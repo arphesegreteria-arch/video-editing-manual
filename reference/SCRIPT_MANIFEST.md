@@ -1,0 +1,25 @@
+# Script Manifest
+
+- `validated/ARPHE_AUTOCUT_TEST_01.py`
+- `validated/ARPHE_MANUAL_TRACK_SETUP_13A_V2.py`
+- `validated/ARPHE_NUCLEAR_RESET_YOYO_08.py`
+- `validated/ARPHE_TRACKED_YOYO_APPLY_13B_V2.py`
+- `partial/ARPHE_CLEAN_LIP_MASK_TEST_03.py`
+- `partial/ARPHE_CLEAN_MOUTH_PIVOT_PUNCH_06.py`
+- `partial/ARPHE_FINAL_HEADROOM_REFRAME_15.py`
+- `partial/ARPHE_PUNCH_IN_TEST_02.py`
+- `partial/ARPHE_TRACKED_YOYO_REFRAME_14.py`
+- `partial/ARPHE_ZOOM_TEST_01.py`
+- `experiments/ARPHE_CLEAN_TRACKER_PROBE_09.py`
+- `experiments/ARPHE_FULL_RESET_CLEAN_PUNCH_05.py`
+- `experiments/ARPHE_LIP_MASK_TEST_01.py`
+- `experiments/ARPHE_LIP_MASK_VISIBLE_TEST_02.py`
+- `experiments/ARPHE_LIP_YOYO_RESET_01.py`
+- `experiments/ARPHE_MANUAL_TRACK_SETUP_13A.py`
+- `experiments/ARPHE_MASK_PUNCH_IN_OUT_TEST_04.py`
+- `experiments/ARPHE_MOUTH_YOYO_WOW_07.py`
+- `experiments/ARPHE_PUNCH_BOOM_01.py`
+- `experiments/ARPHE_TRACKED_YOYO_APPLY_13B.py`
+- `experiments/ARPHE_TRACKER_SIDE_BRANCH_TEST_11.py`
+- `experiments/ARPHE_TRACKER_STEP_TEST_12.py`
+- `experiments/ARPHE_TRACKER_TEST_10.py`

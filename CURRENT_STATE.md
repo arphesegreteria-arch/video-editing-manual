@@ -1,6 +1,6 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-08-25.
+Ultimo aggiornamento: sessione 2026-08-27.
 
 ## Obiettivo del progetto
 
@@ -9,11 +9,12 @@ Automatizzare il montaggio di contenuti video in DaVinci Resolve tramite Python:
 - punch-in e zoom ritmici;
 - tracking del soggetto;
 - B-roll;
-- in futuro trascrizione e paper edit di longform.
+- trascrizione e paper edit di longform;
+- raffinamento automatico dei punti di taglio sull'audio reale.
 
 ## ✅ VALIDATO
 
-### Cut automatici
+### Cut automatici per ricostruzione timeline
 `ARPHE_AUTOCUT_TEST_01.py`
 - crea una nuova timeline;
 - ricompone intervalli della clip sorgente;
@@ -35,7 +36,48 @@ Automatizzare il montaggio di contenuti video in DaVinci Resolve tramite Python:
 - Python legge `TrackedCenter1`;
 - path del tracking può pilotare l'effetto yoyo.
 
+### Trascrizione longform esterna
+Workflow con `faster-whisper` testato su `blabla.mp4`:
+- JSON `ARPHE_TRANSCRIPT_V1` generato correttamente;
+- timestamp a livello segmento e parola;
+- durata transcript: circa 2095.339 s;
+- il JSON è adatto al paper edit semantico.
+
+### Diagnostica timing longform
+Sul test `blabla.mp4`:
+- source FPS = 30.0;
+- timeline FPS = 30.0;
+- frames = 62860;
+- durata Resolve ≈ 2095.333 s;
+- durata Whisper ≈ 2095.339 s.
+
+Conclusione: nel test non c'è drift progressivo tra transcript e Resolve.
+
 ## ⚠️ PARZIALE / DA RIFINIRE
+
+### Longform: paper edit da transcript
+Il transcript è valido per decidere **cosa** togliere, ma i timestamp Whisper non devono essere trattati come punti di lama perfetti.
+
+Problemi osservati nei primi rough cut:
+- alcune parole tranciate;
+- pause residue troppo lunghe;
+- stacchi poco naturali sul parlato;
+- jump cut visivi da revisionare.
+
+Lezione:
+**decisione editoriale ≠ posizione fisica del cut**.
+
+Strategia corrente:
+1. ChatGPT decide semanticamente cosa eliminare.
+2. Whisper protegge e localizza le parole.
+3. Un analizzatore locale legge la waveform reale dell'MP4.
+4. Il confine viene spostato in un punto quieto vicino, senza mangiare altro parlato.
+5. Resolve ricostruisce una nuova timeline.
+
+### Audio-aligned cut V4.x
+- V4.2: approccio conservativo, ma ottimizzare separatamente i due bordi può lasciare troppa aria alla giunzione.
+- V4.3: candidato corrente; tratta la giunzione in modo più stretto e riduce il silenzio residuo.
+- Stato: **in prova, non ancora promosso a validato**.
 
 ### Reframing estetico dopo tracking
 Il tracking può essere tecnicamente corretto ma il soggetto può risultare scentrato durante forti zoom.
@@ -45,34 +87,32 @@ Lezione:
 
 Il tracker va posizionato sul dettaglio più stabile; il framing finale deve usare un offset/target separato.
 
-### Maschere Fusion
-La creazione di una Ellipse Mask da script è stata osservata, ma non è la base consigliata per il punch.
-Per il nostro use case il tracker è più appropriato.
+## ❌ NON AFFIDABILE / DA NON USARE COME PRIMITIVA
 
-## ❌ NON AFFIDABILE NELLA BUILD ATTUALE
+### Timestamp Whisper usati direttamente come lama
+Non usare `start/end` del transcript come cut frame senza margine o allineamento audio.
 
 ### Avvio automatico del tracking da FusionScript
-I trigger `TrackForward` / `TrackForwardFromCurrentTime` sono esposti, ma i test hanno prodotto:
-- path immobile;
-- range di render anomali;
-- nessun path/modifier generato.
+I trigger `TrackForward` / `TrackForwardFromCurrentTime` sono esposti, ma i test hanno prodotto path immobili e range anomali.
 
 Decisione:
 **non basare il prodotto sul trigger automatico del Tracker nella versione gratuita attuale**.
 
-Strategia corrente:
+Strategia tracking corrente:
 1. Python prepara tutto.
 2. Operatore esegue un singolo Track Forward nativo.
 3. Python riprende il controllo.
 
-## PROSSIMO FILONE
+## PROSSIMO TEST
 
-### Longform
-Pipeline proposta:
-1. MP4 longform in Resolve.
-2. Timeline pulita.
-3. Estrazione audio / trascrizione con timestamp.
-4. Analisi editoriale del transcript.
-5. Lista di intervalli da rimuovere.
-6. Script Python che crea una nuova timeline tagliata.
-7. Originale sempre preservato.
+### Validazione V4.3 longform
+1. Partire sempre dalla timeline originale completa.
+2. Generare il piano audio-aligned dal video + transcript + edit plan.
+3. Creare una nuova timeline `LONGFORM_AUDIO_ALIGNED_CUT_04_3`.
+4. Revisionare tutto il longform con priorità a:
+   - attacchi delle parole dopo i cut;
+   - code delle parole prima dei cut;
+   - pause troppo lunghe/corte;
+   - eventuale vero offset audio/video;
+   - qualità visiva dei jump cut.
+5. Solo dopo revisione completa promuovere la V4.3 a `validated`.

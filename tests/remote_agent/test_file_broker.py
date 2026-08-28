@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from scripts.remote_agent.config import FolderConfig
-from scripts.remote_agent.file_broker import FileBroker
+from scripts.remote_agent.file_broker import FileBroker, _has_reparse_attribute
 
 
 def folder_config(tmp_path: Path) -> FolderConfig:
@@ -93,6 +93,23 @@ def test_resolve_rejects_a_reparse_point_component(tmp_path) -> None:
 
     with pytest.raises(PermissionError, match="reparse point"):
         broker.resolve("incoming", "junction/secret.mov")
+
+
+@pytest.mark.parametrize(
+    ("file_attributes", "expected"),
+    [(0x400, True), (0x20, False)],
+)
+def test_windows_reparse_detector_reads_the_platform_file_attribute(
+    file_attributes: int, expected: bool
+) -> None:
+    """Catches ignoring Windows' reparse flag when junction creation is unavailable."""
+
+    class AttributePath:
+        def stat(self, *, follow_symlinks: bool):
+            assert follow_symlinks is False
+            return type("StatResult", (), {"st_file_attributes": file_attributes})()
+
+    assert _has_reparse_attribute(AttributePath()) is expected
 
 
 def test_resolve_rejects_a_real_symlink_escape_when_supported(tmp_path) -> None:
@@ -188,6 +205,44 @@ def test_hash_media_streams_sha256_and_returns_alias_relative_metadata(tmp_path)
     }
 
 
+def test_hash_media_never_requests_an_unbounded_file_read(tmp_path, monkeypatch) -> None:
+    """Catches loading an entire media file into memory during SHA-256 hashing."""
+    config = folder_config(tmp_path)
+    media_path = config.incoming / "large.mp4"
+    media_path.write_bytes(b"x" * (1024 * 1024 + 1))
+    real_open = Path.open
+    read_sizes: list[int] = []
+
+    class BoundedReader:
+        def __init__(self, wrapped_file) -> None:
+            self._wrapped_file = wrapped_file
+
+        def __enter__(self):
+            self._wrapped_file.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._wrapped_file.__exit__(*args)
+
+        def read(self, size: int = -1) -> bytes:
+            if size < 1:
+                raise AssertionError("unbounded media read requested")
+            read_sizes.append(size)
+            return self._wrapped_file.read(size)
+
+    def bounded_open(path: Path, *args, **kwargs):
+        return BoundedReader(real_open(path, *args, **kwargs))
+
+    monkeypatch.setattr(Path, "open", bounded_open)
+    broker = FileBroker(config)
+
+    result = broker.hash_media("incoming", "large.mp4")
+
+    assert result["size_bytes"] == 1024 * 1024 + 1
+    assert len(read_sizes) >= 2
+    assert all(size <= 1024 * 1024 for size in read_sizes)
+
+
 def test_hash_media_rejects_an_unsupported_extension(tmp_path) -> None:
     """Catches non-media files crossing the broker through the hash operation."""
     config = folder_config(tmp_path)
@@ -210,3 +265,17 @@ def test_copy_to_workspace_copies_media_and_returns_only_workspace_alias(tmp_pat
 
     assert copied == "workspace/job-001/copied.mov"
     assert (config.workspace / "job-001/copied.mov").read_bytes() == b"video-bytes"
+
+
+def test_copy_to_workspace_rejects_an_existing_directory_destination(tmp_path) -> None:
+    """Catches copy2 appending the source name while reporting the directory path."""
+    config = folder_config(tmp_path)
+    (config.incoming / "source.mov").write_bytes(b"video-bytes")
+    destination_directory = config.workspace / "existing.mov"
+    destination_directory.mkdir()
+    broker = FileBroker(config)
+
+    with pytest.raises(IsADirectoryError, match="destination is a directory"):
+        broker.copy_to_workspace("incoming", "source.mov", "existing.mov")
+
+    assert not (destination_directory / "source.mov").exists()

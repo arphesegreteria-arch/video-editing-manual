@@ -188,6 +188,8 @@ class FileBroker:
         destination_relative_path = destination_relative_path or source.name
         destination = self.resolve("workspace", destination_relative_path)
         self._require_media_extension(destination)
+        if destination.is_dir():
+            raise IsADirectoryError("workspace destination is a directory")
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination = self.resolve("workspace", destination_relative_path)
         shutil.copy2(source, destination)

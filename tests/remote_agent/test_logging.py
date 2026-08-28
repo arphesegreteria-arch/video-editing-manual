@@ -4,10 +4,12 @@ from pathlib import Path
 
 import pytest
 
+from scripts.remote_agent import logging_setup
 from scripts.remote_agent.logging_setup import configure_logging, redact_secrets
 
 
 TOKEN = "unit-test-token-value"
+LEGACY_TOKEN = "legacy-opaque-token"
 
 
 @pytest.mark.parametrize(
@@ -15,6 +17,10 @@ TOKEN = "unit-test-token-value"
     [
         (f"token={TOKEN}", "token=[REDACTED]"),
         (f"Authorization: Bearer {TOKEN}", "Authorization: [REDACTED]"),
+        (
+            f"{{'Authorization': '{LEGACY_TOKEN}'}}",
+            "{'Authorization': '[REDACTED]'}",
+        ),
     ],
 )
 def test_redact_secrets_removes_tokens_and_authorization_values(
@@ -27,7 +33,8 @@ def test_redact_secrets_removes_tokens_and_authorization_values(
 def test_configured_logger_redacts_token_from_exception_traceback(tmp_path, monkeypatch) -> None:
     """Catches exception logging that leaks an authenticated request token."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    logger = configure_logging("HOME_DEV", secrets=[TOKEN])
+    monkeypatch.setattr(logging_setup, "get_token_for_machine", lambda machine_id: TOKEN)
+    logger = configure_logging("HOME_DEV")
 
     try:
         raise RuntimeError(f"GitHub rejected Authorization: Bearer {TOKEN}")
@@ -45,3 +52,27 @@ def test_configured_logger_redacts_token_from_exception_traceback(tmp_path, monk
     assert handler.maxBytes == 5 * 1024 * 1024
     assert handler.backupCount == 5
     assert handler.baseFilename.endswith("ARPHE\\RemoteAgent\\logs\\HOME_DEV.log")
+
+
+def test_default_logger_redacts_opaque_token_in_mapping_style_header(
+    tmp_path, monkeypatch
+) -> None:
+    """Catches default logging leaking legacy tokens in request-header mappings."""
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(
+        logging_setup,
+        "get_token_for_machine",
+        lambda machine_id: LEGACY_TOKEN,
+        raising=False,
+    )
+    logger = configure_logging("HOME_DEV")
+
+    logger.error("request headers: %s", {"Authorization": LEGACY_TOKEN})
+    for handler in logger.handlers:
+        handler.flush()
+
+    handler = next(handler for handler in logger.handlers if isinstance(handler, RotatingFileHandler))
+    content = Path(handler.baseFilename).read_text(encoding="utf-8")
+
+    assert LEGACY_TOKEN not in content
+    assert "[REDACTED]" in content

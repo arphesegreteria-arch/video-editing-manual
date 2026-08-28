@@ -1,4 +1,5 @@
 from scripts.remote_agent.config import AgentConfig
+from scripts.remote_agent import credentials
 from scripts.remote_agent.credentials import CredentialStore
 
 
@@ -44,3 +45,16 @@ def test_credential_store_uses_injected_keyring_without_mutating_config(tmp_path
     }
     assert "unit-test-token-value" not in str(config.model_dump())
     assert "github_token" not in config.model_dump()
+
+
+def test_credential_store_uses_windows_vault_when_backend_is_not_injected(
+    tmp_path, monkeypatch
+) -> None:
+    """Catches production credentials silently using a non-Windows keyring backend."""
+    windows_vault = InMemoryKeyring()
+    windows_vault.values[("ARPHE Remote Agent", "HOME_DEV:github")] = "opaque-token"
+    monkeypatch.setattr(credentials, "WinVaultKeyring", lambda: windows_vault)
+
+    store = CredentialStore(agent_config(tmp_path))
+
+    assert store.get_token() == "opaque-token"

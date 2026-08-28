@@ -9,11 +9,17 @@ from pathlib import Path
 import re
 from typing import Iterable
 
+from scripts.remote_agent.credentials import get_token_for_machine
+
 
 LOG_MAX_BYTES = 5 * 1024 * 1024
 LOG_BACKUP_COUNT = 5
 _AUTHORIZATION_PATTERN = re.compile(
     r"(Authorization\s*:\s*)(?:Bearer\s+)?[^\s,;]+", re.IGNORECASE
+)
+_AUTHORIZATION_MAPPING_PATTERN = re.compile(
+    r"((?:['\"]authorization['\"])\s*:\s*['\"])(?:Bearer\s+)?[^'\"]+",
+    re.IGNORECASE,
 )
 _BEARER_PATTERN = re.compile(r"\bBearer\s+\S+", re.IGNORECASE)
 _GITHUB_TOKEN_PATTERN = re.compile(
@@ -27,6 +33,7 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     for secret in sorted((secret for secret in secrets if secret), key=len, reverse=True):
         redacted = redacted.replace(secret, "[REDACTED]")
     redacted = _AUTHORIZATION_PATTERN.sub(r"\1[REDACTED]", redacted)
+    redacted = _AUTHORIZATION_MAPPING_PATTERN.sub(r"\1[REDACTED]", redacted)
     redacted = _BEARER_PATTERN.sub("Bearer [REDACTED]", redacted)
     return _GITHUB_TOKEN_PATTERN.sub("[REDACTED]", redacted)
 
@@ -40,9 +47,7 @@ class _RedactingFormatter(logging.Formatter):
         return redact_secrets(super().format(record), self._secrets)
 
 
-def configure_logging(
-    machine_id: str, secrets: Iterable[str] = ()
-) -> logging.Logger:
+def configure_logging(machine_id: str) -> logging.Logger:
     """Create a machine-local rotating logger with centralized secret redaction."""
     local_app_data = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
     log_directory = local_app_data / "ARPHE" / "RemoteAgent" / "logs"
@@ -61,6 +66,7 @@ def configure_logging(
         backupCount=LOG_BACKUP_COUNT,
         encoding="utf-8",
     )
-    handler.setFormatter(_RedactingFormatter(secrets))
+    token = get_token_for_machine(machine_id)
+    handler.setFormatter(_RedactingFormatter((token,) if token else ()))
     logger.addHandler(handler)
     return logger

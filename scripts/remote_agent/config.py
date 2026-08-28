@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Literal
 from pydantic import Field, model_validator
 
 from scripts.remote_agent.models import StrictModel
@@ -51,8 +52,8 @@ class FolderConfig(StrictModel):
 class ResolveConfig(StrictModel):
     executable_path: Path
     launch_if_needed: bool = True
-    test_project: str = Field(default="ARPHE_TEST", min_length=1, max_length=128)
-    audit_project_prefix: str = Field(default="ARPHE_AUDIT", min_length=1, max_length=128)
+    test_project: Literal["ARPHE_TEST"] = "ARPHE_TEST"
+    audit_project_prefix: Literal["ARPHE_AUDIT_"] = "ARPHE_AUDIT_"
 
     @model_validator(mode="after")
     def executable_path_must_be_absolute(self) -> "ResolveConfig":
@@ -84,8 +85,8 @@ class AgentConfig(StrictModel):
                 "allowed_actions contains unsupported V1 action(s): "
                 + ", ".join(sorted(unsupported))
             )
-        if self.machine_id == "POLI_01" and "SYNC_APPROVED_CODE" in self.allowed_actions:
-            raise ValueError("SYNC_APPROVED_CODE is not enabled for POLI_01")
+        if self.machine_id != "HOME_DEV" and "SYNC_APPROVED_CODE" in self.allowed_actions:
+            raise ValueError("SYNC_APPROVED_CODE is enabled only for HOME_DEV")
         return self
 
     @classmethod

@@ -21,7 +21,7 @@ def valid_config_data(tmp_path, machine_id: str = "HOME_DEV") -> dict:
             "executable_path": str(tmp_path / "Resolve.exe"),
             "launch_if_needed": False,
             "test_project": "ARPHE_TEST",
-            "audit_project_prefix": "ARPHE_AUDIT",
+            "audit_project_prefix": "ARPHE_AUDIT_",
         },
         "github": {
             "owner": "arphesegreteria-arch",
@@ -89,20 +89,11 @@ def test_folder_config_only_resolves_declared_aliases(tmp_path) -> None:
         config.folders.path_for("model_dump")
 
 
-def test_agent_config_accepts_a_future_uppercase_machine_profile(tmp_path) -> None:
-    """Catches configuration that cannot name a later machine with the V1 ID format."""
-    data = valid_config_data(tmp_path, "LAB_01")
-    data["allowed_actions"] = ["PING"]
-
-    config = AgentConfig.model_validate(data)
-
-    assert config.machine_id == "LAB_01"
-
-
-def test_poli_profile_cannot_enable_code_synchronization(tmp_path) -> None:
-    """Catches a local POLI_01 profile accidentally enabling code deployment."""
+@pytest.mark.parametrize("machine_id", ["POLI_01", "LAB_01"])
+def test_only_home_dev_can_enable_code_synchronization(tmp_path, machine_id: str) -> None:
+    """Catches any non-HOME_DEV machine enabling controlled code deployment."""
     with pytest.raises(ValidationError, match="SYNC_APPROVED_CODE"):
-        AgentConfig.model_validate(valid_config_data(tmp_path, "POLI_01"))
+        AgentConfig.model_validate(valid_config_data(tmp_path, machine_id))
 
 
 def test_home_dev_profile_can_enable_code_synchronization(tmp_path) -> None:
@@ -110,6 +101,24 @@ def test_home_dev_profile_can_enable_code_synchronization(tmp_path) -> None:
     config = AgentConfig.model_validate(valid_config_data(tmp_path, "HOME_DEV"))
 
     assert "SYNC_APPROVED_CODE" in config.allowed_actions
+
+
+@pytest.mark.parametrize(
+    ("field", "unsafe_value"),
+    [
+        ("test_project", "CLIENT_PRODUCTION"),
+        ("audit_project_prefix", "CLIENT_AUDIT_"),
+    ],
+)
+def test_agent_config_rejects_unsafe_resolve_project_configuration(
+    tmp_path, field: str, unsafe_value: str
+) -> None:
+    """Catches local Resolve configuration targeting a non-disposable project convention."""
+    data = valid_config_data(tmp_path)
+    data["resolve"][field] = unsafe_value
+
+    with pytest.raises(ValidationError, match=unsafe_value):
+        AgentConfig.model_validate(data)
 
 
 class PingParameters(BaseModel):

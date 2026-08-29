@@ -8,9 +8,11 @@ from scripts.remote_agent.config import GitHubConfig
 from scripts.remote_agent.github_queue import (
     ClaimConflict,
     GitHubQueue,
+    HttpError,
     InvalidJob,
     LeaseActive,
     NonRetryableJob,
+    QueuedJob,
     QueueError,
     REMOTE_LOG_MAX_BYTES,
 )
@@ -62,11 +64,11 @@ def job_payload(**overrides):
     return data
 
 
-def queue(responses):
+def queue(responses, *, token="github_pat_super-secret"):
     transport = FakeTransport(responses)
     client = GitHubQueue(
         GitHubConfig(owner="arphe", repository="jobs", branch="main"),
-        "github_pat_super-secret",
+        token,
         transport=transport,
         request_timeout_seconds=7,
     )
@@ -107,6 +109,17 @@ def test_invalid_json_or_schema_is_rejected_before_any_claim(payload):
     assert [call["method"] for call in transport.calls] == ["GET", "GET"]
 
 
+@pytest.mark.parametrize("entry", ["not-a-directory-entry", None, 42, {"type": "file"}])
+def test_malformed_listing_entries_raise_sanitized_invalid_job(entry):
+    """Catches malformed directory payloads escaping as AttributeError during sorting."""
+    client, transport = queue([FakeResponse(payload=[entry])])
+
+    with pytest.raises(InvalidJob, match="listing entry"):
+        client.list_pending("HOME_DEV")
+
+    assert [call["method"] for call in transport.calls] == ["GET"]
+
+
 def test_filename_must_match_job_id():
     client, _ = queue([
         FakeResponse(payload=[{"name": "different.json", "path": "jobs/different.json", "sha": "x", "type": "file"}]),
@@ -123,15 +136,26 @@ def test_claim_maps_github_sha_conflicts(status):
         client.claim(Job.model_validate(job_payload()), "old", now=NOW)
 
 
+def test_claim_conflict_mapping_uses_http_status_not_error_text():
+    """Catches an unrelated error body containing '(409)' being treated as a CAS conflict."""
+    client, _ = queue([FakeResponse(status_code=500, text="upstream diagnostic mentions (409)")])
+
+    with pytest.raises(HttpError) as exc:
+        client.claim(Job.model_validate(job_payload()), "old", now=NOW)
+
+    assert exc.value.status_code == 500
+
+
 def test_claim_sets_lease_attempt_and_uses_fetched_sha():
     client, transport = queue([FakeResponse(payload={"content": {"sha": "new"}})])
     claimed = client.claim(Job.model_validate(job_payload()), "old", now=NOW, lease_seconds=120)
     sent = json.loads(base64.b64decode(transport.calls[0]["json"]["content"]))
-    assert claimed.status is JobStatus.CLAIMED
-    assert claimed.claimed_by == "HOME_DEV"
-    assert claimed.claimed_at == NOW
-    assert claimed.lease_expires_at == NOW + timedelta(seconds=120)
-    assert claimed.attempt == 1
+    assert claimed.sha == "new"
+    assert claimed.job.status is JobStatus.CLAIMED
+    assert claimed.job.claimed_by == "HOME_DEV"
+    assert claimed.job.claimed_at == NOW
+    assert claimed.job.lease_expires_at == NOW + timedelta(seconds=120)
+    assert claimed.job.attempt == 1
     assert transport.calls[0]["json"]["sha"] == "old"
     assert sent["status"] == "CLAIMED"
 
@@ -163,10 +187,10 @@ def test_active_lease_is_not_reclaimed():
 
 
 def test_stale_safe_job_can_be_reclaimed():
-    client, _ = queue([FakeResponse(payload={})])
+    client, _ = queue([FakeResponse(payload={"content": {"sha": "reclaimed-sha"}})])
     claimed = client.claim(stale_job(), "old", now=NOW, idempotent=True)
-    assert claimed.attempt == 2
-    assert claimed.status is JobStatus.CLAIMED
+    assert claimed.job.attempt == 2
+    assert claimed.job.status is JobStatus.CLAIMED
 
 
 def test_mark_running_updates_only_a_claimed_job_with_sha_cas():
@@ -174,12 +198,66 @@ def test_mark_running_updates_only_a_claimed_job_with_sha_cas():
         status="CLAIMED", claimed_by="HOME_DEV", claimed_at=NOW.isoformat(),
         lease_expires_at=(NOW + timedelta(minutes=5)).isoformat(), attempt=1,
     ))
-    client, transport = queue([FakeResponse(payload={})])
-    running = client.mark_running(claimed, "claimed-sha")
-    assert running.status is JobStatus.RUNNING
+    client, transport = queue([FakeResponse(payload={"content": {"sha": "running-sha"}})])
+    running = client.mark_running(QueuedJob(job=claimed, sha="claimed-sha"), now=NOW)
+    assert running.sha == "running-sha"
+    assert running.job.status is JobStatus.RUNNING
     assert transport.calls[0]["json"]["sha"] == "claimed-sha"
     sent = json.loads(base64.b64decode(transport.calls[0]["json"]["content"]))
     assert sent["status"] == "RUNNING"
+
+
+def test_list_claim_and_mark_running_chain_uses_each_fresh_contents_sha():
+    """Catches a claim response SHA being discarded before the running CAS update."""
+    client, transport = queue([
+        FakeResponse(payload=[
+            {"name": "queue-001.json", "path": "jobs/queue-001.json", "sha": "listed-sha", "type": "file"},
+        ]),
+        content_response(job_payload(), "listed-sha"),
+        FakeResponse(payload={"content": {"sha": "claimed-sha"}}),
+        FakeResponse(payload={"content": {"sha": "running-sha"}}),
+    ])
+
+    pending = client.list_pending("HOME_DEV")
+    claimed = client.claim(pending[0].job, pending[0].sha, now=NOW)
+    running = client.mark_running(claimed, now=NOW)
+
+    assert running.job.status is JobStatus.RUNNING
+    assert running.sha == "running-sha"
+    assert transport.calls[2]["json"]["sha"] == "listed-sha"
+    assert transport.calls[3]["json"]["sha"] == "claimed-sha"
+
+
+@pytest.mark.parametrize("response_sha", ["", None, 17])
+def test_claim_rejects_a_missing_or_non_string_response_sha(response_sha):
+    """Catches later CAS operations receiving a coerced or empty GitHub blob SHA."""
+    client, _ = queue([FakeResponse(payload={"content": {"sha": response_sha}})])
+
+    with pytest.raises(QueueError, match="response SHA"):
+        client.claim(Job.model_validate(job_payload()), "listed-sha", now=NOW)
+
+
+@pytest.mark.parametrize(
+    "claimed_job",
+    [
+        Job.model_validate(job_payload(
+            status="CLAIMED", claimed_by="HOME_DEV", claimed_at=NOW.isoformat(),
+            lease_expires_at=(NOW - timedelta(seconds=1)).isoformat(), attempt=1,
+        )),
+        Job.model_validate(job_payload(
+            status="CLAIMED", claimed_by="POLI_01", claimed_at=NOW.isoformat(),
+            lease_expires_at=(NOW + timedelta(minutes=5)).isoformat(), attempt=1,
+        )),
+    ],
+)
+def test_mark_running_rejects_expired_or_foreign_claim_before_put(claimed_job):
+    """Catches running transitions after the lease or current-machine ownership is lost."""
+    client, transport = queue([])
+
+    with pytest.raises(QueueError):
+        client.mark_running(QueuedJob(job=claimed_job, sha="claimed-sha"), now=NOW)
+
+    assert transport.calls == []
 
 
 def result():
@@ -211,6 +289,35 @@ def test_result_log_and_heartbeat_writers_use_bounded_safe_payloads():
     remote_log = base64.b64decode(transport.calls[1]["json"]["content"])
     assert len(remote_log) <= REMOTE_LOG_MAX_BYTES
     assert remote_log.endswith(b"[TRUNCATED]\n")
+
+
+def test_write_log_redacts_configured_and_generic_credentials_before_truncation():
+    """Catches queue-log uploads exposing credentials that appear before the byte cap."""
+    configured_token = "github_pat_configured-secret"
+    client, transport = queue([FakeResponse(payload={})], token=configured_token)
+
+    client.write_log(
+        "queue-001",
+        f"token={configured_token}\nAuthorization: Bearer ghp_GenericSecret\n"
+        + "x" * REMOTE_LOG_MAX_BYTES,
+    )
+
+    remote_log = base64.b64decode(transport.calls[0]["json"]["content"]).decode()
+    assert configured_token not in remote_log
+    assert "ghp_GenericSecret" not in remote_log
+    assert remote_log.count("[REDACTED]") == 2
+    assert remote_log.endswith("[TRUNCATED]\n")
+
+
+@pytest.mark.parametrize("job_id", ["", "../machines/HOME_DEV", "job/escape", r"job\escape", "a" * 81])
+def test_write_log_rejects_job_ids_outside_the_exact_job_namespace(job_id):
+    """Catches logs being written outside logs/<valid-job-id>.log."""
+    client, transport = queue([])
+
+    with pytest.raises(InvalidJob):
+        client.write_log(job_id, "safe log text")
+
+    assert transport.calls == []
 
 
 def test_http_errors_redact_token():

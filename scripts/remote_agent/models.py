@@ -18,6 +18,7 @@ MAX_RESULT_OUTPUT_STRING_LENGTH = 4096
 MAX_RESULT_PAYLOAD_BYTES = 64 * 1024
 MAX_RESULT_PATH_LENGTH = 1024
 RESULT_FOLDER_ALIASES = frozenset({"incoming", "test_media", "workspace", "exports"})
+JOB_ID_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$"
 _SECRET_KEY_PATTERN = re.compile(
     r"(?:token|secret|password|authorization|credential|api[_-]?key)", re.IGNORECASE
 )
@@ -109,7 +110,7 @@ def _validate_alias_relative_path(path: str) -> None:
 
 class Job(StrictModel):
     schema_version: Literal[1] = 1
-    job_id: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$")
+    job_id: str = Field(pattern=JOB_ID_PATTERN)
     target_machine: str = Field(min_length=1, max_length=64)
     action: str = Field(min_length=1, max_length=128)
     created_at: datetime
@@ -142,7 +143,7 @@ class Job(StrictModel):
 
 class JobResult(StrictModel):
     schema_version: Literal[1] = 1
-    job_id: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$")
+    job_id: str = Field(pattern=JOB_ID_PATTERN)
     machine_id: str = Field(min_length=1, max_length=64)
     status: JobStatus
     started_at: datetime
@@ -198,7 +199,7 @@ class MachineHeartbeat(StrictModel):
     resolve_connected: bool
     resolve_version: str | None = None
     current_job_id: str | None = Field(
-        default=None, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$"
+        default=None, pattern=JOB_ID_PATTERN
     )
     workspace_free_bytes: int | None = Field(default=None, ge=0)
     exports_free_bytes: int | None = Field(default=None, ge=0)

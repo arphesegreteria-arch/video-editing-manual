@@ -6,6 +6,7 @@ import base64
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
+import re
 from typing import Any, Protocol
 from urllib.parse import quote
 
@@ -13,15 +14,24 @@ from pydantic import ValidationError
 
 from scripts.remote_agent.config import GitHubConfig
 from scripts.remote_agent.logging_setup import redact_secrets
-from scripts.remote_agent.models import Job, JobResult, JobStatus, MachineHeartbeat
+from scripts.remote_agent.models import JOB_ID_PATTERN, Job, JobResult, JobStatus, MachineHeartbeat
 
 
 REMOTE_LOG_MAX_BYTES = 256 * 1024
 _TRUNCATION_MARKER = b"\n[TRUNCATED]\n"
+_JOB_ID_RE = re.compile(JOB_ID_PATTERN)
 
 
 class QueueError(RuntimeError):
     """Base class for sanitized queue failures."""
+
+
+class HttpError(QueueError):
+    """A sanitized GitHub HTTP failure with a machine-readable status code."""
+
+    def __init__(self, status_code: int, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class InvalidJob(QueueError):
@@ -107,7 +117,7 @@ class GitHubQueue:
                 f"GitHub {method} {path} failed ({response.status_code}): {response.text}",
                 (self._token,),
             )
-            raise QueueError(message)
+            raise HttpError(response.status_code, message)
         try:
             return response.json()
         except (TypeError, ValueError) as exc:
@@ -122,13 +132,18 @@ class GitHubQueue:
         )
         if not isinstance(listing, list):
             raise QueueError("GitHub jobs listing was not an array")
+        if any(
+            not isinstance(entry, dict)
+            or not all(isinstance(entry.get(field), str) and entry[field] for field in ("name", "path", "sha", "type"))
+            for entry in listing
+        ):
+            raise InvalidJob("invalid GitHub jobs listing entry")
         pending: list[QueuedJob] = []
-        for entry in sorted(listing, key=lambda item: str(item.get("path", "")).casefold()):
-            if entry.get("type") != "file" or not str(entry.get("name", "")).endswith(".json"):
+        for entry in sorted(listing, key=lambda item: item["path"].casefold()):
+            if entry["type"] != "file" or not entry["name"].endswith(".json"):
                 continue
-            path = str(entry.get("path", ""))
-            document = self._request("GET", path, expected=(200,))
-            job, sha = self._parse_job_document(document, expected_name=str(entry["name"]))
+            document = self._request("GET", entry["path"], expected=(200,))
+            job, sha = self._parse_job_document(document, expected_name=entry["name"])
             if not job.matches_machine(machine_id):
                 continue
             if job.status is JobStatus.PENDING or self._lease_is_stale(job):
@@ -167,7 +182,7 @@ class GitHubQueue:
         now: datetime | None = None,
         lease_seconds: int = 300,
         idempotent: bool = False,
-    ) -> Job:
+    ) -> QueuedJob:
         current = now or datetime.now(timezone.utc)
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
@@ -183,25 +198,42 @@ class GitHubQueue:
             "lease_expires_at": current + timedelta(seconds=lease_seconds),
             "attempt": job.attempt + 1,
         })
-        self._update_job(claimed, sha, message=f"Claim job {job.job_id}")
-        return claimed
+        updated_sha = self._update_job(claimed, sha, message=f"Claim job {job.job_id}")
+        return QueuedJob(job=claimed, sha=updated_sha)
 
-    def mark_running(self, job: Job, sha: str) -> Job:
+    def mark_running(
+        self,
+        queued_job: QueuedJob,
+        *,
+        now: datetime | None = None,
+    ) -> QueuedJob:
+        job = queued_job.job
         if job.status is not JobStatus.CLAIMED:
             raise QueueError("only a claimed job can be marked running")
+        current = now or datetime.now(timezone.utc)
+        if job.lease_expires_at is None or job.lease_expires_at <= current:
+            raise LeaseActive("job lease has expired")
+        if job.claimed_by != job.target_machine:
+            raise QueueError("job is not claimed by its target machine")
         running = job.model_copy(update={"status": JobStatus.RUNNING})
-        self._update_job(running, sha, message=f"Run job {job.job_id}")
-        return running
+        updated_sha = self._update_job(running, queued_job.sha, message=f"Run job {job.job_id}")
+        return QueuedJob(job=running, sha=updated_sha)
 
-    def _update_job(self, job: Job, sha: str, *, message: str) -> None:
+    def _update_job(self, job: Job, sha: str, *, message: str) -> str:
         payload = self._file_payload(job.model_dump_json().encode("utf-8"), message=message, sha=sha)
         try:
-            self._request("PUT", f"jobs/{job.job_id}.json", payload=payload, expected=(200, 201))
-        except QueueError as exc:
-            text = str(exc)
-            if "(409)" in text or "(422)" in text:
+            response = self._request("PUT", f"jobs/{job.job_id}.json", payload=payload, expected=(200, 201))
+        except HttpError as exc:
+            if exc.status_code in {409, 422}:
                 raise ClaimConflict("job document changed before update") from exc
             raise
+        try:
+            updated_sha = response["content"]["sha"]
+        except (KeyError, TypeError) as exc:
+            raise QueueError("GitHub job update returned no response SHA") from exc
+        if not isinstance(updated_sha, str) or not updated_sha:
+            raise QueueError("GitHub job update returned an invalid response SHA")
+        return updated_sha
 
     def write_result(self, result: JobResult) -> None:
         self._write_file(
@@ -211,7 +243,9 @@ class GitHubQueue:
         )
 
     def write_log(self, job_id: str, log_text: str) -> None:
-        raw = log_text.encode("utf-8", errors="replace")
+        if not _JOB_ID_RE.fullmatch(job_id):
+            raise InvalidJob("invalid job_id for remote log")
+        raw = redact_secrets(log_text, (self._token,)).encode("utf-8", errors="replace")
         if len(raw) > REMOTE_LOG_MAX_BYTES:
             raw = raw[: REMOTE_LOG_MAX_BYTES - len(_TRUNCATION_MARKER)] + _TRUNCATION_MARKER
         self._write_file(f"logs/{job_id}.log", raw, message=f"Write log {job_id}")

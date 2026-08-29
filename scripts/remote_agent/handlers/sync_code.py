@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
+import subprocess
 from typing import Protocol
 
 from pydantic import Field, field_validator
@@ -35,6 +37,29 @@ class GitSyncAdapter(Protocol):
     def remote_revision(self, remote_name: str, branch: str) -> str: ...
     def is_ancestor(self, ancestor: str, descendant: str) -> bool: ...
     def fast_forward(self, remote_name: str, branch: str, commit_sha: str) -> None: ...
+
+
+class SubprocessGitSyncAdapter:
+    """Local Git boundary with fixed argv construction and no shell."""
+    def __init__(self, repository_path: Path, *, run=subprocess.run) -> None:
+        self._repository_path, self._run = repository_path, run
+    def _git(self, *args: str) -> str:
+        result = self._run(["git", "-C", str(self._repository_path), *args], shell=False, check=False, capture_output=True, text=True)
+        if result.returncode != 0: raise RuntimeError("controlled Git operation failed")
+        return result.stdout.strip()
+    def remote_url(self, remote_name: str) -> str: return self._git("remote", "get-url", remote_name)
+    def current_branch(self) -> str: return self._git("branch", "--show-current")
+    def is_clean(self) -> bool: return not self._git("status", "--porcelain")
+    def current_revision(self) -> str: return self._git("rev-parse", "HEAD")
+    def remote_revision(self, remote_name: str, branch: str) -> str:
+        self._git("fetch", "--no-tags", remote_name, branch)
+        return self._git("rev-parse", f"{remote_name}/{branch}")
+    def is_ancestor(self, ancestor: str, descendant: str) -> bool:
+        result = self._run(["git", "-C", str(self._repository_path), "merge-base", "--is-ancestor", ancestor, descendant], shell=False, check=False, capture_output=True, text=True)
+        return result.returncode == 0
+    def fast_forward(self, remote_name: str, branch: str, commit_sha: str) -> None:
+        self._git("merge", "--ff-only", commit_sha)
+        if self.current_revision().casefold() != commit_sha.casefold(): raise RuntimeError("controlled Git update did not reach requested SHA")
 
 
 class ApprovedCodeSync:

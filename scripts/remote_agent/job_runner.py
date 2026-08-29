@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timezone
 import inspect
+import re
 import threading
 import time
 from typing import Any
@@ -54,27 +55,32 @@ class JobRunner:
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._monotonic = monotonic
         self._active_worker: threading.Thread | None = None
+        self._run_lock = threading.Lock()
+        self._reserved = False
 
     def run_once(self) -> JobResult | None:
         """Run one pending job, or return ``None`` when nothing is safely runnable."""
-        if self._active_worker is not None:
-            if self._active_worker.is_alive():
+        with self._run_lock:
+            if self._reserved or (self._active_worker is not None and self._active_worker.is_alive()):
                 return None
             self._active_worker = None
-
-        candidates = getattr(self._queue, "list_pending")(self._config.machine_id)
-        for candidate in candidates:
-            job = candidate.job
-            if not job.matches_machine(self._config.machine_id):
-                continue
-            try:
-                registered = self._registry.get(job.action)
-                parameters = self._registry.validate_parameters(job.action, job.parameters)
-            except (KeyError, PermissionError, ValueError):
-                # Remote invalidity is never claimed: no other agent's job state changes.
-                continue
-            return self._claim_and_execute(candidate, registered, parameters)
-        return None
+            self._reserved = True
+        try:
+            candidates = getattr(self._queue, "list_pending")(self._config.machine_id)
+            for candidate in candidates:
+                job = candidate.job
+                if not job.matches_machine(self._config.machine_id):
+                    continue
+                try:
+                    registered = self._registry.get(job.action)
+                    parameters = self._registry.validate_parameters(job.action, job.parameters)
+                except (KeyError, PermissionError, ValueError):
+                    continue
+                return self._claim_and_execute(candidate, registered, parameters)
+            return None
+        finally:
+            with self._run_lock:
+                self._reserved = False
 
     def _claim_and_execute(self, candidate: QueuedJob, registered: RegisteredHandler, parameters: Any) -> JobResult:
         claimed = getattr(self._queue, "claim")(candidate.job, candidate.sha, idempotent=registered.idempotent)
@@ -128,7 +134,7 @@ class JobRunner:
                 started_at,
                 JobStatus.FAILED,
                 error_type=type(exception).__name__,
-                error_message=redact_secrets(str(exception), ()),
+                error_message=self._safe_error(str(exception)),
             )
         output = outcome.get("output")
         if not isinstance(output, dict):
@@ -136,7 +142,12 @@ class JobRunner:
         try:
             return self._result(job, started_at, JobStatus.SUCCEEDED, output=output)
         except ValueError as exc:
-            return self._result(job, started_at, JobStatus.FAILED, error_type="UnsafeOutput", error_message=redact_secrets(str(exc), ()))
+            return self._result(job, started_at, JobStatus.FAILED, error_type="UnsafeOutput", error_message=self._safe_error(str(exc)))
+
+    @staticmethod
+    def _safe_error(message: str) -> str:
+        message = re.sub(r"(?i)\b(token|secret|password|authorization|credential|api[_-]?key)\s*[:=]\s*[^\s,;]+", "[REDACTED]", message)
+        return redact_secrets(message, ())
 
     @staticmethod
     def _invoke(registered: RegisteredHandler, parameters: Any, token: CancellationToken) -> Any:

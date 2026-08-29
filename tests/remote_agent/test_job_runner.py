@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import threading
 
 import pytest
 
@@ -115,3 +116,27 @@ def test_runner_aborts_before_handler_when_cancellation_is_requested(tmp_path: P
     assert result.status is JobStatus.ABORTED
     assert result.error_type == "Cancelled"
     assert queue.claims == queue.running == 1
+
+
+def test_runner_serializes_concurrent_calls_and_sanitizes_secret_handler_failure(tmp_path: Path) -> None:
+    """Catches a second caller claiming while a job runs or a secret exception escaping result validation."""
+    started, release = threading.Event(), threading.Event()
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+    handler_registry = HandlerRegistry(["PING"])
+    def handler(_p, token):
+        started.set(); release.wait(1)
+        if token.cancelled:
+            return {"cancelled": True}
+        raise RuntimeError("token=abc")
+    handler_registry.register("PING", PingParameters, handler, idempotent=True)
+    queue = FakeQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(config(tmp_path), queue, handler_registry, agent_version="1", source_commit="abc")
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(runner.run_once()))
+    thread.start(); assert started.wait(1)
+    assert runner.run_once() is None and queue.claims == 1
+    release.set(); thread.join(1)
+    result = outcome[0]
+    assert result.status is JobStatus.FAILED
+    assert "abc" not in result.error_message
+    assert queue.results == [result]

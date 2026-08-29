@@ -61,6 +61,16 @@ def call_api_immediately(api_connector, timeout_seconds: float):
     return api_connector()
 
 
+def resolve_process(
+    executable_path: Path, *, pid: int = 101, create_time: float = 1000.0
+) -> dict[str, str | int | float]:
+    return {
+        "exe": str(executable_path),
+        "pid": pid,
+        "create_time": create_time,
+    }
+
+
 def resolve_config(tmp_path: Path, *, launch_if_needed: bool = False) -> ResolveConfig:
     return ResolveConfig(
         executable_path=tmp_path / "DaVinci Resolve" / "Resolve.exe",
@@ -129,13 +139,34 @@ def test_process_state_fails_closed_when_configured_and_wrong_resolve_are_both_r
     assert manager.get_status()["status"] == ResolveStatus.WRONG_EXECUTABLE
 
 
+def test_process_state_fails_closed_when_configured_executable_has_multiple_processes(
+    tmp_path,
+) -> None:
+    """Catches accepting an ambiguous pair of processes from the configured installation."""
+    config = resolve_config(tmp_path)
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: [
+            resolve_process(config.executable_path, pid=101, create_time=1000.0),
+            resolve_process(config.executable_path, pid=102, create_time=1001.0),
+        ],
+        api_connector=lambda: pytest.fail("ambiguous configured processes must not connect"),
+        launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
+        clock=FakeClock(),
+        sleep=lambda seconds: pytest.fail(f"unexpected sleep: {seconds}"),
+    )
+
+    assert manager.get_process_state() is ResolveProcessState.WRONG_EXECUTABLE
+    assert manager.get_status()["status"] == ResolveStatus.WRONG_EXECUTABLE
+
+
 def test_process_state_accepts_a_case_insensitive_match_for_configured_executable(tmp_path) -> None:
     """Catches false negatives when Windows reports the configured executable with different casing."""
     config = resolve_config(tmp_path)
     differently_cased = Path(str(config.executable_path).swapcase())
     manager = ResolveManager(
         config,
-        process_executables=lambda: [differently_cased],
+        process_executables=lambda: [resolve_process(differently_cased)],
         api_connector=lambda: None,
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=FakeClock(),
@@ -207,7 +238,7 @@ def test_connect_waits_only_until_the_bounded_timeout_when_running_api_is_unavai
 
     manager = ResolveManager(
         config,
-        process_executables=lambda: [config.executable_path],
+        process_executables=lambda: [resolve_process(config.executable_path)],
         api_connector=unavailable_api,
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=clock,
@@ -229,7 +260,7 @@ def test_connect_does_not_pass_a_negative_sleep_when_the_clock_crosses_deadline(
     sleeps: list[float] = []
     manager = ResolveManager(
         config,
-        process_executables=lambda: [config.executable_path],
+        process_executables=lambda: [resolve_process(config.executable_path)],
         api_connector=lambda: None,
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=SequenceClock([0.0, 0.5, 1.1]),
@@ -255,7 +286,7 @@ def test_connect_returns_by_deadline_when_the_synchronous_connector_blocks(tmp_p
 
     manager = ResolveManager(
         config,
-        process_executables=lambda: [config.executable_path],
+        process_executables=lambda: [resolve_process(config.executable_path)],
         api_connector=blocking_connector,
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
     )
@@ -286,7 +317,7 @@ def test_late_connector_success_is_discarded_after_connection_deadline(tmp_path)
 
     manager = ResolveManager(
         config,
-        process_executables=lambda: [config.executable_path],
+        process_executables=lambda: [resolve_process(config.executable_path)],
         api_connector=late_connector,
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
     )
@@ -320,7 +351,7 @@ def test_connect_reports_project_timeline_and_version_after_api_becomes_availabl
 
     manager = ResolveManager(
         config,
-        process_executables=lambda: [config.executable_path],
+        process_executables=lambda: [resolve_process(config.executable_path)],
         api_connector=delayed_api,
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=clock,
@@ -346,7 +377,7 @@ def test_require_test_project_refuses_non_disposable_current_projects(
     config = resolve_config(tmp_path)
     manager = ResolveManager(
         config,
-        process_executables=lambda: [config.executable_path],
+        process_executables=lambda: [resolve_process(config.executable_path)],
         api_connector=lambda: FakeResolve(project_name),
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=FakeClock(),
@@ -368,7 +399,7 @@ def test_require_test_project_allows_only_configured_disposable_projects(
     config = resolve_config(tmp_path)
     manager = ResolveManager(
         config,
-        process_executables=lambda: [config.executable_path],
+        process_executables=lambda: [resolve_process(config.executable_path)],
         api_connector=lambda: FakeResolve(project_name),
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=FakeClock(),
@@ -386,7 +417,7 @@ def test_process_replacement_invalidates_cached_connection_before_status_or_dest
 ) -> None:
     """Catches a cached API session being trusted after configured Resolve is replaced."""
     config = resolve_config(tmp_path)
-    processes = [config.executable_path]
+    processes = [resolve_process(config.executable_path)]
     manager = ResolveManager(
         config,
         process_executables=lambda: processes,
@@ -401,5 +432,27 @@ def test_process_replacement_invalidates_cached_connection_before_status_or_dest
     processes[:] = [tmp_path / "replacement" / "Resolve.exe"]
 
     assert manager.get_status()["status"] == ResolveStatus.WRONG_EXECUTABLE
+    with pytest.raises(RuntimeError, match="not connected"):
+        manager.require_test_project()
+
+
+def test_same_path_process_replacement_invalidates_cached_connection_identity(tmp_path) -> None:
+    """Catches PID reuse at the configured path preserving a stale Resolve API session."""
+    config = resolve_config(tmp_path)
+    processes = [resolve_process(config.executable_path, pid=101, create_time=1000.0)]
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: processes,
+        api_connector=lambda: FakeResolve(),
+        launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
+        clock=FakeClock(),
+        sleep=lambda seconds: None,
+        api_call_runner=call_api_immediately,
+    )
+
+    assert manager.connect(timeout_seconds=0.1) is not None
+    processes[:] = [resolve_process(config.executable_path, pid=202, create_time=2000.0)]
+
+    assert manager.get_status()["status"] == ResolveStatus.RUNNING_UNAVAILABLE
     with pytest.raises(RuntimeError, match="not connected"):
         manager.require_test_project()

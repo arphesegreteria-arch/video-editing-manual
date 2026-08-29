@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from enum import Enum
 import math
 import ntpath
@@ -43,17 +44,26 @@ ApiCallRunner = Callable[[ResolveApiConnector, float], Any | None]
 _CONNECTION_POLL_SECONDS = 0.25
 
 
+@dataclass(frozen=True)
+class ResolveProcessIdentity:
+    """Stable identity for one locally observed Resolve process."""
+
+    pid: int
+    create_time: float
+
+
 def _configured_process_executables() -> Iterable[object]:
     """Return local executable paths without importing psutil in unit tests."""
     import psutil
 
-    for process in psutil.process_iter(["exe"]):
+    for process in psutil.process_iter(["exe", "pid", "create_time"]):
         try:
-            executable = process.info.get("exe")
+            process_info = process.info
+            executable = process_info.get("exe")
         except (psutil.AccessDenied, psutil.NoSuchProcess, AttributeError):
             continue
         if executable:
-            yield executable
+            yield process_info
 
 
 def _connect_to_resolve() -> Any | None:
@@ -119,6 +129,35 @@ def _process_executable_path(process: object) -> str | Path | None:
     return executable if isinstance(executable, (str, Path)) else None
 
 
+def _process_field(process: object, field: str) -> object | None:
+    if isinstance(process, Mapping):
+        return process.get(field)
+    info = getattr(process, "info", None)
+    if isinstance(info, Mapping):
+        return info.get(field)
+    value = getattr(process, field, None)
+    if callable(value):
+        try:
+            return value()
+        except Exception:
+            return None
+    return value
+
+
+def _process_identity(process: object) -> ResolveProcessIdentity | None:
+    pid = _process_field(process, "pid")
+    create_time = _process_field(process, "create_time")
+    if (
+        not isinstance(pid, int)
+        or isinstance(pid, bool)
+        or not isinstance(create_time, (int, float))
+        or isinstance(create_time, bool)
+        or not math.isfinite(create_time)
+    ):
+        return None
+    return ResolveProcessIdentity(pid=pid, create_time=float(create_time))
+
+
 class ResolveManager:
     """Connect only to the locally configured Resolve Studio installation.
 
@@ -145,33 +184,50 @@ class ResolveManager:
         self._sleep = sleep
         self._api_call_runner = api_call_runner
         self._resolve: Any | None = None
+        self._resolve_identity: ResolveProcessIdentity | None = None
 
-    def get_process_state(self) -> ResolveProcessState:
+    def _observe_process(self) -> tuple[ResolveProcessState, ResolveProcessIdentity | None]:
         """Identify only the exact locally configured Resolve executable."""
         configured_path = _normalized_windows_path(self._config.executable_path)
         configured_name = ntpath.basename(str(self._config.executable_path)).casefold()
-        has_configured_resolve = False
+        configured_processes: list[ResolveProcessIdentity | None] = []
         has_wrong_resolve = False
         for process in self._process_executables():
             executable = _process_executable_path(process)
             if executable is None:
                 continue
             if _normalized_windows_path(executable) == configured_path:
-                has_configured_resolve = True
+                configured_processes.append(_process_identity(process))
             elif ntpath.basename(str(executable)).casefold() == configured_name:
                 has_wrong_resolve = True
-        if has_wrong_resolve:
-            return ResolveProcessState.WRONG_EXECUTABLE
-        if has_configured_resolve:
-            return ResolveProcessState.RUNNING
-        return ResolveProcessState.NOT_RUNNING
+        if has_wrong_resolve or len(configured_processes) > 1:
+            return ResolveProcessState.WRONG_EXECUTABLE, None
+        if len(configured_processes) == 1:
+            return ResolveProcessState.RUNNING, configured_processes[0]
+        return ResolveProcessState.NOT_RUNNING, None
+
+    def get_process_state(self) -> ResolveProcessState:
+        return self._observe_process()[0]
+
+    def _current_process_observation(
+        self,
+    ) -> tuple[ResolveProcessState, ResolveProcessIdentity | None]:
+        """Return process state and invalidate a cached API for any identity change."""
+        process_state, process_identity = self._observe_process()
+        if (
+            process_state is not ResolveProcessState.RUNNING
+            or process_identity is None
+            or (
+                self._resolve is not None
+                and process_identity != self._resolve_identity
+            )
+        ):
+            self._resolve = None
+            self._resolve_identity = None
+        return process_state, process_identity
 
     def _current_process_state(self) -> ResolveProcessState:
-        """Return process state and invalidate a cached API for any identity change."""
-        process_state = self.get_process_state()
-        if process_state is not ResolveProcessState.RUNNING:
-            self._resolve = None
-        return process_state
+        return self._current_process_observation()[0]
 
     def launch_if_allowed(self) -> bool:
         """Launch only the executable chosen in local ResolveConfig."""
@@ -189,7 +245,7 @@ class ResolveManager:
         if not math.isfinite(timeout_seconds) or timeout_seconds < 0:
             raise ValueError("timeout_seconds must be a non-negative number")
 
-        process_state = self._current_process_state()
+        process_state, _ = self._current_process_observation()
         if process_state is ResolveProcessState.WRONG_EXECUTABLE:
             self._resolve = None
             return None
@@ -198,25 +254,33 @@ class ResolveManager:
 
         deadline = self._clock() + timeout_seconds
         while True:
-            process_state = self._current_process_state()
+            process_state, process_identity = self._current_process_observation()
             if process_state is ResolveProcessState.WRONG_EXECUTABLE:
                 return None
             remaining = deadline - self._clock()
             if remaining <= 0:
                 self._resolve = None
                 return None
-            if process_state is ResolveProcessState.RUNNING:
+            if process_state is ResolveProcessState.RUNNING and process_identity is not None:
                 resolve = self._api_call_runner(self._api_connector, remaining)
                 remaining = deadline - self._clock()
                 if remaining <= 0:
                     self._resolve = None
+                    self._resolve_identity = None
                     return None
                 if resolve is not None:
-                    self._resolve = resolve
-                    return resolve
+                    state_after_call, identity_after_call = self._current_process_observation()
+                    if (
+                        state_after_call is ResolveProcessState.RUNNING
+                        and identity_after_call == process_identity
+                    ):
+                        self._resolve = resolve
+                        self._resolve_identity = process_identity
+                        return resolve
             remaining = deadline - self._clock()
             if remaining <= 0:
                 self._resolve = None
+                self._resolve_identity = None
                 return None
             self._sleep(min(_CONNECTION_POLL_SECONDS, remaining))
 

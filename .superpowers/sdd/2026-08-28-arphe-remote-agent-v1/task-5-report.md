@@ -74,3 +74,25 @@ Full remote-agent suite: `128 passed, 1 skipped in 0.71s`. The skip is the exist
 ### Remaining concern
 
 Python cannot forcefully terminate arbitrary in-process third-party code. The production adapter deliberately uses a daemon worker that cannot mutate manager state, and it discards results after the timeout; this keeps the agent lifecycle safe. A live HOME_DEV test should still confirm the installed Resolve scripting call returns normally under the expected Studio setup.
+
+---
+
+## Audit fix round 2 (2026-08-29)
+
+### Findings resolved
+
+The manager now preserves the configured Resolve process identity as `(pid, create_time)` from `psutil`. It accepts exactly one matching configured executable, rejects two matching processes as ambiguous, and rejects any same-named executable at a different path. Before returning connected status or permitting destructive project access, it observes the process again and invalidates the cached scripting API if the identity is absent or has changed. A connection result is also accepted only if the same identity remains present after the scripting call.
+
+### TDD evidence
+
+RED: the duplicate-configured-process test observed `RUNNING`; the same-path PID/create-time replacement test kept the old API session `connected`.
+
+GREEN: the two new identity tests passed (`2 passed, 18 deselected in 0.11s`).
+
+Focused manager suite: `20 passed in 0.30s`.
+
+Full remote-agent suite: `130 passed, 1 skipped in 0.66s`. The skip is the existing privilege-gated Windows symlink test.
+
+### Remaining concern
+
+Process metadata must remain available from the local process adapter. The production `psutil` adapter explicitly requests executable path, PID, and creation time; a custom adapter that omits PID/create-time is treated as insufficient to retain a cached live API session.

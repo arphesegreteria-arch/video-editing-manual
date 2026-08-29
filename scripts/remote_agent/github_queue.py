@@ -158,7 +158,9 @@ class GitHubQueue:
             raw = base64.b64decode(document["content"], validate=True)
             payload = json.loads(raw.decode("utf-8"))
             job = Job.model_validate(payload)
-            sha = str(document["sha"])
+            sha = document["sha"]
+            if not isinstance(sha, str) or not sha:
+                raise ValueError("invalid document SHA")
         except (KeyError, TypeError, ValueError, UnicodeError, json.JSONDecodeError, ValidationError) as exc:
             raise InvalidJob(f"invalid job document {expected_name}") from exc
         if expected_name != f"{job.job_id}.json":

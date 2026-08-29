@@ -109,6 +109,28 @@ def test_invalid_json_or_schema_is_rejected_before_any_claim(payload):
     assert [call["method"] for call in transport.calls] == ["GET", "GET"]
 
 
+@pytest.mark.parametrize(
+    ("omit_sha", "document_sha"),
+    [(True, None), (False, None), (False, ""), (False, 17)],
+)
+def test_list_pending_rejects_missing_or_invalid_fetched_document_sha(omit_sha, document_sha):
+    """Catches listed jobs acquiring a coerced, unusable Contents blob SHA."""
+    document = content_response(job_payload())
+    if omit_sha:
+        del document._payload["sha"]
+    else:
+        document._payload["sha"] = document_sha
+    client, transport = queue([
+        FakeResponse(payload=[{"name": "queue-001.json", "path": "jobs/queue-001.json", "sha": "listed-sha", "type": "file"}]),
+        document,
+    ])
+
+    with pytest.raises(InvalidJob, match="invalid job document"):
+        client.list_pending("HOME_DEV")
+
+    assert [call["method"] for call in transport.calls] == ["GET", "GET"]
+
+
 @pytest.mark.parametrize("entry", ["not-a-directory-entry", None, 42, {"type": "file"}])
 def test_malformed_listing_entries_raise_sanitized_invalid_job(entry):
     """Catches malformed directory payloads escaping as AttributeError during sorting."""

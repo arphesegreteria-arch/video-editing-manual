@@ -40,6 +40,7 @@ ResolveLauncher = Callable[[Path], None]
 Clock = Callable[[], float]
 Sleeper = Callable[[float], None]
 ApiCallRunner = Callable[[ResolveApiConnector, float], Any | None]
+MediaImporter = Callable[[str, str | None], dict[str, Any]]
 
 _CONNECTION_POLL_SECONDS = 0.25
 
@@ -175,6 +176,7 @@ class ResolveManager:
         clock: Clock = time.monotonic,
         sleep: Sleeper = time.sleep,
         api_call_runner: ApiCallRunner = _call_api_with_timeout,
+        media_importer: MediaImporter | None = None,
     ) -> None:
         self._config = config
         self._process_executables = process_executables
@@ -183,6 +185,7 @@ class ResolveManager:
         self._clock = clock
         self._sleep = sleep
         self._api_call_runner = api_call_runner
+        self._media_importer = media_importer
         self._resolve: Any | None = None
         self._resolve_identity: ResolveProcessIdentity | None = None
 
@@ -366,3 +369,15 @@ class ResolveManager:
         ):
             raise PermissionError("destructive operations require a disposable Resolve project")
         return project_name
+
+    def import_media(
+        self, alias_relative_path: str, target_bin: str | None = None
+    ) -> dict[str, Any]:
+        """Import only an already broker-validated alias path through an injected adapter."""
+        self.require_test_project()
+        if self._media_importer is None:
+            raise RuntimeError("Resolve media import adapter is not configured")
+        result = self._media_importer(alias_relative_path, target_bin)
+        if not isinstance(result, dict):
+            raise RuntimeError("Resolve media import adapter returned invalid output")
+        return result

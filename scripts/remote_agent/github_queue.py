@@ -221,6 +221,16 @@ class GitHubQueue:
         updated_sha = self._update_job(running, queued_job.sha, message=f"Run job {job.job_id}")
         return QueuedJob(job=running, sha=updated_sha)
 
+    def mark_terminal(self, queued_job: QueuedJob, status: JobStatus) -> QueuedJob:
+        """Persist a terminal state only after the runner has held a valid running lease."""
+        if queued_job.job.status is not JobStatus.RUNNING:
+            raise QueueError("only a running job can be marked terminal")
+        if status not in {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.FAILED_TIMEOUT, JobStatus.ABORTED}:
+            raise QueueError("job status is not terminal")
+        terminal = queued_job.job.model_copy(update={"status": status})
+        updated_sha = self._update_job(terminal, queued_job.sha, message=f"Finish job {terminal.job_id}")
+        return QueuedJob(job=terminal, sha=updated_sha)
+
     def _update_job(self, job: Job, sha: str, *, message: str) -> str:
         payload = self._file_payload(job.model_dump_json().encode("utf-8"), message=message, sha=sha)
         try:

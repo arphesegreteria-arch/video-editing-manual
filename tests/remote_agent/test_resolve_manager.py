@@ -456,3 +456,25 @@ def test_same_path_process_replacement_invalidates_cached_connection_identity(tm
     assert manager.get_status()["status"] == ResolveStatus.RUNNING_UNAVAILABLE
     with pytest.raises(RuntimeError, match="not connected"):
         manager.require_test_project()
+
+
+def test_import_media_uses_an_injected_adapter_only_after_the_disposable_project_gate(tmp_path) -> None:
+    """Catches media import bypassing the disposable-project check or directly invoking Resolve in a handler."""
+    config = resolve_config(tmp_path)
+    imported: list[tuple[str, str | None]] = []
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: [resolve_process(config.executable_path)],
+        api_connector=lambda: FakeResolve(),
+        launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
+        clock=FakeClock(),
+        sleep=lambda seconds: pytest.fail(f"unexpected sleep: {seconds}"),
+        api_call_runner=call_api_immediately,
+        media_importer=lambda path, target_bin: imported.append((path, target_bin)) or {"imported": [path], "target_bin": target_bin},
+    )
+    assert manager.connect(timeout_seconds=0.1) is not None
+
+    result = manager.import_media("incoming/clip.mp4", "Remote Agent")
+
+    assert result == {"imported": ["incoming/clip.mp4"], "target_bin": "Remote Agent"}
+    assert imported == [("incoming/clip.mp4", "Remote Agent")]

@@ -7,7 +7,9 @@ from enum import Enum
 import math
 import ntpath
 from pathlib import Path
+import queue
 import subprocess
+import threading
 import time
 from typing import Any
 
@@ -36,6 +38,7 @@ ResolveApiConnector = Callable[[], Any | None]
 ResolveLauncher = Callable[[Path], None]
 Clock = Callable[[], float]
 Sleeper = Callable[[float], None]
+ApiCallRunner = Callable[[ResolveApiConnector, float], Any | None]
 
 _CONNECTION_POLL_SECONDS = 0.25
 
@@ -65,6 +68,31 @@ def _connect_to_resolve() -> Any | None:
 def _launch_configured_executable(executable_path: Path) -> None:
     """Start one explicitly configured executable without involving a shell."""
     subprocess.Popen([str(executable_path)])
+
+
+def _call_api_with_timeout(
+    api_connector: ResolveApiConnector, timeout_seconds: float
+) -> Any | None:
+    """Run an untrusted synchronous API call without blocking application shutdown.
+
+    The worker is daemonized and owns no manager state. A result produced after
+    the caller's deadline is therefore discarded rather than reviving a stopped
+    or timed-out agent lifecycle.
+    """
+    results: queue.Queue[tuple[bool, Any]] = queue.Queue(maxsize=1)
+
+    def invoke() -> None:
+        try:
+            results.put((True, api_connector()))
+        except Exception:
+            results.put((False, None))
+
+    threading.Thread(target=invoke, daemon=True).start()
+    try:
+        succeeded, result = results.get(timeout=timeout_seconds)
+    except queue.Empty:
+        return None
+    return result if succeeded else None
 
 
 def _normalized_windows_path(path: str | Path) -> str:
@@ -107,6 +135,7 @@ class ResolveManager:
         launcher: ResolveLauncher = _launch_configured_executable,
         clock: Clock = time.monotonic,
         sleep: Sleeper = time.sleep,
+        api_call_runner: ApiCallRunner = _call_api_with_timeout,
     ) -> None:
         self._config = config
         self._process_executables = process_executables
@@ -114,24 +143,35 @@ class ResolveManager:
         self._launcher = launcher
         self._clock = clock
         self._sleep = sleep
+        self._api_call_runner = api_call_runner
         self._resolve: Any | None = None
 
     def get_process_state(self) -> ResolveProcessState:
         """Identify only the exact locally configured Resolve executable."""
         configured_path = _normalized_windows_path(self._config.executable_path)
         configured_name = ntpath.basename(str(self._config.executable_path)).casefold()
+        has_configured_resolve = False
         has_wrong_resolve = False
         for process in self._process_executables():
             executable = _process_executable_path(process)
             if executable is None:
                 continue
             if _normalized_windows_path(executable) == configured_path:
-                return ResolveProcessState.RUNNING
-            if ntpath.basename(str(executable)).casefold() == configured_name:
+                has_configured_resolve = True
+            elif ntpath.basename(str(executable)).casefold() == configured_name:
                 has_wrong_resolve = True
         if has_wrong_resolve:
             return ResolveProcessState.WRONG_EXECUTABLE
+        if has_configured_resolve:
+            return ResolveProcessState.RUNNING
         return ResolveProcessState.NOT_RUNNING
+
+    def _current_process_state(self) -> ResolveProcessState:
+        """Return process state and invalidate a cached API for any identity change."""
+        process_state = self.get_process_state()
+        if process_state is not ResolveProcessState.RUNNING:
+            self._resolve = None
+        return process_state
 
     def launch_if_allowed(self) -> bool:
         """Launch only the executable chosen in local ResolveConfig."""
@@ -149,7 +189,7 @@ class ResolveManager:
         if not math.isfinite(timeout_seconds) or timeout_seconds < 0:
             raise ValueError("timeout_seconds must be a non-negative number")
 
-        process_state = self.get_process_state()
+        process_state = self._current_process_state()
         if process_state is ResolveProcessState.WRONG_EXECUTABLE:
             self._resolve = None
             return None
@@ -158,22 +198,27 @@ class ResolveManager:
 
         deadline = self._clock() + timeout_seconds
         while True:
-            process_state = self.get_process_state()
+            process_state = self._current_process_state()
             if process_state is ResolveProcessState.WRONG_EXECUTABLE:
+                return None
+            remaining = deadline - self._clock()
+            if remaining <= 0:
                 self._resolve = None
                 return None
             if process_state is ResolveProcessState.RUNNING:
-                try:
-                    resolve = self._api_connector()
-                except Exception:
-                    resolve = None
+                resolve = self._api_call_runner(self._api_connector, remaining)
+                remaining = deadline - self._clock()
+                if remaining <= 0:
+                    self._resolve = None
+                    return None
                 if resolve is not None:
                     self._resolve = resolve
                     return resolve
-            if self._clock() >= deadline:
+            remaining = deadline - self._clock()
+            if remaining <= 0:
                 self._resolve = None
                 return None
-            self._sleep(min(_CONNECTION_POLL_SECONDS, deadline - self._clock()))
+            self._sleep(min(_CONNECTION_POLL_SECONDS, remaining))
 
     def _current_project(self) -> Any:
         if self._resolve is None:
@@ -196,7 +241,7 @@ class ResolveManager:
 
     def get_status(self) -> dict[str, ResolveStatus | bool | str | None]:
         """Return safe, small status details for the agent UI and heartbeat."""
-        process_state = self.get_process_state()
+        process_state = self._current_process_state()
         if process_state is ResolveProcessState.WRONG_EXECUTABLE:
             return {
                 "status": ResolveStatus.WRONG_EXECUTABLE,
@@ -246,6 +291,8 @@ class ResolveManager:
 
     def require_test_project(self) -> str:
         """Permit destructive Resolve handlers only in disposable project namespaces."""
+        if self._current_process_state() is not ResolveProcessState.RUNNING:
+            raise RuntimeError("Resolve is not connected")
         project_name = self._name(self._current_project())
         if project_name is None:
             raise RuntimeError("Resolve current project is unavailable")

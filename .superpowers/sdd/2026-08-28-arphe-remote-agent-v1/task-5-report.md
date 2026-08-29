@@ -42,3 +42,35 @@ The skip is the existing privilege-gated real Windows symlink test. No Resolve p
 ## Concerns
 
 - The production scripting module is intentionally loaded lazily; validating its installation and Resolve Studio external-scripting preferences belongs to the HOME_DEV live checklist, not this fake-adapter unit suite.
+
+---
+
+## Audit fix round 1 (2026-08-29)
+
+### Findings resolved
+
+1. A synchronous Resolve scripting call could exceed `connect()`'s timeout. It now runs through a bounded, daemonized call adapter that owns no manager state; timed-out and late results are discarded. This prevents a late scripting response from reconnecting a stopped/timed-out lifecycle while avoiding a shutdown-blocking worker.
+2. Connection waits now calculate the remaining duration once immediately before sleeping, return if it is non-positive, and only sleep the smaller of the poll interval and that remaining duration.
+3. Process discovery now scans all same-named Resolve executables before accepting a configured match. Any simultaneous wrong `Resolve.exe` fails closed. Status and destructive-project checks revalidate the configured process identity and invalidate any cached API object if the process disappears, is replaced, or becomes ambiguous.
+
+### TDD evidence
+
+All commands used the external remote-agent virtual environment, `PYTHONDONTWRITEBYTECODE=1`, and `-p no:cacheprovider`.
+
+RED tests were added before the implementation. The focused failures demonstrated:
+
+- a simultaneous configured and wrong `Resolve.exe` returned `RUNNING`;
+- the old clock sampling exhausted the scripted clock before it could protect the sleep boundary;
+- a blocking connector left the `connect()` caller alive beyond its timeout;
+- a late connector remained active past deadline; and
+- a cached connection still authorized project access after process replacement.
+
+After the implementation, the five new checks passed: `5 passed, 13 deselected in 0.27s`.
+
+Focused manager suite: `18 passed in 0.27s`.
+
+Full remote-agent suite: `128 passed, 1 skipped in 0.71s`. The skip is the existing privilege-gated Windows symlink test.
+
+### Remaining concern
+
+Python cannot forcefully terminate arbitrary in-process third-party code. The production adapter deliberately uses a daemon worker that cannot mutate manager state, and it discards results after the timeout; this keeps the agent lifecycle safe. A live HOME_DEV test should still confirm the installed Resolve scripting call returns normally under the expected Studio setup.

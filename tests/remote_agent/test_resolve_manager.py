@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
 
 import pytest
 
@@ -21,6 +22,14 @@ class FakeClock:
 
     def sleep(self, seconds: float) -> None:
         self.now += seconds
+
+
+class SequenceClock:
+    def __init__(self, values: list[float]) -> None:
+        self._values = iter(values)
+
+    def __call__(self) -> float:
+        return next(self._values)
 
 
 class FakeProject:
@@ -46,6 +55,10 @@ class FakeResolve:
 
     def GetVersion(self):
         return [19, 1, 2, 3, "Studio"]
+
+
+def call_api_immediately(api_connector, timeout_seconds: float):
+    return api_connector()
 
 
 def resolve_config(tmp_path: Path, *, launch_if_needed: bool = False) -> ResolveConfig:
@@ -95,6 +108,27 @@ def test_process_state_requires_the_exact_configured_executable_identity(tmp_pat
     assert manager.get_status()["status"] == ResolveStatus.WRONG_EXECUTABLE
 
 
+def test_process_state_fails_closed_when_configured_and_wrong_resolve_are_both_running(
+    tmp_path,
+) -> None:
+    """Catches accepting a scripting API when more than one Resolve executable is present."""
+    config = resolve_config(tmp_path)
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: [
+            config.executable_path,
+            tmp_path / "other-install" / "Resolve.exe",
+        ],
+        api_connector=lambda: pytest.fail("ambiguous process identity must not connect"),
+        launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
+        clock=FakeClock(),
+        sleep=lambda seconds: pytest.fail(f"unexpected sleep: {seconds}"),
+    )
+
+    assert manager.get_process_state() is ResolveProcessState.WRONG_EXECUTABLE
+    assert manager.get_status()["status"] == ResolveStatus.WRONG_EXECUTABLE
+
+
 def test_process_state_accepts_a_case_insensitive_match_for_configured_executable(tmp_path) -> None:
     """Catches false negatives when Windows reports the configured executable with different casing."""
     config = resolve_config(tmp_path)
@@ -122,6 +156,7 @@ def test_launch_only_uses_the_local_configured_executable_when_allowed(tmp_path)
         launcher=launched.append,
         clock=FakeClock(),
         sleep=lambda seconds: None,
+        api_call_runner=call_api_immediately,
     )
 
     assert manager.launch_if_allowed() is True
@@ -177,12 +212,98 @@ def test_connect_waits_only_until_the_bounded_timeout_when_running_api_is_unavai
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=clock,
         sleep=clock.sleep,
+        api_call_runner=call_api_immediately,
     )
 
     assert manager.connect(timeout_seconds=1.0) is None
     assert 1.0 <= clock.now <= 1.25
     assert api_attempts >= 2
     assert manager.get_status()["status"] == ResolveStatus.RUNNING_UNAVAILABLE
+
+
+def test_connect_does_not_pass_a_negative_sleep_when_the_clock_crosses_deadline(
+    tmp_path,
+) -> None:
+    """Catches a clock race turning the bounded wait into an invalid negative sleep."""
+    config = resolve_config(tmp_path)
+    sleeps: list[float] = []
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: [config.executable_path],
+        api_connector=lambda: None,
+        launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
+        clock=SequenceClock([0.0, 0.5, 1.1]),
+        sleep=sleeps.append,
+        api_call_runner=call_api_immediately,
+    )
+
+    assert manager.connect(timeout_seconds=1.0) is None
+    assert sleeps == []
+
+
+def test_connect_returns_by_deadline_when_the_synchronous_connector_blocks(tmp_path) -> None:
+    """Catches a blocking Resolve scripting call holding the agent past its timeout."""
+    config = resolve_config(tmp_path)
+    entered = threading.Event()
+    release = threading.Event()
+    result: list[object | None] = []
+
+    def blocking_connector():
+        entered.set()
+        release.wait()
+        return FakeResolve()
+
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: [config.executable_path],
+        api_connector=blocking_connector,
+        launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
+    )
+    caller = threading.Thread(target=lambda: result.append(manager.connect(0.05)))
+    caller.start()
+    try:
+        assert entered.wait(0.2)
+        caller.join(0.3)
+        assert not caller.is_alive()
+        assert result == [None]
+    finally:
+        release.set()
+        caller.join(0.3)
+
+
+def test_late_connector_success_is_discarded_after_connection_deadline(tmp_path) -> None:
+    """Catches a timed-out scripting call reviving a manager after it later succeeds."""
+    config = resolve_config(tmp_path)
+    entered = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def late_connector():
+        entered.set()
+        release.wait()
+        finished.set()
+        return FakeResolve()
+
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: [config.executable_path],
+        api_connector=late_connector,
+        launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
+    )
+    caller = threading.Thread(target=lambda: manager.connect(0.05))
+    caller.start()
+    try:
+        assert entered.wait(0.2)
+        caller.join(0.3)
+        assert not caller.is_alive()
+        release.set()
+        assert finished.wait(0.3)
+        assert manager.get_status()["status"] == ResolveStatus.RUNNING_UNAVAILABLE
+        with pytest.raises(RuntimeError, match="not connected"):
+            manager.require_test_project()
+    finally:
+        release.set()
+        caller.join(0.3)
 
 
 def test_connect_reports_project_timeline_and_version_after_api_becomes_available(tmp_path) -> None:
@@ -204,6 +325,7 @@ def test_connect_reports_project_timeline_and_version_after_api_becomes_availabl
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=clock,
         sleep=clock.sleep,
+        api_call_runner=call_api_immediately,
     )
 
     assert manager.connect(timeout_seconds=1.0) is resolve
@@ -229,9 +351,10 @@ def test_require_test_project_refuses_non_disposable_current_projects(
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=FakeClock(),
         sleep=lambda seconds: None,
+        api_call_runner=call_api_immediately,
     )
 
-    manager.connect(timeout_seconds=0)
+    manager.connect(timeout_seconds=0.1)
 
     with pytest.raises(PermissionError, match="disposable Resolve project"):
         manager.require_test_project()
@@ -250,8 +373,33 @@ def test_require_test_project_allows_only_configured_disposable_projects(
         launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
         clock=FakeClock(),
         sleep=lambda seconds: None,
+        api_call_runner=call_api_immediately,
     )
 
-    manager.connect(timeout_seconds=0)
+    manager.connect(timeout_seconds=0.1)
 
     assert manager.require_test_project() == project_name
+
+
+def test_process_replacement_invalidates_cached_connection_before_status_or_destructive_use(
+    tmp_path,
+) -> None:
+    """Catches a cached API session being trusted after configured Resolve is replaced."""
+    config = resolve_config(tmp_path)
+    processes = [config.executable_path]
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: processes,
+        api_connector=lambda: FakeResolve(),
+        launcher=lambda path: pytest.fail(f"unexpected launch: {path}"),
+        clock=FakeClock(),
+        sleep=lambda seconds: None,
+        api_call_runner=call_api_immediately,
+    )
+
+    assert manager.connect(timeout_seconds=0.1) is not None
+    processes[:] = [tmp_path / "replacement" / "Resolve.exe"]
+
+    assert manager.get_status()["status"] == ResolveStatus.WRONG_EXECUTABLE
+    with pytest.raises(RuntimeError, match="not connected"):
+        manager.require_test_project()

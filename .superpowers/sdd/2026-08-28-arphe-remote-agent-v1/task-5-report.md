@@ -1,0 +1,44 @@
+# Task 5 report: guarded Resolve Studio manager
+
+## Implementation
+
+- Added `ResolveManager`, consuming `ResolveConfig` and exposing `get_process_state()`, `launch_if_allowed()`, `connect(timeout_seconds)`, `get_status()`, and `require_test_project()`.
+- Process detection normalizes Windows paths and recognizes only the exact local configured executable. A different `Resolve.exe` is reported as `wrong_executable`; a job cannot supply an executable path anywhere in the API.
+- Launching is disabled unless `ResolveConfig.launch_if_needed` permits it, always uses the local configured path, and declines to launch when a different Resolve executable is already detected.
+- Connection waits in 250 ms bounded increments for a configured Resolve process and its scripting API. The Resolve scripting import, process discovery, launcher, clock, and sleeper are injectable, so the tests never access a live process or API.
+- Status distinguishes `not_running`, `running_unavailable`, `connected`, and `wrong_executable`; the connected status exposes only active project, active timeline, and Resolve version.
+- `require_test_project()` raises unless the current project is exactly `ARPHE_TEST` or begins with configured `ARPHE_AUDIT_`.
+
+## TDD evidence
+
+All test commands used the external remote-agent virtual environment, `PYTHONDONTWRITEBYTECODE=1`, and `-p no:cacheprovider`.
+
+### RED
+
+The initial focused command was:
+
+```powershell
+& '..\remote-agent-venv\Scripts\python.exe' -m pytest -p no:cacheprovider tests/remote_agent/test_resolve_manager.py -v
+```
+
+It failed during collection as expected with `ModuleNotFoundError: No module named 'scripts.remote_agent.resolve_manager'`.
+
+The later safety test for a wrong existing `Resolve.exe` was added before its implementation. Its focused run failed as expected because `launch_if_allowed()` invoked the injected launcher.
+
+### GREEN
+
+- Focused manager suite: `13 passed in 0.12s`.
+- Full remote-agent suite: `123 passed, 1 skipped in 0.53s`.
+- `git diff --check` was run without errors.
+
+The skip is the existing privilege-gated real Windows symlink test. No Resolve process, scripting API, or launcher was invoked by any unit test.
+
+## Files changed
+
+- `scripts/remote_agent/resolve_manager.py`
+- `tests/remote_agent/test_resolve_manager.py`
+- `.superpowers/sdd/2026-08-28-arphe-remote-agent-v1/task-5-report.md`
+
+## Concerns
+
+- The production scripting module is intentionally loaded lazily; validating its installation and Resolve Studio external-scripting preferences belongs to the HOME_DEV live checklist, not this fake-adapter unit suite.

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from io import StringIO
 import logging
 from pathlib import Path
 import subprocess
@@ -262,6 +263,150 @@ def test_idle_close_returns_while_a_queue_poll_is_still_blocked(tmp_path):
         runner.release.set()
         closing.join(1)
         controller.wait_until_stopped(timeout=1)
+
+
+def test_idle_close_atomically_blocks_a_claim_crossing_its_boundary(tmp_path):
+    """An idle close owns the claim boundary even when RUNNING is delayed."""
+    from scripts.remote_agent.github_queue import QueuedJob
+    from scripts.remote_agent.handler_registry import HandlerRegistry
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+    from scripts.remote_agent.job_runner import JobRunner
+    from scripts.remote_agent.lifecycle import LifecycleController
+    from scripts.remote_agent.logging_setup import configure_redacting_logger
+    from scripts.remote_agent.models import Job
+    from scripts.remote_agent.models import JobStatus as ModelJobStatus
+
+    mark_running_entered = threading.Event()
+    release_mark_running = threading.Event()
+    release_active_notification = threading.Event()
+    handler_called = threading.Event()
+
+    queued_job = Job.model_validate(
+        {
+            "job_id": "close-boundary-job",
+            "target_machine": "HOME_DEV",
+            "action": "PING",
+            "created_at": "2026-08-28T00:00:00Z",
+            "requested_by": "arphe",
+            "retryable": False,
+            "timeout_seconds": 5,
+            "parameters": {},
+        }
+    )
+
+    class BoundaryQueue(RecordingQueue):
+        def __init__(self) -> None:
+            super().__init__()
+            self.claims = 0
+            self.running = 0
+            self.results = []
+            self.terminal = []
+
+        def list_pending(self, _machine_id):
+            return [QueuedJob(queued_job, "source-sha")]
+
+        def claim(self, candidate, _sha, *, idempotent):
+            self.claims += 1
+            claimed = candidate.model_copy(
+                update={
+                    "status": ModelJobStatus.CLAIMED,
+                    "claimed_by": candidate.target_machine,
+                    "lease_expires_at": datetime(2026, 8, 29, tzinfo=timezone.utc),
+                }
+            )
+            return QueuedJob(claimed, "claimed-sha")
+
+        def mark_running(self, claimed):
+            self.running += 1
+            mark_running_entered.set()
+            assert release_mark_running.wait(1)
+            return QueuedJob(claimed.job.model_copy(update={"status": ModelJobStatus.RUNNING}), "running-sha")
+
+        def write_result(self, result):
+            self.results.append(result)
+
+        def mark_terminal(self, running, status):
+            terminal = QueuedJob(running.job.model_copy(update={"status": status}), "terminal-sha")
+            self.terminal.append(terminal)
+            return terminal
+
+    class CoordinatedRunner(JobRunner):
+        """Makes the old two-step lifecycle interleaving deterministic."""
+
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            self._close_handshake_used = False
+            self._published_active = threading.Event()
+
+        def hold_active_notification(self) -> None:
+            def observe(state):
+                if state.active:
+                    self._published_active.set()
+                    assert release_active_notification.wait(1)
+
+            self.add_execution_listener(observe)
+
+        def close_claim_gate_if_idle(self):
+            self._close_handshake_used = True
+            state = super().close_claim_gate_if_idle()
+            release_mark_running.set()
+            return state
+
+        def stop_accepting_new_claims(self):
+            super().stop_accepting_new_claims()
+            release_mark_running.set()
+            if not self._close_handshake_used:
+                assert self._published_active.wait(1)
+
+    registry = HandlerRegistry(["PING"])
+
+    def handler(_parameters, _token):
+        handler_called.set()
+        return {"ran": True}
+
+    registry.register("PING", PingParameters, handler)
+    queue = BoundaryQueue()
+    logger = configure_redacting_logger(
+        logging.Logger("arphe.remote_agent.HOME_DEV"), [logging.StreamHandler(StringIO())]
+    )
+    agent_config = _config(tmp_path)
+    runner = CoordinatedRunner(
+        agent_config,
+        queue,
+        registry,
+        agent_version="1.0",
+        source_commit="abc123",
+        logger=logger,
+    )
+    controller = LifecycleController(
+        agent_config,
+        queue,
+        runner,
+        FakeResolve(),
+        agent_version="1.0",
+        source_commit="abc123",
+        logger=logging.getLogger("test.lifecycle"),
+        scheduler=ManualScheduler(),
+        monotonic=FakeClock(),
+    )
+    runner.hold_active_notification()
+    controller.start(ui_visible=True)
+    assert mark_running_entered.wait(1)
+
+    try:
+        assert controller.request_close() is True
+        controller.wait_until_stopped(timeout=1)
+
+        assert not handler_called.is_set()
+        assert [result.status for result in queue.results] == [JobStatus.ABORTED]
+        assert [item.job.status for item in queue.terminal] == [JobStatus.ABORTED]
+        assert controller.state is AgentState.OFFLINE
+        assert controller.snapshot().current_job == "-"
+        assert all(heartbeat.current_job_id is None for heartbeat in queue.heartbeats)
+    finally:
+        release_mark_running.set()
+        release_active_notification.set()
+        controller.shutdown(timeout=1)
 
 
 def test_heartbeat_uses_the_runner_current_job_id(tmp_path):

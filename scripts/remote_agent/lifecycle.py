@@ -278,19 +278,12 @@ class LifecycleController:
 
     def request_close(self, mode: CloseMode | None = None) -> bool:
         """Return true when the caller may destroy the window immediately."""
-        with self._lock:
-            active = self._job_active
-        if active and mode is None:
-            raise ValueError("an active job requires an explicit close mode")
-        self._stop_new_claims()
-        with self._lock:
-            active = self._job_active
-        if not active:
+        if not self._close_claim_gate_if_idle():
             self._begin_shutdown()
             return True
         if mode is None:
-            self._resume_new_claims()
             raise ValueError("an active job requires an explicit close mode")
+        self._stop_new_claims()
         with self._lock:
             self._closing = True
             self._stop_after_current = True
@@ -442,10 +435,17 @@ class LifecycleController:
         if callable(stopper):
             stopper()
 
-    def _resume_new_claims(self) -> None:
-        resumer = getattr(self._runner, "resume_accepting_new_claims", None)
-        if callable(resumer):
-            resumer()
+    def _close_claim_gate_if_idle(self) -> bool:
+        """Return whether a confirmed job predates this close request."""
+        closer = getattr(self._runner, "close_claim_gate_if_idle", None)
+        if callable(closer):
+            execution = closer()
+            return bool(getattr(execution, "active", False))
+        with self._lock:
+            active = self._job_active
+        if not active:
+            self._stop_new_claims()
+        return active
 
     def _register_outage(self) -> float:
         with self._lock:

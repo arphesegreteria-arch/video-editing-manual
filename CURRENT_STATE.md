@@ -116,3 +116,10 @@ Strategia tracking corrente:
    - eventuale vero offset audio/video;
    - qualità visiva dei jump cut.
 5. Solo dopo revisione completa promuovere la V4.3 a `validated`.
+
+## 2026-08-31 — Remote Agent: chiusura atomica al confine di claim
+
+- La richiesta di chiusura ora usa una stretta di mano atomica con il runner: un job già attivo richiede esplicitamente `finish` o `abort`, mentre un claim ancora in transito viene bloccato in modo irrevocabile.
+- Un job che attraversa il confine dopo l'inizio della chiusura viene finalizzato `ABORTED`, senza avviare l'handler e senza pubblicare un `current_job_id` transitorio.
+- Aggiunto un test deterministico controller + runner reale + coda finta che forza questo interleaving e controlla stato offline, heartbeat senza job corrente e transizione terminale.
+- Verifica automatizzata: `194 passed, 1 skipped` con la suite completa del remote agent.

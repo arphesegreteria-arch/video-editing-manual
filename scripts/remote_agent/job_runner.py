@@ -120,6 +120,20 @@ class JobRunner:
         with self._run_lock:
             self._claims_allowed = False
 
+    def close_claim_gate_if_idle(self) -> RunnerExecutionState:
+        """Atomically close new claims unless a job was already executing.
+
+        The returned snapshot and gate update share ``_run_lock`` with the
+        claimed-job activation transition.  A lifecycle owner can therefore
+        distinguish a genuinely active job from a claim that is still crossing
+        the queue boundary without reopening the gate.
+        """
+        with self._run_lock:
+            state = self._execution_state
+            if not state.active:
+                self._claims_allowed = False
+            return state
+
     def resume_accepting_new_claims(self) -> None:
         """Reopen the claim gate when an operator cancels a close request."""
         with self._run_lock:
@@ -164,10 +178,19 @@ class JobRunner:
         job = running.job
         started_at = self._utc_now()
         token = CancellationToken()
-        self._set_execution_state(RunnerExecutionState(active=True, current_job_id=job.job_id))
+        if not self._activate_claimed_job_if_allowed(job.job_id):
+            result = self._result(
+                job,
+                started_at,
+                JobStatus.ABORTED,
+                error_type="Cancelled",
+                error_message="cancellation requested before handler start",
+            )
+            self._persist_terminal(running, result)
+            return result
         cleanup_pending = False
         try:
-            if self._cancellation_requested() or not self._claims_are_allowed():
+            if self._cancellation_requested():
                 token.cancel()
                 result = self._result(
                     job,
@@ -315,12 +338,30 @@ class JobRunner:
         with self._run_lock:
             return self._claims_allowed
 
+    def _activate_claimed_job_if_allowed(self, job_id: str) -> bool:
+        """Publish a claimed job only when the close gate is still open."""
+        state = RunnerExecutionState(active=True, current_job_id=job_id)
+        with self._run_lock:
+            if not self._claims_allowed:
+                return False
+            if self._execution_state == state:
+                return True
+            self._execution_state = state
+            listeners = tuple(self._execution_listeners)
+        self._notify_execution_listeners(state, listeners)
+        return True
+
     def _set_execution_state(self, state: RunnerExecutionState) -> None:
         with self._run_lock:
             if self._execution_state == state:
                 return
             self._execution_state = state
             listeners = tuple(self._execution_listeners)
+        self._notify_execution_listeners(state, listeners)
+
+    def _notify_execution_listeners(
+        self, state: RunnerExecutionState, listeners: tuple[Callable[[RunnerExecutionState], None], ...]
+    ) -> None:
         for listener in listeners:
             try:
                 listener(state)

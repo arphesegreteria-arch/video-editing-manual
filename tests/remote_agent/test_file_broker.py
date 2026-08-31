@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from scripts.remote_agent.config import FolderConfig
+from scripts.remote_agent.cancellation import CancellationToken
 from scripts.remote_agent.file_broker import FileBroker, _has_reparse_attribute
 
 
@@ -260,7 +261,7 @@ def test_copy_to_workspace_copies_media_and_returns_only_workspace_alias(tmp_pat
     broker = FileBroker(config)
 
     copied = broker.copy_to_workspace(
-        "incoming", "source.mov", "job-001/copied.mov"
+        "incoming", "source.mov", "job-001/copied.mov", CancellationToken()
     )
 
     assert copied == "workspace/job-001/copied.mov"
@@ -276,6 +277,6 @@ def test_copy_to_workspace_rejects_an_existing_directory_destination(tmp_path) -
     broker = FileBroker(config)
 
     with pytest.raises(IsADirectoryError, match="destination is a directory"):
-        broker.copy_to_workspace("incoming", "source.mov", "existing.mov")
+        broker.copy_to_workspace("incoming", "source.mov", "existing.mov", CancellationToken())
 
     assert not (destination_directory / "source.mov").exists()

@@ -9,7 +9,7 @@ import pytest
 from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.github_queue import QueuedJob
 from scripts.remote_agent.handler_registry import HandlerRegistry
-from scripts.remote_agent.job_runner import JobRunner
+from scripts.remote_agent.job_runner import JobRunner, RunnerState
 from scripts.remote_agent.models import Job, JobStatus
 
 
@@ -120,7 +120,7 @@ def test_runner_aborts_before_handler_when_cancellation_is_requested(tmp_path: P
 
 def test_runner_serializes_concurrent_calls_and_sanitizes_secret_handler_failure(tmp_path: Path) -> None:
     """Catches a second caller claiming while a job runs or a secret exception escaping result validation."""
-    started, release = threading.Event(), threading.Event()
+    started, release, stopped = threading.Event(), threading.Event(), threading.Event()
     from scripts.remote_agent.handlers.agent_status import PingParameters
     handler_registry = HandlerRegistry(["PING"])
     def handler(_p, token):
@@ -140,3 +140,139 @@ def test_runner_serializes_concurrent_calls_and_sanitizes_secret_handler_failure
     assert result.status is JobStatus.FAILED
     assert "abc" not in result.error_message
     assert queue.results == [result]
+
+
+def test_runner_cancels_and_joins_handler_before_persisting_aborted_result(tmp_path: Path) -> None:
+    """Catches persisting ABORTED while a destructive handler is still running."""
+    started, cleaned = threading.Event(), threading.Event()
+    cancelling = [False]
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+    r = HandlerRegistry(["PING"])
+
+    def handler(_p, token):
+        started.set()
+        while not token.cancelled:
+            threading.Event().wait(0.01)
+        cleaned.set()
+        return {"cleaned": True}
+
+    r.register("PING", PingParameters, handler)
+    queue = FakeQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(config(tmp_path), queue, r, agent_version="1", source_commit="abc", cancellation_requested=lambda: cancelling[0])
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(runner.run_once()))
+    thread.start()
+    assert started.wait(1)
+
+    cancelling[0] = True
+    thread.join(1)
+
+    assert cleaned.is_set()
+    assert outcome[0].status is JobStatus.ABORTED
+    assert queue.results == [outcome[0]]
+    assert queue.terminal[0].job.status is JobStatus.ABORTED
+
+
+def test_runner_holds_the_gate_without_persisting_when_cleanup_bound_is_exhausted(tmp_path: Path) -> None:
+    """Catches an uncooperative mutator being marked terminal while it can still run."""
+    started, release, stopped = threading.Event(), threading.Event(), threading.Event()
+    cancelling = [False]
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+
+    registry = HandlerRegistry(["PING"])
+
+    def handler(_parameters, _token):
+        started.set()
+        assert release.wait(1)
+        stopped.set()
+        return {"finished": True}
+
+    registry.register("PING", PingParameters, handler)
+    queue = FakeQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(
+        config(tmp_path),
+        queue,
+        registry,
+        agent_version="1",
+        source_commit="abc",
+        cancellation_requested=lambda: cancelling[0],
+        cleanup_timeout_seconds=0.01,
+    )
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(runner.run_once()))
+    thread.start()
+    assert started.wait(1)
+
+    cancelling[0] = True
+    thread.join(1)
+
+    assert outcome == [None]
+    assert runner.state is RunnerState.CANCELLATION_CLEANUP_PENDING
+    assert queue.results == []
+    assert queue.terminal == []
+    assert runner.run_once() is None
+    assert queue.claims == 1
+
+    release.set()
+    assert stopped.wait(1)
+    assert runner.run_once() is not None
+    assert queue.results[0].status is JobStatus.ABORTED
+    assert queue.terminal[0].job.status is JobStatus.ABORTED
+    assert runner.state is RunnerState.IDLE
+
+
+def test_runner_times_out_only_after_the_handler_observes_its_cancellation_token(tmp_path: Path) -> None:
+    """Catches a timeout being persisted before the handler has stopped mutating."""
+    started, stopped = threading.Event(), threading.Event()
+    timestamps = iter((0.0, 6.0))
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+
+    registry = HandlerRegistry(["PING"])
+
+    def handler(_parameters, token):
+        started.set()
+        while not token.cancelled:
+            threading.Event().wait(0.005)
+        stopped.set()
+        return {"stopped": True}
+
+    registry.register("PING", PingParameters, handler)
+    queue = FakeQueue(QueuedJob(job(timeout_seconds=5), "source-sha"))
+    runner = JobRunner(
+        config(tmp_path), queue, registry, agent_version="1", source_commit="abc", monotonic=lambda: next(timestamps)
+    )
+
+    result = runner.run_once()
+
+    assert started.is_set() and stopped.is_set()
+    assert result.status is JobStatus.FAILED_TIMEOUT
+    assert queue.results == [result]
+    assert queue.terminal[0].job.status is JobStatus.FAILED_TIMEOUT
+
+
+def test_runner_gives_observed_completion_precedence_over_a_simultaneous_cancellation_request(tmp_path: Path) -> None:
+    """Catches a completed handler being rewritten as aborted solely because a later poll sees cancellation."""
+    handler_finished = threading.Event()
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+
+    registry = HandlerRegistry(["PING"])
+
+    def handler(_parameters, _token):
+        handler_finished.set()
+        return {"finished": True}
+
+    registry.register("PING", PingParameters, handler)
+    queue = FakeQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(
+        config(tmp_path),
+        queue,
+        registry,
+        agent_version="1",
+        source_commit="abc",
+        cancellation_requested=handler_finished.is_set,
+    )
+
+    result = runner.run_once()
+
+    assert result.status is JobStatus.SUCCEEDED
+    assert result.output == {"finished": True}

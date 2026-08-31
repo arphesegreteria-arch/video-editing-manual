@@ -6,6 +6,7 @@ import threading
 import pytest
 
 from scripts.remote_agent.config import ResolveConfig
+from scripts.remote_agent.cancellation import CancellationToken
 from scripts.remote_agent.resolve_manager import (
     ResolveManager,
     ResolveProcessState,
@@ -461,7 +462,7 @@ def test_same_path_process_replacement_invalidates_cached_connection_identity(tm
 def test_import_media_uses_an_injected_adapter_only_after_the_disposable_project_gate(tmp_path) -> None:
     """Catches media import bypassing the disposable-project check or directly invoking Resolve in a handler."""
     config = resolve_config(tmp_path)
-    imported: list[tuple[str, str | None]] = []
+    imported: list[tuple[str, str | None, CancellationToken]] = []
     manager = ResolveManager(
         config,
         process_executables=lambda: [resolve_process(config.executable_path)],
@@ -470,11 +471,12 @@ def test_import_media_uses_an_injected_adapter_only_after_the_disposable_project
         clock=FakeClock(),
         sleep=lambda seconds: pytest.fail(f"unexpected sleep: {seconds}"),
         api_call_runner=call_api_immediately,
-        media_importer=lambda path, target_bin: imported.append((path, target_bin)) or {"imported": [path], "target_bin": target_bin},
+        media_importer=lambda path, target_bin, token: imported.append((path, target_bin, token)) or {"imported": [path], "target_bin": target_bin},
     )
     assert manager.connect(timeout_seconds=0.1) is not None
 
-    result = manager.import_media("incoming/clip.mp4", "Remote Agent")
+    token = CancellationToken()
+    result = manager.import_media("incoming/clip.mp4", "Remote Agent", token)
 
     assert result == {"imported": ["incoming/clip.mp4"], "target_bin": "Remote Agent"}
-    assert imported == [("incoming/clip.mp4", "Remote Agent")]
+    assert imported == [("incoming/clip.mp4", "Remote Agent", token)]

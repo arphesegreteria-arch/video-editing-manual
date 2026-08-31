@@ -14,6 +14,7 @@ import threading
 import time
 from typing import Any
 
+from scripts.remote_agent.cancellation import CancellationToken, require_not_cancelled
 from scripts.remote_agent.config import ResolveConfig
 
 
@@ -40,7 +41,7 @@ ResolveLauncher = Callable[[Path], None]
 Clock = Callable[[], float]
 Sleeper = Callable[[float], None]
 ApiCallRunner = Callable[[ResolveApiConnector, float], Any | None]
-MediaImporter = Callable[[str, str | None], dict[str, Any]]
+MediaImporter = Callable[[str, str | None, CancellationToken], dict[str, Any]]
 
 _CONNECTION_POLL_SECONDS = 0.25
 
@@ -371,13 +372,15 @@ class ResolveManager:
         return project_name
 
     def import_media(
-        self, alias_relative_path: str, target_bin: str | None = None
+        self, alias_relative_path: str, target_bin: str | None, token: CancellationToken
     ) -> dict[str, Any]:
         """Import only an already broker-validated alias path through an injected adapter."""
+        require_not_cancelled(token)
         self.require_test_project()
         if self._media_importer is None:
             raise RuntimeError("Resolve media import adapter is not configured")
-        result = self._media_importer(alias_relative_path, target_bin)
+        result = self._media_importer(alias_relative_path, target_bin, token)
+        require_not_cancelled(token)
         if not isinstance(result, dict):
             raise RuntimeError("Resolve media import adapter returned invalid output")
         return result

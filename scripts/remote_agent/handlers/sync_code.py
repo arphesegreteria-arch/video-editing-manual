@@ -9,6 +9,7 @@ from typing import Protocol
 
 from pydantic import Field, field_validator
 
+from scripts.remote_agent.cancellation import CancellationToken, require_not_cancelled
 from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.models import StrictModel
 
@@ -34,9 +35,9 @@ class GitSyncAdapter(Protocol):
     def current_branch(self) -> str: ...
     def is_clean(self) -> bool: ...
     def current_revision(self) -> str: ...
-    def remote_revision(self, remote_name: str, branch: str) -> str: ...
+    def remote_revision(self, remote_name: str, branch: str, token: CancellationToken) -> str: ...
     def is_ancestor(self, ancestor: str, descendant: str) -> bool: ...
-    def fast_forward(self, remote_name: str, branch: str, commit_sha: str) -> None: ...
+    def fast_forward(self, remote_name: str, branch: str, commit_sha: str, token: CancellationToken) -> None: ...
 
 
 class SubprocessGitSyncAdapter:
@@ -51,14 +52,18 @@ class SubprocessGitSyncAdapter:
     def current_branch(self) -> str: return self._git("branch", "--show-current")
     def is_clean(self) -> bool: return not self._git("status", "--porcelain")
     def current_revision(self) -> str: return self._git("rev-parse", "HEAD")
-    def remote_revision(self, remote_name: str, branch: str) -> str:
+    def remote_revision(self, remote_name: str, branch: str, token: CancellationToken) -> str:
+        require_not_cancelled(token)
         self._git("fetch", "--no-tags", remote_name, branch)
+        require_not_cancelled(token)
         return self._git("rev-parse", f"{remote_name}/{branch}")
     def is_ancestor(self, ancestor: str, descendant: str) -> bool:
         result = self._run(["git", "-C", str(self._repository_path), "merge-base", "--is-ancestor", ancestor, descendant], shell=False, check=False, capture_output=True, text=True)
         return result.returncode == 0
-    def fast_forward(self, remote_name: str, branch: str, commit_sha: str) -> None:
+    def fast_forward(self, remote_name: str, branch: str, commit_sha: str, token: CancellationToken) -> None:
+        require_not_cancelled(token)
         self._git("merge", "--ff-only", commit_sha)
+        require_not_cancelled(token)
         if self.current_revision().casefold() != commit_sha.casefold(): raise RuntimeError("controlled Git update did not reach requested SHA")
 
 
@@ -73,7 +78,8 @@ class ApprovedCodeSync:
             f"https://github.com/{config.github.owner}/{config.github.repository}.git"
         )
 
-    def sync(self, commit_sha: str) -> dict[str, object]:
+    def sync(self, commit_sha: str, token: CancellationToken) -> dict[str, object]:
+        require_not_cancelled(token)
         if self._config.machine_id != "HOME_DEV" or "SYNC_APPROVED_CODE" not in self._config.allowed_actions:
             raise PermissionError("code synchronization is enabled only for the HOME_DEV local profile")
         if not _FULL_GIT_SHA.fullmatch(commit_sha):
@@ -85,17 +91,21 @@ class ApprovedCodeSync:
         if not self._git.is_clean():
             raise PermissionError("local repository worktree must be clean")
         current_sha = self._git.current_revision()
-        remote_sha = self._git.remote_revision(self._remote_name, self._config.github.branch)
+        remote_sha = self._git.remote_revision(self._remote_name, self._config.github.branch, token)
         if remote_sha.casefold() != commit_sha.casefold():
             raise PermissionError("requested SHA must exactly match the configured remote branch")
         if not self._git.is_ancestor(current_sha, commit_sha):
             raise PermissionError("code synchronization must be a fast-forward update")
         # All arguments originate in the local config plus the validated full SHA.
-        self._git.fast_forward(self._remote_name, self._config.github.branch, commit_sha)
+        require_not_cancelled(token)
+        self._git.fast_forward(self._remote_name, self._config.github.branch, commit_sha, token)
+        require_not_cancelled(token)
         return {"updated_to": commit_sha, "restart_required": True}
 
 
-def sync_approved_code(parameters: SyncParameters, service: ApprovedCodeSync | None) -> dict[str, object]:
+def sync_approved_code(
+    parameters: SyncParameters, service: ApprovedCodeSync | None, token: CancellationToken
+) -> dict[str, object]:
     if service is None:
         raise RuntimeError("controlled code sync adapter is not installed")
-    return service.sync(parameters.commit_sha)
+    return service.sync(parameters.commit_sha, token)

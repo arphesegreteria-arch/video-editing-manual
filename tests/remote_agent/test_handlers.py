@@ -9,6 +9,7 @@ from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.handler_registry import HandlerRegistry
 from scripts.remote_agent.handlers import register_handlers
 from scripts.remote_agent.handlers.sync_code import ApprovedCodeSync
+from scripts.remote_agent.job_runner import CancellationToken
 
 
 class FakeBroker:
@@ -28,9 +29,9 @@ class FakeBroker:
         return {"path": "incoming/clip.mp4", "size_bytes": 3, "sha256": "a" * 64}
 
     def copy_to_workspace(
-        self, source_alias: str, relative_path: str, destination_relative_path: str | None
+        self, source_alias: str, relative_path: str, destination_relative_path: str | None, token: CancellationToken
     ) -> str:
-        self.calls.append(("copy", source_alias, relative_path, destination_relative_path))
+        self.calls.append(("copy", source_alias, relative_path, destination_relative_path, token))
         return "workspace/jobs/clip.mp4"
 
 
@@ -46,8 +47,8 @@ class FakeResolve:
         self.test_project_checks += 1
         return "ARPHE_TEST"
 
-    def import_media(self, alias_relative_path: str, target_bin: str | None) -> dict[str, object]:
-        self.imports.append((alias_relative_path, target_bin))
+    def import_media(self, alias_relative_path: str, target_bin: str | None, token: CancellationToken) -> dict[str, object]:
+        self.imports.append((alias_relative_path, target_bin, token))
         return {"imported": [alias_relative_path], "target_bin": target_bin}
 
 
@@ -99,18 +100,38 @@ def test_media_handlers_delegate_only_alias_relative_requests_to_broker_and_mana
     assert registry.get("LIST_MEDIA").handler(registry.validate_parameters("LIST_MEDIA", {"alias": "incoming", "relative_dir": "footage"})) == {"media": ["incoming/clip.mp4"]}
     assert registry.get("FIND_MEDIA").handler(registry.validate_parameters("FIND_MEDIA", {"alias": "test_media", "query": "clip"})) == {"media": ["test_media/clip.mp4"]}
     assert registry.get("HASH_MEDIA").handler(registry.validate_parameters("HASH_MEDIA", {"alias": "incoming", "relative_path": "clip.mp4"})) == {"path": "incoming/clip.mp4", "size_bytes": 3, "sha256": "a" * 64}
-    assert registry.get("COPY_TO_WORKSPACE").handler(registry.validate_parameters("COPY_TO_WORKSPACE", {"source_alias": "incoming", "relative_path": "clip.mp4", "destination_relative_path": "jobs/clip.mp4"})) == {"path": "workspace/jobs/clip.mp4"}
-    assert registry.get("IMPORT_MEDIA").handler(registry.validate_parameters("IMPORT_MEDIA", {"source_alias": "incoming", "relative_path": "clip.mp4", "target_bin": "Remote Agent"})) == {"imported": ["incoming/clip.mp4"], "target_bin": "Remote Agent"}
+    token = CancellationToken()
+    assert registry.get("COPY_TO_WORKSPACE").handler(registry.validate_parameters("COPY_TO_WORKSPACE", {"source_alias": "incoming", "relative_path": "clip.mp4", "destination_relative_path": "jobs/clip.mp4"}), token) == {"path": "workspace/jobs/clip.mp4"}
+    assert registry.get("IMPORT_MEDIA").handler(registry.validate_parameters("IMPORT_MEDIA", {"source_alias": "incoming", "relative_path": "clip.mp4", "target_bin": "Remote Agent"}), token) == {"imported": ["incoming/clip.mp4"], "target_bin": "Remote Agent"}
 
     assert broker.calls == [
         ("list", "incoming", "footage"),
         ("find", "test_media", "clip"),
         ("hash", "incoming", "clip.mp4"),
-        ("copy", "incoming", "clip.mp4", "jobs/clip.mp4"),
+        ("copy", "incoming", "clip.mp4", "jobs/clip.mp4", token),
         ("hash", "incoming", "clip.mp4"),
     ]
     assert resolve.test_project_checks == 1
-    assert resolve.imports == [("incoming/clip.mp4", "Remote Agent")]
+    assert resolve.imports == [("incoming/clip.mp4", "Remote Agent", token)]
+
+
+def test_mutating_media_handlers_refuse_an_already_cancelled_token_before_the_adapter_runs(tmp_path: Path) -> None:
+    """Catches a cancelled copy/import job mutating media or Resolve after cancellation was requested."""
+    registry, broker, resolve = registry_for(tmp_path)
+    token = CancellationToken()
+    token.cancel()
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        registry.get("COPY_TO_WORKSPACE").handler(
+            registry.validate_parameters("COPY_TO_WORKSPACE", {"source_alias": "incoming", "relative_path": "clip.mp4"}), token
+        )
+    with pytest.raises(RuntimeError, match="cancelled"):
+        registry.get("IMPORT_MEDIA").handler(
+            registry.validate_parameters("IMPORT_MEDIA", {"source_alias": "incoming", "relative_path": "clip.mp4"}), token
+        )
+
+    assert broker.calls == []
+    assert resolve.imports == []
 
 
 @pytest.mark.parametrize(
@@ -170,7 +191,7 @@ class FakeGit:
     def current_revision(self) -> str:
         return "b" * 40
 
-    def remote_revision(self, remote_name: str, branch: str) -> str:
+    def remote_revision(self, remote_name: str, branch: str, token: CancellationToken) -> str:
         assert (remote_name, branch) == ("origin", "main")
         return self.remote_sha
 
@@ -178,7 +199,7 @@ class FakeGit:
         assert ancestor == "b" * 40
         return self.ancestor and descendant == self.remote_sha
 
-    def fast_forward(self, remote_name: str, branch: str, commit_sha: str) -> None:
+    def fast_forward(self, remote_name: str, branch: str, commit_sha: str, token: CancellationToken) -> None:
         self.fast_forwards.append((remote_name, branch, commit_sha))
 
 
@@ -195,7 +216,7 @@ def test_approved_code_sync_refuses_any_non_fast_forward_or_dirty_update(tmp_pat
     service = ApprovedCodeSync(config(tmp_path, allowed_actions=["SYNC_APPROVED_CODE"]), git)
 
     with pytest.raises(PermissionError, match=expected_error):
-        service.sync("a" * 40)
+        service.sync("a" * 40, CancellationToken())
 
     assert git.fast_forwards == []
 
@@ -205,10 +226,24 @@ def test_approved_code_sync_uses_only_configured_remote_branch_and_exact_sha(tmp
     git = FakeGit()
     service = ApprovedCodeSync(config(tmp_path, allowed_actions=["SYNC_APPROVED_CODE"]), git)
 
-    result = service.sync("a" * 40)
+    token = CancellationToken()
+    result = service.sync("a" * 40, token)
 
     assert result == {"updated_to": "a" * 40, "restart_required": True}
     assert git.fast_forwards == [("origin", "main", "a" * 40)]
     registry, _, _ = registry_for(tmp_path, allowed_actions=["SYNC_APPROVED_CODE"])
     with pytest.raises(ValidationError):
         registry.validate_parameters("SYNC_APPROVED_CODE", {"commit_sha": "a" * 40, "command": "git reset --hard"})
+
+
+def test_approved_code_sync_refuses_a_cancelled_token_before_it_mutates_git(tmp_path: Path) -> None:
+    """Catches a cancellation request being ignored at the Git fast-forward boundary."""
+    git = FakeGit()
+    service = ApprovedCodeSync(config(tmp_path, allowed_actions=["SYNC_APPROVED_CODE"]), git)
+    token = CancellationToken()
+    token.cancel()
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        service.sync("a" * 40, token)
+
+    assert git.fast_forwards == []

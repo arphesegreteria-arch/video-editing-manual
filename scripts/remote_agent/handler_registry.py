@@ -13,7 +13,7 @@ from pydantic import BaseModel
 class RegisteredHandler:
     action: str
     schema: type[BaseModel]
-    handler: Callable[[BaseModel], Any]
+    handler: Callable[..., Any]
     idempotent: bool
 
 
@@ -26,7 +26,7 @@ class HandlerRegistry:
         self,
         action: str,
         schema: type[BaseModel],
-        handler: Callable[[BaseModel], Any],
+        handler: Callable[..., Any],
         idempotent: bool = False,
     ) -> None:
         if action in self._handlers:

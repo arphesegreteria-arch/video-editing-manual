@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
+from scripts.remote_agent.cancellation import CancellationToken, require_not_cancelled
 from scripts.remote_agent.models import StrictModel
 
 
@@ -70,15 +71,24 @@ def hash_media(parameters: HashMediaParameters, broker: object) -> dict[str, obj
     return dict(getattr(broker, "hash_media")(parameters.alias, parameters.relative_path))
 
 
-def copy_to_workspace(parameters: CopyToWorkspaceParameters, broker: object) -> dict[str, object]:
+def copy_to_workspace(parameters: CopyToWorkspaceParameters, broker: object, token: CancellationToken) -> dict[str, object]:
+    require_not_cancelled(token)
     path = getattr(broker, "copy_to_workspace")(
-        parameters.source_alias, parameters.relative_path, parameters.destination_relative_path
+        parameters.source_alias, parameters.relative_path, parameters.destination_relative_path, token
     )
+    require_not_cancelled(token)
     return {"path": path}
 
 
-def import_media(parameters: ImportMediaParameters, broker: object, resolve_manager: object) -> dict[str, object]:
+def import_media(
+    parameters: ImportMediaParameters, broker: object, resolve_manager: object, token: CancellationToken
+) -> dict[str, object]:
     # Hashing is the broker's guarded file check; no raw local path leaves the handler.
+    require_not_cancelled(token)
     media = getattr(broker, "hash_media")(parameters.source_alias, parameters.relative_path)
+    require_not_cancelled(token)
     getattr(resolve_manager, "require_test_project")()
-    return dict(getattr(resolve_manager, "import_media")(media["path"], parameters.target_bin))
+    require_not_cancelled(token)
+    result = dict(getattr(resolve_manager, "import_media")(media["path"], parameters.target_bin, token))
+    require_not_cancelled(token)
+    return result

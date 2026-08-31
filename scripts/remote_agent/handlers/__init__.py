@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from scripts.remote_agent.cancellation import CancellationToken
 from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.handler_registry import HandlerRegistry
 from scripts.remote_agent.handlers.agent_status import GetStatusParameters, PingParameters, get_status, ping
@@ -35,9 +36,9 @@ def register_handlers(
     *,
     agent_version: str,
     source_commit: str,
-    capability_audit_runner: Callable[[dict[str, object]], dict[str, object]] | None = None,
-    tracking_probe_runner: Callable[[dict[str, object]], dict[str, object]] | None = None,
-    render_probe_runner: Callable[[dict[str, object]], dict[str, object]] | None = None,
+    capability_audit_runner: Callable[[dict[str, object], CancellationToken], dict[str, object]] | None = None,
+    tracking_probe_runner: Callable[[dict[str, object], CancellationToken], dict[str, object]] | None = None,
+    render_probe_runner: Callable[[dict[str, object], CancellationToken], dict[str, object]] | None = None,
     code_sync: ApprovedCodeSync | None = None,
 ) -> None:
     """Register fixed handlers; enablement remains solely in ``HandlerRegistry``."""
@@ -46,11 +47,11 @@ def register_handlers(
     registry.register("LIST_MEDIA", ListMediaParameters, lambda p: list_media(p, file_broker), idempotent=True)
     registry.register("FIND_MEDIA", FindMediaParameters, lambda p: find_media(p, file_broker), idempotent=True)
     registry.register("HASH_MEDIA", HashMediaParameters, lambda p: hash_media(p, file_broker), idempotent=True)
-    registry.register("COPY_TO_WORKSPACE", CopyToWorkspaceParameters, lambda p: copy_to_workspace(p, file_broker))
-    registry.register("IMPORT_MEDIA", ImportMediaParameters, lambda p: import_media(p, file_broker, resolve_manager))
-    registry.register("RUN_CAPABILITY_AUDIT", CapabilityAuditParameters, lambda p: run_capability_audit(p, resolve_manager, capability_audit_runner))
-    registry.register("RUN_TRACKING_PROBE", TrackingProbeParameters, lambda p: run_tracking_probe(p, resolve_manager, tracking_probe_runner))
-    registry.register("RUN_RENDER_PROBE", RenderProbeParameters, lambda p: run_render_probe(p, resolve_manager, render_probe_runner))
+    registry.register("COPY_TO_WORKSPACE", CopyToWorkspaceParameters, lambda p, token: copy_to_workspace(p, file_broker, token))
+    registry.register("IMPORT_MEDIA", ImportMediaParameters, lambda p, token: import_media(p, file_broker, resolve_manager, token))
+    registry.register("RUN_CAPABILITY_AUDIT", CapabilityAuditParameters, lambda p, token: run_capability_audit(p, resolve_manager, capability_audit_runner, token))
+    registry.register("RUN_TRACKING_PROBE", TrackingProbeParameters, lambda p, token: run_tracking_probe(p, resolve_manager, tracking_probe_runner, token))
+    registry.register("RUN_RENDER_PROBE", RenderProbeParameters, lambda p, token: run_render_probe(p, resolve_manager, render_probe_runner, token))
     if code_sync is None and "SYNC_APPROVED_CODE" in config.allowed_actions:
         code_sync = ApprovedCodeSync(config, SubprocessGitSyncAdapter(Path.cwd()))
-    registry.register("SYNC_APPROVED_CODE", SyncParameters, lambda p: sync_approved_code(p, code_sync))
+    registry.register("SYNC_APPROVED_CODE", SyncParameters, lambda p, token: sync_approved_code(p, code_sync, token))

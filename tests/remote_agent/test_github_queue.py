@@ -250,6 +250,28 @@ def test_list_claim_and_mark_running_chain_uses_each_fresh_contents_sha():
     assert transport.calls[3]["json"]["sha"] == "claimed-sha"
 
 
+def test_complete_terminal_cas_chain_uses_the_running_revision_for_terminal_persistence():
+    """Catches terminal persistence overwriting the running transition with an earlier Contents revision."""
+    client, transport = queue([
+        FakeResponse(payload=[
+            {"name": "queue-001.json", "path": "jobs/queue-001.json", "sha": "listed-sha", "type": "file"},
+        ]),
+        content_response(job_payload(), "listed-sha"),
+        FakeResponse(payload={"content": {"sha": "claimed-sha"}}),
+        FakeResponse(payload={"content": {"sha": "running-sha"}}),
+        FakeResponse(payload={"content": {"sha": "terminal-sha"}}),
+    ])
+
+    pending = client.list_pending("HOME_DEV")
+    claimed = client.claim(pending[0].job, pending[0].sha, now=NOW)
+    running = client.mark_running(claimed, now=NOW)
+    terminal = client.mark_terminal(running, JobStatus.SUCCEEDED)
+
+    assert terminal.job.status is JobStatus.SUCCEEDED
+    assert terminal.sha == "terminal-sha"
+    assert [call["json"]["sha"] for call in transport.calls[2:]] == ["listed-sha", "claimed-sha", "running-sha"]
+
+
 @pytest.mark.parametrize("response_sha", ["", None, 17])
 def test_claim_rejects_a_missing_or_non_string_response_sha(response_sha):
     """Catches later CAS operations receiving a coerced or empty GitHub blob SHA."""

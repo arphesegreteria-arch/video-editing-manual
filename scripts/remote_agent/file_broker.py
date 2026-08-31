@@ -9,6 +9,7 @@ from pathlib import Path, PureWindowsPath
 import shutil
 from typing import Callable
 
+from scripts.remote_agent.cancellation import CancellationToken, require_not_cancelled
 from scripts.remote_agent.config import FolderConfig
 
 
@@ -182,15 +183,20 @@ class FileBroker:
         self,
         source_alias: str,
         relative_path: str,
-        destination_relative_path: str | None = None,
+        destination_relative_path: str | None,
+        token: CancellationToken,
     ) -> str:
+        require_not_cancelled(token)
         source = self._require_media_file(source_alias, relative_path)
         destination_relative_path = destination_relative_path or source.name
         destination = self.resolve("workspace", destination_relative_path)
         self._require_media_extension(destination)
         if destination.is_dir():
             raise IsADirectoryError("workspace destination is a directory")
+        require_not_cancelled(token)
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination = self.resolve("workspace", destination_relative_path)
+        require_not_cancelled(token)
         shutil.copy2(source, destination)
+        require_not_cancelled(token)
         return self._alias_relative("workspace", destination)

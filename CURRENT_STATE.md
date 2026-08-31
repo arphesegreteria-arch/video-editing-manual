@@ -1,6 +1,6 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-08-27.
+Ultimo aggiornamento: sessione 2026-08-31.
 
 ## Obiettivo del progetto
 
@@ -128,7 +128,7 @@ Strategia tracking corrente:
 
 - Stato documento: release candidate per installazione manuale su `HOME_DEV`; non ancora taggato `REMOTE_AGENT_V1_HOME_DEV_TESTED`.
 - Profilo `POLI_01`: ancora più ristretto di `HOME_DEV` e **non production-ready** in V1.
-- Suite automatizzata più recente in questo branch: `202 passed, 1 skipped`.
+- Suite automatizzata più recente in questo branch: `220 passed, 1 skipped`.
 
 Versioni verificate in questo ambiente di sviluppo:
 - Python 3.12.13

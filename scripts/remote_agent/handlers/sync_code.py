@@ -79,9 +79,13 @@ class ApprovedCodeSync:
         self._config = config
         self._git = git
         self._remote_name = remote_name
+        if config.code_sync is None:
+            raise ValueError("SYNC_APPROVED_CODE requires code_sync.source_repository")
+        source_repository = config.code_sync.source_repository
         self._expected_remote = (
-            f"https://github.com/{config.github.owner}/{config.github.repository}.git"
+            f"https://github.com/{source_repository.owner}/{source_repository.repository}.git"
         )
+        self._expected_branch = source_repository.branch
 
     @property
     def git_adapter(self) -> GitSyncAdapter:
@@ -96,12 +100,12 @@ class ApprovedCodeSync:
             raise PermissionError("code synchronization requires an exact commit SHA")
         if self._git.remote_url(self._remote_name) != self._expected_remote:
             raise PermissionError("configured repository remote identity does not match")
-        if self._git.current_branch() != self._config.github.branch:
+        if self._git.current_branch() != self._expected_branch:
             raise PermissionError("configured repository branch does not match")
         if not self._git.is_clean():
             raise PermissionError("local repository worktree must be clean")
         current_sha = self._git.current_revision()
-        remote_sha = self._git.remote_revision(self._remote_name, self._config.github.branch, token)
+        remote_sha = self._git.remote_revision(self._remote_name, self._expected_branch, token)
         if remote_sha.casefold() != commit_sha.casefold():
             raise PermissionError("requested SHA must exactly match the configured remote branch")
         if not self._git.is_ancestor(current_sha, commit_sha):
@@ -125,4 +129,6 @@ def default_code_sync(config: AgentConfig) -> ApprovedCodeSync:
     """Create production Git sync only from the immutable configured checkout."""
     if config.local_checkout_path is None:
         raise ValueError("SYNC_APPROVED_CODE requires local_checkout_path")
+    if config.code_sync is None:
+        raise ValueError("SYNC_APPROVED_CODE requires code_sync.source_repository")
     return ApprovedCodeSync(config, SubprocessGitSyncAdapter(config.local_checkout_path))

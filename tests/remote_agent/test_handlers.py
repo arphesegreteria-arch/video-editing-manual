@@ -59,8 +59,15 @@ def config(tmp_path: Path, *, allowed_actions: list[str] | None = None) -> Agent
             "machine_id": "HOME_DEV",
             "folders": folders,
             "resolve": {"executable_path": str(tmp_path / "Resolve.exe")},
-            "github": {"owner": "arphesegreteria-arch", "repository": "video-editing-manual", "branch": "main"},
+            "github": {"owner": "arphesegreteria-arch", "repository": "arphe-remote-jobs", "branch": "main"},
             "local_checkout_path": str(tmp_path / "video-editing-manual"),
+            "code_sync": {
+                "source_repository": {
+                    "owner": "arphesegreteria-arch",
+                    "repository": "video-editing-manual",
+                    "branch": "main",
+                }
+            },
             "allowed_actions": allowed_actions or ["PING", "GET_STATUS", "LIST_MEDIA", "FIND_MEDIA", "HASH_MEDIA", "COPY_TO_WORKSPACE", "IMPORT_MEDIA"],
         }
     )
@@ -235,6 +242,22 @@ def test_approved_code_sync_uses_only_configured_remote_branch_and_exact_sha(tmp
     registry, _, _ = registry_for(tmp_path, allowed_actions=["SYNC_APPROVED_CODE"])
     with pytest.raises(ValidationError):
         registry.validate_parameters("SYNC_APPROVED_CODE", {"commit_sha": "a" * 40, "command": "git reset --hard"})
+
+
+def test_approved_code_sync_rejects_the_runtime_job_repository_as_the_source_remote(tmp_path: Path) -> None:
+    """Catches a queue repository being accepted as the checkout to fast-forward."""
+    class RuntimeRemoteGit(FakeGit):
+        def remote_url(self, remote_name: str) -> str:
+            assert remote_name == "origin"
+            return "https://github.com/arphesegreteria-arch/arphe-remote-jobs.git"
+
+    git = RuntimeRemoteGit()
+    service = ApprovedCodeSync(config(tmp_path, allowed_actions=["SYNC_APPROVED_CODE"]), git)
+
+    with pytest.raises(PermissionError, match="remote identity"):
+        service.sync("a" * 40, CancellationToken())
+
+    assert git.fast_forwards == []
 
 
 def test_approved_code_sync_refuses_a_cancelled_token_before_it_mutates_git(tmp_path: Path) -> None:

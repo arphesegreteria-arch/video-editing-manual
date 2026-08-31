@@ -73,6 +73,20 @@ class GitHubConfig(StrictModel):
     api_base_url: str = Field(default="https://api.github.com", pattern=r"^https://")
 
 
+class SourceRepositoryConfig(StrictModel):
+    """Public source identity used only by the HOME_DEV code-sync checkout."""
+
+    owner: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,128}$", frozen=True)
+    repository: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,128}$", frozen=True)
+    branch: str = Field(default="main", pattern=r"^.{1,256}$", frozen=True)
+
+
+class CodeSyncConfig(StrictModel):
+    """Non-secret, explicit source repository boundary for controlled updates."""
+
+    source_repository: SourceRepositoryConfig = Field(frozen=True)
+
+
 class AgentConfig(StrictModel):
     machine_id: str = Field(pattern=r"^[A-Z][A-Z0-9_]{0,63}$")
     poll_interval_seconds: int = Field(default=30, ge=10, le=300)
@@ -80,6 +94,7 @@ class AgentConfig(StrictModel):
     resolve: ResolveConfig
     github: GitHubConfig
     local_checkout_path: Path | None = Field(default=None, frozen=True)
+    code_sync: CodeSyncConfig | None = Field(default=None, frozen=True)
     allowed_actions: frozenset[str] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -95,6 +110,8 @@ class AgentConfig(StrictModel):
         if "SYNC_APPROVED_CODE" in self.allowed_actions:
             if self.local_checkout_path is None:
                 raise ValueError("SYNC_APPROVED_CODE requires local_checkout_path")
+            if self.code_sync is None:
+                raise ValueError("SYNC_APPROVED_CODE requires code_sync.source_repository")
             if not self.local_checkout_path.is_absolute():
                 raise ValueError("local_checkout_path must be absolute")
             if _SECRET_PATH_COMPONENT.search(str(self.local_checkout_path)):

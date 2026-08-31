@@ -20,9 +20,11 @@ heartbeats.
    ```
 
    The script creates `scripts\remote_agent\.venv`, installs the pinned runtime
-   dependencies, prompts for the machine/repository/folder settings on the
-   initial run, and creates one desktop shortcut. Existing `config.json` is
-   deliberately preserved on repeat runs.
+   dependencies, prompts for the machine/private runtime-job repository/folder
+   settings on the initial run, validates the complete candidate configuration,
+   and then creates one desktop shortcut. A failed or cancelled first run
+   leaves no `config.json`; existing `config.json` is deliberately preserved on
+   repeat runs.
 4. When asked, paste a fine-grained GitHub token into the Python hidden prompt.
    It is stored only in **Windows Credential Manager** as `ARPHE Remote Agent`
    / `<machine_id>:github`; it is never written to `config.json`, the command
@@ -33,14 +35,42 @@ heartbeats.
 Development/test-only dependencies are in `requirements-dev.txt`; production
 setup installs `requirements.txt` only.
 
-## Private GitHub queue
+## Private GitHub runtime queue
 
-Use a private repository and a fine-grained personal access token restricted to
-that repository. Grant only the minimum **Contents: Read and write** permission
-needed for queue jobs, results, bounded logs, and heartbeats. Do not use an
-owner-wide token and never put a token in a configuration file. `HOME_DEV` is
-the only V1 profile permitted to enable the separately configured
-`SYNC_APPROVED_CODE` action.
+`github` configures the private runtime/job repository only; the included
+example is `arphesegreteria-arch/arphe-remote-jobs`. Use a fine-grained
+personal access token restricted to that repository. Grant only the minimum
+**Contents: Read and write** permission needed for queue jobs, results, bounded
+logs, and heartbeats. Do not use an owner-wide token and never put a token in a
+configuration file.
+
+## Optional HOME_DEV source synchronization
+
+`HOME_DEV` alone may enable `SYNC_APPROVED_CODE`, but it is intentionally
+separate from the runtime queue. Enable it during setup only when the local
+machine has a clean checkout of the public source repository. Setup then asks
+for the local checkout and the distinct source repository identity. The saved
+non-secret fields must identify `arphesegreteria-arch/video-editing-manual`
+and its source branch separately from `github`:
+
+```json
+{
+  "local_checkout_path": "C:\\ARPHE\\video-editing-manual",
+  "code_sync": {
+    "source_repository": {
+      "owner": "arphesegreteria-arch",
+      "repository": "video-editing-manual",
+      "branch": "main"
+    }
+  },
+  "allowed_actions": ["PING", "SYNC_APPROVED_CODE"]
+}
+```
+
+The configured checkout's `origin` and current branch must exactly match these
+source settings before an approved fast-forward can run. A sync configuration
+without the separate `code_sync.source_repository` is rejected; it never falls
+back to the private runtime/job repository.
 
 ## DaVinci Resolve Studio prerequisites
 

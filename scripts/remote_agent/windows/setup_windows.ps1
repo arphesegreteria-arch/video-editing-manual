@@ -33,10 +33,18 @@ function Assert-ConfigValue([string] $Label, [string] $Value, [string] $Pattern)
     }
 }
 
-function Read-Default([string] $Prompt, [string] $Default) {
-    $value = Read-Host "$Prompt [$Default]"
+function Read-Default([string] $Prompt, [string] $Default, [scriptblock] $PromptReader) {
+    if ($null -ne $PromptReader) {
+        $value = & $PromptReader $Prompt $Default
+    } else {
+        $value = Read-Host "$Prompt [$Default]"
+    }
     if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
     return $value.Trim()
+}
+
+function Read-Confirmation([string] $Prompt, [scriptblock] $PromptReader) {
+    return (Read-Default $Prompt 'N' $PromptReader) -match '^[Yy]$'
 }
 
 function Assert-LastExitCode([string] $Step) {
@@ -45,23 +53,75 @@ function Assert-LastExitCode([string] $Step) {
     }
 }
 
-function Initialize-NewConfig {
+function Initialize-NewConfig(
+    [string] $AgentDirectory,
+    [string] $ConfigPath,
+    [string] $ExampleConfigPath,
+    [scriptblock] $ConfigValidator,
+    [scriptblock] $PromptReader
+) {
+    if ([string]::IsNullOrWhiteSpace($AgentDirectory) -or [string]::IsNullOrWhiteSpace($ConfigPath) -or [string]::IsNullOrWhiteSpace($ExampleConfigPath) -or $null -eq $ConfigValidator) {
+        throw 'The configuration transaction requires an agent directory, config paths, and strict validator.'
+    }
+    if (Test-Path -LiteralPath $ConfigPath) {
+        throw 'Refusing to overwrite an existing local configuration.'
+    }
+    $resolvedAgentDirectory = [IO.Path]::GetFullPath($AgentDirectory)
+    $resolvedConfigParent = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($ConfigPath))
+    if ($resolvedConfigParent -ne $resolvedAgentDirectory) {
+        throw 'The configuration transaction must remain inside the agent directory.'
+    }
+    $temporaryConfigPath = Join-Path $resolvedAgentDirectory ('.config.json.{0}.tmp' -f [guid]::NewGuid().ToString('N'))
+    try {
     $config = Get-Content -LiteralPath $exampleConfigPath -Raw | ConvertFrom-Json
-    $config.machine_id = Read-Default 'Machine ID (uppercase letters, digits, underscores)' $config.machine_id
+    $config.machine_id = Read-Default 'Machine ID (uppercase letters, digits, underscores)' $config.machine_id $PromptReader
     Assert-ConfigValue 'machine ID' $config.machine_id '^[A-Z][A-Z0-9_]{0,63}$'
-    $config.github.owner = Read-Default 'Private GitHub owner or organization' $config.github.owner
+    $config.github.owner = Read-Default 'Private runtime/job GitHub owner or organization' $config.github.owner $PromptReader
     Assert-ConfigValue 'GitHub owner' $config.github.owner '^[A-Za-z0-9_.-]{1,128}$'
-    $config.github.repository = Read-Default 'Private GitHub repository' $config.github.repository
+    $config.github.repository = Read-Default 'Private runtime/job GitHub repository (for example arphe-remote-jobs)' $config.github.repository $PromptReader
     Assert-ConfigValue 'GitHub repository' $config.github.repository '^[A-Za-z0-9_.-]{1,128}$'
-    $config.github.branch = Read-Default 'GitHub branch' $config.github.branch
+    $config.github.branch = Read-Default 'Private runtime/job GitHub branch' $config.github.branch $PromptReader
     Assert-ConfigValue 'GitHub branch' $config.github.branch '^.{1,256}$'
-    $config.resolve.executable_path = Read-Default 'Resolve Studio executable path' $config.resolve.executable_path
+    $config.resolve.executable_path = Read-Default 'Resolve Studio executable path' $config.resolve.executable_path $PromptReader
     if (-not [IO.Path]::IsPathFullyQualified($config.resolve.executable_path)) { throw 'Resolve executable path must be absolute.' }
     foreach ($folderName in @('incoming', 'test_media', 'workspace', 'exports')) {
-        $config.folders.$folderName = Read-Default "Folder path for $folderName" $config.folders.$folderName
+        $config.folders.$folderName = Read-Default "Folder path for $folderName" $config.folders.$folderName $PromptReader
         if (-not [IO.Path]::IsPathFullyQualified($config.folders.$folderName)) { throw "Folder path for $folderName must be absolute." }
     }
-    $config | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $configPath -Encoding utf8 -NoNewline
+    if (Read-Confirmation 'Enable controlled source-code synchronization on this HOME_DEV machine? [y/N]' $PromptReader) {
+        $config.allowed_actions = @($config.allowed_actions) + 'SYNC_APPROVED_CODE'
+        $checkoutPath = Read-Default 'Local source checkout path for controlled synchronization' '' $PromptReader
+        if (-not [IO.Path]::IsPathFullyQualified($checkoutPath)) { throw 'Local source checkout path must be absolute.' }
+        $sourceOwner = Read-Default 'Source repository owner or organization' '' $PromptReader
+        Assert-ConfigValue 'source repository owner' $sourceOwner '^[A-Za-z0-9_.-]{1,128}$'
+        $sourceRepository = Read-Default 'Source repository name' '' $PromptReader
+        Assert-ConfigValue 'source repository name' $sourceRepository '^[A-Za-z0-9_.-]{1,128}$'
+        $sourceBranch = Read-Default 'Source repository branch' 'main' $PromptReader
+        Assert-ConfigValue 'source repository branch' $sourceBranch '^.{1,256}$'
+        $config | Add-Member -NotePropertyName 'local_checkout_path' -NotePropertyValue $checkoutPath
+        $config | Add-Member -NotePropertyName 'code_sync' -NotePropertyValue ([pscustomobject]@{
+            source_repository = [pscustomobject]@{
+                owner = $sourceOwner
+                repository = $sourceRepository
+                branch = $sourceBranch
+            }
+        })
+    }
+    $config | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $temporaryConfigPath -Encoding utf8 -NoNewline
+    $global:LASTEXITCODE = 0
+    & $ConfigValidator $temporaryConfigPath
+    if ($global:LASTEXITCODE -ne 0) {
+        throw 'Strict validation rejected the new local configuration.'
+    }
+    if (Test-Path -LiteralPath $ConfigPath) {
+        throw 'Refusing to overwrite an existing local configuration.'
+    }
+    [IO.File]::Move($temporaryConfigPath, $ConfigPath)
+    } finally {
+        if (Test-Path -LiteralPath $temporaryConfigPath) {
+            Remove-Item -LiteralPath $temporaryConfigPath -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 function New-DesktopShortcut {
@@ -80,6 +140,7 @@ function New-DesktopShortcut {
     $shortcut.Save()
 }
 
+function Invoke-Setup {
 Write-Host 'ARPHE Remote Agent — manual HOME_DEV setup'
 $pythonCommand = @(Get-Python311Command)
 if (-not (Test-Path -LiteralPath $venvDirectory)) {
@@ -104,8 +165,12 @@ if ($CreateDefaultFolders) {
 }
 
 if (-not (Test-Path -LiteralPath $configPath)) {
-    Copy-Item -LiteralPath $exampleConfigPath -Destination $configPath -ErrorAction Stop
-    Initialize-NewConfig
+    $configValidator = {
+        param([string] $CandidatePath)
+        & $venvPython -c "import sys; from pathlib import Path; sys.path.insert(0, str(Path(sys.argv[2]).resolve())); from scripts.remote_agent.config import AgentConfig; AgentConfig.load(sys.argv[1])" $CandidatePath $projectDirectory
+        Assert-LastExitCode 'validating the new local config.json'
+    }
+    Initialize-NewConfig -AgentDirectory $agentDirectory -ConfigPath $configPath -ExampleConfigPath $exampleConfigPath -ConfigValidator $configValidator
 } else {
     Write-Host "Keeping the existing local configuration: $configPath"
 }
@@ -125,3 +190,8 @@ if (-not $SkipTokenSetup) {
 
 Write-Host 'Setup complete. Use the ARPHE Remote Agent desktop shortcut to start the visible app.'
 Write-Host 'This setup creates no service, scheduled task, startup entry, tray process, or automatic background launch.'
+}
+
+if ($MyInvocation.InvocationName -ne '.') {
+    Invoke-Setup
+}

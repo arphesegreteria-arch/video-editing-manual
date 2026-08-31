@@ -25,10 +25,17 @@ def valid_config_data(tmp_path, machine_id: str = "HOME_DEV") -> dict:
         },
         "github": {
             "owner": "arphesegreteria-arch",
-            "repository": "video-editing-manual",
+            "repository": "arphe-remote-jobs",
             "branch": "main",
         },
         "local_checkout_path": str(tmp_path / "video-editing-manual"),
+        "code_sync": {
+            "source_repository": {
+                "owner": "arphesegreteria-arch",
+                "repository": "video-editing-manual",
+                "branch": "main",
+            }
+        },
         "allowed_actions": ["PING", "SYNC_APPROVED_CODE"],
     }
 
@@ -103,6 +110,8 @@ def test_home_dev_profile_can_enable_code_synchronization(tmp_path) -> None:
 
     assert "SYNC_APPROVED_CODE" in config.allowed_actions
     assert config.local_checkout_path == tmp_path / "video-editing-manual"
+    assert config.github.repository == "arphe-remote-jobs"
+    assert config.code_sync.source_repository.repository == "video-editing-manual"
 
     with pytest.raises(ValidationError, match="frozen"):
         config.local_checkout_path = tmp_path / "another-checkout"
@@ -121,6 +130,19 @@ def test_code_synchronization_requires_an_absolute_secret_free_local_checkout_pa
         data["local_checkout_path"] = checkout_path
 
     with pytest.raises(ValidationError, match="checkout"):
+        AgentConfig.model_validate(data)
+
+
+@pytest.mark.parametrize("sync_config", [None, {}, {"source_repository": {}}])
+def test_code_synchronization_fails_closed_without_a_separate_source_repository(tmp_path, sync_config) -> None:
+    """Catches sync silently reusing the private runtime/job repository as source code."""
+    data = valid_config_data(tmp_path)
+    if sync_config is None:
+        data.pop("code_sync")
+    else:
+        data["code_sync"] = sync_config
+
+    with pytest.raises(ValidationError, match="code_sync"):
         AgentConfig.model_validate(data)
 
 

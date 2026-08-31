@@ -112,7 +112,7 @@ class ApprovedCodeSync:
             raise PermissionError("code synchronization must be a fast-forward update")
         # All arguments originate in the local config plus the validated full SHA.
         require_not_cancelled(token)
-        self._git.fast_forward(self._remote_name, self._config.github.branch, commit_sha, token)
+        self._git.fast_forward(self._remote_name, self._expected_branch, commit_sha, token)
         require_not_cancelled(token)
         return {"updated_to": commit_sha, "restart_required": True}
 

@@ -52,20 +52,26 @@ class FakeResolve:
         return {"imported": [alias_relative_path], "target_bin": target_bin}
 
 
-def config(tmp_path: Path, *, allowed_actions: list[str] | None = None) -> AgentConfig:
+def config(
+    tmp_path: Path,
+    *,
+    allowed_actions: list[str] | None = None,
+    github_branch: str = "main",
+    source_branch: str = "main",
+) -> AgentConfig:
     folders = {name: str(tmp_path / name) for name in ("incoming", "test_media", "workspace", "exports")}
     return AgentConfig.model_validate(
         {
             "machine_id": "HOME_DEV",
             "folders": folders,
             "resolve": {"executable_path": str(tmp_path / "Resolve.exe")},
-            "github": {"owner": "arphesegreteria-arch", "repository": "arphe-remote-jobs", "branch": "main"},
+            "github": {"owner": "arphesegreteria-arch", "repository": "arphe-remote-jobs", "branch": github_branch},
             "local_checkout_path": str(tmp_path / "video-editing-manual"),
             "code_sync": {
                 "source_repository": {
                     "owner": "arphesegreteria-arch",
                     "repository": "video-editing-manual",
-                    "branch": "main",
+                    "branch": source_branch,
                 }
             },
             "allowed_actions": allowed_actions or ["PING", "GET_STATUS", "LIST_MEDIA", "FIND_MEDIA", "HASH_MEDIA", "COPY_TO_WORKSPACE", "IMPORT_MEDIA"],
@@ -180,10 +186,19 @@ def test_copy_schema_allows_an_explicit_null_destination_for_the_broker_default(
 
 
 class FakeGit:
-    def __init__(self, *, clean: bool = True, remote_sha: str = "a" * 40, ancestor: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        clean: bool = True,
+        remote_sha: str = "a" * 40,
+        ancestor: bool = True,
+        current_branch: str = "main",
+    ) -> None:
         self.clean = clean
         self.remote_sha = remote_sha
         self.ancestor = ancestor
+        self._current_branch = current_branch
+        self.remote_revisions: list[tuple[str, str]] = []
         self.fast_forwards: list[tuple[str, str, str]] = []
 
     def remote_url(self, remote_name: str) -> str:
@@ -191,7 +206,7 @@ class FakeGit:
         return "https://github.com/arphesegreteria-arch/video-editing-manual.git"
 
     def current_branch(self) -> str:
-        return "main"
+        return self._current_branch
 
     def is_clean(self) -> bool:
         return self.clean
@@ -200,7 +215,7 @@ class FakeGit:
         return "b" * 40
 
     def remote_revision(self, remote_name: str, branch: str, token: CancellationToken) -> str:
-        assert (remote_name, branch) == ("origin", "main")
+        self.remote_revisions.append((remote_name, branch))
         return self.remote_sha
 
     def is_ancestor(self, ancestor: str, descendant: str) -> bool:
@@ -238,10 +253,33 @@ def test_approved_code_sync_uses_only_configured_remote_branch_and_exact_sha(tmp
     result = service.sync("a" * 40, token)
 
     assert result == {"updated_to": "a" * 40, "restart_required": True}
+    assert git.remote_revisions == [("origin", "main")]
     assert git.fast_forwards == [("origin", "main", "a" * 40)]
     registry, _, _ = registry_for(tmp_path, allowed_actions=["SYNC_APPROVED_CODE"])
     with pytest.raises(ValidationError):
         registry.validate_parameters("SYNC_APPROVED_CODE", {"commit_sha": "a" * 40, "command": "git reset --hard"})
+
+
+def test_approved_code_sync_never_passes_the_runtime_queue_branch_to_git_sync(tmp_path: Path) -> None:
+    """Catches controlled sync leaking the runtime queue branch into source checkout Git operations."""
+    git = FakeGit(current_branch="release/manual-sync")
+    service = ApprovedCodeSync(
+        config(
+            tmp_path,
+            allowed_actions=["SYNC_APPROVED_CODE"],
+            github_branch="jobs-runtime",
+            source_branch="release/manual-sync",
+        ),
+        git,
+    )
+
+    result = service.sync("a" * 40, CancellationToken())
+
+    assert result == {"updated_to": "a" * 40, "restart_required": True}
+    assert git.remote_revisions == [("origin", "release/manual-sync")]
+    assert git.fast_forwards == [("origin", "release/manual-sync", "a" * 40)]
+    assert all(branch != "jobs-runtime" for _, branch in git.remote_revisions)
+    assert all(branch != "jobs-runtime" for _, branch, _ in git.fast_forwards)
 
 
 def test_approved_code_sync_rejects_the_runtime_job_repository_as_the_source_remote(tmp_path: Path) -> None:

@@ -11,7 +11,7 @@ import pytest
 from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.github_queue import QueuedJob
 from scripts.remote_agent.handler_registry import HandlerRegistry
-from scripts.remote_agent.job_runner import JobRunner, RunnerState
+from scripts.remote_agent.job_runner import JobRunner, RunnerExecutionState, RunnerState
 from scripts.remote_agent.logging_setup import configure_redacting_logger
 from scripts.remote_agent.models import Job, JobStatus
 
@@ -504,3 +504,144 @@ def test_runner_gives_observed_completion_precedence_over_a_simultaneous_cancell
 
     assert result.status is JobStatus.SUCCEEDED
     assert result.output == {"finished": True}
+
+
+def test_runner_exposes_the_current_job_only_after_it_is_running(tmp_path: Path) -> None:
+    """Catches the UI treating a slow queue scan as an active job."""
+    listed, started, release_listing, release_handler = (
+        threading.Event(),
+        threading.Event(),
+        threading.Event(),
+        threading.Event(),
+    )
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+
+    runner_registry = HandlerRegistry(["PING"])
+
+    class SlowListingQueue(FakeQueue):
+        def list_pending(self, machine_id: str) -> list[QueuedJob]:
+            listed.set()
+            assert release_listing.wait(1)
+            return super().list_pending(machine_id)
+
+    def handler(_parameters, _token):
+        started.set()
+        assert release_handler.wait(1)
+        return {"finished": True}
+
+    runner_registry.register("PING", PingParameters, handler)
+    runner = JobRunner(
+        config(tmp_path),
+        SlowListingQueue(QueuedJob(job(), "source-sha")),
+        runner_registry,
+        agent_version="1",
+        source_commit="abc",
+        logger=safe_logger(),
+    )
+
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(runner.run_once()))
+    thread.start()
+    assert listed.wait(1)
+
+    assert runner.execution_state == RunnerExecutionState(active=False, current_job_id=None)
+
+    release_listing.set()
+    assert started.wait(1)
+
+    assert runner.execution_state == RunnerExecutionState(active=True, current_job_id="job-001")
+    assert runner.current_job_id == "job-001"
+
+    release_handler.set()
+    thread.join(1)
+
+    assert outcome[0].status is JobStatus.SUCCEEDED
+    assert runner.execution_state == RunnerExecutionState(active=False, current_job_id=None)
+
+
+def test_runner_refuses_a_claim_after_shutdown_begins_during_a_slow_poll(tmp_path: Path) -> None:
+    """Catches a close request racing a queue response into a new claim."""
+    listed, release = threading.Event(), threading.Event()
+
+    class SlowQueue(FakeQueue):
+        def list_pending(self, machine_id: str) -> list[QueuedJob]:
+            listed.set()
+            assert release.wait(1)
+            return super().list_pending(machine_id)
+
+    queue = SlowQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(
+        config(tmp_path),
+        queue,
+        registry(),
+        agent_version="1",
+        source_commit="abc",
+        logger=safe_logger(),
+    )
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(runner.run_once()))
+    thread.start()
+    assert listed.wait(1)
+
+    runner.stop_accepting_new_claims()
+    release.set()
+    thread.join(1)
+
+    assert outcome == [None]
+    assert queue.claims == 0
+    assert queue.running == 0
+
+
+def test_runner_aborts_a_job_that_is_claimed_at_the_shutdown_boundary(tmp_path: Path) -> None:
+    """Catches a close race leaving a claimed or running document behind."""
+    claim_entered, release_claim = threading.Event(), threading.Event()
+
+    class BlockingClaimQueue(FakeQueue):
+        def claim(self, candidate: Job, sha: str, *, idempotent: bool) -> QueuedJob:
+            claim_entered.set()
+            assert release_claim.wait(1)
+            return super().claim(candidate, sha, idempotent=idempotent)
+
+    queue = BlockingClaimQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(
+        config(tmp_path),
+        queue,
+        registry(),
+        agent_version="1",
+        source_commit="abc",
+        logger=safe_logger(),
+    )
+    outcome = []
+    thread = threading.Thread(target=lambda: outcome.append(runner.run_once()))
+    thread.start()
+    assert claim_entered.wait(1)
+
+    runner.stop_accepting_new_claims()
+    release_claim.set()
+    thread.join(1)
+
+    assert outcome[0].status is JobStatus.ABORTED
+    assert queue.running == 1
+    assert queue.results == outcome
+    assert queue.terminal[0].job.status is JobStatus.ABORTED
+    assert runner.execution_state == RunnerExecutionState(active=False, current_job_id=None)
+
+
+def test_runner_can_resume_claims_after_a_close_prompt_is_cancelled(tmp_path: Path) -> None:
+    """Catches a dismissed close prompt permanently disabling future queue work."""
+    queue = FakeQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(
+        config(tmp_path),
+        queue,
+        registry(),
+        agent_version="1",
+        source_commit="abc",
+        logger=safe_logger(),
+    )
+
+    runner.stop_accepting_new_claims()
+    runner.resume_accepting_new_claims()
+    result = runner.run_once()
+
+    assert result.status is JobStatus.SUCCEEDED
+    assert queue.claims == 1

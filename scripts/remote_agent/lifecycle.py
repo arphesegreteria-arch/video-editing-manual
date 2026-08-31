@@ -183,6 +183,7 @@ class LifecycleController:
         self._state = AgentState.OFFLINE
         self._status_message = "Offline"
         self._paused = False
+        self._poll_in_progress = False
         self._job_active = False
         self._cleanup_pending = False
         self._stop_requested = threading.Event()
@@ -193,6 +194,10 @@ class LifecycleController:
         self._last_job_status: JobStatus | None = None
         self._recent_logs: deque[str] = deque(maxlen=100)
         self._retry_delay = float(config.poll_interval_seconds)
+        listener = getattr(runner, "add_execution_listener", None)
+        self._runner_reports_execution = callable(listener)
+        if self._runner_reports_execution:
+            listener(self._on_runner_execution_state)
 
     @property
     def state(self) -> AgentState:
@@ -275,10 +280,16 @@ class LifecycleController:
         """Return true when the caller may destroy the window immediately."""
         with self._lock:
             active = self._job_active
+        if active and mode is None:
+            raise ValueError("an active job requires an explicit close mode")
+        self._stop_new_claims()
+        with self._lock:
+            active = self._job_active
         if not active:
-            self.shutdown()
+            self._begin_shutdown()
             return True
         if mode is None:
+            self._resume_new_claims()
             raise ValueError("an active job requires an explicit close mode")
         with self._lock:
             self._closing = True
@@ -295,16 +306,20 @@ class LifecycleController:
 
     def shutdown(self, *, timeout: float | None = None) -> None:
         """Stop all work and join the non-daemon lifecycle worker before returning."""
-        with self._lock:
-            if self._job_active:
-                self._cancellation.set()
-            self._stop_requested.set()
-        self._scheduler.wake()
+        self._begin_shutdown()
         worker = self._worker
         if worker is not None and worker is not threading.current_thread():
             worker.join(timeout)
             if worker.is_alive():
                 raise TimeoutError("remote agent worker did not stop")
+
+    def _begin_shutdown(self) -> None:
+        """Close the gates immediately; joining is deliberately a separate boundary."""
+        self._stop_new_claims()
+        with self._lock:
+            self._cancellation.set()
+            self._stop_requested.set()
+        self._scheduler.wake()
 
     def wait_until_stopped(self, timeout: float | None = None) -> None:
         if not self._stopped.wait(timeout):
@@ -373,11 +388,12 @@ class LifecycleController:
 
     def _run_one_job(self) -> bool:
         with self._lock:
-            self._job_active = True
-            self._state = AgentState.RUNNING
-            current = getattr(self._runner, "current_job_id", None)
-            self._current_job = current if isinstance(current, str) and current else "Processing queue job"
-            self._status_message = "Running one allowlisted job"
+            self._poll_in_progress = True
+            if not self._runner_reports_execution:
+                self._job_active = True
+                self._state = AgentState.RUNNING
+                self._current_job = "Processing queue job"
+                self._status_message = "Running one allowlisted job"
         cleanup_pending = False
         try:
             result = getattr(self._runner, "run_once")()
@@ -394,14 +410,42 @@ class LifecycleController:
                     self._record(f"Job {self._last_job}: {self._last_job_status}")
         finally:
             with self._lock:
+                self._poll_in_progress = False
                 if not cleanup_pending:
-                    self._job_active = False
+                    if not self._runner_reports_execution:
+                        self._job_active = False
                     self._cleanup_pending = False
-                    self._current_job = "-"
-                if not self._stop_after_current and not cleanup_pending:
+                    if not self._runner_reports_execution:
+                        self._current_job = "-"
+                if not self._stop_after_current and not cleanup_pending and not self._job_active:
                     self._state = AgentState.PAUSED if self._paused else AgentState.ONLINE
                     self._status_message = "Paused - no new jobs" if self._paused else "Online"
         return cleanup_pending
+
+    def _on_runner_execution_state(self, execution: object) -> None:
+        """Mirror only a confirmed remote RUNNING job into UI-visible lifecycle state."""
+        active = bool(getattr(execution, "active", False))
+        current = getattr(execution, "current_job_id", None)
+        current_job = current if isinstance(current, str) and current else "-"
+        with self._lock:
+            self._job_active = active
+            self._current_job = current_job
+            if active:
+                self._state = AgentState.RUNNING
+                self._status_message = "Running one allowlisted job"
+            elif not self._cleanup_pending and not self._stop_after_current:
+                self._state = AgentState.PAUSED if self._paused else AgentState.ONLINE
+                self._status_message = "Paused - no new jobs" if self._paused else "Online"
+
+    def _stop_new_claims(self) -> None:
+        stopper = getattr(self._runner, "stop_accepting_new_claims", None)
+        if callable(stopper):
+            stopper()
+
+    def _resume_new_claims(self) -> None:
+        resumer = getattr(self._runner, "resume_accepting_new_claims", None)
+        if callable(resumer):
+            resumer()
 
     def _register_outage(self) -> float:
         with self._lock:

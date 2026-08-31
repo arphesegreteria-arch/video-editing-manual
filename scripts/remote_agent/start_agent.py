@@ -4,6 +4,16 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
+
+
+if __package__ in {None, ""}:
+    # Direct invocation adds only this script's directory to sys.path.  Add the
+    # verified repository root, not a user-controlled or current directory.
+    _repository_root = Path(__file__).resolve().parents[2]
+    if not (_repository_root / "scripts" / "remote_agent").is_dir():
+        raise RuntimeError("remote agent package root is unavailable")
+    sys.path.insert(0, str(_repository_root))
 
 from scripts.remote_agent.app import build_application
 

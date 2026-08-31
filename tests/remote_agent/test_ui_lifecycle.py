@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
 from pathlib import Path
+import subprocess
+import sys
 import threading
 import time
 
@@ -190,10 +192,118 @@ def test_idle_close_is_immediate_and_writes_offline_heartbeat(tmp_path):
     _wait_for(lambda: len(queue.heartbeats) == 1)
 
     assert controller.request_close() is True
+    controller.wait_until_stopped(timeout=1)
 
     assert controller.state is AgentState.OFFLINE
     assert queue.heartbeats[-1].state is AgentState.OFFLINE
     assert not controller.worker_alive
+
+
+def test_slow_idle_poll_stays_online_and_can_close_without_a_job_prompt(tmp_path):
+    """Catches a queue listing being mistaken for an active job during close."""
+    class SlowPollingRunner:
+        def __init__(self):
+            self.entered = threading.Event()
+            self.released = threading.Event()
+
+        def add_execution_listener(self, _listener):
+            # Queue I/O is deliberately not a running job.
+            return None
+
+        def run_once(self):
+            self.entered.set()
+            assert self.released.wait(1)
+            return None
+
+        def stop_accepting_new_claims(self):
+            self.released.set()
+
+    runner = SlowPollingRunner()
+    controller = _controller(tmp_path, runner=runner)
+    controller.start(ui_visible=True)
+    assert runner.entered.wait(1)
+
+    assert controller.state is AgentState.ONLINE
+    assert controller.snapshot().current_job == "-"
+    assert controller.request_close() is True
+    controller.wait_until_stopped(timeout=1)
+    assert controller.state is AgentState.OFFLINE
+
+
+def test_idle_close_returns_while_a_queue_poll_is_still_blocked(tmp_path):
+    """Catches an idle close freezing the UI for the queue HTTP timeout."""
+    class UninterruptiblePollingRunner:
+        def __init__(self):
+            self.entered = threading.Event()
+            self.release = threading.Event()
+
+        def add_execution_listener(self, _listener):
+            return None
+
+        def stop_accepting_new_claims(self):
+            return None
+
+        def run_once(self):
+            self.entered.set()
+            assert self.release.wait(1)
+            return None
+
+    runner = UninterruptiblePollingRunner()
+    controller = _controller(tmp_path, runner=runner)
+    controller.start(ui_visible=True)
+    assert runner.entered.wait(1)
+
+    finished = threading.Event()
+    closing = threading.Thread(target=lambda: (controller.request_close(), finished.set()))
+    closing.start()
+    try:
+        assert finished.wait(0.1)
+    finally:
+        runner.release.set()
+        closing.join(1)
+        controller.wait_until_stopped(timeout=1)
+
+
+def test_heartbeat_uses_the_runner_current_job_id(tmp_path):
+    """Catches heartbeats silently omitting a job id published by the runner."""
+    from scripts.remote_agent.job_runner import RunnerExecutionState
+
+    class StatePublishingRunner:
+        def __init__(self):
+            self._listener = None
+
+        def add_execution_listener(self, listener):
+            self._listener = listener
+
+        def run_once(self):
+            return None
+
+    queue = RecordingQueue()
+    runner = StatePublishingRunner()
+    controller = _controller(tmp_path, runner=runner, queue=queue)
+
+    runner._listener(RunnerExecutionState(active=True, current_job_id="job-current"))
+    controller._send_heartbeat()
+
+    assert queue.heartbeats[-1].state is AgentState.RUNNING
+    assert queue.heartbeats[-1].current_job_id == "job-current"
+
+
+def test_start_agent_runs_directly_by_path_without_importing_the_ui(tmp_path):
+    """Catches package imports failing when Task 8 launches the entry point by path."""
+    entry_point = Path(__file__).parents[2] / "scripts" / "remote_agent" / "start_agent.py"
+
+    result = subprocess.run(
+        [sys.executable, str(entry_point), "--help"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--config" in result.stdout
 
 
 def test_finish_current_then_close_joins_worker(tmp_path):

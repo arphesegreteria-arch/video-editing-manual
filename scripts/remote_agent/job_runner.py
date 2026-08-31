@@ -32,6 +32,18 @@ class RunnerState(str, Enum):
 
 
 @dataclass(frozen=True)
+class RunnerExecutionState:
+    """The one job that has crossed the remote ``RUNNING`` transition."""
+
+    active: bool
+    current_job_id: str | None
+
+    def __post_init__(self) -> None:
+        if self.active != (self.current_job_id is not None):
+            raise ValueError("active runner state must have exactly one current job id")
+
+
+@dataclass(frozen=True)
 class _PendingCleanup:
     """A cancellation whose handler must exit before terminal persistence."""
 
@@ -77,12 +89,41 @@ class JobRunner:
         self._state = RunnerState.IDLE
         self._run_lock = threading.Lock()
         self._reserved = False
+        self._claims_allowed = True
+        self._execution_state = RunnerExecutionState(active=False, current_job_id=None)
+        self._execution_listeners: list[Callable[[RunnerExecutionState], None]] = []
 
     @property
     def state(self) -> RunnerState:
         """Return whether a timed-out/cancelled handler still owns the job gate."""
         with self._run_lock:
             return self._state
+
+    @property
+    def execution_state(self) -> RunnerExecutionState:
+        """Return a thread-safe snapshot of the actual remote running job."""
+        with self._run_lock:
+            return self._execution_state
+
+    @property
+    def current_job_id(self) -> str | None:
+        """Return the job id only after its document is marked ``RUNNING``."""
+        return self.execution_state.current_job_id
+
+    def add_execution_listener(self, listener: Callable[[RunnerExecutionState], None]) -> None:
+        """Notify a lifecycle owner when a job enters or leaves execution."""
+        with self._run_lock:
+            self._execution_listeners.append(listener)
+
+    def stop_accepting_new_claims(self) -> None:
+        """Close the claim gate without waiting for an in-flight queue request."""
+        with self._run_lock:
+            self._claims_allowed = False
+
+    def resume_accepting_new_claims(self) -> None:
+        """Reopen the claim gate when an operator cancels a close request."""
+        with self._run_lock:
+            self._claims_allowed = True
 
     def run_once(self) -> JobResult | None:
         """Run one pending job, or return ``None`` when nothing is safely runnable."""
@@ -101,6 +142,8 @@ class JobRunner:
                 return self._finish_pending_cleanup(pending_cleanup)
             candidates = getattr(self._queue, "list_pending")(self._config.machine_id)
             for candidate in candidates:
+                if not self._claims_are_allowed():
+                    return None
                 job = candidate.job
                 if not job.matches_machine(self._config.machine_id):
                     continue
@@ -121,19 +164,31 @@ class JobRunner:
         job = running.job
         started_at = self._utc_now()
         token = CancellationToken()
-
-        if self._cancellation_requested():
-            token.cancel()
-            result = self._result(job, started_at, JobStatus.ABORTED, error_type="Cancelled", error_message="cancellation requested before handler start")
-        else:
-            result = self._execute(running, registered, parameters, token, started_at)
-        if isinstance(result, _PendingCleanup):
-            with self._run_lock:
-                self._pending_cleanup = result
-                self._state = RunnerState.CANCELLATION_CLEANUP_PENDING
-            return None
-        self._persist_terminal(running, result)
-        return result
+        self._set_execution_state(RunnerExecutionState(active=True, current_job_id=job.job_id))
+        cleanup_pending = False
+        try:
+            if self._cancellation_requested() or not self._claims_are_allowed():
+                token.cancel()
+                result = self._result(
+                    job,
+                    started_at,
+                    JobStatus.ABORTED,
+                    error_type="Cancelled",
+                    error_message="cancellation requested before handler start",
+                )
+            else:
+                result = self._execute(running, registered, parameters, token, started_at)
+            if isinstance(result, _PendingCleanup):
+                cleanup_pending = True
+                with self._run_lock:
+                    self._pending_cleanup = result
+                    self._state = RunnerState.CANCELLATION_CLEANUP_PENDING
+                return None
+            self._persist_terminal(running, result)
+            return result
+        finally:
+            if not cleanup_pending:
+                self._set_execution_state(RunnerExecutionState(active=False, current_job_id=None))
 
     def _execute(
         self, running: QueuedJob, registered: RegisteredHandler, parameters: Any, token: CancellationToken, started_at: datetime
@@ -253,7 +308,24 @@ class JobRunner:
             self._pending_cleanup = None
             self._active_worker = None
             self._state = RunnerState.IDLE
+        self._set_execution_state(RunnerExecutionState(active=False, current_job_id=None))
         return result
+
+    def _claims_are_allowed(self) -> bool:
+        with self._run_lock:
+            return self._claims_allowed
+
+    def _set_execution_state(self, state: RunnerExecutionState) -> None:
+        with self._run_lock:
+            if self._execution_state == state:
+                return
+            self._execution_state = state
+            listeners = tuple(self._execution_listeners)
+        for listener in listeners:
+            try:
+                listener(state)
+            except Exception:
+                self._logger.exception("remote runner execution-state listener failed")
 
     def _persist_terminal(self, running: QueuedJob, result: JobResult) -> None:
         getattr(self._queue, "write_result")(result)

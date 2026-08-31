@@ -120,3 +120,32 @@ def test_readme_states_manual_launch_and_no_background_agent():
     assert "no scheduled task" in lower
     assert "no startup" in lower
     assert "resolve studio" in lower
+
+
+def test_readme_documents_manual_release_gate_and_expanded_secret_scan():
+    readme = _read("README.md")
+
+    assert "HOME_DEV manual release checklist" in readme
+    assert "PING" in readme
+    assert "LIST_MEDIA" in readme
+    assert "RUN_CAPABILITY_AUDIT" in readme
+    assert "RUN_RENDER_PROBE" in readme
+    assert "REMOTE_AGENT_V1_HOME_DEV_TESTED" in readme
+    assert "POLI_01" in readme
+    assert "api[_-]?key" in readme
+
+
+def test_current_state_records_tested_versions_and_pending_live_gate():
+    current_state = (Path(__file__).parents[2] / "CURRENT_STATE.md").read_text(encoding="utf-8")
+    lower = current_state.lower()
+
+    assert "python " in lower
+    assert "pytest " in lower
+    assert "pydantic " in lower
+    assert "requests " in lower
+    assert "keyring " in lower
+    assert "psutil " in lower
+    assert "remote_agent_v1_home_dev_tested" in lower
+    assert "not yet" in lower or "non ancora" in lower
+    assert "poli_01" in lower
+    assert "not production-ready" in lower or "non production-ready" in lower

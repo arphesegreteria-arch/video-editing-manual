@@ -85,10 +85,35 @@ exports, and local logs by default. It does not delete `D:\ARPHE` folders.
 ## Static secret scan
 
 Before a release candidate, run this exact PowerShell command from the
-repository root. It looks for accidental token literals or authorization dumps;
-matches must be investigated, not blindly suppressed.
+repository root. It looks for accidental token literals, authorization dumps,
+and secret-like config keys; matches must be investigated, not blindly
+suppressed.
 
 ```powershell
 Get-ChildItem scripts\remote_agent,tests\remote_agent -Recurse -File |
-  Select-String -Pattern 'github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9_]+|Authorization\s*:'
+  Where-Object { $_.FullName -notmatch '\\__pycache__\\' } |
+  Select-String -Pattern 'github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9_]+|Authorization\s*:|"(?:token|secret|password|authorization|credential|api[_-]?key)"\s*:'
 ```
+
+Expected matches still need review. Synthetic token fixtures in the redaction
+tests and the deliberate `Authorization` header construction inside the queue
+client are normal; an unexpected match in config, README examples, runtime
+results, or non-test literals is not.
+
+## HOME_DEV manual release checklist
+
+Run this on the real HOME_DEV workstation before promoting the branch:
+
+1. Open the visible app from the desktop shortcut and confirm the window stays open.
+2. Submit `PING` and confirm a `SUCCEEDED` result with sanitized machine metadata.
+3. Submit `LIST_MEDIA` against a configured alias and confirm alias-relative paths only.
+4. Connect to Resolve Studio and confirm the UI shows a connected status.
+5. Run `RUN_CAPABILITY_AUDIT` only inside `ARPHE_TEST` or an `ARPHE_AUDIT_` project.
+6. Run `RUN_RENDER_PROBE` only inside `ARPHE_TEST` or an `ARPHE_AUDIT_` project.
+7. Pause jobs, then confirm heartbeats continue while new claims stop.
+8. Close the app and confirm no process, polling, or heartbeat remains afterward.
+
+Only after that live checklist passes may the build be tagged in documentation
+as `REMOTE_AGENT_V1_HOME_DEV_TESTED`. Until then, this branch is a release
+candidate only. `POLI_01` remains intentionally more restricted and is not
+production-ready in V1.

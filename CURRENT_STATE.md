@@ -123,3 +123,23 @@ Strategia tracking corrente:
 - Un job che attraversa il confine dopo l'inizio della chiusura viene finalizzato `ABORTED`, senza avviare l'handler e senza pubblicare un `current_job_id` transitorio.
 - Aggiunto un test deterministico controller + runner reale + coda finta che forza questo interleaving e controlla stato offline, heartbeat senza job corrente e transizione terminale.
 - Verifica automatizzata: `194 passed, 1 skipped` con la suite completa del remote agent.
+
+## 2026-08-31 — Remote Agent V1 release candidate
+
+- Stato documento: release candidate per installazione manuale su `HOME_DEV`; non ancora taggato `REMOTE_AGENT_V1_HOME_DEV_TESTED`.
+- Profilo `POLI_01`: ancora più ristretto di `HOME_DEV` e **non production-ready** in V1.
+- Suite automatizzata più recente in questo branch: `202 passed, 1 skipped`.
+
+Versioni verificate in questo ambiente di sviluppo:
+- Python 3.12.13
+- pytest 9.1.1
+- pydantic 2.13.4
+- requests 2.34.2
+- keyring 25.7.0
+- psutil 7.2.2
+
+Limitazioni osservate:
+- L'installer Windows e l'uninstaller PowerShell sono stati validati con parser, test statici e suite automatizzata, ma non eseguiti sul vero PC `HOME_DEV` in questa sessione.
+- Il collegamento live a DaVinci Resolve Studio e i probe distruttivi restano subordinati al checklist manuale su `ARPHE_TEST` o `ARPHE_AUDIT_*`.
+- Finché il checklist live non passa, non va pubblicata la dicitura `REMOTE_AGENT_V1_HOME_DEV_TESTED`.
+- La static secret scan, eseguita con esclusione di `__pycache__`, segnala solo fixture sintetiche nei test di redazione e l'header `Authorization` costruito intenzionalmente nel client GitHub; non ha evidenziato token reali in config, README o risultati runtime.

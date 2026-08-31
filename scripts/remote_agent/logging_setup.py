@@ -15,7 +15,7 @@ from scripts.remote_agent.credentials import get_token_for_machine
 LOG_MAX_BYTES = 5 * 1024 * 1024
 LOG_BACKUP_COUNT = 5
 _AUTHORIZATION_PATTERN = re.compile(
-    r"(Authorization\s*:\s*)(?:Bearer\s+)?[^\s,;]+", re.IGNORECASE
+    r"(Authorization\s*:\s*)(?:Bearer\s+)?[^,;\r\n]+", re.IGNORECASE
 )
 _AUTHORIZATION_MAPPING_PATTERN = re.compile(
     r"((?:['\"]authorization['\"])\s*:\s*['\"])(?:Bearer\s+)?[^'\"]+",
@@ -24,6 +24,14 @@ _AUTHORIZATION_MAPPING_PATTERN = re.compile(
 _BEARER_PATTERN = re.compile(r"\bBearer\s+\S+", re.IGNORECASE)
 _GITHUB_TOKEN_PATTERN = re.compile(
     r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+)\b", re.IGNORECASE
+)
+_GENERIC_SECRET_QUOTED_ASSIGNMENT_PATTERN = re.compile(
+    r"(\b(?:token|secret|password|credential|api[_-]?key)\b(?:['\"])?\s*[:=]\s*['\"])(?:Bearer\s+)?[^'\"]*",
+    re.IGNORECASE,
+)
+_GENERIC_SECRET_PLAIN_ASSIGNMENT_PATTERN = re.compile(
+    r"(\b(?:token|secret|password|credential|api[_-]?key)\b\s*[:=]\s*)(?:Bearer\s+)?[^,;\r\n]+",
+    re.IGNORECASE,
 )
 
 
@@ -35,7 +43,9 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     redacted = _AUTHORIZATION_PATTERN.sub(r"\1[REDACTED]", redacted)
     redacted = _AUTHORIZATION_MAPPING_PATTERN.sub(r"\1[REDACTED]", redacted)
     redacted = _BEARER_PATTERN.sub("Bearer [REDACTED]", redacted)
-    return _GITHUB_TOKEN_PATTERN.sub("[REDACTED]", redacted)
+    redacted = _GITHUB_TOKEN_PATTERN.sub("[REDACTED]", redacted)
+    redacted = _GENERIC_SECRET_QUOTED_ASSIGNMENT_PATTERN.sub(r"\1[REDACTED]", redacted)
+    return _GENERIC_SECRET_PLAIN_ASSIGNMENT_PATTERN.sub(r"\1[REDACTED]", redacted)
 
 
 class _RedactingFormatter(logging.Formatter):

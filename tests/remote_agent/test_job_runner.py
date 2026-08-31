@@ -47,6 +47,7 @@ class FakeQueue:
         self.running = 0
         self.results = []
         self.terminal: list[QueuedJob] = []
+        self.terminal_inputs: list[QueuedJob] = []
 
     def list_pending(self, machine_id: str) -> list[QueuedJob]:
         return [self.queued]
@@ -64,6 +65,7 @@ class FakeQueue:
         self.results.append(result)
 
     def mark_terminal(self, running: QueuedJob, status: JobStatus) -> QueuedJob:
+        self.terminal_inputs.append(running)
         terminal = QueuedJob(running.job.model_copy(update={"status": status}), "terminal-sha")
         self.terminal.append(terminal)
         return terminal
@@ -145,17 +147,16 @@ def test_runner_serializes_concurrent_calls_and_sanitizes_secret_handler_failure
 @pytest.mark.parametrize(
     "exception_text",
     [
-        "Authorization: Bearer ordinary-secret-value",
-        "{'Authorization': 'Bearer ordinary-secret-value'}",
-        "{'headers': {'authorization': 'Bearer ordinary-secret-value'}}",
-        "token=ordinary-secret-value",
-        "x" * 5001,
+        "Authorization: Bearer alpha beta gamma",
+        "{'Authorization': 'Bearer alpha beta gamma'}",
+        "token=alpha beta gamma",
+        "alpha beta gamma " + "x" * 5001,
     ],
 )
-def test_runner_persists_a_bounded_secret_free_terminal_result_for_hostile_exception_text(
+def test_runner_persists_an_opaque_terminal_result_for_hostile_exception_text(
     tmp_path: Path, exception_text: str
 ) -> None:
-    """Catches unsafe handler errors breaking JobResult validation and leaving the job RUNNING."""
+    """Catches raw handler exception text escaping remotely or breaking terminal persistence."""
     from scripts.remote_agent.handlers.agent_status import PingParameters
 
     handler_registry = HandlerRegistry(["PING"])
@@ -171,11 +172,12 @@ def test_runner_persists_a_bounded_secret_free_terminal_result_for_hostile_excep
 
     assert result is not None
     assert result.status is JobStatus.FAILED
-    assert result.error_message is not None
-    assert "ordinary-secret-value" not in result.error_message
-    assert len(result.error_message) <= 512
+    assert result.error_type == "HandlerFailure"
+    assert result.error_message == "handler failed; see redacted local logs"
+    assert all(fragment not in result.error_message for fragment in ("alpha", "beta", "gamma", "x" * 32))
     assert queue.results == [result]
     assert [item.job.status for item in queue.terminal] == [JobStatus.FAILED]
+    assert [item.sha for item in queue.terminal_inputs] == ["running-sha"]
 
 
 def test_runner_cancels_and_joins_handler_before_persisting_aborted_result(tmp_path: Path) -> None:

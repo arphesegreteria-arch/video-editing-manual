@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import inspect
-import re
+import logging
 import threading
 import time
 from typing import Any
@@ -16,14 +16,11 @@ from scripts.remote_agent.cancellation import CancellationToken
 from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.github_queue import QueuedJob
 from scripts.remote_agent.handler_registry import HandlerRegistry, RegisteredHandler
-from scripts.remote_agent.logging_setup import redact_secrets
 from scripts.remote_agent.models import JobResult, JobStatus
 
 
-_SAFE_ERROR_MAX_LENGTH = 512
-_GENERIC_SECRET_ASSIGNMENT = re.compile(
-    r"(?i)\b(?:token|secret|password|authorization|credential|api[_-]?key)\b(?:['\"])?\s*[:=]\s*(?:['\"])?(?:bearer\s+)?[^\s,;'\"]+"
-)
+_HANDLER_FAILURE_TYPE = "HandlerFailure"
+_HANDLER_FAILURE_MESSAGE = "handler failed; see redacted local logs"
 
 
 class RunnerState(str, Enum):
@@ -60,6 +57,7 @@ class JobRunner:
         now: Callable[[], datetime] | None = None,
         monotonic: Callable[[], float] = time.monotonic,
         cleanup_timeout_seconds: float = 5.0,
+        logger: logging.Logger | None = None,
     ) -> None:
         if cleanup_timeout_seconds <= 0:
             raise ValueError("cleanup_timeout_seconds must be positive")
@@ -72,6 +70,7 @@ class JobRunner:
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._monotonic = monotonic
         self._cleanup_timeout_seconds = cleanup_timeout_seconds
+        self._logger = logger or logging.getLogger(f"arphe.remote_agent.{config.machine_id}")
         self._active_worker: threading.Thread | None = None
         self._pending_cleanup: _PendingCleanup | None = None
         self._state = RunnerState.IDLE
@@ -189,20 +188,26 @@ class JobRunner:
             return self._result(job, started_at, JobStatus.ABORTED, error_type="Cancelled", error_message="handler observed cancellation")
         if "exception" in outcome:
             exception = outcome["exception"]
+            self._logger.error(
+                "remote handler execution failed for job_id=%s action=%s",
+                job.job_id,
+                job.action,
+                exc_info=(type(exception), exception, exception.__traceback__),
+            )
             return self._result(
                 job,
                 started_at,
                 JobStatus.FAILED,
-                error_type=type(exception).__name__,
-                error_message=self._safe_error(str(exception)),
+                error_type=_HANDLER_FAILURE_TYPE,
+                error_message=_HANDLER_FAILURE_MESSAGE,
             )
         output = outcome.get("output")
         if not isinstance(output, dict):
             return self._result(job, started_at, JobStatus.FAILED, error_type="HandlerContractError", error_message="handler output must be a JSON object")
         try:
             return self._result(job, started_at, JobStatus.SUCCEEDED, output=output)
-        except ValueError as exc:
-            return self._result(job, started_at, JobStatus.FAILED, error_type="UnsafeOutput", error_message=self._safe_error(str(exc)))
+        except ValueError:
+            return self._result(job, started_at, JobStatus.FAILED, error_type="UnsafeOutput", error_message="handler output was rejected")
 
     def _cancel_and_join(
         self,
@@ -246,14 +251,6 @@ class JobRunner:
         getattr(self._queue, "mark_terminal")(running, result.status)
 
     @staticmethod
-    def _safe_error(message: str) -> str:
-        redacted = redact_secrets(str(message), ())
-        redacted = _GENERIC_SECRET_ASSIGNMENT.sub("[REDACTED]", redacted)
-        if len(redacted) > _SAFE_ERROR_MAX_LENGTH:
-            return redacted[: _SAFE_ERROR_MAX_LENGTH - len(" [TRUNCATED]")] + " [TRUNCATED]"
-        return redacted
-
-    @staticmethod
     def _invoke(registered: RegisteredHandler, parameters: Any, token: CancellationToken) -> Any:
         handler = registered.handler
         try:
@@ -288,8 +285,8 @@ class JobRunner:
             return JobResult(
                 **common,
                 output=output or {},
-                error_type=self._safe_error(error_type)[:256] if error_type else None,
-                error_message=self._safe_error(error_message) if error_message else None,
+                error_type=error_type,
+                error_message=error_message,
             )
         except ValueError:
             return JobResult(

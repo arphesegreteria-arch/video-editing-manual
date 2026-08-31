@@ -1,0 +1,34 @@
+{
+  "machine_id": "HOME_DEV",
+  "poll_interval_seconds": 30,
+  "folders": {
+    "incoming": "D:\\ARPHE\\Incoming",
+    "test_media": "D:\\ARPHE\\TestMedia",
+    "workspace": "D:\\ARPHE\\Workspace",
+    "exports": "D:\\ARPHE\\Exports"
+  },
+  "resolve": {
+    "executable_path": "C:\\Program Files\\Blackmagic Design\\DaVinci Resolve\\Resolve.exe",
+    "launch_if_needed": true,
+    "test_project": "ARPHE_TEST",
+    "audit_project_prefix": "ARPHE_AUDIT_"
+  },
+  "github": {
+    "owner": "arphesegreteria-arch",
+    "repository": "video-editing-manual",
+    "branch": "main",
+    "api_base_url": "https://api.github.com"
+  },
+  "allowed_actions": [
+    "PING",
+    "GET_STATUS",
+    "RUN_CAPABILITY_AUDIT",
+    "LIST_MEDIA",
+    "FIND_MEDIA",
+    "HASH_MEDIA",
+    "COPY_TO_WORKSPACE",
+    "IMPORT_MEDIA",
+    "RUN_TRACKING_PROBE",
+    "RUN_RENDER_PROBE"
+  ]
+}

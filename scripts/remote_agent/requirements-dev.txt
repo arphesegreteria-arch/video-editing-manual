@@ -1,0 +1,2 @@
+# Development and test tooling only.  Runtime installations use requirements.txt.
+pytest==9.1.1

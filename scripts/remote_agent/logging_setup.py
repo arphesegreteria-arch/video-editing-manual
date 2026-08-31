@@ -57,6 +57,41 @@ class _RedactingFormatter(logging.Formatter):
         return redact_secrets(super().format(record), self._secrets)
 
 
+class _RedactingHandler(logging.Handler):
+    """Render a record safely before handing it to an untrusted backend."""
+
+    def __init__(self, backend: logging.Handler, secrets: Iterable[str]) -> None:
+        super().__init__(backend.level)
+        self._backend = backend
+        self.setFormatter(_RedactingFormatter(secrets))
+
+    @property
+    def backend(self) -> logging.Handler:
+        return self._backend
+
+    def emit(self, record: logging.LogRecord) -> None:
+        rendered = self.format(record)
+        safe_record = logging.LogRecord(
+            name=record.name,
+            level=record.levelno,
+            pathname="",
+            lineno=0,
+            msg=rendered,
+            args=(),
+            exc_info=None,
+        )
+        self._backend.handle(safe_record)
+
+    def flush(self) -> None:
+        self._backend.flush()
+
+    def close(self) -> None:
+        try:
+            self._backend.close()
+        finally:
+            super().close()
+
+
 def configure_redacting_logger(
     logger: logging.Logger,
     handlers: Iterable[logging.Handler],
@@ -74,21 +109,29 @@ def configure_redacting_logger(
     for existing_handler in logger.handlers[:]:
         logger.removeHandler(existing_handler)
         existing_handler.close()
+    logger.filters.clear()
     for handler in configured_handlers:
-        handler.setFormatter(_RedactingFormatter(configured_secrets))
-        logger.addHandler(handler)
+        logger.addHandler(_RedactingHandler(handler, configured_secrets))
     return logger
 
 
 def is_redacting_logger(logger: object) -> bool:
     """Return whether every possible local output path applies central redaction."""
     return (
-        isinstance(logger, logging.Logger)
+        type(logger) is logging.Logger
         and not logger.disabled
         and logger.isEnabledFor(logging.ERROR)
         and not logger.propagate
+        and not logger.filters
         and bool(logger.handlers)
-        and all(isinstance(handler.formatter, _RedactingFormatter) for handler in logger.handlers)
+        and all(
+            type(handler) is _RedactingHandler
+            and type(handler.formatter) is _RedactingFormatter
+            and not handler.filters
+            and "emit" not in handler.__dict__
+            and "handle" not in handler.__dict__
+            for handler in logger.handlers
+        )
         and any(handler.level <= logging.ERROR for handler in logger.handlers)
     )
 

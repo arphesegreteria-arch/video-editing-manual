@@ -273,8 +273,8 @@ def test_runner_persists_an_opaque_terminal_result_for_hostile_exception_text(
     assert [item.sha for item in queue.terminal_inputs] == ["running-sha"]
 
 
-def test_runner_routes_raw_handler_failure_only_through_redacting_backend(tmp_path: Path) -> None:
-    """Catches exception detail leaking to root while proving the local handler receives it."""
+def test_runner_routes_preredacted_handler_failure_only_to_local_backend(tmp_path: Path) -> None:
+    """Catches exception detail reaching either the injected backend or root unredacted."""
     from scripts.remote_agent.handlers.agent_status import PingParameters
 
     hostile_text = "token=alpha beta gamma"
@@ -304,7 +304,9 @@ def test_runner_routes_raw_handler_failure_only_through_redacting_backend(tmp_pa
         root_logger.removeHandler(root_handler)
 
     assert len(local_handler.records) == 1
-    assert hostile_text in str(local_handler.records[0].exc_info[1])
+    assert local_handler.records[0].exc_info is None
+    assert hostile_text not in local_handler.records[0].getMessage()
+    assert "RuntimeError: token=[REDACTED]" in local_handler.records[0].getMessage()
     assert hostile_text not in local_stream.getvalue()
     assert "token=[REDACTED]" in local_stream.getvalue()
     assert root_stream.getvalue() == ""

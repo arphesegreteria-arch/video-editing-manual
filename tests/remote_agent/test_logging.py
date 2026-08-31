@@ -18,6 +18,37 @@ TOKEN = "unit-test-token-value"
 LEGACY_TOKEN = "legacy-opaque-token"
 
 
+class FormatterIgnoringHandler(logging.Handler):
+    """A backend that deliberately inspects the record without formatting it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+def test_untrusted_backend_receives_only_a_preredacted_exception_record() -> None:
+    """Catches arbitrary handlers receiving raw message arguments or exception objects."""
+    backend = FormatterIgnoringHandler()
+    logger = logging.Logger("arphe.remote_agent.HOME_DEV")
+    configure_redacting_logger(logger, [backend], secrets=[TOKEN])
+
+    try:
+        raise RuntimeError(f"GitHub rejected token={TOKEN}")
+    except RuntimeError:
+        logger.exception("handler failed with credential %s", TOKEN)
+
+    assert len(backend.records) == 1
+    delivered = backend.records[0]
+    assert delivered.args == ()
+    assert delivered.exc_info is None
+    assert TOKEN not in delivered.getMessage()
+    assert "RuntimeError: GitHub rejected token=[REDACTED]" in delivered.getMessage()
+    assert "handler failed with credential [REDACTED]" in delivered.getMessage()
+
+
 def test_injected_logger_backend_is_centrally_redacted_without_credentials() -> None:
     """Catches test/injected loggers bypassing the same formatter contract as production."""
     stream = StringIO()
@@ -82,7 +113,8 @@ def test_configured_logger_redacts_token_from_exception_traceback(tmp_path, monk
         for handler in logger.handlers:
             handler.flush()
 
-    handler = next(handler for handler in logger.handlers if isinstance(handler, RotatingFileHandler))
+    handler = logger.handlers[0].backend
+    assert isinstance(handler, RotatingFileHandler)
     content = Path(handler.baseFilename).read_text(encoding="utf-8")
 
     assert TOKEN not in content
@@ -109,7 +141,8 @@ def test_default_logger_redacts_opaque_token_in_mapping_style_header(
     for handler in logger.handlers:
         handler.flush()
 
-    handler = next(handler for handler in logger.handlers if isinstance(handler, RotatingFileHandler))
+    handler = logger.handlers[0].backend
+    assert isinstance(handler, RotatingFileHandler)
     content = Path(handler.baseFilename).read_text(encoding="utf-8")
 
     assert LEGACY_TOKEN not in content

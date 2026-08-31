@@ -60,6 +60,17 @@ def test_setup_is_visible_only_and_uses_credential_manager_token_prompt():
     assert "Copy-Item -LiteralPath" in script
 
 
+def test_setup_fails_closed_when_external_install_or_token_commands_fail():
+    script = (WINDOWS_ROOT / "setup_windows.ps1").read_text(encoding="utf-8")
+
+    assert "function Assert-LastExitCode" in script
+    assert "Assert-LastExitCode 'creating the dedicated virtual environment'" in script
+    assert "Assert-LastExitCode 'upgrading pip in the dedicated virtual environment'" in script
+    assert "Assert-LastExitCode 'installing the ARPHE Remote Agent runtime dependencies'" in script
+    assert "Assert-LastExitCode 'validating the local config.json'" in script
+    assert "Assert-LastExitCode 'storing the GitHub token in Windows Credential Manager'" in script
+
+
 def test_launcher_quotes_paths_and_runs_direct_entry_point():
     script = (WINDOWS_ROOT / "start_agent.bat").read_text(encoding="utf-8")
 

@@ -39,6 +39,12 @@ function Read-Default([string] $Prompt, [string] $Default) {
     return $value.Trim()
 }
 
+function Assert-LastExitCode([string] $Step) {
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed while $Step (exit code $LASTEXITCODE)."
+    }
+}
+
 function Initialize-NewConfig {
     $config = Get-Content -LiteralPath $exampleConfigPath -Raw | ConvertFrom-Json
     $config.machine_id = Read-Default 'Machine ID (uppercase letters, digits, underscores)' $config.machine_id
@@ -82,11 +88,14 @@ if (-not (Test-Path -LiteralPath $venvDirectory)) {
     } else {
         & $pythonCommand[0] -m venv $venvDirectory
     }
+    Assert-LastExitCode 'creating the dedicated virtual environment'
 }
 $venvPython = Join-Path $venvDirectory 'Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $venvPython)) { throw 'The dedicated virtual environment was not created.' }
 & $venvPython -m pip install --upgrade pip
+Assert-LastExitCode 'upgrading pip in the dedicated virtual environment'
 & $venvPython -m pip install -r (Join-Path $agentDirectory 'requirements.txt')
+Assert-LastExitCode 'installing the ARPHE Remote Agent runtime dependencies'
 
 if ($CreateDefaultFolders) {
     foreach ($folder in @('D:\ARPHE\Incoming', 'D:\ARPHE\TestMedia', 'D:\ARPHE\Workspace', 'D:\ARPHE\Exports')) {
@@ -103,13 +112,14 @@ if (-not (Test-Path -LiteralPath $configPath)) {
 
 # Validate the strict, secret-free config before creating a launch shortcut.
 & $venvPython -c "import sys; from pathlib import Path; sys.path.insert(0, str(Path(sys.argv[2]).resolve())); from scripts.remote_agent.config import AgentConfig; AgentConfig.load(sys.argv[1])" $configPath $projectDirectory
-if ($LASTEXITCODE -ne 0) { throw 'The local config.json did not pass ARPHE Remote Agent validation.' }
+Assert-LastExitCode 'validating the local config.json'
 
 New-DesktopShortcut
 if (-not $SkipTokenSetup) {
     $setToken = Read-Host 'Set or update the GitHub token in Windows Credential Manager now? [Y/n]'
     if ([string]::IsNullOrWhiteSpace($setToken) -or $setToken -match '^[Yy]') {
         & $venvPython (Join-Path $agentDirectory 'start_agent.py') --config $configPath --set-github-token
+        Assert-LastExitCode 'storing the GitHub token in Windows Credential Manager'
     }
 }
 

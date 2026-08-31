@@ -1,15 +1,53 @@
 import logging
 from logging.handlers import RotatingFileHandler
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
 from scripts.remote_agent import logging_setup
-from scripts.remote_agent.logging_setup import configure_logging, redact_secrets
+from scripts.remote_agent.logging_setup import (
+    configure_logging,
+    configure_redacting_logger,
+    is_redacting_logger,
+    redact_secrets,
+)
 
 
 TOKEN = "unit-test-token-value"
 LEGACY_TOKEN = "legacy-opaque-token"
+
+
+def test_injected_logger_backend_is_centrally_redacted_without_credentials() -> None:
+    """Catches test/injected loggers bypassing the same formatter contract as production."""
+    stream = StringIO()
+    logger = logging.Logger("arphe.remote_agent.HOME_DEV")
+    handler = logging.StreamHandler(stream)
+
+    configured = configure_redacting_logger(logger, [handler], secrets=[TOKEN])
+    configured.error("request token=%s", TOKEN)
+
+    assert configured is logger
+    assert is_redacting_logger(configured)
+    assert configured.propagate is False
+    assert TOKEN not in stream.getvalue()
+    assert "token=[REDACTED]" in stream.getvalue()
+
+
+def test_every_injected_backend_receives_the_complete_known_secret_set() -> None:
+    """Catches a one-shot secrets iterable protecting only the first configured handler."""
+    streams = [StringIO(), StringIO()]
+    logger = logging.Logger("arphe.remote_agent.HOME_DEV")
+
+    configure_redacting_logger(
+        logger,
+        [logging.StreamHandler(stream) for stream in streams],
+        secrets=(secret for secret in [TOKEN]),
+    )
+    logger.error("authenticated as %s", TOKEN)
+
+    assert all(TOKEN not in stream.getvalue() for stream in streams)
+    assert all("[REDACTED]" in stream.getvalue() for stream in streams)
 
 
 @pytest.mark.parametrize(

@@ -16,6 +16,7 @@ from scripts.remote_agent.cancellation import CancellationToken
 from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.github_queue import QueuedJob
 from scripts.remote_agent.handler_registry import HandlerRegistry, RegisteredHandler
+from scripts.remote_agent.logging_setup import require_redacting_logger
 from scripts.remote_agent.models import JobResult, JobStatus
 
 
@@ -53,11 +54,11 @@ class JobRunner:
         *,
         agent_version: str,
         source_commit: str,
+        logger: logging.Logger,
         cancellation_requested: Callable[[], bool] | None = None,
         now: Callable[[], datetime] | None = None,
         monotonic: Callable[[], float] = time.monotonic,
         cleanup_timeout_seconds: float = 5.0,
-        logger: logging.Logger | None = None,
     ) -> None:
         if cleanup_timeout_seconds <= 0:
             raise ValueError("cleanup_timeout_seconds must be positive")
@@ -70,7 +71,7 @@ class JobRunner:
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._monotonic = monotonic
         self._cleanup_timeout_seconds = cleanup_timeout_seconds
-        self._logger = logger or logging.getLogger(f"arphe.remote_agent.{config.machine_id}")
+        self._logger = require_redacting_logger(logger, config.machine_id)
         self._active_worker: threading.Thread | None = None
         self._pending_cleanup: _PendingCleanup | None = None
         self._state = RunnerState.IDLE
@@ -188,12 +189,7 @@ class JobRunner:
             return self._result(job, started_at, JobStatus.ABORTED, error_type="Cancelled", error_message="handler observed cancellation")
         if "exception" in outcome:
             exception = outcome["exception"]
-            self._logger.error(
-                "remote handler execution failed for job_id=%s action=%s",
-                job.job_id,
-                job.action,
-                exc_info=(type(exception), exception, exception.__traceback__),
-            )
+            self._log_handler_failure(job, exception)
             return self._result(
                 job,
                 started_at,
@@ -208,6 +204,19 @@ class JobRunner:
             return self._result(job, started_at, JobStatus.SUCCEEDED, output=output)
         except ValueError:
             return self._result(job, started_at, JobStatus.FAILED, error_type="UnsafeOutput", error_message="handler output was rejected")
+
+    def _log_handler_failure(self, job: Any, exception: BaseException) -> None:
+        """Emit raw failure detail only while the injected logger remains safe."""
+        try:
+            logger = require_redacting_logger(self._logger, self._config.machine_id)
+        except ValueError:
+            return
+        logger.error(
+            "remote handler execution failed for job_id=%s action=%s",
+            job.job_id,
+            job.action,
+            exc_info=(type(exception), exception, exception.__traceback__),
+        )
 
     def _cancel_and_join(
         self,

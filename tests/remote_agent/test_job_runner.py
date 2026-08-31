@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from io import StringIO
+import logging
 from pathlib import Path
 import threading
 
@@ -10,6 +12,7 @@ from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.github_queue import QueuedJob
 from scripts.remote_agent.handler_registry import HandlerRegistry
 from scripts.remote_agent.job_runner import JobRunner, RunnerState
+from scripts.remote_agent.logging_setup import configure_redacting_logger
 from scripts.remote_agent.models import Job, JobStatus
 
 
@@ -79,12 +82,83 @@ def registry(*, enabled: bool = True) -> HandlerRegistry:
     return handler_registry
 
 
+def safe_logger(
+    stream: StringIO | None = None,
+    *,
+    handler: logging.Handler | None = None,
+) -> logging.Logger:
+    """Build an in-memory logger through the production redaction contract."""
+    logger = logging.Logger("arphe.remote_agent.HOME_DEV")
+    backend = handler if handler is not None else logging.StreamHandler(
+        stream if stream is not None else StringIO()
+    )
+    return configure_redacting_logger(logger, [backend])
+
+
+class RecordingStreamHandler(logging.StreamHandler):
+    def __init__(self, stream: StringIO) -> None:
+        super().__init__(stream)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+        super().emit(record)
+
+
+def test_runner_fails_closed_when_logger_wiring_is_missing(tmp_path: Path) -> None:
+    """Catches production construction silently falling back to a bare named logger."""
+    with pytest.raises(TypeError, match="logger"):
+        JobRunner(
+            config(tmp_path),
+            FakeQueue(QueuedJob(job(), "source-sha")),
+            registry(),
+            agent_version="1",
+            source_commit="abc",
+        )
+
+
+def test_runner_rejects_non_redacting_or_propagating_logger_wiring(tmp_path: Path) -> None:
+    """Catches raw handler failures reaching an unformatted handler or the root logger."""
+    unsafe = logging.Logger("arphe.remote_agent.HOME_DEV")
+    unsafe.propagate = False
+    unsafe.addHandler(logging.StreamHandler(StringIO()))
+    propagating = safe_logger()
+    propagating.propagate = True
+    muted = safe_logger()
+    muted.handlers[0].setLevel(logging.CRITICAL)
+
+    for logger in (unsafe, propagating, muted):
+        with pytest.raises(ValueError, match="centrally configured redacting logger"):
+            JobRunner(
+                config(tmp_path),
+                FakeQueue(QueuedJob(job(), "source-sha")),
+                registry(),
+                agent_version="1",
+                source_commit="abc",
+                logger=logger,
+            )
+
+
 def test_runner_validates_target_and_profile_before_claim(tmp_path: Path) -> None:
     """Catches claiming a job addressed to another machine or disabled by the local profile."""
     target_queue = FakeQueue(QueuedJob(job(target_machine="POLI_01"), "source-sha"))
-    target_runner = JobRunner(config(tmp_path), target_queue, registry(), agent_version="1", source_commit="abc")
+    target_runner = JobRunner(
+        config(tmp_path),
+        target_queue,
+        registry(),
+        agent_version="1",
+        source_commit="abc",
+        logger=safe_logger(),
+    )
     profile_queue = FakeQueue(QueuedJob(job(), "source-sha"))
-    profile_runner = JobRunner(config(tmp_path), profile_queue, registry(enabled=False), agent_version="1", source_commit="abc")
+    profile_runner = JobRunner(
+        config(tmp_path),
+        profile_queue,
+        registry(enabled=False),
+        agent_version="1",
+        source_commit="abc",
+        logger=safe_logger(),
+    )
 
     assert target_runner.run_once() is None
     assert profile_runner.run_once() is None
@@ -95,7 +169,14 @@ def test_runner_validates_target_and_profile_before_claim(tmp_path: Path) -> Non
 def test_runner_claims_runs_and_writes_structured_success_result(tmp_path: Path) -> None:
     """Catches the runner skipping a queue transition or losing a handler's structured output."""
     queue = FakeQueue(QueuedJob(job(), "source-sha"))
-    runner = JobRunner(config(tmp_path), queue, registry(), agent_version="1", source_commit="abc")
+    runner = JobRunner(
+        config(tmp_path),
+        queue,
+        registry(),
+        agent_version="1",
+        source_commit="abc",
+        logger=safe_logger(),
+    )
 
     result = runner.run_once()
 
@@ -110,7 +191,15 @@ def test_runner_claims_runs_and_writes_structured_success_result(tmp_path: Path)
 def test_runner_aborts_before_handler_when_cancellation_is_requested(tmp_path: Path) -> None:
     """Catches a cancellation request being ignored after a job has been safely claimed."""
     queue = FakeQueue(QueuedJob(job(), "source-sha"))
-    runner = JobRunner(config(tmp_path), queue, registry(), agent_version="1", source_commit="abc", cancellation_requested=lambda: True)
+    runner = JobRunner(
+        config(tmp_path),
+        queue,
+        registry(),
+        agent_version="1",
+        source_commit="abc",
+        cancellation_requested=lambda: True,
+        logger=safe_logger(),
+    )
 
     result = runner.run_once()
 
@@ -132,7 +221,9 @@ def test_runner_serializes_concurrent_calls_and_sanitizes_secret_handler_failure
         raise RuntimeError("token=abc")
     handler_registry.register("PING", PingParameters, handler, idempotent=True)
     queue = FakeQueue(QueuedJob(job(), "source-sha"))
-    runner = JobRunner(config(tmp_path), queue, handler_registry, agent_version="1", source_commit="abc")
+    runner = JobRunner(
+        config(tmp_path), queue, handler_registry, agent_version="1", source_commit="abc", logger=safe_logger()
+    )
     outcome = []
     thread = threading.Thread(target=lambda: outcome.append(runner.run_once()))
     thread.start(); assert started.wait(1)
@@ -166,7 +257,9 @@ def test_runner_persists_an_opaque_terminal_result_for_hostile_exception_text(
 
     handler_registry.register("PING", PingParameters, handler)
     queue = FakeQueue(QueuedJob(job(), "source-sha"))
-    runner = JobRunner(config(tmp_path), queue, handler_registry, agent_version="1", source_commit="abc")
+    runner = JobRunner(
+        config(tmp_path), queue, handler_registry, agent_version="1", source_commit="abc", logger=safe_logger()
+    )
 
     result = runner.run_once()
 
@@ -178,6 +271,85 @@ def test_runner_persists_an_opaque_terminal_result_for_hostile_exception_text(
     assert queue.results == [result]
     assert [item.job.status for item in queue.terminal] == [JobStatus.FAILED]
     assert [item.sha for item in queue.terminal_inputs] == ["running-sha"]
+
+
+def test_runner_routes_raw_handler_failure_only_through_redacting_backend(tmp_path: Path) -> None:
+    """Catches exception detail leaking to root while proving the local handler receives it."""
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+
+    hostile_text = "token=alpha beta gamma"
+    handler_registry = HandlerRegistry(["PING"])
+
+    def handler(_parameters):
+        raise RuntimeError(hostile_text)
+
+    handler_registry.register("PING", PingParameters, handler)
+    local_stream = StringIO()
+    local_handler = RecordingStreamHandler(local_stream)
+    root_stream = StringIO()
+    root_handler = logging.StreamHandler(root_stream)
+    root_logger = logging.getLogger()
+    root_logger.addHandler(root_handler)
+    try:
+        runner = JobRunner(
+            config(tmp_path),
+            FakeQueue(QueuedJob(job(), "source-sha")),
+            handler_registry,
+            agent_version="1",
+            source_commit="abc",
+            logger=safe_logger(handler=local_handler),
+        )
+        result = runner.run_once()
+    finally:
+        root_logger.removeHandler(root_handler)
+
+    assert len(local_handler.records) == 1
+    assert hostile_text in str(local_handler.records[0].exc_info[1])
+    assert hostile_text not in local_stream.getvalue()
+    assert "token=[REDACTED]" in local_stream.getvalue()
+    assert root_stream.getvalue() == ""
+    assert result is not None
+    assert result.error_type == "HandlerFailure"
+    assert result.error_message == "handler failed; see redacted local logs"
+
+
+def test_runner_suppresses_raw_failure_if_logger_becomes_unsafe_after_construction(
+    tmp_path: Path,
+) -> None:
+    """Catches later logger mutation bypassing the constructor's fail-closed check."""
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+
+    handler_registry = HandlerRegistry(["PING"])
+
+    def handler(_parameters):
+        raise RuntimeError("token=late mutation secret")
+
+    handler_registry.register("PING", PingParameters, handler)
+    local_stream = StringIO()
+    logger = safe_logger(local_stream)
+    runner = JobRunner(
+        config(tmp_path),
+        FakeQueue(QueuedJob(job(), "source-sha")),
+        handler_registry,
+        agent_version="1",
+        source_commit="abc",
+        logger=logger,
+    )
+    root_stream = StringIO()
+    root_handler = logging.StreamHandler(root_stream)
+    root_logger = logging.getLogger()
+    root_logger.addHandler(root_handler)
+    logger.propagate = True
+    try:
+        result = runner.run_once()
+    finally:
+        root_logger.removeHandler(root_handler)
+
+    assert local_stream.getvalue() == ""
+    assert root_stream.getvalue() == ""
+    assert result is not None
+    assert result.error_type == "HandlerFailure"
+    assert result.error_message == "handler failed; see redacted local logs"
 
 
 def test_runner_cancels_and_joins_handler_before_persisting_aborted_result(tmp_path: Path) -> None:
@@ -196,7 +368,15 @@ def test_runner_cancels_and_joins_handler_before_persisting_aborted_result(tmp_p
 
     r.register("PING", PingParameters, handler)
     queue = FakeQueue(QueuedJob(job(), "source-sha"))
-    runner = JobRunner(config(tmp_path), queue, r, agent_version="1", source_commit="abc", cancellation_requested=lambda: cancelling[0])
+    runner = JobRunner(
+        config(tmp_path),
+        queue,
+        r,
+        agent_version="1",
+        source_commit="abc",
+        cancellation_requested=lambda: cancelling[0],
+        logger=safe_logger(),
+    )
     outcome = []
     thread = threading.Thread(target=lambda: outcome.append(runner.run_once()))
     thread.start()
@@ -235,6 +415,7 @@ def test_runner_holds_the_gate_without_persisting_when_cleanup_bound_is_exhauste
         source_commit="abc",
         cancellation_requested=lambda: cancelling[0],
         cleanup_timeout_seconds=0.01,
+        logger=safe_logger(),
     )
     outcome = []
     thread = threading.Thread(target=lambda: outcome.append(runner.run_once()))
@@ -277,7 +458,13 @@ def test_runner_times_out_only_after_the_handler_observes_its_cancellation_token
     registry.register("PING", PingParameters, handler)
     queue = FakeQueue(QueuedJob(job(timeout_seconds=5), "source-sha"))
     runner = JobRunner(
-        config(tmp_path), queue, registry, agent_version="1", source_commit="abc", monotonic=lambda: next(timestamps)
+        config(tmp_path),
+        queue,
+        registry,
+        agent_version="1",
+        source_commit="abc",
+        monotonic=lambda: next(timestamps),
+        logger=safe_logger(),
     )
 
     result = runner.run_once()
@@ -308,6 +495,7 @@ def test_runner_gives_observed_completion_precedence_over_a_simultaneous_cancell
         agent_version="1",
         source_commit="abc",
         cancellation_requested=handler_finished.is_set,
+        logger=safe_logger(),
     )
 
     result = runner.run_once()

@@ -57,6 +57,52 @@ class _RedactingFormatter(logging.Formatter):
         return redact_secrets(super().format(record), self._secrets)
 
 
+def configure_redacting_logger(
+    logger: logging.Logger,
+    handlers: Iterable[logging.Handler],
+    *,
+    secrets: Iterable[str] = (),
+) -> logging.Logger:
+    """Apply the central redaction/no-propagation contract to injected backends."""
+    configured_handlers = tuple(handlers)
+    configured_secrets = tuple(secrets)
+    if not configured_handlers:
+        raise ValueError("a redacting logger requires at least one handler")
+    logger.setLevel(logging.INFO)
+    logger.disabled = False
+    logger.propagate = False
+    for existing_handler in logger.handlers[:]:
+        logger.removeHandler(existing_handler)
+        existing_handler.close()
+    for handler in configured_handlers:
+        handler.setFormatter(_RedactingFormatter(configured_secrets))
+        logger.addHandler(handler)
+    return logger
+
+
+def is_redacting_logger(logger: object) -> bool:
+    """Return whether every possible local output path applies central redaction."""
+    return (
+        isinstance(logger, logging.Logger)
+        and not logger.disabled
+        and logger.isEnabledFor(logging.ERROR)
+        and not logger.propagate
+        and bool(logger.handlers)
+        and all(isinstance(handler.formatter, _RedactingFormatter) for handler in logger.handlers)
+        and any(handler.level <= logging.ERROR for handler in logger.handlers)
+    )
+
+
+def require_redacting_logger(logger: object, machine_id: str) -> logging.Logger:
+    """Fail closed unless a machine's logger has verified central redaction wiring."""
+    expected_name = f"arphe.remote_agent.{machine_id}"
+    if not is_redacting_logger(logger) or logger.name != expected_name:
+        raise ValueError(
+            f"logger must be the centrally configured redacting logger {expected_name!r}"
+        )
+    return logger
+
+
 def configure_logging(machine_id: str) -> logging.Logger:
     """Create a machine-local rotating logger with centralized secret redaction."""
     local_app_data = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
@@ -64,12 +110,6 @@ def configure_logging(machine_id: str) -> logging.Logger:
     log_directory.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger(f"arphe.remote_agent.{machine_id}")
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-    for existing_handler in logger.handlers[:]:
-        logger.removeHandler(existing_handler)
-        existing_handler.close()
-
     handler = RotatingFileHandler(
         log_directory / f"{machine_id}.log",
         maxBytes=LOG_MAX_BYTES,
@@ -77,6 +117,8 @@ def configure_logging(machine_id: str) -> logging.Logger:
         encoding="utf-8",
     )
     token = get_token_for_machine(machine_id)
-    handler.setFormatter(_RedactingFormatter((token,) if token else ()))
-    logger.addHandler(handler)
-    return logger
+    return configure_redacting_logger(
+        logger,
+        [handler],
+        secrets=(token,) if token else (),
+    )

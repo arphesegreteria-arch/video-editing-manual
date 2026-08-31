@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.handler_registry import HandlerRegistry
 from scripts.remote_agent.handlers import register_handlers
-from scripts.remote_agent.handlers.sync_code import ApprovedCodeSync
+from scripts.remote_agent.handlers.sync_code import ApprovedCodeSync, SubprocessGitSyncAdapter, default_code_sync
 from scripts.remote_agent.job_runner import CancellationToken
 
 
@@ -60,6 +60,7 @@ def config(tmp_path: Path, *, allowed_actions: list[str] | None = None) -> Agent
             "folders": folders,
             "resolve": {"executable_path": str(tmp_path / "Resolve.exe")},
             "github": {"owner": "arphesegreteria-arch", "repository": "video-editing-manual", "branch": "main"},
+            "local_checkout_path": str(tmp_path / "video-editing-manual"),
             "allowed_actions": allowed_actions or ["PING", "GET_STATUS", "LIST_MEDIA", "FIND_MEDIA", "HASH_MEDIA", "COPY_TO_WORKSPACE", "IMPORT_MEDIA"],
         }
     )
@@ -247,3 +248,64 @@ def test_approved_code_sync_refuses_a_cancelled_token_before_it_mutates_git(tmp_
         service.sync("a" * 40, token)
 
     assert git.fast_forwards == []
+
+
+def test_default_code_sync_binds_the_real_adapter_to_the_configured_checkout(tmp_path: Path) -> None:
+    """Catches production registration deriving its Git checkout from the process CWD."""
+    agent_config = config(tmp_path, allowed_actions=["SYNC_APPROVED_CODE"])
+
+    service = default_code_sync(agent_config)
+
+    assert isinstance(service.git_adapter, SubprocessGitSyncAdapter)
+    assert service.git_adapter.repository_path == tmp_path / "video-editing-manual"
+
+
+def test_subprocess_git_adapter_uses_the_configured_checkout_with_fixed_shell_free_argv(tmp_path: Path) -> None:
+    """Catches controlled Git sync running in CWD, using a shell, or skipping its post-update HEAD check."""
+    checkout = tmp_path / "fixed-checkout"
+    sha = "a" * 40
+    responses = iter(
+        [
+            "https://github.com/arphesegreteria-arch/video-editing-manual.git",
+            "main",
+            "",
+            "b" * 40,
+            "",
+            sha,
+            "",
+            "",
+            sha,
+        ]
+    )
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    class Completed:
+        returncode = 0
+
+        def __init__(self, stdout: str) -> None:
+            self.stdout = stdout
+
+    def run(argv: list[str], **kwargs: object) -> Completed:
+        calls.append((argv, kwargs))
+        return Completed(next(responses))
+
+    service = ApprovedCodeSync(
+        config(tmp_path, allowed_actions=["SYNC_APPROVED_CODE"]),
+        SubprocessGitSyncAdapter(checkout, run=run),
+    )
+
+    result = service.sync(sha, CancellationToken())
+
+    assert result == {"updated_to": sha, "restart_required": True}
+    assert [argv for argv, _ in calls] == [
+        ["git", "-C", str(checkout), "remote", "get-url", "origin"],
+        ["git", "-C", str(checkout), "branch", "--show-current"],
+        ["git", "-C", str(checkout), "status", "--porcelain"],
+        ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+        ["git", "-C", str(checkout), "fetch", "--no-tags", "origin", "main"],
+        ["git", "-C", str(checkout), "rev-parse", "origin/main"],
+        ["git", "-C", str(checkout), "merge-base", "--is-ancestor", "b" * 40, sha],
+        ["git", "-C", str(checkout), "merge", "--ff-only", sha],
+        ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+    ]
+    assert all(kwargs["shell"] is False for _, kwargs in calls)

@@ -28,6 +28,7 @@ def valid_config_data(tmp_path, machine_id: str = "HOME_DEV") -> dict:
             "repository": "video-editing-manual",
             "branch": "main",
         },
+        "local_checkout_path": str(tmp_path / "video-editing-manual"),
         "allowed_actions": ["PING", "SYNC_APPROVED_CODE"],
     }
 
@@ -101,6 +102,26 @@ def test_home_dev_profile_can_enable_code_synchronization(tmp_path) -> None:
     config = AgentConfig.model_validate(valid_config_data(tmp_path, "HOME_DEV"))
 
     assert "SYNC_APPROVED_CODE" in config.allowed_actions
+    assert config.local_checkout_path == tmp_path / "video-editing-manual"
+
+    with pytest.raises(ValidationError, match="frozen"):
+        config.local_checkout_path = tmp_path / "another-checkout"
+
+
+@pytest.mark.parametrize(
+    "checkout_path",
+    [None, "relative/checkout", "C:/credentials/checkout"],
+)
+def test_code_synchronization_requires_an_absolute_secret_free_local_checkout_path(tmp_path, checkout_path) -> None:
+    """Catches sync falling back to CWD or accepting a relative/secret-bearing checkout path."""
+    data = valid_config_data(tmp_path)
+    if checkout_path is None:
+        data.pop("local_checkout_path")
+    else:
+        data["local_checkout_path"] = checkout_path
+
+    with pytest.raises(ValidationError, match="checkout"):
+        AgentConfig.model_validate(data)
 
 
 @pytest.mark.parametrize(

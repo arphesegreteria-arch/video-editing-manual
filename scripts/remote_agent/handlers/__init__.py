@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 from scripts.remote_agent.cancellation import CancellationToken
@@ -24,7 +23,7 @@ from scripts.remote_agent.handlers.media import (
     list_media,
 )
 from scripts.remote_agent.handlers.render_probe import RenderProbeParameters, run_render_probe
-from scripts.remote_agent.handlers.sync_code import ApprovedCodeSync, SubprocessGitSyncAdapter, SyncParameters, sync_approved_code
+from scripts.remote_agent.handlers.sync_code import ApprovedCodeSync, SyncParameters, default_code_sync, sync_approved_code
 from scripts.remote_agent.handlers.tracking_probe import TrackingProbeParameters, run_tracking_probe
 
 
@@ -53,5 +52,5 @@ def register_handlers(
     registry.register("RUN_TRACKING_PROBE", TrackingProbeParameters, lambda p, token: run_tracking_probe(p, resolve_manager, tracking_probe_runner, token))
     registry.register("RUN_RENDER_PROBE", RenderProbeParameters, lambda p, token: run_render_probe(p, resolve_manager, render_probe_runner, token))
     if code_sync is None and "SYNC_APPROVED_CODE" in config.allowed_actions:
-        code_sync = ApprovedCodeSync(config, SubprocessGitSyncAdapter(Path.cwd()))
+        code_sync = default_code_sync(config)
     registry.register("SYNC_APPROVED_CODE", SyncParameters, lambda p, token: sync_approved_code(p, code_sync, token))

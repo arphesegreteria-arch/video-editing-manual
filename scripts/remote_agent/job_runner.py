@@ -20,6 +20,12 @@ from scripts.remote_agent.logging_setup import redact_secrets
 from scripts.remote_agent.models import JobResult, JobStatus
 
 
+_SAFE_ERROR_MAX_LENGTH = 512
+_GENERIC_SECRET_ASSIGNMENT = re.compile(
+    r"(?i)\b(?:token|secret|password|authorization|credential|api[_-]?key)\b(?:['\"])?\s*[:=]\s*(?:['\"])?(?:bearer\s+)?[^\s,;'\"]+"
+)
+
+
 class RunnerState(str, Enum):
     """Externally visible local safety state for the one-job gate."""
 
@@ -241,8 +247,11 @@ class JobRunner:
 
     @staticmethod
     def _safe_error(message: str) -> str:
-        message = re.sub(r"(?i)\b(token|secret|password|authorization|credential|api[_-]?key)\s*[:=]\s*[^\s,;]+", "[REDACTED]", message)
-        return redact_secrets(message, ())
+        redacted = redact_secrets(str(message), ())
+        redacted = _GENERIC_SECRET_ASSIGNMENT.sub("[REDACTED]", redacted)
+        if len(redacted) > _SAFE_ERROR_MAX_LENGTH:
+            return redacted[: _SAFE_ERROR_MAX_LENGTH - len(" [TRUNCATED]")] + " [TRUNCATED]"
+        return redacted
 
     @staticmethod
     def _invoke(registered: RegisteredHandler, parameters: Any, token: CancellationToken) -> Any:
@@ -264,20 +273,31 @@ class JobRunner:
         error_message: str | None = None,
     ) -> JobResult:
         finished_at = self._utc_now()
-        return JobResult(
-            job_id=job.job_id,
-            machine_id=self._config.machine_id,
-            status=status,
-            started_at=started_at,
-            finished_at=finished_at,
-            action=job.action,
-            duration_seconds=max(0.0, (finished_at - started_at).total_seconds()),
-            output=output or {},
-            error_type=error_type,
-            error_message=error_message,
-            agent_version=self._agent_version,
-            source_commit=self._source_commit,
-        )
+        common = {
+            "job_id": job.job_id,
+            "machine_id": self._config.machine_id,
+            "status": status,
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "action": job.action,
+            "duration_seconds": max(0.0, (finished_at - started_at).total_seconds()),
+            "agent_version": self._agent_version,
+            "source_commit": self._source_commit,
+        }
+        try:
+            return JobResult(
+                **common,
+                output=output or {},
+                error_type=self._safe_error(error_type)[:256] if error_type else None,
+                error_message=self._safe_error(error_message) if error_message else None,
+            )
+        except ValueError:
+            return JobResult(
+                **common,
+                output={},
+                error_type="ResultConstructionError",
+                error_message="handler result could not be safely serialized",
+            )
 
     def _utc_now(self) -> datetime:
         value = self._now()

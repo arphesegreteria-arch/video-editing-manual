@@ -142,6 +142,42 @@ def test_runner_serializes_concurrent_calls_and_sanitizes_secret_handler_failure
     assert queue.results == [result]
 
 
+@pytest.mark.parametrize(
+    "exception_text",
+    [
+        "Authorization: Bearer ordinary-secret-value",
+        "{'Authorization': 'Bearer ordinary-secret-value'}",
+        "{'headers': {'authorization': 'Bearer ordinary-secret-value'}}",
+        "token=ordinary-secret-value",
+        "x" * 5001,
+    ],
+)
+def test_runner_persists_a_bounded_secret_free_terminal_result_for_hostile_exception_text(
+    tmp_path: Path, exception_text: str
+) -> None:
+    """Catches unsafe handler errors breaking JobResult validation and leaving the job RUNNING."""
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+
+    handler_registry = HandlerRegistry(["PING"])
+
+    def handler(_parameters):
+        raise RuntimeError(exception_text)
+
+    handler_registry.register("PING", PingParameters, handler)
+    queue = FakeQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(config(tmp_path), queue, handler_registry, agent_version="1", source_commit="abc")
+
+    result = runner.run_once()
+
+    assert result is not None
+    assert result.status is JobStatus.FAILED
+    assert result.error_message is not None
+    assert "ordinary-secret-value" not in result.error_message
+    assert len(result.error_message) <= 512
+    assert queue.results == [result]
+    assert [item.job.status for item in queue.terminal] == [JobStatus.FAILED]
+
+
 def test_runner_cancels_and_joins_handler_before_persisting_aborted_result(tmp_path: Path) -> None:
     """Catches persisting ABORTED while a destructive handler is still running."""
     started, cleaned = threading.Event(), threading.Event()

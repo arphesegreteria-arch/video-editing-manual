@@ -44,6 +44,11 @@ class SubprocessGitSyncAdapter:
     """Local Git boundary with fixed argv construction and no shell."""
     def __init__(self, repository_path: Path, *, run=subprocess.run) -> None:
         self._repository_path, self._run = repository_path, run
+
+    @property
+    def repository_path(self) -> Path:
+        """The fixed local checkout selected by strict agent configuration."""
+        return self._repository_path
     def _git(self, *args: str) -> str:
         result = self._run(["git", "-C", str(self._repository_path), *args], shell=False, check=False, capture_output=True, text=True)
         if result.returncode != 0: raise RuntimeError("controlled Git operation failed")
@@ -78,6 +83,11 @@ class ApprovedCodeSync:
             f"https://github.com/{config.github.owner}/{config.github.repository}.git"
         )
 
+    @property
+    def git_adapter(self) -> GitSyncAdapter:
+        """Expose the fixed boundary for local wiring verification."""
+        return self._git
+
     def sync(self, commit_sha: str, token: CancellationToken) -> dict[str, object]:
         require_not_cancelled(token)
         if self._config.machine_id != "HOME_DEV" or "SYNC_APPROVED_CODE" not in self._config.allowed_actions:
@@ -109,3 +119,10 @@ def sync_approved_code(
     if service is None:
         raise RuntimeError("controlled code sync adapter is not installed")
     return service.sync(parameters.commit_sha, token)
+
+
+def default_code_sync(config: AgentConfig) -> ApprovedCodeSync:
+    """Create production Git sync only from the immutable configured checkout."""
+    if config.local_checkout_path is None:
+        raise ValueError("SYNC_APPROVED_CODE requires local_checkout_path")
+    return ApprovedCodeSync(config, SubprocessGitSyncAdapter(config.local_checkout_path))

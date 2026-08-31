@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 from typing import Literal
 from pydantic import Field, model_validator
 
@@ -24,6 +25,9 @@ V1_ACTIONS = frozenset(
         "RUN_RENDER_PROBE",
         "SYNC_APPROVED_CODE",
     }
+)
+_SECRET_PATH_COMPONENT = re.compile(
+    r"(?:token|secret|password|authorization|credential|api[_-]?key)", re.IGNORECASE
 )
 
 
@@ -75,6 +79,7 @@ class AgentConfig(StrictModel):
     folders: FolderConfig
     resolve: ResolveConfig
     github: GitHubConfig
+    local_checkout_path: Path | None = Field(default=None, frozen=True)
     allowed_actions: frozenset[str] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -87,6 +92,13 @@ class AgentConfig(StrictModel):
             )
         if self.machine_id != "HOME_DEV" and "SYNC_APPROVED_CODE" in self.allowed_actions:
             raise ValueError("SYNC_APPROVED_CODE is enabled only for HOME_DEV")
+        if "SYNC_APPROVED_CODE" in self.allowed_actions:
+            if self.local_checkout_path is None:
+                raise ValueError("SYNC_APPROVED_CODE requires local_checkout_path")
+            if not self.local_checkout_path.is_absolute():
+                raise ValueError("local_checkout_path must be absolute")
+            if _SECRET_PATH_COMPONENT.search(str(self.local_checkout_path)):
+                raise ValueError("local_checkout_path must be secret-free")
         return self
 
     @classmethod

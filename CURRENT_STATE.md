@@ -1,6 +1,6 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-08-27.
+Ultimo aggiornamento: sessione 2026-09-01.
 
 ## Obiettivo del progetto
 
@@ -10,7 +10,9 @@ Automatizzare il montaggio di contenuti video in DaVinci Resolve tramite Python:
 - tracking del soggetto;
 - B-roll;
 - trascrizione e paper edit di longform;
-- raffinamento automatico dei punti di taglio sull'audio reale.
+- rilevamento di pause/disfluenze/false partenze;
+- raffinamento automatico dei punti di taglio sull'audio reale;
+- benchmark quantitativo contro montaggi umani di riferimento.
 
 ## ✅ VALIDATO
 
@@ -53,31 +55,63 @@ Sul test `blabla.mp4`:
 
 Conclusione: nel test non c'è drift progressivo tra transcript e Resolve.
 
+### Export del reference umano
+`ARPHE_EXPORT_REFERENCE_EDIT_02.py`
+- legge una timeline montata manualmente;
+- esporta kept segments, remove ranges e joins;
+- non modifica la timeline;
+- usato con successo per creare il reference umano di `blabla.mp4`.
+
+## 📊 BENCHMARK 01 — `blabla.mp4`
+
+Reference umano confrontato con `ARPHE_LONGFORM_SAFE_EDIT_PLAN_V3`.
+
+Risultati:
+- Precision: **0.522**
+- Recall: **0.430**
+- F1: **0.472**
+- False positive: **197.5 s**
+- False negative: **286.1 s**
+- Boundary matched: **48 / 246**
+- Mean boundary error: **625 ms**
+- Median boundary error: **373 ms**
+
+Interpretazione:
+- il collo di bottiglia principale non è più solo il posizionamento della lama;
+- mancano molte decisioni editoriali e micro-cut che il montatore umano esegue;
+- diversi cut automatici non coincidono con le scelte umane;
+- l'audio alignment rimane utile, ma viene dopo la corretta classificazione del tipo di intervento.
+
 ## ⚠️ PARZIALE / DA RIFINIRE
 
-### Longform: paper edit da transcript
-Il transcript è valido per decidere **cosa** togliere, ma i timestamp Whisper non devono essere trattati come punti di lama perfetti.
+### Longform: architettura editoriale
+La pipeline non deve essere un semplice `transcript -> remove ranges -> waveform`.
 
-Problemi osservati nei primi rough cut:
-- alcune parole tranciate;
-- pause residue troppo lunghe;
-- stacchi poco naturali sul parlato;
-- jump cut visivi da revisionare.
+Nuova direzione:
+1. audio/VAD per pause e speech regions;
+2. transcript con word timestamps;
+3. rilevamento disfluenze e false partenze;
+4. analisi semantica/editoriale;
+5. classificazione del tipo di taglio;
+6. waveform per il placement finale della lama;
+7. Resolve ricostruisce la timeline.
 
-Lezione:
-**decisione editoriale ≠ posizione fisica del cut**.
+### ARPHE Editorial Profile v0.1
 
-Strategia corrente:
-1. ChatGPT decide semanticamente cosa eliminare.
-2. Whisper protegge e localizza le parole.
-3. Un analizzatore locale legge la waveform reale dell'MP4.
-4. Il confine viene spostato in un punto quieto vicino, senza mangiare altro parlato.
-5. Resolve ricostruisce una nuova timeline.
+- Pause: accorciare solo quelle eccessive, preservando ritmo umano.
+- `ehm`, `eeee`, `mmm`: non rimuovere sempre; solo se la ricucitura resta naturale.
+- `allora`, `cioè`, `quindi`, `praticamente`, ecc.: rimuovere solo quando non svolgono realmente funzione nel discorso.
+- False partenze: preferire **speech repair** precise, conservando il prefisso buono e riagganciandolo alla continuazione corretta.
+- Ripetizioni: preferire la formulazione più chiara/completa.
+- Tagli concettuali: livello editoriale separato dai micro-cut.
+- Contenuto sensibile/reputazionale: **FLAG ONLY**, mai auto-cut.
+
+Dettagli in `docs/07_EDITORIAL_BENCHMARK.md`.
 
 ### Audio-aligned cut V4.x
 - V4.2: approccio conservativo, ma ottimizzare separatamente i due bordi può lasciare troppa aria alla giunzione.
-- V4.3: candidato corrente; tratta la giunzione in modo più stretto e riduce il silenzio residuo.
-- Stato: **in prova, non ancora promosso a validato**.
+- V4.3: ha corretto in modo utile il problema della giunzione con troppo spazio prima della ripartenza del parlato.
+- Non è però sufficiente come soluzione editoriale completa: il benchmark mostra che il problema dominante è anche nella selezione dei tagli.
 
 ### Reframing estetico dopo tracking
 Il tracking può essere tecnicamente corretto ma il soggetto può risultare scentrato durante forti zoom.
@@ -85,34 +119,30 @@ Il tracking può essere tecnicamente corretto ma il soggetto può risultare scen
 Lezione:
 **punto di tracking ≠ centro estetico dell'effetto**.
 
-Il tracker va posizionato sul dettaglio più stabile; il framing finale deve usare un offset/target separato.
-
 ## ❌ NON AFFIDABILE / DA NON USARE COME PRIMITIVA
 
 ### Timestamp Whisper usati direttamente come lama
 Non usare `start/end` del transcript come cut frame senza margine o allineamento audio.
 
+### Keyword matching puro per filler
+Non trattare parole come `allora`, `cioè`, `quindi`, `praticamente` come stopword da cancellare automaticamente.
+Serve contesto sintattico/semantico prima e dopo.
+
 ### Avvio automatico del tracking da FusionScript
 I trigger `TrackForward` / `TrackForwardFromCurrentTime` sono esposti, ma i test hanno prodotto path immobili e range anomali.
 
-Decisione:
-**non basare il prodotto sul trigger automatico del Tracker nella versione gratuita attuale**.
+## PROSSIMO TEST — BENCHMARK 02
 
-Strategia tracking corrente:
-1. Python prepara tutto.
-2. Operatore esegue un singolo Track Forward nativo.
-3. Python riprende il controllo.
+Produrre un **nuovo video mai usato per calibrare il sistema**.
 
-## PROSSIMO TEST
+Regola anti-leakage:
+1. conservare MP4 originale;
+2. generare transcript;
+3. congelare il candidate automatico PRIMA di leggere il montaggio umano;
+4. montare manualmente il video come risultato desiderato;
+5. esportare il reference con `ARPHE_EXPORT_REFERENCE_EDIT_02.py`;
+6. confrontare candidate vs reference;
+7. classificare mismatch per categoria;
+8. aggiornare le regole soltanto dopo il report.
 
-### Validazione V4.3 longform
-1. Partire sempre dalla timeline originale completa.
-2. Generare il piano audio-aligned dal video + transcript + edit plan.
-3. Creare una nuova timeline `LONGFORM_AUDIO_ALIGNED_CUT_04_3`.
-4. Revisionare tutto il longform con priorità a:
-   - attacchi delle parole dopo i cut;
-   - code delle parole prima dei cut;
-   - pause troppo lunghe/corte;
-   - eventuale vero offset audio/video;
-   - qualità visiva dei jump cut.
-5. Solo dopo revisione completa promuovere la V4.3 a `validated`.
+Per ottimizzare i tempi, il prossimo test può essere un video/campione di circa **8–12 minuti** invece di un longform da 35 minuti, purché contenga parlato naturale, pause, filler, false partenze e qualche decisione editoriale reale.

@@ -152,7 +152,7 @@ Il test non dimostra ancora che tutte le altre operazioni write siano affidabili
 
 ## E07 — ChatGPT MCP Bridge
 
-Stato: **LOCAL MCP READ VALIDATED / SECURE TUNNEL READY / CHATGPT APP DRAFT CREATED / TOOL CALL NEXT**.
+Stato: **END-TO-END READ + SAFE WRITE VALIDATED**.
 
 ### Architettura
 
@@ -191,48 +191,79 @@ Conclusione:
 ### Secure MCP Tunnel — 2026-09-01
 
 Configurazione locale:
-- bridge stabile in `C:\ARPHE\MCP\ARPHE_MCP_BRIDGE_READ_01\ARPHE_MCP_BRIDGE_READ_01.py`;
-- runtime `tunnel-client-runtime-cloudflared` avviato su Windows;
+- bridge in `C:\ARPHE\MCP\...`;
+- runtime `tunnel-client-runtime-cloudflared` su Windows;
 - runtime API key Restricted con permessi Tunnels Read + Use;
-- tunnel `ARPHE-RESOLVE-HOME` collegato al runtime;
-- `MCP_COMMAND` usa path Windows normalizzato con `/`;
-- stdio MCP command avviato senza `can't open file`;
+- tunnel `ARPHE-RESOLVE-HOME`;
+- `MCP_COMMAND` con path Windows normalizzato usando `/`;
+- stdio MCP command avviato;
 - control-plane poller avviato;
 - metadata tunnel recuperati;
 - health listener su `127.0.0.1:8080`;
 - `GET /readyz` -> `HTTP/1.1 200 OK`, body `ready`.
 
 Conclusione:
-**Secure MCP Tunnel runtime -> MCP locale è READY nel nostro ambiente.**
+**Secure MCP Tunnel runtime -> MCP locale è VALIDATED.**
 
-Nota: la build `runtime-cloudflared` non espone `/ui`; `readyz` è il gate di salute usato in questo test.
+Nota: la build `runtime-cloudflared` non espone `/ui`; `/readyz` è il gate di salute usato.
 
-### ChatGPT custom app
+### ChatGPT custom app READ
 
 Workspace ChatGPT Business.
 
-Creata app:
+App draft DEV:
 - nome: `ARPHE Resolve`;
-- descrizione: bridge read-only tra ChatGPT e DaVinci Resolve Studio;
 - connessione: Tunnel;
 - tunnel: `ARPHE-RESOLVE-HOME`;
-- autenticazione MCP: None;
-- app presente in `Workspace Settings -> Apps -> Drafts` con badge `DEV`.
+- autenticazione MCP: None.
+
+Test dalla conversazione:
+- ChatGPT ha chiamato realmente `resolve_status`;
+- risposta: Resolve `21.0.4.5`, progetto `blabla`, timeline `Timeline 1`, 30 fps, 1 traccia video, 1 audio, 130 clip V1, 130 clip A1.
 
 Conclusione:
-**Creazione/configurazione della custom MCP app in ChatGPT è riuscita.**
+**ChatGPT -> custom MCP app -> Secure MCP Tunnel -> MCP locale -> Resolve Studio READ è VALIDATED end-to-end.**
 
-Non è ancora validato il gate finale `ChatGPT conversation -> tool call -> tunnel -> MCP -> Resolve`.
+### ChatGPT custom app SAFE WRITE
+
+Bridge: `ARPHE_MCP_BRIDGE_SAFE_WRITE_02`.
+App draft DEV: `ARPHE Resolve WRITE Test`.
+Tool write allowlisted:
+- `create_safe_working_timeline`.
+
+Preflight:
+- bridge SAFE WRITE avviato tramite lo stesso tunnel;
+- `/readyz` -> `HTTP/1.1 200 OK`, body `ready`;
+- `ping` da ChatGPT: `mode=SAFE_WRITE`, `write_tools_enabled=true`.
+
+Test dalla conversazione:
+- ChatGPT ha chiamato `create_safe_working_timeline` con prefisso `ARPHE_CHATGPT_WRITE_TEST`;
+- progetto: `blabla`;
+- timeline originale: `Timeline 1`;
+- timeline count prima: `3`;
+- creata timeline vuota: `ARPHE_CHATGPT_WRITE_TEST_20260901_185749`;
+- timeline count dopo: `4`;
+- incremento count verificato: `true`;
+- ritorno automatico all'originale: `true`;
+- timeline finale: `Timeline 1`;
+- clip edit eseguiti: `0`;
+- timeline cancellate: `0`;
+- risultato tool: `ok=true`.
+
+Conclusione:
+**ChatGPT -> custom MCP app -> Secure MCP Tunnel -> bridge Python -> Resolve Studio SAFE WRITE è VALIDATED end-to-end.**
+
+Questa validazione dimostra il controllo reale da ChatGPT in scrittura per una primitiva non distruttiva allowlisted; NON valida ancora import media, cut/rebuild, transform, Fusion, tracking, captions o render.
 
 ### Gate successivi E07
 
-1. Testare privatamente la draft `ARPHE Resolve` senza pubblicarla.
-2. Da una chat selezionare/menzionare `ARPHE Resolve` e chiamare `resolve_status`.
-3. PASS se ChatGPT restituisce dati reali del Resolve aperto (progetto/timeline/FPS/track/clip) e i log del tunnel mostrano la richiesta.
-4. Solo dopo attivare la build `ARPHE_MCP_BRIDGE_SAFE_WRITE_02` con `create_safe_working_timeline`.
-5. Validare `ChatGPT -> MCP -> Resolve WRITE` creando una timeline vuota e tornando all'originale.
-6. Pubblicare l'app nel workspace solo dopo i test read/write sicuri.
-7. Successivamente aggiungere tool allowlisted per media, trascrizione, edit plan, benchmark e render.
+1. Consolidare le tool validate in un unico bridge/app DEV mantenendo allowlist e protezione originali.
+2. Aggiungere `list_media` su cartella esplicitamente consentita.
+3. Aggiungere `transcribe_media` con faster-whisper locale.
+4. Esporre preview/lettura transcript a ChatGPT.
+5. Implementare `apply_edit_plan` minimale su una sorgente di test creando sempre una nuova timeline.
+6. Validare il rebuild/cut via MCP end-to-end.
+7. Pubblicare nel workspace solo dopo una policy chiara per le write action e dopo i test fondamentali.
 
 ## Architettura superata
 

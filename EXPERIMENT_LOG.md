@@ -265,6 +265,69 @@ Questa validazione dimostra il controllo reale da ChatGPT in scrittura per una p
 6. Validare il rebuild/cut via MCP end-to-end.
 7. Pubblicare nel workspace solo dopo una policy chiara per le write action e dopo i test fondamentali.
 
+## E08 — Windows Bridge Runtime + replica workstation
+
+Stato: **NEXT / PRIORITÀ IMMEDIATA**.
+
+Ambiente di riferimento:
+- `PC_SEGRETERIA` = CURRENT / VALIDATED;
+- `PC_PERSONALE` = PENDING REPLICA.
+
+Correzione importante:
+**tutti i test E06/E07 del 2026-09-01 sono stati eseguiti sul PC segreteria, non sul PC personale.**
+
+Problema da risolvere:
+- oggi il tunnel resta attivo solo finché il processo `tunnel-client-runtime-cloudflared.exe run` resta aperto;
+- l'operatore non deve aprire PowerShell ogni volta.
+
+Decisione:
+- costruire `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1`;
+- ChatGPT resta la UI;
+- nessuna GUI desktop di montaggio;
+- autostart v1 via Windows Task Scheduler `At logon` nella sessione utente;
+- NON usare inizialmente un Windows Service Session 0, per ridurre il rischio di problemi di interazione/IPC con Resolve nella sessione desktop;
+- secret storage Windows per la runtime API key;
+- health check `/readyz`;
+- restart con backoff;
+- log redatti;
+- install/uninstall/status;
+- nessuna operazione Resolve eseguita autonomamente allo startup.
+
+Regola multi-workstation:
+- un tunnel per workstation;
+- una runtime API key per workstation;
+- non copiare la runtime key del PC segreteria sul PC personale;
+- condividere codice e template tramite repository.
+
+Naming consigliato:
+- `ARPHE-RESOLVE-SEGRETERIA`;
+- `ARPHE-RESOLVE-PERSONALE`.
+
+Nota: il tunnel corrente `ARPHE-RESOLVE-HOME` è in realtà collegato al PC segreteria e va considerato nome legacy/fuorviante.
+
+Task adatto a Codex:
+- multi-file repository work;
+- supervisor Python;
+- PowerShell install/autostart/status;
+- secret storage;
+- test;
+- documentazione.
+
+Spec completa:
+`docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`.
+
+PASS PC_SEGRETERIA quando:
+1. login Windows;
+2. nessuna PowerShell manuale;
+3. tunnel runtime parte;
+4. `/readyz` HTTP 200;
+5. ChatGPT `resolve_status` funziona;
+6. SAFE WRITE timeline vuota funziona;
+7. restart automatico testato;
+8. nessun segreto nei log/repo.
+
+PASS PC_PERSONALE solo dopo replica separata e nuovi gate READ + SAFE WRITE.
+
 ## Architettura superata
 
 Il precedente `ARPHE Remote Agent V1` basato su GUI Tkinter + polling GitHub è **SUPERSEDED**.
@@ -277,5 +340,7 @@ La chat non deve essere l'unico posto in cui vive lo stato del progetto. Prima d
 - `CURRENT_STATE.md`;
 - `EXPERIMENT_LOG.md`;
 - `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md`;
+- `docs/09_MCP_TUNNEL_ROLLOUT_CHECKLIST.md`;
+- `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`;
 - `docs/RESOLVE_STUDIO_CAPABILITIES.md`;
 - per benchmark editoriali, `docs/07_EDITORIAL_BENCHMARK.md`.

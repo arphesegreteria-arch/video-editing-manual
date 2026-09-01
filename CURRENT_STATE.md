@@ -44,6 +44,28 @@ Ambiente testato:
 Conclusione:
 **Python esterno -> Resolve Studio è funzionante in lettura.** Non siamo più vincolati a `Workspace -> Scripts -> Utility` come architettura principale.
 
+### DaVinci Resolve Studio — scripting esterno SAFE WRITE
+`ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02.py` eseguito con successo.
+
+Risultato:
+- progetto `blabla`;
+- timeline originale `Timeline 1`;
+- timeline count prima `2`;
+- creata timeline vuota `ARPHE_API_WRITE_TEST_20260901_145018`;
+- timeline count dopo `3`;
+- `SetCurrentTimeline(original) = True`;
+- timeline finale `Timeline 1`;
+- exit code `0`.
+
+Conclusione:
+**Python esterno -> Resolve Studio WRITE non distruttiva è funzionante.**
+
+Sono validate almeno le primitive:
+- `MediaPool.CreateEmptyTimeline()`;
+- `Project.SetCurrentTimeline()`.
+
+Questo non promuove automaticamente tutte le operazioni write: import media, rebuild/cut, transform, Fusion, tracking, captions e render vanno ancora testati singolarmente.
+
 ### MCP locale -> Resolve Studio READ
 `ARPHE_MCP_BRIDGE_READ_01` eseguito con successo.
 
@@ -203,12 +225,11 @@ Non trattare parole come `allora`, `cioè`, `quindi`, `praticamente` come stopwo
 ## PROSSIMI TEST — DUE TRACK PARALLELI
 
 ### Track A — infrastruttura ChatGPT / Resolve
-1. Eseguire `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`.
-2. Se passa, promuovere `CreateEmptyTimeline` esterno a `SUPPORTED`.
-3. Configurare Secure MCP Tunnel verso il server MCP locale read-only già validato.
-4. Collegare la custom app a ChatGPT.
-5. Validare `ChatGPT -> MCP -> Resolve READ` chiamando `resolve_status` dalla conversazione.
-6. Solo dopo esporre `create_safe_working_timeline` e validare `ChatGPT -> MCP -> Resolve WRITE`.
+1. Configurare Secure MCP Tunnel verso il server MCP locale read-only già validato.
+2. Collegare la custom app a ChatGPT.
+3. Validare `ChatGPT -> MCP -> Resolve READ` chiamando `resolve_status` dalla conversazione.
+4. Solo dopo esporre `create_safe_working_timeline` e validare `ChatGPT -> MCP -> Resolve WRITE`.
+5. Poi testare singolarmente import media, rebuild/cut, transform, Fusion, tracking, captions e render.
 
 ### Track B — Benchmark 02 editoriale
 1. Prendere un estratto podcast autonomo di circa 8–15 minuti.

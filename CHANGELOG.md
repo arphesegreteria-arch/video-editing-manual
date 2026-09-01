@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## 2026-09-01 — Benchmark editoriale + profilo v0.1
+
+### Benchmark 01
+- creato reference umano da timeline Resolve tramite `ARPHE_EXPORT_REFERENCE_EDIT_02.py`;
+- confronto contro `ARPHE_LONGFORM_SAFE_EDIT_PLAN_V3`;
+- Precision 0.522;
+- Recall 0.430;
+- F1 0.472;
+- false positive 197.5 s;
+- false negative 286.1 s;
+- 48 boundary matched su 246;
+- mean boundary error 625 ms;
+- median boundary error 373 ms.
+
+### Lezione principale
+Il collo di bottiglia non è soltanto il posizionamento della lama.
+Prima del waveform alignment bisogna migliorare la selezione editoriale e il rilevamento di micro-cut/speech repair.
+
+### ARPHE Editorial Profile v0.1
+- pause: accorciare quelle eccessive senza azzerare il ritmo;
+- vocalizzi (`ehm`, `eeee`, `mmm`): non eliminarli sempre, solo quando la ricucitura resta naturale;
+- filler linguistici: rimuovere solo quando non svolgono realmente funzione nel discorso;
+- false partenze: preferire ricuciture precise conservando il prefisso buono;
+- ripetizioni: preferire la formulazione più chiara/completa;
+- tagli concettuali: livello editoriale separato dai micro-cut;
+- contenuto sensibile/reputazionale: FLAG ONLY, mai auto-cut.
+
+### Nuovo protocollo di sviluppo
+- congelare il candidate automatico prima di leggere il reference umano;
+- usare un secondo video mai visto per misurare la generalizzazione;
+- classificare mismatch per categoria;
+- ottimizzare una categoria alla volta;
+- per iterazioni rapide usare campioni di circa 8–12 minuti invece di 35 minuti quando possibile.
+
 ## 2026-08-27 — Longform transcript + audio alignment
 
 ### Validato

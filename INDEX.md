@@ -6,14 +6,29 @@
 |---|---|
 | `START_HERE.md` | Punto di ingresso per persone e ChatGPT |
 | `CURRENT_STATE.md` | Stato tecnico corrente |
+| `EXPERIMENT_LOG.md` | Registro persistente degli esperimenti e dei prossimi step |
 | `CHANGELOG.md` | Storico delle decisioni |
-| `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python e cartelle script |
+| `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md` | **Architettura prodotto corrente: ChatGPT -> MCP -> Resolve Studio** |
+| `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
+| `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
+| `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |
 | `docs/02_SHORTFORM_WORKFLOW.md` | Pipeline shortform |
 | `docs/03_TRACKING_FUSION.md` | Tracking, Fusion, yoyo e lezioni |
 | `docs/04_LONGFORM_WORKFLOW.md` | Pipeline longform |
-| `docs/05_OPERATOR_GUIDE.md` | Istruzioni click-per-click |
+| `docs/05_OPERATOR_GUIDE.md` | Istruzioni manuali click-per-click per test/fallback |
 | `docs/06_TROUBLESHOOTING.md` | Problemi noti |
-| `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
+| `docs/TRAINING_ROADMAP.md` | Sequenza di validazione delle capacità |
+| `docs/PROVISIONAL_REFERENCES.md` | Fonti Resolve/Fusion esterne non authoritative |
+
+## Architettura corrente
+
+Interfaccia primaria:
+
+`Segreteria -> ChatGPT -> custom MCP app -> Secure MCP Tunnel -> bridge Python locale -> Resolve Studio API`
+
+Non usare i vecchi documenti `ARPHE Remote Agent V1` come piano attuale: sono conservati in `docs/superpowers/` ma marcati **SUPERSEDED**.
+
+Il piano `docs/superpowers/plans/2026-08-28-resolve-studio-capability-audit.md` resta valido come backlog di probe tecnici.
 
 ## Script validati
 
@@ -24,16 +39,19 @@
 | `scripts/validated/ARPHE_MANUAL_TRACK_SETUP_13A_V2.py` | ✅ | Prepara tracking manuale limitato a un range |
 | `scripts/validated/ARPHE_TRACKED_YOYO_APPLY_13B_V2.py` | ✅ proof of concept | Legge tracking e applica yoyo |
 
+## Studio / MCP experiments
+
+- `scripts/experiments/ARPHE_STUDIO_EXTERNAL_API_TEST_01.py`: **READ external API test superato** su Resolve Studio 21.0.4.5.
+- `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`: prossimo probe, crea soltanto una timeline vuota e torna all'originale.
+- MCP bridge read-only: prossimo step dopo il write test, con `ping` + `resolve_status`.
+
 ## Benchmark / strumenti di valutazione
 
 - `ARPHE_EXPORT_REFERENCE_EDIT_02.py`: esporta da Resolve un reference umano con kept/remove/joins.
 - `ARPHE_COMPARE_CUTS_01.py`: confronta reference e candidate plan con metriche quantitative.
 
-## Script parziali
+## Script parziali / esperimenti storici
 
-Vedi `scripts/partial/`. Possono essere utili come riferimento ma non vanno usati come primitive di produzione senza verifica.
+Vedi `scripts/partial/`, `scripts/experiments/` e `reference/nonvalidated_archive/`.
 
-## Esperimenti
-
-Vedi `scripts/experiments/`.
-Servono come archivio tecnico e per evitare di ripetere strade già testate.
+Servono come archivio tecnico e per evitare di ripetere strade già testate; non vanno usati come primitive di produzione senza verifica/promozione esplicita.

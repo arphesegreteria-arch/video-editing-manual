@@ -1,5 +1,46 @@
 # CHANGELOG
 
+## 2026-09-01 — Resolve Studio external API + ChatGPT/MCP pivot
+
+### Resolve Studio
+- installato/testato DaVinci Resolve Studio `21.0.4.5`;
+- impostato `External scripting using = Local`;
+- `ARPHE_STUDIO_EXTERNAL_API_TEST_01` eseguito da Python esterno con exit code 0;
+- letti correttamente progetto `blabla`, `Timeline 1`, 30 fps, 1 traccia video, 1 audio, 130 item V1 e 130 item A1;
+- conclusione: **external READ API supported** nel nostro ambiente;
+- preparato `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02` come prossimo probe non distruttivo.
+
+### Nuova direzione prodotto
+La segreteria deve usare **ChatGPT come interfaccia primaria**, non una GUI ARPHE separata.
+
+Architettura target:
+
+`ChatGPT -> custom MCP app -> Secure MCP Tunnel -> bridge Python locale -> Resolve Studio API`
+
+Il bridge è infrastruttura: tool allowlisted, validazione, accesso controllato ai media e operazioni deterministiche su Resolve.
+
+### Ricerca MCP
+Verificata la fattibilità concettuale sulle fonti correnti:
+- custom MCP app in ChatGPT possono esporre tool e, con full MCP, write/modify;
+- full MCP write è attualmente beta su Business, Enterprise ed Edu web;
+- Pro può collegare custom MCP in read/fetch ma non full write al momento;
+- server MCP locali/private network richiedono Secure MCP Tunnel per essere raggiunti da ChatGPT senza esposizione pubblica;
+- `tunnel-client` può inoltrare a MCP locale via stdio/HTTP;
+- SDK Python MCP v2 scelto come base del prototipo.
+
+### Cleanup architetturale
+- creato `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md`;
+- creato `docs/RESOLVE_STUDIO_CAPABILITIES.md`;
+- aggiornati README, START_HERE, CURRENT_STATE, INDEX, setup, longform, operator guide, roadmap ed EXPERIMENT_LOG;
+- vecchio design `ARPHE Remote Agent V1` GUI + GitHub polling dichiarato **SUPERSEDED**;
+- mantenuti i suoi principi di sicurezza utili: allowlist, path guard, original timeline protection, log strutturati.
+
+### Podcast benchmark
+- usare estratti autonomi di circa 8–15 minuti;
+- una volta esportato l'estratto, tutti i timestamp ripartono da `00:00`;
+- nessun mapping al timecode del podcast completo durante l'esperimento;
+- candidate automatico congelato prima del reference umano.
+
 ## 2026-09-01 — Benchmark editoriale + profilo v0.1
 
 ### Benchmark 01
@@ -29,10 +70,10 @@ Prima del waveform alignment bisogna migliorare la selezione editoriale e il ril
 
 ### Nuovo protocollo di sviluppo
 - congelare il candidate automatico prima di leggere il reference umano;
-- usare un secondo video mai visto per misurare la generalizzazione;
+- usare materiale mai visto per misurare la generalizzazione;
 - classificare mismatch per categoria;
 - ottimizzare una categoria alla volta;
-- per iterazioni rapide usare campioni di circa 8–12 minuti invece di 35 minuti quando possibile.
+- per iterazioni rapide usare estratti/campioni invece di longform completi.
 
 ## 2026-08-27 — Longform transcript + audio alignment
 
@@ -48,24 +89,18 @@ Prima del waveform alignment bisogna migliorare la selezione editoriale e il ril
 - restano pause lunghe se non vengono trattate separatamente;
 - un bordo video/audio apparentemente allineato può comunque contenere troppo silenzio prima del parlato: non è necessariamente vero fuori-sync.
 
-### Nuova architettura
+### Nuova architettura editoriale emersa allora
 - ChatGPT decide semanticamente **cosa** togliere;
 - Whisper localizza/protegge le parole;
 - un analizzatore locale legge la waveform reale e raffina i confini;
 - Resolve applica gli intervalli raffinati ricostruendo una nuova timeline.
 
-Principio:
+Principio ancora valido:
 **decisione editoriale ≠ posizione fisica della lama**.
 
 ### V4.x
 - V4.2: primo audio align conservativo; osservata troppa aria in alcune giunzioni.
-- V4.3: candidato corrente con giunzioni più compatte; ancora da revisionare integralmente prima della promozione a validato.
-
-### Regole aggiunte
-- non promuovere V4.3 a `validated` finché il longform non è stato guardato per intero;
-- distinguere vero offset A/V da semplice silenzio contenuto nella clip;
-- revisione umana obbligatoria anche quando l'audio cut è corretto, perché il jump cut visivo può restare brutto;
-- la futura interfaccia per segreteria deve nascondere la complessità tecnica dietro pochi passaggi o un solo pulsante.
+- V4.3: candidato con giunzioni più compatte; ha corretto il problema specifico della troppa aria, ma non risolve da solo la selezione editoriale.
 
 ## 2026-08-25 — Sessione iniziale
 
@@ -82,7 +117,7 @@ Principio:
 ### Scartato come base di produzione
 - simulare yoyo con micro-tagli;
 - usare il Tracker in serie verso MediaOut;
-- affidarsi al trigger automatico `TrackForward` via FusionScript nella build corrente.
+- affidarsi al trigger automatico `TrackForward` via FusionScript nella build Free testata.
 
 ### Regole aggiunte
 - mai modificare l'originale;

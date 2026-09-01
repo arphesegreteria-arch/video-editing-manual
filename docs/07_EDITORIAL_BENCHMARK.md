@@ -37,21 +37,21 @@ Il collo di bottiglia principale non è più soltanto l'audio alignment.
 
 - Recall bassa: mancano molti tagli che il montatore umano esegue.
 - Precision bassa: diversi tagli automatici non coincidono con le scelte editoriali umane.
-- Boundary error alto: anche quando il tipo di intervento è corretto, la lama va ancora raffinata.
+- Boundary error alto: anche quando l'intervento è corretto, la lama va ancora raffinata.
 
-Priorità: migliorare prima il rilevamento delle decisioni editoriali e delle speech repair; solo dopo ottimizzare ulteriormente i bordi.
+Priorità: migliorare prima decisioni editoriali e speech repair; poi ottimizzare ulteriormente i bordi.
 
 ## ARPHE Editorial Profile v0.1
 
 ### Pause
 - accorciare le pause chiaramente eccessive;
 - non azzerare automaticamente gli spazi;
-- preservare un ritmo umano e un respiro naturale tra attacco e attacco.
+- preservare ritmo umano e respiro naturale.
 
 ### `ehm`, `eeee`, `mmm` e vocalizzi
 - **non rimuoverli sempre**;
-- rimuoverli quando la frase prima/dopo può essere ricucita in modo naturale;
-- conservarli quando svolgono una funzione espressiva o quando la rimozione rende il ritmo innaturale;
+- rimuoverli quando la frase prima/dopo può essere ricucita naturalmente;
+- conservarli quando svolgono una funzione espressiva o la rimozione rende il ritmo innaturale;
 - i casi ambigui vanno raffinati tramite benchmark successivi.
 
 ### Filler linguistici (`allora`, `cioè`, `quindi`, `praticamente`, ecc.)
@@ -74,57 +74,57 @@ Quindi:
 - eliminare il ramo abbandonato;
 - riagganciare alla continuazione semanticamente corretta;
 - usare word timestamps + audio per il posizionamento finale;
-- se esistono più ricuciture plausibili, evitare un auto-cut aggressivo.
+- se esistono più ricuciture plausibili, evitare auto-cut aggressivi.
 
 ### Ripetizioni
 - preferire la formulazione più chiara/completa;
-- se la seconda formulazione completa corregge la prima, trattarla come speech repair, non solo come blocco duplicato.
+- se la seconda formulazione corregge la prima, trattarla come speech repair, non solo come blocco duplicato.
 
 ### Tagli concettuali
-- modello separato dai micro-cut;
+- livello separato dai micro-cut;
 - possono riguardare materiale grammaticalmente corretto ma inutile, ridondante o non funzionale al video;
-- devono essere appresi e misurati contro reference umani, non derivati dalla sola waveform.
+- devono essere misurati contro reference umani, non derivati dalla sola waveform.
 
 ### Contenuto sensibile
 - **FLAG ONLY**;
 - non effettuare auto-cut per motivi reputazionali/sensibili;
 - produrre timestamp + breve motivo del flag;
-- decisione finale sempre umana.
+- decisione finale umana.
 
-## Protocollo Benchmark 02 — nuovo video
+## Protocollo Benchmark 02 — podcast excerpt autonomo
 
-Obiettivo: verificare generalizzazione su materiale mai usato per calibrare il sistema.
+Obiettivo: verificare generalizzazione su materiale mai usato per calibrare il sistema senza processare ogni volta un podcast completo.
+
+### Sorgente canonica
+
+1. Individuare nel podcast un passaggio interessante, idealmente circa 8–15 minuti.
+2. Esportarlo come MP4 autonomo **prima** di qualsiasi montaggio editoriale.
+3. Dal momento dell'export, dimenticare il timecode dell'episodio completo.
+4. L'estratto parte da `00:00` ed è l'unica sorgente canonica dell'esperimento.
+
+Non fare somme/offset verso il podcast originale durante il benchmark: aggiungono rischio senza migliorare la misura.
 
 ### Regola anti-leakage
 
 Il candidate automatico deve essere congelato **prima** di leggere il reference umano.
 
-Ordine consigliato:
-
-1. Registrare un nuovo video naturale.
-2. Conservare l'MP4 originale intatto.
-3. Generare transcript con word timestamps.
-4. Generare e salvare il candidate automatico senza vedere il montaggio umano.
-5. In parallelo, montare manualmente lo stesso video come risultato desiderato.
-6. Esportare il reference con `ARPHE_EXPORT_REFERENCE_EDIT_02.py`.
-7. Confrontare candidate e reference.
-8. Classificare i mismatch per categoria:
+Ordine:
+1. creare `E05_SOURCE_EXCERPT.mp4`;
+2. generare `E05_TRANSCRIPT.json` con word timestamps;
+3. generare e salvare `E05_CANDIDATE_V1.json` senza vedere il montaggio umano;
+4. montare manualmente la stessa SOURCE_EXCERPT come risultato desiderato;
+5. esportare `E05_REFERENCE.json` con `ARPHE_EXPORT_REFERENCE_EDIT_02.py`;
+6. confrontare candidate e reference;
+7. generare `E05_REPORT.txt`;
+8. classificare i mismatch per:
    - pause;
    - vocalizzi;
    - filler senza funzione;
    - false partenze / speech repair;
    - ripetizioni;
    - tagli concettuali;
-   - altro.
-9. Aggiornare le regole solo dopo aver letto il report del secondo video.
-
-## Ottimizzazione dei tempi
-
-Per ogni iterazione non è necessario montare 35 minuti.
-
-Per sviluppo rapido è sufficiente un campione nuovo di circa **8–12 minuti**, purché contenga parlato naturale e una quantità ragionevole di errori/disfluenze. Un secondo campione separato può essere usato come holdout.
-
-Quando le metriche diventano stabili, eseguire un test completo su un longform più lungo.
+   - altro;
+9. aggiornare le regole solo dopo il report.
 
 ## Metriche da tenere
 
@@ -136,6 +136,8 @@ Quando le metriche diventano stabili, eseguire un test completo su un longform p
 - mean / median boundary error;
 - metriche separate per categoria editoriale.
 
-Principio:
+## Regola di sviluppo
 
-**non ottimizzare una singola V4.x “a sensazione”: congelare un candidate, confrontarlo con un reference umano e migliorare una categoria alla volta.**
+**Non ottimizzare una versione “a sensazione”: congelare un candidate, confrontarlo con un reference umano e migliorare una categoria alla volta.**
+
+Il benchmark editoriale rimane indipendente dal canale di esecuzione: oggi può usare script/JSON; nell'architettura target ChatGPT potrà richiamare gli stessi passaggi tramite MCP senza cambiare la metodologia di valutazione.

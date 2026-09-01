@@ -217,6 +217,16 @@ def test_readme_states_manual_launch_and_no_background_agent():
     assert "resolve studio" in lower
 
 
+def test_setup_and_docs_cover_resolve_module_loading_and_exact_source_revision():
+    setup = (WINDOWS_ROOT / "setup_windows.ps1").read_text(encoding="utf-8")
+    readme = _read("README.md")
+
+    assert "_load_resolve_script_module" in setup
+    assert "Developer\\Scripting\\Modules" in readme
+    assert "git rev-parse HEAD" in readme
+    assert "per-job audit log" in readme
+
+
 def test_readme_documents_manual_release_gate_and_expanded_secret_scan():
     readme = _read("README.md")
 

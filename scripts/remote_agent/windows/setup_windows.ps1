@@ -179,6 +179,11 @@ if (-not (Test-Path -LiteralPath $configPath)) {
 & $venvPython -c "import sys; from pathlib import Path; sys.path.insert(0, str(Path(sys.argv[2]).resolve())); from scripts.remote_agent.config import AgentConfig; AgentConfig.load(sys.argv[1])" $configPath $projectDirectory
 Assert-LastExitCode 'validating the local config.json'
 
+# A clean venv cannot import Resolve's bridge as a pip package. Verify the
+# trusted Studio installation path used by the production loader instead.
+& $venvPython -c "import sys; from pathlib import Path; sys.path.insert(0, str(Path(sys.argv[1]).resolve())); from scripts.remote_agent.resolve_manager import _load_resolve_script_module; _load_resolve_script_module()" $projectDirectory
+Assert-LastExitCode 'loading DaVinciResolveScript from the trusted Studio installation'
+
 New-DesktopShortcut
 if (-not $SkipTokenSetup) {
     $setToken = Read-Host 'Set or update the GitHub token in Windows Credential Manager now? [Y/n]'

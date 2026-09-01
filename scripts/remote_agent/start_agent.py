@@ -24,7 +24,6 @@ from scripts.remote_agent.credentials import CredentialStore
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="ARPHE Remote Agent")
     parser.add_argument("--config", type=Path, required=True, help="Path to local config.json")
-    parser.add_argument("--source-commit", default="unknown")
     parser.add_argument(
         "--set-github-token",
         action="store_true",
@@ -38,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         CredentialStore(AgentConfig.load(args.config)).set_token(token)
         print("GitHub token stored in Windows Credential Manager.")
         return 0
-    application = build_application(args.config, source_commit=args.source_commit)
+    application = build_application(args.config)
     application.run()
     return 0
 

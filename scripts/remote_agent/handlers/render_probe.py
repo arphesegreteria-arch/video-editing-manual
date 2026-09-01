@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Callable
+from pathlib import PureWindowsPath
 
 from pydantic import Field, field_validator
 
@@ -15,6 +16,13 @@ class RenderProbeParameters(StrictModel):
     output_relative_path: str = Field(min_length=1, max_length=1024)
 
     _validate_output_path = field_validator("output_relative_path")(_relative_path)
+
+    @field_validator("output_relative_path")
+    @classmethod
+    def output_must_be_a_supported_video(cls, value: str) -> str:
+        if PureWindowsPath(value).suffix.casefold() not in {".mov", ".mp4"}:
+            raise ValueError("render probe output must be a .mov or .mp4 file")
+        return value
 
 
 def run_render_probe(

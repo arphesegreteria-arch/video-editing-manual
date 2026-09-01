@@ -12,6 +12,7 @@ from scripts.remote_agent.models import StrictModel
 
 
 FolderAlias = Literal["incoming", "test_media", "workspace", "exports"]
+MEDIA_RESULT_LIMIT = 50
 
 
 def _relative_path(value: str | None) -> str | None:
@@ -60,11 +61,13 @@ class ImportMediaParameters(StrictModel):
 
 
 def list_media(parameters: ListMediaParameters, broker: object) -> dict[str, object]:
-    return {"media": getattr(broker, "list_media")(parameters.alias, parameters.relative_dir)}
+    media = list(getattr(broker, "list_media")(parameters.alias, parameters.relative_dir))
+    return {"media": media[:MEDIA_RESULT_LIMIT], "total": len(media), "truncated": len(media) > MEDIA_RESULT_LIMIT}
 
 
 def find_media(parameters: FindMediaParameters, broker: object) -> dict[str, object]:
-    return {"media": getattr(broker, "find_media")(parameters.alias, parameters.query)}
+    media = list(getattr(broker, "find_media")(parameters.alias, parameters.query))
+    return {"media": media[:MEDIA_RESULT_LIMIT], "total": len(media), "truncated": len(media) > MEDIA_RESULT_LIMIT}
 
 
 def hash_media(parameters: HashMediaParameters, broker: object) -> dict[str, object]:
@@ -86,9 +89,14 @@ def import_media(
     # Hashing is the broker's guarded file check; no raw local path leaves the handler.
     require_not_cancelled(token)
     media = getattr(broker, "hash_media")(parameters.source_alias, parameters.relative_path)
+    local_path = getattr(broker, "local_media_path")(parameters.source_alias, parameters.relative_path)
     require_not_cancelled(token)
     getattr(resolve_manager, "require_test_project")()
     require_not_cancelled(token)
-    result = dict(getattr(resolve_manager, "import_media")(media["path"], parameters.target_bin, token))
+    importer = getattr(resolve_manager, "import_local_media", None)
+    if callable(importer):
+        result = dict(importer(local_path, media["path"], parameters.target_bin, token))
+    else:
+        result = dict(getattr(resolve_manager, "import_media")(media["path"], parameters.target_bin, token))
     require_not_cancelled(token)
     return result

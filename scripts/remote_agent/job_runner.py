@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import inspect
+import json
 import logging
 import threading
 import time
@@ -17,7 +18,7 @@ from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.github_queue import QueuedJob
 from scripts.remote_agent.handler_registry import HandlerRegistry, RegisteredHandler
 from scripts.remote_agent.logging_setup import require_redacting_logger
-from scripts.remote_agent.models import JobResult, JobStatus
+from scripts.remote_agent.models import JobResult, JobStatus, RESULT_FOLDER_ALIASES
 
 
 _HANDLER_FAILURE_TYPE = "HandlerFailure"
@@ -371,6 +372,58 @@ class JobRunner:
     def _persist_terminal(self, running: QueuedJob, result: JobResult) -> None:
         getattr(self._queue, "write_result")(result)
         getattr(self._queue, "mark_terminal")(running, result.status)
+        writer = getattr(self._queue, "write_log", None)
+        if callable(writer):
+            try:
+                writer(result.job_id, self._audit_log(result))
+            except Exception:
+                self._logger.warning("remote audit-log upload failed for job_id=%s", result.job_id)
+
+    @classmethod
+    def _alias_paths_from_output(cls, value: Any) -> list[str]:
+        paths: set[str] = set()
+
+        def visit(item: Any) -> None:
+            if len(paths) >= 50:
+                return
+            if isinstance(item, str):
+                prefix, separator, rest = item.partition("/")
+                if separator and prefix in RESULT_FOLDER_ALIASES and rest and "\\" not in item and ".." not in rest.split("/"):
+                    paths.add(item)
+            elif isinstance(item, dict):
+                for nested in item.values():
+                    visit(nested)
+            elif isinstance(item, list):
+                for nested in item:
+                    visit(nested)
+
+        visit(value)
+        return sorted(paths, key=lambda path: (path.casefold(), path))[:50]
+
+    @classmethod
+    def _audit_log(cls, result: JobResult) -> str:
+        resolve: dict[str, Any] = {}
+        for key in ("project", "timeline", "version", "status", "connected", "size_bytes", "sha256", "render_job_id", "imported_count"):
+            value = result.output.get(key)
+            if isinstance(value, (bool, int)) or (
+                isinstance(value, str)
+                and len(value) <= 128
+                and "\\" not in value
+                and not (len(value) >= 3 and value[1:3] in {":/", ":\\"})
+            ):
+                resolve[key] = value
+        transitions = ["CLAIMED", "RUNNING", result.status.value]
+        payload = {
+            "schema_version": 1,
+            "job_id": result.job_id,
+            "action": result.action,
+            "status": result.status.value,
+            "transitions": transitions,
+            "touched_paths": result.output_paths or cls._alias_paths_from_output(result.output),
+            "warnings": result.warnings[:50],
+            "resolve": resolve,
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
     @staticmethod
     def _invoke(registered: RegisteredHandler, parameters: Any, token: CancellationToken) -> Any:
@@ -404,9 +457,11 @@ class JobRunner:
             "source_commit": self._source_commit,
         }
         try:
+            output_value = output or {}
             return JobResult(
                 **common,
-                output=output or {},
+                output=output_value,
+                output_paths=self._alias_paths_from_output(output_value),
                 error_type=error_type,
                 error_message=error_message,
             )

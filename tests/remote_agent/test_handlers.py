@@ -28,6 +28,14 @@ class FakeBroker:
         self.calls.append(("hash", alias, relative_path))
         return {"path": "incoming/clip.mp4", "size_bytes": 3, "sha256": "a" * 64}
 
+    def local_media_path(self, alias: str, relative_path: str) -> Path:
+        self.calls.append(("local_path", alias, relative_path))
+        return Path("C:/ARPHE/Incoming/clip.mp4")
+
+    def resolve(self, alias: str, relative_path: str) -> Path:
+        self.calls.append(("resolve", alias, relative_path))
+        return Path("C:/ARPHE/Exports") / relative_path
+
     def copy_to_workspace(
         self, source_alias: str, relative_path: str, destination_relative_path: str | None, token: CancellationToken
     ) -> str:
@@ -50,6 +58,15 @@ class FakeResolve:
     def import_media(self, alias_relative_path: str, target_bin: str | None, token: CancellationToken) -> dict[str, object]:
         self.imports.append((alias_relative_path, target_bin, token))
         return {"imported": [alias_relative_path], "target_bin": target_bin}
+
+    def run_capability_audit(self, _parameters, _token):
+        return {"project": "ARPHE_TEST", "capabilities": {"render": True}}
+
+    def run_tracking_probe(self, local_path, alias_path, _token):
+        return {"project": "ARPHE_TEST", "source_path": alias_path, "probe": "tracking"}
+
+    def run_render_probe(self, local_path, alias_path, _token):
+        return {"project": "ARPHE_TEST", "path": alias_path, "rendered": True}
 
 
 def config(
@@ -111,8 +128,8 @@ def test_media_handlers_delegate_only_alias_relative_requests_to_broker_and_mana
     """Catches handlers bypassing the guarded broker or importing outside a disposable project."""
     registry, broker, resolve = registry_for(tmp_path)
 
-    assert registry.get("LIST_MEDIA").handler(registry.validate_parameters("LIST_MEDIA", {"alias": "incoming", "relative_dir": "footage"})) == {"media": ["incoming/clip.mp4"]}
-    assert registry.get("FIND_MEDIA").handler(registry.validate_parameters("FIND_MEDIA", {"alias": "test_media", "query": "clip"})) == {"media": ["test_media/clip.mp4"]}
+    assert registry.get("LIST_MEDIA").handler(registry.validate_parameters("LIST_MEDIA", {"alias": "incoming", "relative_dir": "footage"})) == {"media": ["incoming/clip.mp4"], "total": 1, "truncated": False}
+    assert registry.get("FIND_MEDIA").handler(registry.validate_parameters("FIND_MEDIA", {"alias": "test_media", "query": "clip"})) == {"media": ["test_media/clip.mp4"], "total": 1, "truncated": False}
     assert registry.get("HASH_MEDIA").handler(registry.validate_parameters("HASH_MEDIA", {"alias": "incoming", "relative_path": "clip.mp4"})) == {"path": "incoming/clip.mp4", "size_bytes": 3, "sha256": "a" * 64}
     token = CancellationToken()
     assert registry.get("COPY_TO_WORKSPACE").handler(registry.validate_parameters("COPY_TO_WORKSPACE", {"source_alias": "incoming", "relative_path": "clip.mp4", "destination_relative_path": "jobs/clip.mp4"}), token) == {"path": "workspace/jobs/clip.mp4"}
@@ -124,6 +141,7 @@ def test_media_handlers_delegate_only_alias_relative_requests_to_broker_and_mana
         ("hash", "incoming", "clip.mp4"),
         ("copy", "incoming", "clip.mp4", "jobs/clip.mp4", token),
         ("hash", "incoming", "clip.mp4"),
+        ("local_path", "incoming", "clip.mp4"),
     ]
     assert resolve.test_project_checks == 1
     assert resolve.imports == [("incoming/clip.mp4", "Remote Agent", token)]
@@ -173,6 +191,13 @@ def test_local_profile_cannot_be_widened_by_registered_handler(tmp_path: Path) -
         registry.get("GET_STATUS")
 
 
+def test_render_probe_schema_accepts_only_relative_video_outputs(tmp_path: Path) -> None:
+    registry, _, _ = registry_for(tmp_path, allowed_actions=["RUN_RENDER_PROBE"])
+
+    with pytest.raises(ValidationError):
+        registry.validate_parameters("RUN_RENDER_PROBE", {"output_relative_path": "probe.txt"})
+
+
 def test_copy_schema_allows_an_explicit_null_destination_for_the_broker_default(tmp_path: Path) -> None:
     """Catches optional workspace destinations being treated as malformed remote paths."""
     registry, _, _ = registry_for(tmp_path)
@@ -183,6 +208,46 @@ def test_copy_schema_allows_an_explicit_null_destination_for_the_broker_default(
     )
 
     assert parameters.destination_relative_path is None
+
+
+def test_list_and_find_media_bound_large_results_with_deterministic_metadata(tmp_path: Path) -> None:
+    registry, broker, _ = registry_for(tmp_path)
+    broker.list_media = lambda *_args: [f"incoming/{index:03}.mp4" for index in range(75)]
+    broker.find_media = lambda *_args: [f"test_media/{index:03}.mov" for index in range(63)]
+
+    listed = registry.get("LIST_MEDIA").handler(
+        registry.validate_parameters("LIST_MEDIA", {"alias": "incoming"})
+    )
+    found = registry.get("FIND_MEDIA").handler(
+        registry.validate_parameters("FIND_MEDIA", {"alias": "test_media", "query": "clip"})
+    )
+
+    assert len(listed["media"]) == 50 and listed["media"][-1] == "incoming/049.mp4"
+    assert listed["total"] == 75 and listed["truncated"] is True
+    assert len(found["media"]) == 50 and found["total"] == 63 and found["truncated"] is True
+
+
+def test_default_enabled_resolve_actions_use_guarded_local_production_adapters(tmp_path: Path) -> None:
+    allowed = ["RUN_CAPABILITY_AUDIT", "RUN_TRACKING_PROBE", "RUN_RENDER_PROBE"]
+    registry, broker, resolve = registry_for(tmp_path, allowed_actions=allowed)
+    token = CancellationToken()
+
+    audit = registry.get("RUN_CAPABILITY_AUDIT").handler(
+        registry.validate_parameters("RUN_CAPABILITY_AUDIT", {}), token
+    )
+    tracking = registry.get("RUN_TRACKING_PROBE").handler(
+        registry.validate_parameters(
+            "RUN_TRACKING_PROBE", {"source_alias": "incoming", "relative_path": "clip.mp4"}
+        ), token
+    )
+    render = registry.get("RUN_RENDER_PROBE").handler(
+        registry.validate_parameters("RUN_RENDER_PROBE", {"output_relative_path": "probe.mp4"}), token
+    )
+
+    assert audit["project"] == "ARPHE_TEST"
+    assert tracking["source_path"] == "incoming/clip.mp4"
+    assert render["path"] == "exports/probe.mp4"
+    assert ("local_path", "incoming", "clip.mp4") in broker.calls
 
 
 class FakeGit:

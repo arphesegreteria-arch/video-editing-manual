@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from io import StringIO
+import json
 import logging
 from pathlib import Path
 import threading
@@ -185,6 +186,64 @@ def test_runner_claims_runs_and_writes_structured_success_result(tmp_path: Path)
     assert result.output == {"pong": True}
     assert queue.claims == queue.running == 1
     assert queue.results == [result]
+    assert [item.job.status for item in queue.terminal] == [JobStatus.SUCCEEDED]
+
+
+def test_runner_uploads_bounded_sanitized_audit_log_after_terminal_state(tmp_path: Path) -> None:
+    class AuditQueue(FakeQueue):
+        def __init__(self, queued):
+            super().__init__(queued)
+            self.logs = []
+
+        def write_log(self, job_id, text):
+            self.logs.append((job_id, text))
+
+    handler_registry = HandlerRegistry(["PING"])
+    from scripts.remote_agent.handlers.agent_status import PingParameters
+    handler_registry.register(
+        "PING",
+        PingParameters,
+        lambda _parameters: {
+            "path": "workspace/jobs/output.mov",
+            "project": "ARPHE_TEST",
+            "timeline": "Audit timeline",
+            "size_bytes": 42,
+            "ignored_absolute": r"C:\Users\operator\secret.mov",
+        },
+        idempotent=True,
+    )
+    queue = AuditQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(
+        config(tmp_path), queue, handler_registry,
+        agent_version="1", source_commit="abc", logger=safe_logger(),
+    )
+
+    result = runner.run_once()
+
+    assert result is not None and result.status is JobStatus.SUCCEEDED
+    assert len(queue.logs) == 1
+    audit = json.loads(queue.logs[0][1])
+    assert audit["transitions"] == ["CLAIMED", "RUNNING", "SUCCEEDED"]
+    assert audit["action"] == "PING"
+    assert audit["touched_paths"] == ["workspace/jobs/output.mov"]
+    assert audit["resolve"] == {"project": "ARPHE_TEST", "timeline": "Audit timeline", "size_bytes": 42}
+    assert "C:\\Users" not in queue.logs[0][1]
+
+
+def test_audit_log_write_failure_cannot_corrupt_persisted_terminal_state(tmp_path: Path) -> None:
+    class FailingLogQueue(FakeQueue):
+        def write_log(self, _job_id, _text):
+            raise RuntimeError("github_pat_remote-secret")
+
+    queue = FailingLogQueue(QueuedJob(job(), "source-sha"))
+    runner = JobRunner(
+        config(tmp_path), queue, registry(),
+        agent_version="1", source_commit="abc", logger=safe_logger(),
+    )
+
+    result = runner.run_once()
+
+    assert result is not None and result.status is JobStatus.SUCCEEDED
     assert [item.job.status for item in queue.terminal] == [JobStatus.SUCCEEDED]
 
 

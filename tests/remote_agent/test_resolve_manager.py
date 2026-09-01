@@ -11,6 +11,7 @@ from scripts.remote_agent.resolve_manager import (
     ResolveManager,
     ResolveProcessState,
     ResolveStatus,
+    _load_resolve_script_module,
 )
 
 
@@ -480,3 +481,146 @@ def test_import_media_uses_an_injected_adapter_only_after_the_disposable_project
 
     assert result == {"imported": ["incoming/clip.mp4"], "target_bin": "Remote Agent"}
     assert imported == [("incoming/clip.mp4", "Remote Agent", token)]
+
+
+def test_resolve_script_loader_imports_from_a_trusted_installed_modules_directory(tmp_path) -> None:
+    modules = tmp_path / "Developer" / "Scripting" / "Modules"
+    modules.mkdir(parents=True)
+    (modules / "DaVinciResolveScript.py").write_text(
+        "def scriptapp(name):\n    return {'application': name}\n", encoding="utf-8"
+    )
+
+    loaded = _load_resolve_script_module((modules,))
+
+    assert loaded.scriptapp("Resolve") == {"application": "Resolve"}
+
+
+def test_builtin_resolve_adapters_are_guarded_and_return_only_safe_metadata(tmp_path) -> None:
+    class Clip:
+        def GetName(self):
+            return "clip.mp4"
+
+    class MediaPool:
+        def ImportMedia(self, paths):
+            assert paths == [str((tmp_path / "incoming" / "clip.mp4").resolve())]
+            return [Clip()]
+
+        def CreateTimelineFromClips(self, name, clips):
+            assert name == "ARPHE_REMOTE_TRACKING_PROBE"
+            assert len(clips) == 1
+            tracker = type("Tracker", (), {"GetName": lambda self: "Tracker1"})()
+            comp = type("Comp", (), {"AddTool": lambda self, tool: tracker if tool == "Tracker" else None})()
+            item = type("Item", (), {"AddFusionComp": lambda self: comp})()
+            return type(
+                "ProbeTimeline",
+                (),
+                {
+                    "GetName": lambda self: name,
+                    "GetItemListInTrack": lambda self, kind, index: [item] if (kind, index) == ("video", 1) else [],
+                },
+            )()
+
+    class RenderProject(FakeProject):
+        def __init__(self):
+            super().__init__("ARPHE_TEST")
+            self.media_pool = MediaPool()
+
+        def GetMediaPool(self):
+            return self.media_pool
+
+        def SetRenderSettings(self, settings):
+            self.settings = settings
+            return True
+
+        def AddRenderJob(self):
+            output = Path(self.settings["TargetDir"]) / self.settings["CustomName"]
+            output.write_bytes(b"render")
+            return "render-job-1"
+
+        def StartRendering(self, job_id):
+            return job_id == "render-job-1"
+
+        def IsRenderingInProgress(self):
+            return False
+
+    class RenderResolve(FakeResolve):
+        def __init__(self):
+            self._project = RenderProject()
+
+    config = resolve_config(tmp_path)
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: [resolve_process(config.executable_path)],
+        api_connector=RenderResolve,
+        launcher=lambda _path: None,
+        clock=FakeClock(),
+        sleep=lambda _seconds: None,
+        api_call_runner=call_api_immediately,
+    )
+    assert manager.connect(0.1) is not None
+    source = (tmp_path / "incoming" / "clip.mp4").resolve()
+    source.parent.mkdir()
+    source.write_bytes(b"clip")
+    target = (tmp_path / "exports" / "probe.mp4").resolve()
+    target.parent.mkdir()
+    token = CancellationToken()
+
+    imported = manager.import_local_media(source, "incoming/clip.mp4", None, token)
+    audit = manager.run_capability_audit({}, token)
+    tracking = manager.run_tracking_probe(source, "incoming/clip.mp4", token)
+    rendered = manager.run_render_probe(target, "exports/probe.mp4", token)
+
+    assert imported == {"imported": ["incoming/clip.mp4"], "imported_count": 1, "target_bin": None}
+    assert audit["project"] == "ARPHE_TEST" and audit["capabilities"]["render"] is True
+    assert tracking["source_path"] == "incoming/clip.mp4" and tracking["tracker_created"] is True
+    assert tracking["timeline"] == "ARPHE_REMOTE_TRACKING_PROBE"
+    assert rendered["path"] == "exports/probe.mp4"
+    assert rendered["size_bytes"] == 6 and len(rendered["sha256"]) == 64
+
+
+def test_status_probe_never_enters_resolve_concurrently_with_a_blocking_operation(tmp_path) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingProject(FakeProject):
+        def GetMediaPool(self):
+            return object()
+
+        def GetCurrentTimeline(self):
+            entered.set()
+            assert release.wait(1)
+            return super().GetCurrentTimeline()
+
+    class BlockingResolve(FakeResolve):
+        def __init__(self):
+            self._project = BlockingProject("ARPHE_TEST")
+
+    config = resolve_config(tmp_path)
+    manager = ResolveManager(
+        config,
+        process_executables=lambda: [resolve_process(config.executable_path)],
+        api_connector=BlockingResolve,
+        launcher=lambda _path: None,
+        clock=FakeClock(),
+        sleep=lambda _seconds: None,
+        api_call_runner=call_api_immediately,
+    )
+    assert manager.connect(0.1) is not None
+    audit_thread = threading.Thread(
+        target=lambda: manager.run_capability_audit({}, CancellationToken())
+    )
+    audit_thread.start()
+    assert entered.wait(1)
+    finished = threading.Event()
+    status = {}
+    status_thread = threading.Thread(
+        target=lambda: (status.update(manager.get_status()), finished.set())
+    )
+    status_thread.start()
+    try:
+        assert finished.wait(0.1)
+        assert status["status"] is ResolveStatus.RUNNING_UNAVAILABLE
+    finally:
+        release.set()
+        audit_thread.join(1)
+        status_thread.join(1)

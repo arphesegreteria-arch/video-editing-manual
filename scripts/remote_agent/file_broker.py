@@ -179,6 +179,10 @@ class FileBroker:
             "sha256": digest.hexdigest(),
         }
 
+    def local_media_path(self, alias: str, relative_path: str) -> Path:
+        """Return a broker-validated local media path only to in-process adapters."""
+        return self._require_media_file(alias, relative_path)
+
     def copy_to_workspace(
         self,
         source_alias: str,

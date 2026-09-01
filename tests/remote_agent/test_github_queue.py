@@ -96,15 +96,14 @@ def test_list_pending_parses_matching_jobs_and_ignores_other_machines():
 
 
 @pytest.mark.parametrize("payload", [b"not-json", json.dumps({"schema_version": 1}).encode()])
-def test_invalid_json_or_schema_is_rejected_before_any_claim(payload):
+def test_invalid_json_or_schema_is_skipped_before_any_claim(payload):
     encoded = base64.b64encode(payload).decode()
     client, transport = queue([
         FakeResponse(payload=[{"name": "bad.json", "path": "jobs/bad.json", "sha": "x", "type": "file"}]),
         FakeResponse(payload={"encoding": "base64", "content": encoded, "sha": "x"}),
     ])
 
-    with pytest.raises(InvalidJob):
-        client.list_pending("HOME_DEV")
+    assert client.list_pending("HOME_DEV") == []
 
     assert [call["method"] for call in transport.calls] == ["GET", "GET"]
 
@@ -113,7 +112,7 @@ def test_invalid_json_or_schema_is_rejected_before_any_claim(payload):
     ("omit_sha", "document_sha"),
     [(True, None), (False, None), (False, ""), (False, 17)],
 )
-def test_list_pending_rejects_missing_or_invalid_fetched_document_sha(omit_sha, document_sha):
+def test_list_pending_skips_missing_or_invalid_fetched_document_sha(omit_sha, document_sha):
     """Catches listed jobs acquiring a coerced, unusable Contents blob SHA."""
     document = content_response(job_payload())
     if omit_sha:
@@ -125,8 +124,7 @@ def test_list_pending_rejects_missing_or_invalid_fetched_document_sha(omit_sha, 
         document,
     ])
 
-    with pytest.raises(InvalidJob, match="invalid job document"):
-        client.list_pending("HOME_DEV")
+    assert client.list_pending("HOME_DEV") == []
 
     assert [call["method"] for call in transport.calls] == ["GET", "GET"]
 
@@ -147,8 +145,7 @@ def test_filename_must_match_job_id():
         FakeResponse(payload=[{"name": "different.json", "path": "jobs/different.json", "sha": "x", "type": "file"}]),
         content_response(job_payload(), "x"),
     ])
-    with pytest.raises(InvalidJob, match="filename"):
-        client.list_pending("HOME_DEV")
+    assert client.list_pending("HOME_DEV") == []
 
 
 @pytest.mark.parametrize("status", [409, 422])
@@ -321,16 +318,20 @@ def heartbeat():
 
 
 def test_result_log_and_heartbeat_writers_use_bounded_safe_payloads():
-    client, transport = queue([FakeResponse(payload={}), FakeResponse(payload={}), FakeResponse(payload={})])
+    client, transport = queue([
+        FakeResponse(status_code=404, payload={}), FakeResponse(status_code=201, payload={}),
+        FakeResponse(status_code=404, payload={}), FakeResponse(status_code=201, payload={}),
+        FakeResponse(status_code=404, payload={}), FakeResponse(status_code=201, payload={}),
+    ])
     client.write_result(result())
     client.write_log("queue-001", "x" * (REMOTE_LOG_MAX_BYTES + 500))
     client.write_heartbeat(heartbeat())
 
-    assert [call["method"] for call in transport.calls] == ["PUT", "PUT", "PUT"]
-    assert "/contents/results/queue-001.json" in transport.calls[0]["url"]
-    assert "/contents/logs/queue-001.log" in transport.calls[1]["url"]
-    assert "/contents/machines/HOME_DEV.json" in transport.calls[2]["url"]
-    remote_log = base64.b64decode(transport.calls[1]["json"]["content"])
+    assert [call["method"] for call in transport.calls] == ["GET", "PUT", "GET", "PUT", "GET", "PUT"]
+    assert "/contents/results/queue-001.json" in transport.calls[1]["url"]
+    assert "/contents/logs/queue-001.log" in transport.calls[3]["url"]
+    assert "/contents/machines/HOME_DEV.json" in transport.calls[5]["url"]
+    remote_log = base64.b64decode(transport.calls[3]["json"]["content"])
     assert len(remote_log) <= REMOTE_LOG_MAX_BYTES
     assert remote_log.endswith(b"[TRUNCATED]\n")
 
@@ -338,7 +339,9 @@ def test_result_log_and_heartbeat_writers_use_bounded_safe_payloads():
 def test_write_log_redacts_configured_and_generic_credentials_before_truncation():
     """Catches queue-log uploads exposing credentials that appear before the byte cap."""
     configured_token = "github_pat_configured-secret"
-    client, transport = queue([FakeResponse(payload={})], token=configured_token)
+    client, transport = queue([
+        FakeResponse(status_code=404, payload={}), FakeResponse(status_code=201, payload={})
+    ], token=configured_token)
 
     client.write_log(
         "queue-001",
@@ -346,7 +349,7 @@ def test_write_log_redacts_configured_and_generic_credentials_before_truncation(
         + "x" * REMOTE_LOG_MAX_BYTES,
     )
 
-    remote_log = base64.b64decode(transport.calls[0]["json"]["content"]).decode()
+    remote_log = base64.b64decode(transport.calls[1]["json"]["content"]).decode()
     assert configured_token not in remote_log
     assert "ghp_GenericSecret" not in remote_log
     assert remote_log.count("[REDACTED]") == 2
@@ -370,3 +373,74 @@ def test_http_errors_redact_token():
         client.list_pending("HOME_DEV")
     assert "github_pat_super-secret" not in str(exc.value)
     assert "[REDACTED]" in str(exc.value)
+
+
+def test_existing_result_log_and_heartbeat_are_upserted_with_blob_sha():
+    """Repeated singleton writes must use the current Contents blob as a CAS."""
+    client, transport = queue([
+        FakeResponse(payload={"sha": "result-old"}),
+        FakeResponse(payload={}),
+        FakeResponse(status_code=404, payload={"message": "Not Found"}),
+        FakeResponse(status_code=201, payload={}),
+        FakeResponse(payload={"sha": "heartbeat-old"}),
+        FakeResponse(payload={}),
+    ])
+
+    client.write_result(result())
+    client.write_log("queue-001", "safe")
+    client.write_heartbeat(heartbeat())
+
+    assert [call["method"] for call in transport.calls] == ["GET", "PUT", "GET", "PUT", "GET", "PUT"]
+    assert transport.calls[1]["json"]["sha"] == "result-old"
+    assert "sha" not in transport.calls[3]["json"]
+    assert transport.calls[5]["json"]["sha"] == "heartbeat-old"
+
+
+def test_upsert_conflict_fails_safely_without_retrying_over_newer_content():
+    client, transport = queue([
+        FakeResponse(payload={"sha": "old"}),
+        FakeResponse(status_code=409, text="conflict github_pat_super-secret"),
+    ])
+
+    with pytest.raises(ClaimConflict, match="changed"):
+        client.write_heartbeat(heartbeat())
+
+    assert len(transport.calls) == 2
+
+
+def test_malformed_job_document_does_not_hide_a_later_valid_job():
+    client, _ = queue([
+        FakeResponse(payload=[
+            {"name": "bad.json", "path": "jobs/bad.json", "sha": "bad", "type": "file"},
+            {"name": "queue-001.json", "path": "jobs/queue-001.json", "sha": "good", "type": "file"},
+        ]),
+        FakeResponse(payload={"encoding": "base64", "content": "not-base64", "sha": "bad"}),
+        content_response(job_payload(), "good"),
+    ])
+
+    pending = client.list_pending("HOME_DEV")
+
+    assert [item.job.job_id for item in pending] == ["queue-001"]
+
+
+def test_invalid_github_json_for_one_document_does_not_hide_a_later_valid_job():
+    client, _ = queue([
+        FakeResponse(payload=[
+            {"name": "bad.json", "path": "jobs/bad.json", "sha": "bad", "type": "file"},
+            {"name": "queue-001.json", "path": "jobs/queue-001.json", "sha": "good", "type": "file"},
+        ]),
+        FakeResponse(payload=ValueError("invalid response json"), text="not-json"),
+        content_response(job_payload(), "good"),
+    ])
+
+    assert [item.job.job_id for item in client.list_pending("HOME_DEV")] == ["queue-001"]
+
+
+def test_claim_lease_covers_long_handler_timeout_and_cleanup_margin():
+    client, _ = queue([FakeResponse(payload={"content": {"sha": "new"}})])
+    long_job = Job.model_validate(job_payload(timeout_seconds=7200))
+
+    claimed = client.claim(long_job, "old", now=NOW)
+
+    assert claimed.job.lease_expires_at >= NOW + timedelta(seconds=7260)
+    assert not client._lease_is_stale(claimed.job, now=NOW + timedelta(seconds=7205))

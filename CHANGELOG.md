@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-09-01 — Remote Agent release-gap hardening
+
+- Upsert GitHub per risultati, log e heartbeat con blob SHA/CAS; documenti job malformati vengono isolati senza bloccare quelli validi.
+- Lease di claim estesa al timeout validato del job piu margine di cleanup.
+- Adapter Resolve locali e allowlisted per import, audit, tracking preflight e render probe, sempre sotto gate `ARPHE_TEST` / `ARPHE_AUDIT_*` e broker dei path.
+- Loader deterministico del modulo `DaVinciResolveScript` dai path installati standard di Windows.
+- Chiusura UI asincrona e visibile fino a fine poll, heartbeat `OFFLINE` e join del worker; snapshot UI serviti da cache.
+- Gate dei claim chiuso atomicamente da pausa/chiusura e riaperto solo da resume consentito.
+- Audit log per-job bounded/sanitized e revisione Git esatta rilevata automaticamente all'avvio.
+- `LIST_MEDIA` e `FIND_MEDIA` limitati deterministicamente a 50 elementi con metadati di troncamento.
+
+Il gate live su vero `HOME_DEV` + Resolve Studio resta non eseguito; il tag `REMOTE_AGENT_V1_HOME_DEV_TESTED` resta non impostato.
+
 ## 2026-09-01 — Remote Agent release gate riproducibile
 
 ### Verificato

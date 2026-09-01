@@ -178,6 +178,7 @@ class LifecycleController:
         self._cancellation = cancellation_event or threading.Event()
         self._instance_lock = instance_lock
         self._lock = threading.RLock()
+        self._claim_gate_lock = threading.RLock()
         self._stopped = threading.Event()
         self._worker: threading.Thread | None = None
         self._state = AgentState.OFFLINE
@@ -194,6 +195,10 @@ class LifecycleController:
         self._last_job_status: JobStatus | None = None
         self._recent_logs: deque[str] = deque(maxlen=100)
         self._retry_delay = float(config.poll_interval_seconds)
+        self._resolve_status_cache: dict[str, object] = {
+            "status": "unavailable",
+            "connected": False,
+        }
         listener = getattr(runner, "add_execution_listener", None)
         self._runner_reports_execution = callable(listener)
         if self._runner_reports_execution:
@@ -242,25 +247,31 @@ class LifecycleController:
         worker.start()
 
     def pause(self) -> None:
-        with self._lock:
-            if self._state is AgentState.OFFLINE:
-                return
-            self._paused = True
-            if not self._job_active:
-                self._state = AgentState.PAUSED
-                self._status_message = "Paused - no new jobs"
-            self._record("New job claims paused")
+        with self._claim_gate_lock:
+            self._stop_new_claims()
+            with self._lock:
+                if self._state is AgentState.OFFLINE:
+                    return
+                self._paused = True
+                if not self._job_active:
+                    self._state = AgentState.PAUSED
+                    self._status_message = "Paused - no new jobs"
+                self._record("New job claims paused")
         self._scheduler.wake()
 
     def resume(self) -> None:
-        with self._lock:
-            if self._state is AgentState.OFFLINE:
-                return
-            self._paused = False
-            if not self._job_active:
-                self._state = AgentState.ONLINE
-                self._status_message = "Online"
-            self._record("Job claims resumed")
+        with self._claim_gate_lock:
+            with self._lock:
+                if self._state is AgentState.OFFLINE or self._closing or self._stop_after_current:
+                    return
+                self._paused = False
+                if not self._job_active:
+                    self._state = AgentState.ONLINE
+                    self._status_message = "Online"
+                self._record("Job claims resumed")
+            resumer = getattr(self._runner, "resume_accepting_new_claims", None)
+            if callable(resumer):
+                resumer()
         self._scheduler.wake()
 
     def stop_after_current(self) -> None:
@@ -278,22 +289,27 @@ class LifecycleController:
 
     def request_close(self, mode: CloseMode | None = None) -> bool:
         """Return true when the caller may destroy the window immediately."""
-        if not self._close_claim_gate_if_idle():
-            self._begin_shutdown()
-            return True
-        if mode is None:
-            raise ValueError("an active job requires an explicit close mode")
-        self._stop_new_claims()
-        with self._lock:
-            self._closing = True
-            self._stop_after_current = True
-            if mode is CloseMode.ABORT_CURRENT:
-                self._status_message = "Aborting current job, then closing"
-                self._record("Cooperative abort requested")
-                self._cancellation.set()
-            else:
-                self._status_message = "Finishing current job, then closing"
-                self._record("Finish current job before close requested")
+        with self._claim_gate_lock:
+            if not self._close_claim_gate_if_idle():
+                with self._lock:
+                    self._closing = True
+                    self._status_message = "Closing - waiting for active poll and offline heartbeat"
+                    self._record("Visible close wait started")
+                self._begin_shutdown()
+                return False
+            if mode is None:
+                raise ValueError("an active job requires an explicit close mode")
+            self._stop_new_claims()
+            with self._lock:
+                self._closing = True
+                self._stop_after_current = True
+                if mode is CloseMode.ABORT_CURRENT:
+                    self._status_message = "Aborting current job, then closing"
+                    self._record("Cooperative abort requested")
+                    self._cancellation.set()
+                else:
+                    self._status_message = "Finishing current job, then closing"
+                    self._record("Finish current job before close requested")
         self._scheduler.wake()
         return False
 
@@ -308,10 +324,11 @@ class LifecycleController:
 
     def _begin_shutdown(self) -> None:
         """Close the gates immediately; joining is deliberately a separate boundary."""
-        self._stop_new_claims()
-        with self._lock:
-            self._cancellation.set()
-            self._stop_requested.set()
+        with self._claim_gate_lock:
+            self._stop_new_claims()
+            with self._lock:
+                self._cancellation.set()
+                self._stop_requested.set()
         self._scheduler.wake()
 
     def wait_until_stopped(self, timeout: float | None = None) -> None:
@@ -323,7 +340,8 @@ class LifecycleController:
 
     def snapshot(self) -> LifecycleSnapshot:
         with self._lock:
-            resolve_status = self._safe_resolve_status()
+            status = self._resolve_status_cache.get("status", "unavailable")
+            resolve_status = str(getattr(status, "value", status))
             return LifecycleSnapshot(
                 machine_id=self.config.machine_id,
                 state=self._state,
@@ -459,6 +477,7 @@ class LifecycleController:
     def _send_heartbeat(self, state: AgentState | None = None) -> bool:
         resolve_status = self._resolve_status()
         with self._lock:
+            self._resolve_status_cache = dict(resolve_status)
             current_state = state or self._state
             current_job = None if self._current_job in {"-", "Processing queue job"} else self._current_job
         heartbeat = MachineHeartbeat(
@@ -501,10 +520,6 @@ class LifecycleController:
             return status if isinstance(status, dict) else {}
         except Exception:
             return {}
-
-    def _safe_resolve_status(self) -> str:
-        status = self._resolve_status().get("status", "unavailable")
-        return str(getattr(status, "value", status))
 
     @staticmethod
     def _safe_optional_text(value: object) -> str | None:

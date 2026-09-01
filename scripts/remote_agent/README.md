@@ -92,6 +92,15 @@ Install DaVinci Resolve **Studio** at the configured, absolute executable path.
 Enable the local Fusion/Resolve scripting access required by the Studio API and
 verify that the Python scripting module can connect before using live handlers.
 Destructive probes must run only in `ARPHE_TEST` or an `ARPHE_AUDIT_` project.
+The agent loads `DaVinciResolveScript.py` directly from the trusted standard
+Windows installation under
+`C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Developer\Scripting\Modules`
+(with the fixed Program Files installation path as a fallback); setup validates
+this from the clean agent venv and never accepts a module path from a job.
+
+At startup the launcher obtains the exact deployed revision with the fixed,
+shell-free `git rev-parse HEAD` command. Startup fails closed if a 40-character
+Git commit cannot be read; results and heartbeats never publish `unknown`.
 
 ## Everyday operation
 
@@ -101,6 +110,10 @@ to stop claiming work, **Stop after current job** to drain a running job, and
 the normal close choices to finish or abort the current job. Once closed, there
 is no polling, heartbeat, service, scheduled task, startup entry, tray agent,
 or background worker left behind.
+Every terminal job also attempts a bounded, sanitized per-job audit log in the
+private queue repository. It records fixed transitions, the action, alias-relative
+touched paths, warnings and safe Resolve metadata. Audit upload failure is visible
+locally but cannot rewrite or corrupt an already persisted terminal state.
 
 ## Uninstall
 

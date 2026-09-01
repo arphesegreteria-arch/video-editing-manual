@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+import re
+import subprocess
 import threading
+from collections.abc import Callable
+from typing import Any
 
 from scripts.remote_agent.config import AgentConfig
 from scripts.remote_agent.credentials import CredentialStore
@@ -20,6 +24,32 @@ from scripts.remote_agent.resolve_manager import ResolveManager
 
 
 APP_VERSION = "1.0.0"
+_GIT_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def detect_source_commit(
+    repository_root: Path | None = None,
+    *,
+    run: Callable[..., Any] = subprocess.run,
+) -> str:
+    """Return the exact deployed checkout revision via fixed, shell-free Git."""
+    root = (repository_root or Path(__file__).resolve().parents[2]).resolve()
+    try:
+        completed = run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+            shell=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("exact deployed source commit is unavailable") from exc
+    commit = completed.stdout.strip().casefold() if completed.returncode == 0 else ""
+    if not _GIT_COMMIT_RE.fullmatch(commit):
+        raise RuntimeError("exact deployed source commit is unavailable")
+    return commit
 
 
 @dataclass
@@ -39,11 +69,12 @@ def build_application(
     config_path: str | Path,
     *,
     agent_version: str = APP_VERSION,
-    source_commit: str = "unknown",
+    source_commit: str | None = None,
     acquire_lock: bool = True,
 ) -> RemoteAgentApplication:
     """Validate local setup and wire every production dependency explicitly."""
     config = AgentConfig.load(config_path)
+    source_commit = source_commit or detect_source_commit()
     for alias in config.folders.aliases():
         folder = config.folders.path_for(alias)
         if not folder.is_dir():
@@ -60,7 +91,7 @@ def build_application(
         if not token:
             raise RuntimeError("GitHub token is missing from Windows Credential Manager")
 
-        queue = GitHubQueue(config.github, token)
+        queue = GitHubQueue(config.github, token, logger=logger)
         file_broker = FileBroker(config.folders)
         resolve_manager = ResolveManager(config.resolve)
         resolve_manager.connect(5.0)

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import base64
+import binascii
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 import re
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -18,6 +20,7 @@ from scripts.remote_agent.models import JOB_ID_PATTERN, Job, JobResult, JobStatu
 
 
 REMOTE_LOG_MAX_BYTES = 256 * 1024
+LEASE_CLEANUP_MARGIN_SECONDS = 60
 _TRUNCATION_MARKER = b"\n[TRUNCATED]\n"
 _JOB_ID_RE = re.compile(JOB_ID_PATTERN)
 
@@ -76,6 +79,7 @@ class GitHubQueue:
         *,
         transport: HttpTransport | None = None,
         request_timeout_seconds: float = 15,
+        logger: logging.Logger | None = None,
     ) -> None:
         if request_timeout_seconds <= 0:
             raise ValueError("request timeout must be positive")
@@ -87,6 +91,7 @@ class GitHubQueue:
             transport = requests.Session()
         self._transport = transport
         self._timeout = request_timeout_seconds
+        self._logger = logger
         owner = quote(config.owner, safe="")
         repository = quote(config.repository, safe="")
         self._contents_url = f"{config.api_base_url.rstrip('/')}/repos/{owner}/{repository}/contents"
@@ -104,6 +109,19 @@ class GitHubQueue:
         payload: dict[str, Any] | None = None,
         expected: tuple[int, ...] = (200,),
     ) -> Any:
+        _status, payload_value = self._request_with_status(
+            method, path, payload=payload, expected=expected
+        )
+        return payload_value
+
+    def _request_with_status(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        expected: tuple[int, ...] = (200,),
+    ) -> tuple[int, Any]:
         url = f"{self._contents_url}/{quote(path, safe='/')}"
         response = self._transport.request(
             method,
@@ -119,7 +137,7 @@ class GitHubQueue:
             )
             raise HttpError(response.status_code, message)
         try:
-            return response.json()
+            return response.status_code, response.json()
         except (TypeError, ValueError) as exc:
             raise QueueError(f"GitHub {method} {path} returned invalid JSON") from exc
 
@@ -142,8 +160,15 @@ class GitHubQueue:
         for entry in sorted(listing, key=lambda item: item["path"].casefold()):
             if entry["type"] != "file" or not entry["name"].endswith(".json"):
                 continue
-            document = self._request("GET", entry["path"], expected=(200,))
-            job, sha = self._parse_job_document(document, expected_name=entry["name"])
+            try:
+                document = self._request("GET", entry["path"], expected=(200,))
+                job, sha = self._parse_job_document(document, expected_name=entry["name"])
+            except (InvalidJob, QueueError) as exc:
+                if isinstance(exc, HttpError):
+                    raise
+                if self._logger is not None:
+                    self._logger.warning("ignored one malformed queue job document")
+                continue
             if not job.matches_machine(machine_id):
                 continue
             if job.status is JobStatus.PENDING or self._lease_is_stale(job):
@@ -161,7 +186,7 @@ class GitHubQueue:
             sha = document["sha"]
             if not isinstance(sha, str) or not sha:
                 raise ValueError("invalid document SHA")
-        except (KeyError, TypeError, ValueError, UnicodeError, json.JSONDecodeError, ValidationError) as exc:
+        except (KeyError, TypeError, ValueError, UnicodeError, binascii.Error, json.JSONDecodeError, ValidationError) as exc:
             raise InvalidJob(f"invalid job document {expected_name}") from exc
         if expected_name != f"{job.job_id}.json":
             raise InvalidJob("job filename does not match job_id")
@@ -193,11 +218,15 @@ class GitHubQueue:
                 raise LeaseActive("job lease is still active")
             if not job.retryable or not idempotent:
                 raise NonRetryableJob("stale job is not safe to retry")
+        effective_lease_seconds = max(
+            lease_seconds,
+            job.timeout_seconds + LEASE_CLEANUP_MARGIN_SECONDS,
+        )
         claimed = job.model_copy(update={
             "status": JobStatus.CLAIMED,
             "claimed_by": job.target_machine,
             "claimed_at": current,
-            "lease_expires_at": current + timedelta(seconds=lease_seconds),
+            "lease_expires_at": current + timedelta(seconds=effective_lease_seconds),
             "attempt": job.attempt + 1,
         })
         updated_sha = self._update_job(claimed, sha, message=f"Claim job {job.job_id}")
@@ -270,12 +299,28 @@ class GitHubQueue:
         )
 
     def _write_file(self, path: str, content: bytes, *, message: str) -> None:
-        self._request(
-            "PUT",
-            path,
-            payload=self._file_payload(content, message=message),
-            expected=(200, 201),
-        )
+        status, document = self._request_with_status("GET", path, expected=(200, 404))
+        sha: str | None = None
+        if status == 404:
+            sha = None
+        elif isinstance(document, dict) and "sha" in document:
+            candidate = document.get("sha")
+            if not isinstance(candidate, str) or not candidate:
+                raise QueueError(f"GitHub GET {path} returned an invalid blob SHA")
+            sha = candidate
+        else:
+            raise QueueError(f"GitHub GET {path} returned an invalid content document")
+        try:
+            self._request(
+                "PUT",
+                path,
+                payload=self._file_payload(content, message=message, sha=sha),
+                expected=(200, 201),
+            )
+        except HttpError as exc:
+            if exc.status_code in {409, 422}:
+                raise ClaimConflict("output document changed before update") from exc
+            raise
 
     def _file_payload(self, content: bytes, *, message: str, sha: str | None = None) -> dict[str, Any]:
         payload: dict[str, Any] = {

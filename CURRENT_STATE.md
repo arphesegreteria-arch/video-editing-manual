@@ -126,9 +126,11 @@ Strategia tracking corrente:
 
 ## 2026-08-31 — Remote Agent V1 release candidate
 
+Aggiornamento 2026-09-01: chiusi i gap finali automatizzabili (upsert/CAS della coda, lease lunga, adapter Resolve guarded, loader scripting Windows, chiusura UI visibile, pausa atomica, cache status, audit per-job, commit sorgente esatto, isolamento job malformati e risultati media bounded). Il checklist live `HOME_DEV` + Resolve Studio resta **NON PASSATO** e il tag `REMOTE_AGENT_V1_HOME_DEV_TESTED` resta non impostato.
+
 - Stato documento: release candidate con verifica automatizzata del branch per installazione manuale su `HOME_DEV`; checklist live `HOME_DEV` + Resolve Studio non ancora passato e tag `REMOTE_AGENT_V1_HOME_DEV_TESTED` ancora non impostato.
 - Profilo `POLI_01`: ancora più ristretto di `HOME_DEV` e **non production-ready** in V1.
-- Suite automatizzata più recente in questo branch: `221 passed, 1 skipped`.
+- Suite automatizzata più recente in questo branch: `239 passed, 1 skipped`.
 - Gate automatizzato documentato per il branch: attivare un venv di sviluppo dedicato, installare `scripts/remote_agent/requirements-dev.txt` cosi `pytest` e disponibile sul PATH del venv, quindi eseguire dal root del repository `pytest tests/remote_agent -v`.
 - Il test di regressione del launcher usa il `pytest.exe` gemello dell'interprete attivo, rimuove `PYTHONPATH` e verifica in `--collect-only` che la vera suite `tests/remote_agent` si raccolga dal root del repository senza errori di import.
 

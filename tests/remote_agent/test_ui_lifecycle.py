@@ -102,14 +102,14 @@ def _wait_for(predicate, timeout: float = 1.0) -> None:
     raise AssertionError("condition was not reached")
 
 
-def _controller(tmp_path, *, runner=None, queue=None, scheduler=None, clock=None, cancel=None):
+def _controller(tmp_path, *, runner=None, queue=None, scheduler=None, clock=None, cancel=None, resolve=None):
     from scripts.remote_agent.lifecycle import LifecycleController
 
     return LifecycleController(
         _config(tmp_path),
         queue or RecordingQueue(),
         runner or RecordingRunner(),
-        FakeResolve(),
+        resolve or FakeResolve(),
         agent_version="1.0",
         source_commit="abc123",
         logger=logging.getLogger("test.lifecycle"),
@@ -169,6 +169,48 @@ def test_pause_keeps_heartbeat_but_claims_no_new_work(tmp_path):
     controller.shutdown()
 
 
+def test_pause_closes_claim_gate_before_an_inflight_poll_returns(tmp_path):
+    class GateAwareRunner:
+        def __init__(self):
+            self.listed = threading.Event()
+            self.release = threading.Event()
+            self.finished = threading.Event()
+            self.claimed = False
+            self.gate = True
+
+        def add_execution_listener(self, _listener):
+            return None
+
+        def run_once(self):
+            self.listed.set()
+            assert self.release.wait(1)
+            if self.gate:
+                self.claimed = True
+            self.finished.set()
+            return None
+
+        def stop_accepting_new_claims(self):
+            self.gate = False
+
+        def resume_accepting_new_claims(self):
+            self.gate = True
+
+    runner = GateAwareRunner()
+    controller = _controller(tmp_path, runner=runner)
+    controller.start(ui_visible=True)
+    assert runner.listed.wait(1)
+
+    controller.pause()
+    runner.release.set()
+    assert runner.finished.wait(1)
+
+    assert runner.claimed is False
+    assert runner.gate is False
+    controller.resume()
+    assert runner.gate is True
+    controller.shutdown()
+
+
 class BlockingRunner:
     def __init__(self, cancellation: threading.Event) -> None:
         self.entered = threading.Event()
@@ -186,13 +228,13 @@ class BlockingRunner:
         return type("Result", (), {"job_id": "job-1", "status": JobStatus.SUCCEEDED})()
 
 
-def test_idle_close_is_immediate_and_writes_offline_heartbeat(tmp_path):
+def test_idle_close_stays_visible_until_worker_and_offline_heartbeat_finish(tmp_path):
     queue = RecordingQueue()
     controller = _controller(tmp_path, queue=queue)
     controller.start(ui_visible=True)
     _wait_for(lambda: len(queue.heartbeats) == 1)
 
-    assert controller.request_close() is True
+    assert controller.request_close() is False
     controller.wait_until_stopped(timeout=1)
 
     assert controller.state is AgentState.OFFLINE
@@ -226,7 +268,7 @@ def test_slow_idle_poll_stays_online_and_can_close_without_a_job_prompt(tmp_path
 
     assert controller.state is AgentState.ONLINE
     assert controller.snapshot().current_job == "-"
-    assert controller.request_close() is True
+    assert controller.request_close() is False
     controller.wait_until_stopped(timeout=1)
     assert controller.state is AgentState.OFFLINE
 
@@ -259,6 +301,8 @@ def test_idle_close_returns_while_a_queue_poll_is_still_blocked(tmp_path):
     closing.start()
     try:
         assert finished.wait(0.1)
+        assert controller.worker_alive
+        assert "Closing" in controller.status_message
     finally:
         runner.release.set()
         closing.join(1)
@@ -394,7 +438,7 @@ def test_idle_close_atomically_blocks_a_claim_crossing_its_boundary(tmp_path):
     assert mark_running_entered.wait(1)
 
     try:
-        assert controller.request_close() is True
+        assert controller.request_close() is False
         controller.wait_until_stopped(timeout=1)
 
         assert not handler_called.is_set()
@@ -434,6 +478,35 @@ def test_heartbeat_uses_the_runner_current_job_id(tmp_path):
     assert queue.heartbeats[-1].current_job_id == "job-current"
 
 
+def test_ui_snapshot_never_calls_a_blocking_resolve_api(tmp_path):
+    class BlockingResolve:
+        def __init__(self):
+            self.called = threading.Event()
+            self.release = threading.Event()
+
+        def get_status(self):
+            self.called.set()
+            assert self.release.wait(1)
+            return {"status": "connected", "connected": True}
+
+    resolve = BlockingResolve()
+    controller = _controller(tmp_path, resolve=resolve)
+    finished = threading.Event()
+    captured = {}
+
+    thread = threading.Thread(
+        target=lambda: (captured.setdefault("snapshot", controller.snapshot()), finished.set())
+    )
+    thread.start()
+    try:
+        assert finished.wait(0.1)
+        assert not resolve.called.is_set()
+        assert captured["snapshot"].resolve_state == "unavailable"
+    finally:
+        resolve.release.set()
+        thread.join(1)
+
+
 def test_start_agent_runs_directly_by_path_without_importing_the_ui(tmp_path):
     """Catches package imports failing when Task 8 launches the entry point by path."""
     entry_point = Path(__file__).parents[2] / "scripts" / "remote_agent" / "start_agent.py"
@@ -449,6 +522,39 @@ def test_start_agent_runs_directly_by_path_without_importing_the_ui(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert "--config" in result.stdout
+    assert "--source-commit" not in result.stdout
+
+
+def test_source_commit_is_detected_with_fixed_shell_free_git_invocation(tmp_path):
+    from scripts.remote_agent.app import detect_source_commit
+
+    calls = []
+    exact = "a" * 40
+
+    def run(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return type("Completed", (), {"returncode": 0, "stdout": exact + "\n", "stderr": ""})()
+
+    assert detect_source_commit(tmp_path, run=run) == exact
+    assert calls[0][0] == ["git", "rev-parse", "HEAD"]
+    assert calls[0][1]["cwd"] == tmp_path
+    assert calls[0][1]["shell"] is False
+
+
+def test_source_commit_detection_fails_closed_on_unavailable_or_invalid_revision(tmp_path):
+    from scripts.remote_agent.app import detect_source_commit
+
+    def run(_argv, **_kwargs):
+        return type("Completed", (), {"returncode": 1, "stdout": "unknown", "stderr": "failure"})()
+
+    with pytest.raises(RuntimeError, match="source commit"):
+        detect_source_commit(tmp_path, run=run)
+
+    def missing_git(_argv, **_kwargs):
+        raise FileNotFoundError("git")
+
+    with pytest.raises(RuntimeError, match="source commit"):
+        detect_source_commit(tmp_path, run=missing_git)
 
 
 def test_finish_current_then_close_joins_worker(tmp_path):

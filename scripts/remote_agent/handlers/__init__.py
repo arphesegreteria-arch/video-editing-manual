@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import PureWindowsPath
 from typing import Any
 
 from scripts.remote_agent.cancellation import CancellationToken
@@ -41,6 +42,23 @@ def register_handlers(
     code_sync: ApprovedCodeSync | None = None,
 ) -> None:
     """Register fixed handlers; enablement remains solely in ``HandlerRegistry``."""
+    if capability_audit_runner is None:
+        capability_audit_runner = lambda p, token: getattr(resolve_manager, "run_capability_audit")(p, token)
+    if tracking_probe_runner is None:
+        def tracking_probe_runner(p: dict[str, object], token: CancellationToken) -> dict[str, object]:
+            alias = str(p["source_alias"])
+            relative_path = str(p["relative_path"])
+            metadata = getattr(file_broker, "hash_media")(alias, relative_path)
+            local_path = getattr(file_broker, "local_media_path")(alias, relative_path)
+            return getattr(resolve_manager, "run_tracking_probe")(
+                local_path, metadata["path"], token
+            )
+    if render_probe_runner is None:
+        def render_probe_runner(p: dict[str, object], token: CancellationToken) -> dict[str, object]:
+            relative_path = str(p["output_relative_path"])
+            local_path = getattr(file_broker, "resolve")("exports", relative_path)
+            alias_path = f"exports/{PureWindowsPath(relative_path).as_posix()}"
+            return getattr(resolve_manager, "run_render_probe")(local_path, alias_path, token)
     registry.register("PING", PingParameters, lambda _p: ping(config, agent_version=agent_version, source_commit=source_commit), idempotent=True)
     registry.register("GET_STATUS", GetStatusParameters, lambda _p: get_status(config, resolve_manager), idempotent=True)
     registry.register("LIST_MEDIA", ListMediaParameters, lambda p: list_media(p, file_broker), idempotent=True)

@@ -3,8 +3,8 @@
 ## 2026-09-01 — Remote Agent release-gap hardening
 
 - Upsert GitHub per risultati, log e heartbeat con blob SHA/CAS; documenti job malformati vengono isolati senza bloccare quelli validi.
-- Lease di claim estesa al timeout validato del job piu margine di cleanup.
-- Adapter Resolve locali e allowlisted per import, audit, tracking preflight e render probe, sempre sotto gate `ARPHE_TEST` / `ARPHE_AUDIT_*` e broker dei path.
+- Lease di claim estesa al timeout validato del job più un margine calcolato che copre cleanup, tutte le richieste GitHub necessarie alla persistenza terminale e jitter.
+- Adapter Resolve locali e allowlisted per import, audit, tracking preflight e render probe, sempre sotto gate `ARPHE_TEST` / `ARPHE_AUDIT_*` e broker dei path; il render probe forza un intervallo massimo di 90 frame e non può ereditare l'intera timeline.
 - Loader deterministico del modulo `DaVinciResolveScript` dai path installati standard di Windows.
 - Chiusura UI asincrona e visibile fino a fine poll, heartbeat `OFFLINE` e join del worker; snapshot UI serviti da cache.
 - Gate dei claim chiuso atomicamente da pausa/chiusura e riaperto solo da resume consentito.

@@ -524,9 +524,21 @@ def test_builtin_resolve_adapters_are_guarded_and_return_only_safe_metadata(tmp_
         def __init__(self):
             super().__init__("ARPHE_TEST")
             self.media_pool = MediaPool()
+            self.timeline = type(
+                "RenderTimeline",
+                (),
+                {
+                    "GetName": lambda self: "Long test timeline",
+                    "GetStartFrame": lambda self: 1000,
+                    "GetEndFrame": lambda self: 5000,
+                },
+            )()
 
         def GetMediaPool(self):
             return self.media_pool
+
+        def GetCurrentTimeline(self):
+            return self.timeline
 
         def SetRenderSettings(self, settings):
             self.settings = settings
@@ -576,6 +588,10 @@ def test_builtin_resolve_adapters_are_guarded_and_return_only_safe_metadata(tmp_
     assert tracking["timeline"] == "ARPHE_REMOTE_TRACKING_PROBE"
     assert rendered["path"] == "exports/probe.mp4"
     assert rendered["size_bytes"] == 6 and len(rendered["sha256"]) == 64
+    assert manager._resolve._project.settings["SelectAllFrames"] is False
+    assert manager._resolve._project.settings["MarkIn"] == 1000
+    assert manager._resolve._project.settings["MarkOut"] == 1089
+    assert rendered["frame_range"] == {"mark_in": 1000, "mark_out": 1089, "frame_count": 90}
 
 
 def test_status_probe_never_enters_resolve_concurrently_with_a_blocking_operation(tmp_path) -> None:

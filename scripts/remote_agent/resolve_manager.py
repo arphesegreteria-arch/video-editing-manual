@@ -21,6 +21,9 @@ from scripts.remote_agent.cancellation import CancellationToken, require_not_can
 from scripts.remote_agent.config import ResolveConfig
 
 
+RENDER_PROBE_MAX_FRAMES = 90
+
+
 class ResolveProcessState(str, Enum):
     """Observed local process state, without making an API connection."""
 
@@ -563,7 +566,30 @@ class ResolveManager:
             raise FileExistsError("render probe refuses to overwrite an existing output")
         output.parent.mkdir(parents=True, exist_ok=True)
         project = self._current_project()
-        settings = {"TargetDir": str(output.parent), "CustomName": output.name}
+        timeline = project.GetCurrentTimeline()
+        if timeline is None:
+            raise RuntimeError("render probe requires a current test timeline")
+        try:
+            mark_in = timeline.GetStartFrame()
+            timeline_end = timeline.GetEndFrame()
+        except Exception as exc:
+            raise RuntimeError("Resolve did not expose a bounded render range") from exc
+        if (
+            isinstance(mark_in, bool)
+            or isinstance(timeline_end, bool)
+            or not isinstance(mark_in, int)
+            or not isinstance(timeline_end, int)
+            or timeline_end < mark_in
+        ):
+            raise RuntimeError("Resolve returned an invalid render range")
+        mark_out = min(timeline_end, mark_in + RENDER_PROBE_MAX_FRAMES - 1)
+        settings = {
+            "TargetDir": str(output.parent),
+            "CustomName": output.name,
+            "SelectAllFrames": False,
+            "MarkIn": mark_in,
+            "MarkOut": mark_out,
+        }
         if project.SetRenderSettings(settings) is not True:
             raise RuntimeError("Resolve rejected render probe settings")
         render_job_id = project.AddRenderJob()
@@ -594,4 +620,9 @@ class ResolveManager:
             "size_bytes": size,
             "sha256": digest.hexdigest(),
             "render_job_id": render_job_id,
+            "frame_range": {
+                "mark_in": mark_in,
+                "mark_out": mark_out,
+                "frame_count": mark_out - mark_in + 1,
+            },
         }

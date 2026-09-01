@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
 import logging
+import math
 import re
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -20,7 +21,13 @@ from scripts.remote_agent.models import JOB_ID_PATTERN, Job, JobResult, JobStatu
 
 
 REMOTE_LOG_MAX_BYTES = 256 * 1024
-LEASE_CLEANUP_MARGIN_SECONDS = 60
+# A claim timestamp is recorded before the claim PUT.  Terminal persistence
+# then needs a RUNNING PUT, a result GET+PUT and the terminal PUT.  Reserve at
+# least five request timeouts, bounded cleanup time and scheduling jitter; five
+# minutes is the minimum fail-safe window for the production 15-second client.
+LEASE_CLEANUP_MARGIN_SECONDS = 300
+_LEASE_FINALIZATION_REQUEST_COUNT = 5
+_LEASE_LOCAL_CLEANUP_SECONDS = 30
 _TRUNCATION_MARKER = b"\n[TRUNCATED]\n"
 _JOB_ID_RE = re.compile(JOB_ID_PATTERN)
 
@@ -218,9 +225,16 @@ class GitHubQueue:
                 raise LeaseActive("job lease is still active")
             if not job.retryable or not idempotent:
                 raise NonRetryableJob("stale job is not safe to retry")
+        finalization_margin = max(
+            LEASE_CLEANUP_MARGIN_SECONDS,
+            math.ceil(
+                self._timeout * _LEASE_FINALIZATION_REQUEST_COUNT
+                + _LEASE_LOCAL_CLEANUP_SECONDS
+            ),
+        )
         effective_lease_seconds = max(
             lease_seconds,
-            job.timeout_seconds + LEASE_CLEANUP_MARGIN_SECONDS,
+            job.timeout_seconds + finalization_margin,
         )
         claimed = job.model_copy(update={
             "status": JobStatus.CLAIMED,

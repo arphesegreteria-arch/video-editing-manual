@@ -165,7 +165,7 @@ def test_claim_conflict_mapping_uses_http_status_not_error_text():
     assert exc.value.status_code == 500
 
 
-def test_claim_sets_lease_attempt_and_uses_fetched_sha():
+def test_claim_sets_safe_lease_attempt_and_uses_fetched_sha():
     client, transport = queue([FakeResponse(payload={"content": {"sha": "new"}})])
     claimed = client.claim(Job.model_validate(job_payload()), "old", now=NOW, lease_seconds=120)
     sent = json.loads(base64.b64decode(transport.calls[0]["json"]["content"]))
@@ -173,7 +173,9 @@ def test_claim_sets_lease_attempt_and_uses_fetched_sha():
     assert claimed.job.status is JobStatus.CLAIMED
     assert claimed.job.claimed_by == "HOME_DEV"
     assert claimed.job.claimed_at == NOW
-    assert claimed.job.lease_expires_at == NOW + timedelta(seconds=120)
+    # A caller cannot shorten the lease below the bounded execution and
+    # terminal-persistence safety window.
+    assert claimed.job.lease_expires_at == NOW + timedelta(seconds=330)
     assert claimed.job.attempt == 1
     assert transport.calls[0]["json"]["sha"] == "old"
     assert sent["status"] == "CLAIMED"
@@ -442,5 +444,7 @@ def test_claim_lease_covers_long_handler_timeout_and_cleanup_margin():
 
     claimed = client.claim(long_job, "old", now=NOW)
 
-    assert claimed.job.lease_expires_at >= NOW + timedelta(seconds=7260)
-    assert not client._lease_is_stale(claimed.job, now=NOW + timedelta(seconds=7205))
+    # The lease must cover the handler timeout plus every bounded Contents API
+    # write needed before terminal persistence, cancellation cleanup and jitter.
+    assert claimed.job.lease_expires_at >= NOW + timedelta(seconds=7500)
+    assert not client._lease_is_stale(claimed.job, now=NOW + timedelta(seconds=7499))

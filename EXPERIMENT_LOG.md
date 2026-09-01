@@ -152,11 +152,10 @@ Il test non dimostra ancora che tutte le altre operazioni write siano affidabili
 
 ## E07 — ChatGPT MCP Bridge
 
-Stato: **LOCAL MCP -> RESOLVE READ VALIDATED / TUNNEL NEXT**.
+Stato: **LOCAL MCP READ VALIDATED / SECURE TUNNEL READY / CHATGPT APP DRAFT CREATED / TOOL CALL NEXT**.
 
-### Ricerca 2026-09-01
+### Architettura
 
-Direzione prodotto:
 `Segreteria -> ChatGPT -> custom MCP app -> Secure MCP Tunnel -> ARPHE MCP Bridge locale -> Resolve Studio API`
 
 ChatGPT resta la UI primaria; il bridge locale è infrastruttura e non una seconda applicazione per l'operatore.
@@ -189,16 +188,51 @@ Risultato osservato:
 Conclusione:
 **MCP locale -> tool -> bridge Python -> Resolve Studio READ è VALIDATED.**
 
-Questo test valida l'MCP locale e la traduzione tool -> Resolve, ma NON ancora il tratto ChatGPT/cloud -> tunnel -> MCP locale.
+### Secure MCP Tunnel — 2026-09-01
+
+Configurazione locale:
+- bridge stabile in `C:\ARPHE\MCP\ARPHE_MCP_BRIDGE_READ_01\ARPHE_MCP_BRIDGE_READ_01.py`;
+- runtime `tunnel-client-runtime-cloudflared` avviato su Windows;
+- runtime API key Restricted con permessi Tunnels Read + Use;
+- tunnel `ARPHE-RESOLVE-HOME` collegato al runtime;
+- `MCP_COMMAND` usa path Windows normalizzato con `/`;
+- stdio MCP command avviato senza `can't open file`;
+- control-plane poller avviato;
+- metadata tunnel recuperati;
+- health listener su `127.0.0.1:8080`;
+- `GET /readyz` -> `HTTP/1.1 200 OK`, body `ready`.
+
+Conclusione:
+**Secure MCP Tunnel runtime -> MCP locale è READY nel nostro ambiente.**
+
+Nota: la build `runtime-cloudflared` non espone `/ui`; `readyz` è il gate di salute usato in questo test.
+
+### ChatGPT custom app
+
+Workspace ChatGPT Business.
+
+Creata app:
+- nome: `ARPHE Resolve`;
+- descrizione: bridge read-only tra ChatGPT e DaVinci Resolve Studio;
+- connessione: Tunnel;
+- tunnel: `ARPHE-RESOLVE-HOME`;
+- autenticazione MCP: None;
+- app presente in `Workspace Settings -> Apps -> Drafts` con badge `DEV`.
+
+Conclusione:
+**Creazione/configurazione della custom MCP app in ChatGPT è riuscita.**
+
+Non è ancora validato il gate finale `ChatGPT conversation -> tool call -> tunnel -> MCP -> Resolve`.
 
 ### Gate successivi E07
 
-1. Configurare Secure MCP Tunnel verso `ARPHE_MCP_BRIDGE_READ_01`.
-2. Collegare la custom app a ChatGPT.
-3. Chiamare `resolve_status` direttamente da ChatGPT e validare `ChatGPT -> MCP -> Resolve READ`.
-4. Solo dopo aggiungere una write tool innocua `create_safe_working_timeline`.
-5. Validare `ChatGPT -> MCP -> Resolve WRITE` su timeline nuova e originale intatto.
-6. Successivamente aggiungere tool allowlisted per media, trascrizione, edit plan, benchmark e render.
+1. Testare privatamente la draft `ARPHE Resolve` senza pubblicarla.
+2. Da una chat selezionare/menzionare `ARPHE Resolve` e chiamare `resolve_status`.
+3. PASS se ChatGPT restituisce dati reali del Resolve aperto (progetto/timeline/FPS/track/clip) e i log del tunnel mostrano la richiesta.
+4. Solo dopo attivare la build `ARPHE_MCP_BRIDGE_SAFE_WRITE_02` con `create_safe_working_timeline`.
+5. Validare `ChatGPT -> MCP -> Resolve WRITE` creando una timeline vuota e tornando all'originale.
+6. Pubblicare l'app nel workspace solo dopo i test read/write sicuri.
+7. Successivamente aggiungere tool allowlisted per media, trascrizione, edit plan, benchmark e render.
 
 ## Architettura superata
 

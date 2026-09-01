@@ -2,7 +2,7 @@
 
 ## Stato
 
-**TARGET ARCHITECTURE — fattibilità tecnica confermata, integrazione end-to-end ancora da validare.**
+**TARGET ARCHITECTURE — fattibilità locale confermata; integrazione ChatGPT/tunnel end-to-end ancora da validare.**
 
 Data verifica: 2026-09-01.
 
@@ -109,7 +109,7 @@ Requisiti correnti:
 - Python 3.10+;
 - pacchetto `mcp[cli]`;
 - server con tool tipizzati;
-- MCP Inspector per il test locale prima di collegare ChatGPT.
+- MCP Inspector utile per il test locale, ma non necessario nel workflow finale.
 
 ## Sicurezza applicativa ARPHE
 
@@ -159,17 +159,21 @@ Un'integrazione separata via OpenAI API rimane un possibile fallback futuro, ma 
 
 ## Gate di validazione
 
-### Gate 0 — Workspace ChatGPT
+### Gate 0 — Workspace ChatGPT — NEXT
 Verificare che il workspace usato per il test disponga di developer mode e delle autorizzazioni MCP necessarie. Per le write action serve full MCP.
 
-### Gate 1 — Resolve external WRITE
-`ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02` deve creare una timeline vuota e tornare all'originale senza modificarla.
+### Gate 1 — Resolve external WRITE — PASSED
+`ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02` ha creato una timeline vuota, incrementato il timeline count e riportato Resolve su `Timeline 1` con exit code 0.
 
-### Gate 2 — MCP locale READ
-Avviare un server MCP locale con `ping` + `resolve_status` e verificarlo tramite MCP Inspector.
+Primitive confermate:
+- `MediaPool.CreateEmptyTimeline()`;
+- `Project.SetCurrentTimeline()`.
 
-### Gate 3 — Secure MCP Tunnel READ
-Collegare il server locale a ChatGPT e chiedere in una normale chat lo stato di Resolve.
+### Gate 2 — MCP locale READ — PASSED
+`ARPHE_MCP_BRIDGE_READ_01` ha negoziato il protocollo MCP, esposto `ping` e `resolve_status` e letto correttamente progetto/timeline/FPS/track/item di Resolve senza modifiche.
+
+### Gate 3 — Secure MCP Tunnel READ — NEXT
+Collegare il server locale a ChatGPT tramite Secure MCP Tunnel e chiedere in una normale chat lo stato reale di Resolve.
 
 ### Gate 4 — ChatGPT -> MCP -> Resolve WRITE innocua
 Esporre `create_safe_working_timeline`, chiedere a ChatGPT di creare una timeline vuota di test e verificare manualmente il risultato.
@@ -182,6 +186,18 @@ Applicare un edit plan minimo a un clip di test, sempre creando una timeline sep
 
 Solo dopo Gate 4 si può dire che **ChatGPT controlla realmente Resolve Studio in scrittura**.
 
+## Prossima procedura operativa
+
+Usare `docs/09_MCP_TUNNEL_ROLLOUT_CHECKLIST.md` come guida click-by-click per:
+- workspace/piano;
+- tunnel Platform;
+- runtime key;
+- `tunnel-client`;
+- readiness;
+- custom app ChatGPT;
+- READ gate;
+- primo WRITE gate.
+
 ## Fonti tecniche esterne
 
 Da considerare riferimenti correnti, ma da validare nel nostro ambiente:
@@ -190,4 +206,4 @@ Da considerare riferimenti correnti, ma da validare nel nostro ambiente:
 - OpenAI Secure MCP Tunnel / `openai/tunnel-client`.
 - Model Context Protocol Python SDK v2.
 
-Le osservazioni sull'API Resolve restano invece subordinate ai test eseguiti sulla nostra installazione di Resolve Studio.
+Le osservazioni sull'API Resolve restano subordinate ai test eseguiti sulla nostra installazione di Resolve Studio.

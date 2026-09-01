@@ -13,6 +13,7 @@
 | `docs/04_LONGFORM_WORKFLOW.md` | Pipeline longform |
 | `docs/05_OPERATOR_GUIDE.md` | Istruzioni click-per-click |
 | `docs/06_TROUBLESHOOTING.md` | Problemi noti |
+| `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 
 ## Script validati
 
@@ -22,6 +23,11 @@
 | `scripts/validated/ARPHE_NUCLEAR_RESET_YOYO_08.py` | ✅ | Yoyo via Fusion BezierSpline |
 | `scripts/validated/ARPHE_MANUAL_TRACK_SETUP_13A_V2.py` | ✅ | Prepara tracking manuale limitato a un range |
 | `scripts/validated/ARPHE_TRACKED_YOYO_APPLY_13B_V2.py` | ✅ proof of concept | Legge tracking e applica yoyo |
+
+## Benchmark / strumenti di valutazione
+
+- `ARPHE_EXPORT_REFERENCE_EDIT_02.py`: esporta da Resolve un reference umano con kept/remove/joins.
+- `ARPHE_COMPARE_CUTS_01.py`: confronta reference e candidate plan con metriche quantitative.
 
 ## Script parziali
 

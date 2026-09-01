@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-09-01 — Workstation chiarite + runtime Windows come prossima priorità
+
+- confermato che tutti i test end-to-end del 2026-09-01 sono stati eseguiti sul **PC segreteria**, non sul PC personale;
+- introdotti gli identificatori logici `PC_SEGRETERIA` (CURRENT / VALIDATED) e `PC_PERSONALE` (PENDING REPLICA);
+- il tunnel `ARPHE-RESOLVE-HOME` è documentato come nome legacy/fuorviante del tunnel attualmente collegato al PC segreteria;
+- deciso un tunnel e una runtime API key separati per ogni workstation;
+- vietata la copia della runtime API key del PC segreteria sul PC personale;
+- creato `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`;
+- dopo il PASS end-to-end READ + SAFE WRITE, la nuova priorità è `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1` per eliminare la PowerShell manuale;
+- v1 deve partire nella sessione utente tramite Windows Task Scheduler `At logon`, non come Windows Service Session 0;
+- il task di implementazione è delegabile a Codex e deve limitarsi a autostart, secret storage, health, restart/backoff, logging e deployment multi-workstation.
+
 ## 2026-09-01 — ChatGPT -> MCP -> Resolve READ + SAFE WRITE end-to-end validati
 
 ### READ end-to-end
@@ -27,7 +39,7 @@ Conclusione:
 Conclusione:
 **ChatGPT -> custom MCP app -> Secure MCP Tunnel -> bridge Python -> Resolve Studio SAFE WRITE è supportato end-to-end** per la primitiva non distruttiva testata.
 
-Prossima priorità: `list_media` allowlisted -> `transcribe_media` locale -> `apply_edit_plan` minimale su nuova timeline.
+Prossima priorità aggiornata: rendere il bridge persistente sul PC segreteria; poi `list_media` allowlisted -> `transcribe_media` locale -> `apply_edit_plan` minimale su nuova timeline.
 
 ## 2026-09-01 — External Resolve WRITE validato
 
@@ -130,7 +142,7 @@ Prima del waveform alignment bisogna migliorare la selezione editoriale e il ril
 - filler linguistici: rimuovere solo quando non svolgono realmente funzione nel discorso;
 - false partenze: preferire ricuciture precise conservando il prefisso buono;
 - ripetizioni: preferire la formulazione più chiara/completa;
-- tagli concettuali: livello editoriale separato dai micro-cut;
+- tagli concettuali: livello editoriale separato;
 - contenuto sensibile/reputazionale: FLAG ONLY, mai auto-cut.
 
 ### Nuovo protocollo di sviluppo

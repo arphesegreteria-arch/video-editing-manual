@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-09-01 — External Resolve WRITE validato
+
+### Test `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`
+- eseguito da Python esterno con Resolve Studio aperto;
+- progetto `blabla`;
+- timeline originale `Timeline 1`;
+- timeline count prima `2`;
+- creata timeline vuota `ARPHE_API_WRITE_TEST_20260901_145018`;
+- timeline count dopo `3`;
+- ritorno automatico all'originale riuscito (`True`);
+- timeline finale `Timeline 1`;
+- exit code `0`.
+
+Conclusione:
+**Python esterno -> Resolve Studio WRITE non distruttiva è supportato nel nostro ambiente** almeno per `CreateEmptyTimeline` e `SetCurrentTimeline`.
+
+La prossima priorità infrastrutturale diventa il transport gate:
+`ChatGPT -> Secure MCP Tunnel -> MCP locale -> Resolve READ`.
+
 ## 2026-09-01 — MCP locale -> Resolve READ validato
 
 ### Test MCP `ARPHE_MCP_BRIDGE_READ_01`
@@ -17,12 +36,6 @@ Conclusione:
 
 Non è ancora validato il tratto cloud `ChatGPT -> Secure MCP Tunnel -> MCP locale`.
 
-Prossimi gate:
-1. `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`;
-2. Secure MCP Tunnel;
-3. `ChatGPT -> MCP -> Resolve READ`;
-4. write tool MCP innocua solo dopo i gate precedenti.
-
 ## 2026-09-01 — Resolve Studio external API + ChatGPT/MCP pivot
 
 ### Resolve Studio
@@ -31,7 +44,7 @@ Prossimi gate:
 - `ARPHE_STUDIO_EXTERNAL_API_TEST_01` eseguito da Python esterno con exit code 0;
 - letti correttamente progetto `blabla`, `Timeline 1`, 30 fps, 1 traccia video, 1 audio, 130 item V1 e 130 item A1;
 - conclusione: **external READ API supported** nel nostro ambiente;
-- preparato `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02` come prossimo probe non distruttivo.
+- preparato `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02` come probe non distruttivo.
 
 ### Nuova direzione prodotto
 La segreteria deve usare **ChatGPT come interfaccia primaria**, non una GUI ARPHE separata.

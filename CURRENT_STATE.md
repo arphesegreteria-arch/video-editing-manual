@@ -12,6 +12,33 @@ Architettura corrente validata:
 
 Il bridge locale è infrastruttura: espone solo tool allowlisted, valida gli input e traduce le decisioni approvate in operazioni deterministiche. La segreteria non deve usare Python, JSON o una GUI ARPHE separata.
 
+## Workstation — stato ufficiale
+
+### PC_SEGRETERIA — CURRENT / VALIDATED
+
+**Tutti i test end-to-end del 2026-09-01 descritti sotto sono stati eseguiti sul PC della segreteria, non sul PC personale.**
+
+Root locale corrente:
+
+`C:\ARPHE\MCP\`
+
+Il tunnel usato nei test è `ARPHE-RESOLVE-HOME`; il nome è legacy/fuorviante perché il runtime è sul PC segreteria. Quando possibile rinominarlo in `ARPHE-RESOLVE-SEGRETERIA`, oppure mantenere il nome legacy documentando il mapping.
+
+### PC_PERSONALE — PENDING REPLICA
+
+Il PC personale non è ancora configurato né validato.
+
+La replica dovrà usare:
+- stesso codice/versioni controllate tramite repository;
+- tunnel dedicato;
+- runtime API key dedicata;
+- config locale dedicata;
+- nuovi gate READ + SAFE WRITE end-to-end.
+
+Non copiare la runtime API key del PC segreteria sul PC personale.
+
+Dettagli: `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`.
+
 ## ✅ MILESTONE PRINCIPALE — END-TO-END VALIDATO
 
 ### ChatGPT -> Resolve READ
@@ -78,7 +105,7 @@ Validato:
 - nessuna modifica in modalità READ.
 
 ### Secure MCP Tunnel
-- tunnel: `ARPHE-RESOLVE-HOME`;
+- tunnel attuale sul PC segreteria: `ARPHE-RESOLVE-HOME` (nome legacy);
 - runtime Windows: `tunnel-client-runtime-cloudflared`;
 - runtime API key Restricted con Tunnels Read + Use;
 - MCP locale collegato via `MCP_COMMAND` stdio;
@@ -97,7 +124,9 @@ Principi obbligatori:
 - ogni montaggio crea una nuova timeline;
 - write action piccole e verificabili;
 - contenuti sensibili/reputazionali: **FLAG ONLY**, mai auto-cut;
-- separare decisione editoriale da esecuzione deterministica.
+- separare decisione editoriale da esecuzione deterministica;
+- una runtime API key per workstation;
+- nessun segreto nella repository.
 
 ## ⚠️ NON ANCORA VALIDATO END-TO-END
 
@@ -137,7 +166,23 @@ Lezione: il collo di bottiglia principale è la **decisione editoriale**, non so
 
 ## PROSSIMO PERCORSO
 
-### Track A — prodotto ChatGPT / Resolve
+### Track A0 — infrastruttura Windows, PRIORITÀ IMMEDIATA
+
+Ora che READ e SAFE WRITE end-to-end sono validati, il prossimo step è rimuovere la dipendenza dalla PowerShell aperta manualmente sul PC segreteria.
+
+Implementare `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1` come processo background nella sessione utente, avviato tramite Windows Task Scheduler `At logon`, con:
+- secret storage Windows;
+- tunnel runtime automatico;
+- health check `/readyz`;
+- restart con backoff;
+- log redatti;
+- install/uninstall/status;
+- nessuna GUI di montaggio;
+- nessuna write Resolve eseguita autonomamente allo startup.
+
+Questo task è adatto a Codex. Specifica: `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`.
+
+### Track A1 — prodotto ChatGPT / Resolve
 1. Consolidare le tool validate in un unico bridge/app DEV.
 2. Aggiungere `list_media` limitato a una cartella allowlisted.
 3. Aggiungere `transcribe_media` con faster-whisper locale.
@@ -145,6 +190,16 @@ Lezione: il collo di bottiglia principale è la **decisione editoriale**, non so
 5. Implementare `apply_edit_plan` minimale su una sorgente di test, sempre creando una nuova timeline.
 6. Validare rebuild/cut via MCP end-to-end.
 7. Solo dopo ampliare a transform, Fusion, captions, render e tracking.
+
+### Track A2 — replica PC personale
+Dopo il PASS del runtime persistente sul PC segreteria:
+1. installare lo stesso stack sul PC personale;
+2. creare tunnel `ARPHE-RESOLVE-PERSONALE`;
+3. creare runtime API key dedicata;
+4. installare autostart;
+5. collegare app ChatGPT dedicata;
+6. ripetere READ + SAFE WRITE;
+7. dichiarare il PC personale validato solo dopo entrambi i gate.
 
 ### Track B — Benchmark 02 editoriale
 1. Usare un estratto podcast autonomo di circa 8–15 minuti.
@@ -162,5 +217,7 @@ La vecchia GUI desktop ARPHE + polling GitHub (`ARPHE Remote Agent V1`) è **SUP
 Dettagli persistenti:
 - `EXPERIMENT_LOG.md`;
 - `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md`;
+- `docs/09_MCP_TUNNEL_ROLLOUT_CHECKLIST.md`;
+- `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`;
 - `docs/RESOLVE_STUDIO_CAPABILITIES.md`;
 - `docs/07_EDITORIAL_BENCHMARK.md`.

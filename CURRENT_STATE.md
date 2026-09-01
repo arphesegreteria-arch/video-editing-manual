@@ -4,17 +4,47 @@ Ultimo aggiornamento: sessione 2026-09-01.
 
 ## Obiettivo del progetto
 
-Automatizzare il montaggio di contenuti video in DaVinci Resolve tramite Python:
+Automatizzare il montaggio video in DaVinci Resolve Studio con **ChatGPT come interfaccia primaria per la segreteria**.
+
+Architettura target:
+
+`Segreteria -> ChatGPT -> custom MCP app -> Secure MCP Tunnel -> bridge Python locale -> Resolve Studio API`
+
+Il bridge locale non deve diventare una seconda interfaccia da imparare: serve soltanto a esporre tool controllati a ChatGPT e a tradurre decisioni approvate in operazioni deterministiche.
+
+Funzioni obiettivo:
+- selezione media consentiti;
+- trascrizione locale;
 - cut / remove / reassemble;
-- punch-in e zoom ritmici;
-- tracking del soggetto;
+- speech repair;
+- punch-in e zoom;
+- tracking;
 - B-roll;
-- trascrizione e paper edit di longform;
-- rilevamento di pause/disfluenze/false partenze;
-- raffinamento automatico dei punti di taglio sull'audio reale;
-- benchmark quantitativo contro montaggi umani di riferimento.
+- captions;
+- render/export;
+- benchmark quantitativo contro montaggi umani.
 
 ## ✅ VALIDATO
+
+### DaVinci Resolve Studio — scripting esterno READ
+Ambiente testato:
+- Resolve Studio `21.0.4.5`;
+- Preferences -> System -> General -> `External scripting using = Local`;
+- Python eseguito **fuori** da Resolve.
+
+`ARPHE_STUDIO_EXTERNAL_API_TEST_01.py` ha restituito exit code 0 e ha letto correttamente:
+- progetto `blabla`;
+- timeline `Timeline 1`;
+- FPS `30.0`;
+- video tracks `1`;
+- audio tracks `1`;
+- clip V1 `130`;
+- clip A1 `130`.
+
+Conclusione:
+**Python esterno -> Resolve Studio è funzionante in lettura.** Non siamo più vincolati a `Workspace -> Scripts -> Utility` come architettura principale.
+
+Dettagli: `docs/RESOLVE_STUDIO_CAPABILITIES.md`.
 
 ### Cut automatici per ricostruzione timeline
 `ARPHE_AUTOCUT_TEST_01.py`
@@ -38,11 +68,13 @@ Automatizzare il montaggio di contenuti video in DaVinci Resolve tramite Python:
 - Python legge `TrackedCenter1`;
 - path del tracking può pilotare l'effetto yoyo.
 
+Questo workaround appartiene alla fase Free/manuale: con Studio il tracking automatico deve essere rivalutato da zero prima di conservarlo.
+
 ### Trascrizione longform esterna
 Workflow con `faster-whisper` testato su `blabla.mp4`:
 - JSON `ARPHE_TRANSCRIPT_V1` generato correttamente;
 - timestamp a livello segmento e parola;
-- durata transcript: circa 2095.339 s;
+- durata transcript circa 2095.339 s;
 - il JSON è adatto al paper edit semantico.
 
 ### Diagnostica timing longform
@@ -80,24 +112,36 @@ Interpretazione:
 - il collo di bottiglia principale non è più solo il posizionamento della lama;
 - mancano molte decisioni editoriali e micro-cut che il montatore umano esegue;
 - diversi cut automatici non coincidono con le scelte umane;
-- l'audio alignment rimane utile, ma viene dopo la corretta classificazione del tipo di intervento.
+- l'audio alignment rimane utile, ma viene dopo la corretta classificazione dell'intervento.
+
+## 🎯 DIREZIONE PRODOTTO — CHATGPT + MCP
+
+Ricerca aggiornata al 2026-09-01: la direzione è tecnicamente plausibile.
+
+ChatGPT supporta custom MCP app che possono esporre tool. Il full MCP con azioni write/modify è attualmente in beta su ChatGPT Business, Enterprise ed Edu sul web. Pro può usare custom MCP in developer mode per read/fetch, ma non dispone oggi del full MCP write.
+
+Per un server locale/on-premise ChatGPT non collega direttamente localhost: l'architettura prevista usa **Secure MCP Tunnel** con `tunnel-client`, mantenendo il bridge locale non esposto pubblicamente.
+
+Dettagli, tool proposti e gate: `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md`.
+
+### Vincolo ancora da verificare
+Prima del test ChatGPT -> Resolve in scrittura bisogna verificare il piano/workspace ChatGPT effettivamente usato per ARPHE.
 
 ## ⚠️ PARZIALE / DA RIFINIRE
 
 ### Longform: architettura editoriale
 La pipeline non deve essere un semplice `transcript -> remove ranges -> waveform`.
 
-Nuova direzione:
+Direzione:
 1. audio/VAD per pause e speech regions;
 2. transcript con word timestamps;
 3. rilevamento disfluenze e false partenze;
 4. analisi semantica/editoriale;
 5. classificazione del tipo di taglio;
 6. waveform per il placement finale della lama;
-7. Resolve ricostruisce la timeline.
+7. bridge/Resolve ricostruisce una nuova timeline.
 
 ### ARPHE Editorial Profile v0.1
-
 - Pause: accorciare solo quelle eccessive, preservando ritmo umano.
 - `ehm`, `eeee`, `mmm`: non rimuovere sempre; solo se la ricucitura resta naturale.
 - `allora`, `cioè`, `quindi`, `praticamente`, ecc.: rimuovere solo quando non svolgono realmente funzione nel discorso.
@@ -109,40 +153,40 @@ Nuova direzione:
 Dettagli in `docs/07_EDITORIAL_BENCHMARK.md`.
 
 ### Audio-aligned cut V4.x
-- V4.2: approccio conservativo, ma ottimizzare separatamente i due bordi può lasciare troppa aria alla giunzione.
-- V4.3: ha corretto in modo utile il problema della giunzione con troppo spazio prima della ripartenza del parlato.
-- Non è però sufficiente come soluzione editoriale completa: il benchmark mostra che il problema dominante è anche nella selezione dei tagli.
+- V4.2: approccio conservativo, ma i due bordi indipendenti potevano lasciare troppa aria.
+- V4.3: ha corretto utilmente il problema della giunzione con troppo spazio prima della ripartenza del parlato.
+- Non è sufficiente come soluzione editoriale completa: il benchmark mostra che il problema dominante è anche nella selezione dei tagli.
 
-### Reframing estetico dopo tracking
-Il tracking può essere tecnicamente corretto ma il soggetto può risultare scentrato durante forti zoom.
+## ❌ NON USARE COME DIREZIONE PRODOTTO
 
-Lezione:
-**punto di tracking ≠ centro estetico dell'effetto**.
+### GUI desktop ARPHE + coda GitHub
+Il precedente design `ARPHE Remote Agent V1` con GUI Tkinter visibile e polling di una coda GitHub è **SUPERSEDED**.
 
-## ❌ NON AFFIDABILE / DA NON USARE COME PRIMITIVA
+Motivo: la decisione corrente è usare ChatGPT direttamente come interfaccia; il componente locale deve essere un bridge MCP/Resolve, non una seconda UI.
+
+I vecchi documenti sono conservati con un avviso `SUPERSEDED` per memoria progettuale.
 
 ### Timestamp Whisper usati direttamente come lama
 Non usare `start/end` del transcript come cut frame senza margine o allineamento audio.
 
 ### Keyword matching puro per filler
 Non trattare parole come `allora`, `cioè`, `quindi`, `praticamente` come stopword da cancellare automaticamente.
-Serve contesto sintattico/semantico prima e dopo.
 
-### Avvio automatico del tracking da FusionScript
-I trigger `TrackForward` / `TrackForwardFromCurrentTime` sono esposti, ma i test hanno prodotto path immobili e range anomali.
+## PROSSIMI TEST — DUE TRACK PARALLELI
 
-## PROSSIMO TEST — BENCHMARK 02
+### Track A — infrastruttura ChatGPT / Resolve
+1. Eseguire `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`.
+2. Se passa, promuovere `CreateEmptyTimeline` esterno a `SUPPORTED`.
+3. Avviare MCP locale read-only con `ping` + `resolve_status` e testarlo con MCP Inspector.
+4. Configurare Secure MCP Tunnel.
+5. Collegare la custom app a ChatGPT e validare `ChatGPT -> MCP -> Resolve READ`.
+6. Solo dopo esporre una write tool innocua `create_safe_working_timeline` e validare `ChatGPT -> MCP -> Resolve WRITE`.
 
-Produrre un **nuovo video mai usato per calibrare il sistema**.
-
-Regola anti-leakage:
-1. conservare MP4 originale;
-2. generare transcript;
-3. congelare il candidate automatico PRIMA di leggere il montaggio umano;
-4. montare manualmente il video come risultato desiderato;
-5. esportare il reference con `ARPHE_EXPORT_REFERENCE_EDIT_02.py`;
-6. confrontare candidate vs reference;
-7. classificare mismatch per categoria;
-8. aggiornare le regole soltanto dopo il report.
-
-Per ottimizzare i tempi, il prossimo test può essere un video/campione di circa **8–12 minuti** invece di un longform da 35 minuti, purché contenga parlato naturale, pause, filler, false partenze e qualche decisione editoriale reale.
+### Track B — Benchmark 02 editoriale
+1. Prendere un estratto podcast autonomo di circa 8–15 minuti.
+2. Trattarlo da `00:00` come unica sorgente canonica.
+3. Generare transcript.
+4. Congelare il candidate automatico PRIMA del montaggio umano.
+5. Montare manualmente lo stesso estratto.
+6. Esportare reference e confrontare.
+7. Classificare i mismatch per categoria e aggiornare le regole solo dopo il report.

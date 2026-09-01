@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import json
 from pathlib import Path
 import subprocess
+import sys
+import tempfile
 
 
 AGENT_ROOT = Path(__file__).parents[2] / "scripts" / "remote_agent"
@@ -224,6 +227,37 @@ def test_readme_documents_manual_release_gate_and_expanded_secret_scan():
     assert "REMOTE_AGENT_V1_HOME_DEV_TESTED" in readme
     assert "POLI_01" in readme
     assert "api[_-]?key" in readme
+
+
+def test_repo_root_pytest_launcher_can_import_scripts_package():
+    """Catches the external pytest launcher missing the repo root on sys.path."""
+    pytest_launcher = Path(sys.executable).with_name("pytest.exe")
+    if not pytest_launcher.exists():
+        pytest.skip("pytest console launcher is unavailable in this environment")
+
+    repo_root = Path(__file__).parents[2]
+    with tempfile.TemporaryDirectory(dir=repo_root) as temp_dir:
+        smoke_test = Path(temp_dir) / "test_console_launcher_import.py"
+        smoke_test.write_text(
+            "from scripts.remote_agent.config import AgentConfig\n\n"
+            "def test_console_launcher_imports_repo_package():\n"
+            "    assert AgentConfig.__name__ == 'AgentConfig'\n",
+            encoding="utf-8",
+        )
+
+        env = os.environ.copy()
+        env.pop("PYTHONPATH", None)
+        result = subprocess.run(
+            [str(pytest_launcher), str(smoke_test), "-q", "-p", "no:cacheprovider"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "1 passed" in result.stdout
 
 
 def test_current_state_records_tested_versions_and_pending_live_gate():

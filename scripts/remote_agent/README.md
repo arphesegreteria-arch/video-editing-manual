@@ -126,9 +126,10 @@ Get-ChildItem scripts\remote_agent,tests\remote_agent -Recurse -File |
 ```
 
 Expected matches still need review. Synthetic token fixtures in the redaction
-tests and the deliberate `Authorization` header construction inside the queue
-client are normal; an unexpected match in config, README examples, runtime
-results, or non-test literals is not.
+tests (`test_github_queue.py`, `test_job_runner.py`, `test_logging.py`,
+`test_models.py`) and the deliberate `Authorization` header construction
+inside the queue client are normal; an unexpected match in another production
+file is not.
 
 ## HOME_DEV manual release checklist
 
@@ -145,5 +146,5 @@ Run this on the real HOME_DEV workstation before promoting the branch:
 
 Only after that live checklist passes may the build be tagged in documentation
 as `REMOTE_AGENT_V1_HOME_DEV_TESTED`. Until then, this branch is a release
-candidate only. `POLI_01` remains intentionally more restricted and is not
-production-ready in V1.
+candidate only, even if the automated suite is green. `POLI_01` remains
+intentionally more restricted and is not production-ready in V1.

@@ -126,9 +126,10 @@ Strategia tracking corrente:
 
 ## 2026-08-31 — Remote Agent V1 release candidate
 
-- Stato documento: release candidate per installazione manuale su `HOME_DEV`; non ancora taggato `REMOTE_AGENT_V1_HOME_DEV_TESTED`.
+- Stato documento: release candidate con verifica automatizzata del branch per installazione manuale su `HOME_DEV`; checklist live `HOME_DEV` + Resolve Studio non ancora passato e tag `REMOTE_AGENT_V1_HOME_DEV_TESTED` ancora non impostato.
 - Profilo `POLI_01`: ancora più ristretto di `HOME_DEV` e **non production-ready** in V1.
-- Suite automatizzata più recente in questo branch: `220 passed, 1 skipped`.
+- Suite automatizzata più recente in questo branch: `221 passed, 1 skipped`.
+- Il launcher esterno `pytest.exe` ora eredita il root del repository tramite `pytest.ini`, quindi `pytest tests/remote_agent -v -p no:cacheprovider` raccoglie la stessa suite di `python -m pytest` senza `PYTHONPATH` locale.
 
 Versioni verificate in questo ambiente di sviluppo:
 - Python 3.12.13
@@ -142,4 +143,4 @@ Limitazioni osservate:
 - L'installer Windows e l'uninstaller PowerShell sono stati validati con parser, test statici e suite automatizzata, ma non eseguiti sul vero PC `HOME_DEV` in questa sessione.
 - Il collegamento live a DaVinci Resolve Studio e i probe distruttivi restano subordinati al checklist manuale su `ARPHE_TEST` o `ARPHE_AUDIT_*`.
 - Finché il checklist live non passa, non va pubblicata la dicitura `REMOTE_AGENT_V1_HOME_DEV_TESTED`.
-- La static secret scan, eseguita con esclusione di `__pycache__`, segnala solo fixture sintetiche nei test di redazione e l'header `Authorization` costruito intenzionalmente nel client GitHub; non ha evidenziato token reali in config, README o risultati runtime.
+- La static secret scan PowerShell esatta su `scripts/remote_agent` e `tests/remote_agent`, con esclusione di `__pycache__`, restituisce solo fixture sintetiche in `test_github_queue.py`, `test_job_runner.py`, `test_logging.py`, `test_models.py` e l'header `Authorization` costruito intenzionalmente in `github_queue.py`; nessun secret reale nei file scansionati.

@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-09-01 — MCP locale -> Resolve READ validato
+
+### Test MCP `ARPHE_MCP_BRIDGE_READ_01`
+- installato/usato Python MCP SDK v2 per il prototipo locale;
+- protocollo MCP negoziato correttamente;
+- tool discovery riuscita: `ping`, `resolve_status`;
+- `ping` ha confermato modalità `READ_ONLY` e write tool disabilitate;
+- `resolve_status` ha raggiunto DaVinci Resolve Studio attraverso il bridge Python;
+- letto Resolve `21.0.4.5`, progetto `blabla`, `Timeline 1`, FPS 30, 1 traccia video, 1 audio, 130 clip V1 e 130 clip A1;
+- exit code 0;
+- nessuna modifica fatta in Resolve.
+
+Conclusione:
+**MCP locale -> tool -> bridge Python -> Resolve Studio READ è supportato nel nostro ambiente.**
+
+Non è ancora validato il tratto cloud `ChatGPT -> Secure MCP Tunnel -> MCP locale`.
+
+Prossimi gate:
+1. `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`;
+2. Secure MCP Tunnel;
+3. `ChatGPT -> MCP -> Resolve READ`;
+4. write tool MCP innocua solo dopo i gate precedenti.
+
 ## 2026-09-01 — Resolve Studio external API + ChatGPT/MCP pivot
 
 ### Resolve Studio

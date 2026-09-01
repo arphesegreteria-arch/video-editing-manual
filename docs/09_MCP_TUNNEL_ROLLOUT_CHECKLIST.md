@@ -2,6 +2,20 @@
 
 Data: 2026-09-01
 
+## STATUS POST-ROLLOUT
+
+**COMPLETATO sul `PC_SEGRETERIA` fino al Gate 4 incluso.**
+
+Sono ora VALIDATED end-to-end:
+- ChatGPT -> Secure MCP Tunnel -> Resolve READ;
+- ChatGPT -> Secure MCP Tunnel -> Resolve SAFE WRITE con `create_safe_working_timeline`.
+
+Le fasi sotto restano come documentazione riproducibile del rollout manuale. La vecchia regola “non automatizzare startup Windows finché l'end-to-end non è stabile” è ora soddisfatta e quindi superata.
+
+**Prossimo documento operativo:** `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`.
+
+Nota workstation: i test descritti in questo documento sono stati eseguiti sul **PC segreteria**, non sul PC personale.
+
 ## Obiettivo
 
 Arrivare dal prototipo locale già validato a questo percorso reale:
@@ -133,6 +147,8 @@ Prima di creare configurazioni manuali, verificare il binario:
 
 Se questi comandi non funzionano, fermarsi qui e correggere l'installazione.
 
+Nota del test reale: sul PC segreteria è stata usata la build `tunnel-client-runtime-cloudflared`; questa variante non espone `/ui`, ma supporta health/readiness e il runtime MCP necessario.
+
 ## FASE 5 — Creare il profilo locale stdio
 
 Il nostro MCP server locale usa stdio, quindi il percorso ufficiale più semplice è un profilo `sample_mcp_stdio_local`.
@@ -146,141 +162,123 @@ Nota Windows:
 - quotare correttamente i path con spazi;
 - non inserire la runtime key nel comando salvato nel repository.
 
-Impostare la runtime key nella sessione/ambiente locale come `CONTROL_PLANE_API_KEY`.
+Nel test con `runtime-cloudflared` sono state usate direttamente le variabili:
+- `CONTROL_PLANE_API_KEY`;
+- `CONTROL_PLANE_TUNNEL_ID`;
+- `MCP_COMMAND`.
 
-## FASE 6 — Eseguire `doctor` PRIMA di ChatGPT
+Per `MCP_COMMAND` su Windows si è dimostrato robusto usare `/` nei path, ad esempio:
 
-Comando concettuale:
+`py -3 C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_READ_01/ARPHE_MCP_BRIDGE_READ_01.py`
 
-`tunnel-client doctor --profile arphe-resolve --explain`
+## FASE 6 — Eseguire diagnostica PRIMA di ChatGPT
 
-Non procedere se `doctor` segnala:
-- runtime key assente;
-- tunnel non autorizzato;
-- MCP server non avviabile;
-- problemi di readiness.
+Con il full client usare `doctor --explain` quando disponibile.
 
-## FASE 7 — Avviare il tunnel in foreground
+Con la variante runtime usata nel test, il gate pratico verificato è stato:
+- processo avviato senza `can't open file`;
+- poller control-plane avviato;
+- `GET http://127.0.0.1:8080/readyz` -> HTTP 200 `ready`.
 
-Per il primo test:
+## FASE 7 — Avviare il tunnel in foreground — STORICO
 
-`tunnel-client run --profile arphe-resolve`
+Per il primo test è stato corretto tenere il runtime in foreground per vedere log e stato.
 
-NON installare ancora servizi Windows, startup automatico o daemon nascosto.
+Questa fase è ora **VALIDATED e non è più il target operativo finale**.
 
-Per sviluppo vogliamo vedere chiaramente log e stato.
-
-Il processo deve restare aperto durante il test ChatGPT.
+Il prossimo step è automatizzare l'avvio nella sessione utente come definito in `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`.
 
 ## FASE 8 — Verificare health e readiness locali
 
-`tunnel-client` espone superfici locali di diagnostica:
+La superficie validata nel runtime usato è:
 
 - `/healthz`;
 - `/readyz`;
-- `/metrics`;
-- `/ui`.
+- `/metrics` dove disponibile.
 
-Ordine di controllo:
+La variante `runtime-cloudflared` usata sul PC segreteria non espone `/ui`.
 
-1. `/readyz` deve risultare pronto;
-2. `/ui#overview` deve mostrare tunnel e MCP target corretti;
-3. se qualcosa fallisce, guardare `/ui#logs` prima di modificare codice.
+Gate reale usato:
 
-Non considerare il tunnel funzionante solo perché il processo è aperto.
+1. `/readyz` deve restituire HTTP 200;
+2. body `ready`;
+3. i log non devono mostrare uscita immediata del comando MCP.
 
 ## FASE 9 — Collegare ChatGPT
 
 Con il tunnel ancora in esecuzione:
 
 1. Aprire ChatGPT web.
-2. Aprire Settings.
-3. Entrare nella sezione Apps/Connectors prevista dal workspace.
-4. Abilitare Developer Mode se richiesto e consentito dal workspace.
-5. Creare/aggiungere la custom app ARPHE.
-6. Scegliere `Connection: Tunnel`.
-7. Selezionare `ARPHE-RESOLVE-HOME-DEV` oppure incollare il relativo `tunnel_id`.
-8. Verificare che ChatGPT scopra le tool `ping` e `resolve_status`.
+2. Aprire Workspace Settings -> Apps.
+3. Creare una custom app.
+4. Scegliere `Connection: Tunnel`.
+5. Selezionare il tunnel della workstation.
+6. Authentication: `None` per il bridge attuale.
+7. Confermare l'avviso di rischio custom MCP.
+8. Creare la draft DEV.
+9. Dalla chat connettere la app.
 
-Se il tunnel non appare:
-- controllare workspace scope del tunnel;
-- controllare permesso Tunnels Read + Use;
-- controllare che `tunnel-client` sia ancora running e `/readyz` sia OK;
-- attendere circa 30 secondi se il tunnel è appena stato creato.
+Risultato reale PC segreteria:
+- app DEV `ARPHE Resolve` creata;
+- tool READ `ping`, `resolve_status` disponibili;
+- app DEV `ARPHE Resolve WRITE Test` creata per il gate SAFE WRITE.
 
-## GATE 3 — Test end-to-end READ
-
-Preparazione:
-
-1. Aprire Resolve Studio.
-2. Aprire un progetto non sensibile di test.
-3. Aprire una timeline.
-4. Lasciare `External scripting using = Local`.
-5. Lasciare `tunnel-client run --profile arphe-resolve` attivo.
-
-Prompt di test in ChatGPT:
-
-`Usa ARPHE Resolve e dimmi quale progetto e timeline sono aperti in Resolve. Non modificare nulla.`
-
-Risultato PASS:
-
-- ChatGPT chiama `resolve_status`;
-- la risposta coincide con ciò che è realmente aperto in Resolve;
-- nessuna modifica viene effettuata;
-- log tunnel mostrano una tool call riuscita.
-
-Solo a questo punto segnare:
-
-`ChatGPT -> Secure MCP Tunnel -> MCP -> Resolve READ = SUPPORTED`
-
-## FASE 10 — Programmare MCP WRITE v1
-
-Solo dopo Gate 3.
-
-Nuova tool:
-
-`create_safe_working_timeline(name_prefix: str = "ARPHE_CHATGPT_TEST")`
-
-Regole obbligatorie:
-
-- non accetta codice arbitrario;
-- non accetta un project path arbitrario;
-- opera solo sul progetto corrente esplicitamente aperto;
-- conserva un riferimento alla timeline originale;
-- crea soltanto una timeline vuota con nome ARPHE;
-- verifica l'incremento del timeline count;
-- torna automaticamente alla timeline originale;
-- restituisce un risultato strutturato;
-- in caso di errore non prova operazioni distruttive di recovery.
-
-Output previsto:
-
-```json
-{
-  "ok": true,
-  "original_timeline": "Timeline 1",
-  "created_timeline": "ARPHE_CHATGPT_TEST_...",
-  "returned_to_original": true
-}
-```
-
-## GATE 4 — ChatGPT -> Resolve WRITE innocua
+## GATE 3 — Test end-to-end READ — PASS
 
 Prompt di test:
 
+`Usa ARPHE Resolve e dimmi quale progetto e timeline sono aperti in Resolve. Non modificare nulla.`
+
+Risultato osservato:
+- `resolve_status` chiamata realmente dalla conversazione;
+- Resolve `21.0.4.5`;
+- progetto `blabla`;
+- timeline `Timeline 1`;
+- 30 fps;
+- 1 video track, 1 audio track;
+- 130 clip V1, 130 clip A1.
+
+Stato:
+
+`ChatGPT -> Secure MCP Tunnel -> MCP -> Resolve READ = SUPPORTED`
+
+## FASE 10 — MCP WRITE v1 — PASS
+
+Tool:
+
+`create_safe_working_timeline(name_prefix: str = "ARPHE_CHATGPT_TEST")`
+
+Regole implementate:
+- non accetta codice arbitrario;
+- opera sul progetto corrente;
+- conserva la timeline originale;
+- crea soltanto una timeline vuota con nome ARPHE;
+- verifica incremento timeline count;
+- torna automaticamente alla timeline originale;
+- restituisce risultato strutturato;
+- non modifica clip e non cancella timeline.
+
+## GATE 4 — ChatGPT -> Resolve WRITE innocua — PASS
+
+Prompt:
+
 `Crea una nuova timeline vuota di test ARPHE e poi torna alla timeline originale. Non modificare nessuna clip.`
 
-PASS solo se:
+Risultato osservato:
+- timeline count `3 -> 4`;
+- creata `ARPHE_CHATGPT_WRITE_TEST_20260901_185749`;
+- timeline finale `Timeline 1`;
+- clip edit `0`;
+- timeline delete `0`;
+- `ok=true`.
 
-- compare una nuova timeline;
-- nessuna clip dell'originale cambia;
-- timeline attiva finale = originale;
-- il risultato della tool coincide con la UI Resolve;
-- eventuale conferma ChatGPT viene mostrata e approvata quando prevista.
+Stato:
+
+`ChatGPT -> Secure MCP Tunnel -> MCP -> Resolve SAFE WRITE = SUPPORTED` per la primitiva testata.
 
 ## FASE 11 — Tool da aggiungere dopo il WRITE gate
 
-Ordine di sviluppo consigliato:
+Ordine di sviluppo consigliato, **dopo il runtime Windows persistente**:
 
 1. `list_media`
 2. `transcribe_media`
@@ -320,30 +318,35 @@ Flusso:
 - non rendere il bridge un remote shell;
 - non esporre tool `run_python`, `run_command`, `delete_file` generiche;
 - non mettere chiavi nella repo;
-- non automatizzare startup Windows finché il test end-to-end non è stabile;
-- non provare subito cut reali sul progetto `blabla` come primo test MCP write.
+- non provare cut reali sul progetto `blabla` senza un gate dedicato;
+- non usare un unico tunnel/key indistinto per PC segreteria e PC personale.
 
-## Checklist rapida quando si riprende la sessione
+La precedente regola “non automatizzare startup Windows finché il test end-to-end non è stabile” è **SUPERATA**, perché READ e SAFE WRITE sono ora end-to-end VALIDATED.
+
+## Checklist rapida — stato attuale PC_SEGRETERIA
 
 - [x] Resolve external READ
 - [x] Resolve external SAFE WRITE
 - [x] MCP locale READ
-- [ ] verificare piano/workspace ChatGPT
-- [ ] creare tunnel Platform
-- [ ] creare runtime key Tunnels Read + Use
-- [ ] installare `tunnel-client`
-- [ ] creare profilo `arphe-resolve`
-- [ ] `doctor --explain` PASS
-- [ ] `run` + `/readyz` PASS
-- [ ] collegare custom app ChatGPT
-- [ ] ChatGPT chiama `resolve_status`
-- [ ] programmare `create_safe_working_timeline`
-- [ ] ChatGPT crea timeline vuota in Resolve
+- [x] workspace ChatGPT Business verificato
+- [x] tunnel Platform creato
+- [x] runtime key Tunnels Read + Use creata
+- [x] `tunnel-client-runtime-cloudflared` installato
+- [x] MCP stdio collegato via `MCP_COMMAND`
+- [x] `/readyz` PASS
+- [x] custom app ChatGPT DEV creata
+- [x] ChatGPT chiama `resolve_status`
+- [x] `create_safe_working_timeline` implementata
+- [x] ChatGPT crea timeline vuota in Resolve
+- [ ] runtime Windows automatico senza PowerShell manuale — NEXT
+- [ ] replica `PC_PERSONALE`
 - [ ] aggiungere transcription/media tools
 - [ ] eseguire E05 podcast excerpt benchmark
 
-## Definition of Done — prima milestone
+## Definition of Done — milestone tunnel
 
-La milestone `CHATGPT_RESOLVE_BRIDGE_V1_READ` è completata quando da una normale conversazione ChatGPT possiamo leggere realmente lo stato del Resolve Studio locale attraverso Secure MCP Tunnel.
+`CHATGPT_RESOLVE_BRIDGE_V1_READ` = COMPLETED.
 
-La milestone `CHATGPT_RESOLVE_BRIDGE_V1_WRITE` è completata quando da ChatGPT possiamo creare una nuova timeline vuota ARPHE e tornare all'originale senza modificare contenuto esistente.
+`CHATGPT_RESOLVE_BRIDGE_V1_WRITE` = COMPLETED per SAFE WRITE testata.
+
+Il nuovo milestone infrastrutturale è `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1`, definito in `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`.

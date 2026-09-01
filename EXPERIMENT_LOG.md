@@ -8,7 +8,7 @@ Ogni nuovo esperimento deve avere:
 - ID esperimento;
 - sorgente/video;
 - file input;
-- candidate automatico congelato prima del reference umano;
+- candidate automatico congelato prima del reference umano quando si tratta di benchmark editoriale;
 - reference umano;
 - report di confronto;
 - risultato;
@@ -53,7 +53,7 @@ Decisione:
 
 Sorgente: `blabla.mp4`.
 Reference: `ARPHE_REFERENCE_EDIT_Timeline_1.json`.
-Candidate iniziale confrontato: `ARPHE_LONGFORM_SAFE_EDIT_PLAN_V3`.
+Candidate: `ARPHE_LONGFORM_SAFE_EDIT_PLAN_V3`.
 
 Metriche:
 - Precision 0.522
@@ -75,65 +75,49 @@ Profilo editoriale emerso:
 - `ehm/eeee/mmm`: non rimuovere sempre;
 - filler: rimuovere solo se non portano a nulla;
 - false partenze: preferire speech repair precisa, conservando il prefisso buono e ricucendo alla continuazione corretta;
-- tagli concettuali: trattarli come livello editoriale separato;
+- tagli concettuali: livello editoriale separato;
 - contenuto sensibile: FLAG ONLY, mai auto-cut.
 
 ## E05 — Podcast excerpt benchmark
 
-Stato: NEXT.
+Stato: NEXT / PARALLEL TRACK.
 
-Obiettivo:
-- evitare di lavorare ogni volta su episodi podcast completi molto lunghi;
-- scegliere una porzione interessante destinata potenzialmente alla pubblicazione;
-- usare solo quella porzione come unità canonica del benchmark.
+Workflow:
+1. Individuare un intervallo podcast utile, idealmente 8–15 minuti.
+2. Esportarlo come MP4 autonomo **prima** del montaggio editoriale.
+3. Da quel momento ignorare il timecode del podcast completo.
+4. `SOURCE_EXCERPT` parte da `00:00` ed è l'unica sorgente canonica.
+5. Generare transcript.
+6. Generare e congelare il candidate automatico PRIMA del reference umano.
+7. Montare manualmente la stessa SOURCE_EXCERPT.
+8. Esportare reference con `ARPHE_EXPORT_REFERENCE_EDIT_02.py`.
+9. Confrontare con `ARPHE_COMPARE_CUTS_01.py`.
+10. Classificare mismatch e aggiornare le regole solo dopo il report.
 
-Workflow consigliato:
+Naming consigliato:
+- `E05_SOURCE_EXCERPT.mp4`
+- `E05_TRANSCRIPT.json`
+- `E05_CANDIDATE_V1.json`
+- `E05_REFERENCE.json`
+- `E05_REPORT.txt`
 
-1. Individuare nel podcast originale un intervallo utile, idealmente 8–15 minuti.
-2. Esportare quella porzione come MP4 autonomo, senza montaggio editoriale.
-3. Dal momento dell'export, ignorare completamente il timecode del podcast originale.
-4. La `SOURCE_EXCERPT` parte da 00:00 ed è la sola sorgente canonica dell'esperimento.
-5. Generare transcript con word timestamps sulla SOURCE_EXCERPT.
-6. Generare il candidate automatico e congelarlo PRIMA di vedere il reference umano.
-7. Montare manualmente la stessa SOURCE_EXCERPT come risultato desiderato.
-8. Importare/ricreare il reference in Resolve e usare `ARPHE_EXPORT_REFERENCE_EDIT_02.py`.
-9. Confrontare candidate e reference con `ARPHE_COMPARE_CUTS_01.py`.
-10. Classificare i mismatch per categoria editoriale.
-11. Aggiornare le regole solo dopo il report.
-
-### Regola timestamp
-
-Nessun mapping verso l'episodio completo durante il benchmark.
-Tutti i file e tutti i timestamp partono da `00:00` della SOURCE_EXCERPT.
-Questo riduce il rischio di offset, conversioni e confusione tra timecode diversi.
-
-## Naming consigliato dei file
-
-Per evitare confusione:
-
-`E05_SOURCE_EXCERPT.mp4`
-`E05_TRANSCRIPT.json`
-`E05_CANDIDATE_V1.json`
-`E05_REFERENCE.json`
-`E05_REPORT.txt`
-
-Per esperimenti successivi incrementare E06, E07, ecc.
-
-## E06 — DaVinci Resolve Studio external API / controller
+## E06 — DaVinci Resolve Studio external API
 
 Stato: **READ API VALIDATED / WRITE TEST NEXT**.
 
 ### Test 01 — lettura esterna
 
-Eseguito con DaVinci Resolve Studio e `External scripting using = Local`.
+Ambiente:
+- DaVinci Resolve Studio `21.0.4.5`;
+- `External scripting using = Local`;
+- Python esterno.
 
-Risultato validato:
-- Python esterno importa `DaVinciResolveScript`;
-- connessione esterna a Resolve riuscita;
-- Resolve version: `21.0.4.5`;
-- progetto corrente: `blabla`;
-- timeline corrente: `Timeline 1`;
-- timeline FPS: `30.0`;
+Risultato:
+- import `DaVinciResolveScript`: OK;
+- connessione: OK;
+- progetto: `blabla`;
+- timeline: `Timeline 1`;
+- FPS: `30.0`;
 - video tracks: `1`;
 - audio tracks: `1`;
 - clip V1: `130`;
@@ -141,29 +125,73 @@ Risultato validato:
 - exit code: `0`.
 
 Conclusione:
-**il canale Python esterno -> Resolve Studio è funzionante e non è più necessario limitare l'architettura agli script lanciati da `Workspace -> Scripts -> Utility`.**
+**Python esterno -> Resolve Studio READ è VALIDATED.**
 
 ### Test 02 — scrittura esterna non distruttiva
 
-Prossimo passo:
-- eseguire `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`;
-- creare esclusivamente una timeline vuota con nome univoco;
+Stato: da eseguire.
+
+`ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02` deve:
+- creare una timeline vuota con nome univoco;
 - verificare l'incremento del numero timeline;
 - tornare automaticamente alla timeline originale;
 - non toccare clip o timeline originale.
 
-### Dopo il Test 02
+## E07 — ChatGPT MCP Bridge
 
-Se la scrittura esterna viene validata, iniziare `ARPHE_CONTROLLER` con moduli separati per:
-- chiamate Resolve API;
-- transcript/audio analysis;
-- logica editoriale;
-- benchmark/log esperimenti.
+Stato: **FEASIBILITY VALIDATED / CONFIGURATION NEXT**.
 
-Principio:
+### Ricerca 2026-09-01
 
-**prima validare lettura e scrittura esterne; solo dopo costruire automazioni più intelligenti sopra quel canale.**
+La direzione desiderata è supportata dall'ecosistema corrente:
+- custom MCP app in ChatGPT possono esporre tool;
+- full MCP include write/modify su ChatGPT Business, Enterprise ed Edu (beta, web);
+- Pro può usare custom MCP read/fetch ma non il full MCP write al momento;
+- ChatGPT non collega direttamente localhost;
+- Secure MCP Tunnel è il percorso previsto per un MCP locale/private network senza esposizione pubblica;
+- `tunnel-client` può inoltrare a server MCP locali via stdio o HTTP;
+- SDK Python MCP v2 è il riferimento per il prototipo locale.
+
+### Decisione architetturale
+
+**ChatGPT è la UI primaria.**
+
+Non costruire una GUI ARPHE desktop separata come prodotto per la segreteria.
+
+Percorso target:
+
+`Segreteria -> ChatGPT -> custom MCP app -> Secure MCP Tunnel -> ARPHE MCP Bridge locale -> Resolve Studio API`
+
+Il bridge locale:
+- espone solo tool allowlisted e tipizzati;
+- non espone shell/Python arbitrario;
+- accede solo a cartelle configurate;
+- impone nuova timeline / originale intatto;
+- esegue deterministicamente il piano approvato.
+
+### Gate E07
+
+1. Verificare workspace/piano ChatGPT adatto al full MCP se vogliamo write.
+2. Completare E06 Write Test 02.
+3. Creare MCP locale read-only: `ping` + `resolve_status`.
+4. Testarlo con MCP Inspector.
+5. Configurare Secure MCP Tunnel.
+6. Collegare custom app a ChatGPT.
+7. Validare `ChatGPT -> MCP -> Resolve READ`.
+8. Solo dopo esporre `create_safe_working_timeline` e validare una WRITE innocua.
+9. Successivamente aggiungere `list_media`, `transcribe_media`, `apply_edit_plan`.
+
+## Architettura superata
+
+Il precedente `ARPHE Remote Agent V1` basato su GUI Tkinter + polling GitHub è **SUPERSEDED**.
+
+Alcune idee di sicurezza restano valide (allowlist, path guard, log strutturati, protezione originali), ma il trasporto/UI vengono sostituiti da ChatGPT + MCP + Secure MCP Tunnel.
 
 ## Principio di continuità
 
-La chat non deve essere l'unico posto in cui vive lo stato del progetto. La repository è la fonte persistente: prima di iniziare un nuovo esperimento controllare `CURRENT_STATE.md`, `EXPERIMENT_LOG.md` e `docs/07_EDITORIAL_BENCHMARK.md`.
+La chat non deve essere l'unico posto in cui vive lo stato del progetto. Prima di iniziare un nuovo esperimento controllare:
+- `CURRENT_STATE.md`;
+- `EXPERIMENT_LOG.md`;
+- `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md`;
+- `docs/RESOLVE_STUDIO_CAPABILITIES.md`;
+- per benchmark editoriali, `docs/07_EDITORIAL_BENCHMARK.md`.

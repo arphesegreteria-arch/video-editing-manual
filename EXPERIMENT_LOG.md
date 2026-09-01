@@ -121,36 +121,48 @@ Per esperimenti successivi incrementare E06, E07, ecc.
 
 ## E06 — DaVinci Resolve Studio external API / controller
 
-Stato: NEXT dopo installazione Studio.
+Stato: **READ API VALIDATED / WRITE TEST NEXT**.
 
-Obiettivo:
-- verificare se Resolve Studio permette di uscire dal workflow `Workspace -> Scripts -> Utility`;
-- controllare Resolve da un normale processo Python esterno;
-- porre le basi per un controller locale che in futuro possa orchestrare transcript, edit plan, benchmark e operazioni Resolve.
+### Test 01 — lettura esterna
 
-Ordine dei test:
+Eseguito con DaVinci Resolve Studio e `External scripting using = Local`.
 
-1. Installare e avviare DaVinci Resolve Studio.
-2. Verificare nelle preferenze le opzioni di scripting/remote scripting disponibili nella build installata.
-3. Creare un test Python ESTERNO a Resolve che faccia solo lettura:
-   - connessione a Resolve;
-   - nome progetto corrente;
-   - nome timeline corrente;
-   - FPS timeline;
-   - numero clip V1/A1.
-4. Se la lettura funziona, fare un secondo test di scrittura non distruttivo:
-   - creare una timeline di test o duplicare una timeline;
-   - non toccare mai l'originale.
-5. Solo dopo validare un vero `ARPHE_CONTROLLER` esterno.
-6. Il controller dovrà mantenere separati:
-   - logica editoriale;
-   - analisi audio/transcript;
-   - chiamate Resolve API;
-   - log esperimenti e benchmark.
+Risultato validato:
+- Python esterno importa `DaVinciResolveScript`;
+- connessione esterna a Resolve riuscita;
+- Resolve version: `21.0.4.5`;
+- progetto corrente: `blabla`;
+- timeline corrente: `Timeline 1`;
+- timeline FPS: `30.0`;
+- video tracks: `1`;
+- audio tracks: `1`;
+- clip V1: `130`;
+- clip A1: `130`;
+- exit code: `0`.
+
+Conclusione:
+**il canale Python esterno -> Resolve Studio è funzionante e non è più necessario limitare l'architettura agli script lanciati da `Workspace -> Scripts -> Utility`.**
+
+### Test 02 — scrittura esterna non distruttiva
+
+Prossimo passo:
+- eseguire `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`;
+- creare esclusivamente una timeline vuota con nome univoco;
+- verificare l'incremento del numero timeline;
+- tornare automaticamente alla timeline originale;
+- non toccare clip o timeline originale.
+
+### Dopo il Test 02
+
+Se la scrittura esterna viene validata, iniziare `ARPHE_CONTROLLER` con moduli separati per:
+- chiamate Resolve API;
+- transcript/audio analysis;
+- logica editoriale;
+- benchmark/log esperimenti.
 
 Principio:
 
-**prima validare Python esterno -> Resolve; solo dopo costruire automazioni più intelligenti sopra quel canale.**
+**prima validare lettura e scrittura esterne; solo dopo costruire automazioni più intelligenti sopra quel canale.**
 
 ## Principio di continuità
 

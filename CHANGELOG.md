@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 2026-09-01 — ChatGPT -> MCP -> Resolve READ + SAFE WRITE end-to-end validati
+
+### READ end-to-end
+- custom app DEV `ARPHE Resolve` collegata al tunnel `ARPHE-RESOLVE-HOME`;
+- autenticazione MCP: None;
+- chiamata `resolve_status` eseguita direttamente dalla conversazione ChatGPT;
+- letti Resolve `21.0.4.5`, progetto `blabla`, `Timeline 1`, 30 fps, 1 traccia video, 1 audio, 130 clip V1 e 130 clip A1.
+
+Conclusione:
+**ChatGPT -> custom MCP app -> Secure MCP Tunnel -> MCP locale -> Resolve Studio READ è supportato end-to-end.**
+
+### SAFE WRITE end-to-end
+- bridge `ARPHE_MCP_BRIDGE_SAFE_WRITE_02` avviato tramite lo stesso tunnel;
+- `/readyz` -> HTTP 200 `ready`;
+- app DEV `ARPHE Resolve WRITE Test` collegata;
+- `ping` da ChatGPT ha confermato `SAFE_WRITE` e `create_safe_working_timeline` abilitata;
+- ChatGPT ha chiamato `create_safe_working_timeline`;
+- timeline count: `3 -> 4`;
+- creata `ARPHE_CHATGPT_WRITE_TEST_20260901_185749`;
+- ritorno automatico a `Timeline 1`: `true`;
+- clip edit: `0`;
+- timeline delete: `0`;
+- tool result: `ok=true`.
+
+Conclusione:
+**ChatGPT -> custom MCP app -> Secure MCP Tunnel -> bridge Python -> Resolve Studio SAFE WRITE è supportato end-to-end** per la primitiva non distruttiva testata.
+
+Prossima priorità: `list_media` allowlisted -> `transcribe_media` locale -> `apply_edit_plan` minimale su nuova timeline.
+
 ## 2026-09-01 — External Resolve WRITE validato
 
 ### Test `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`

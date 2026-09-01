@@ -103,7 +103,7 @@ Naming consigliato:
 
 ## E06 — DaVinci Resolve Studio external API
 
-Stato: **READ API VALIDATED / WRITE TEST NEXT**.
+Stato: **READ + SAFE WRITE VALIDATED**.
 
 ### Test 01 — lettura esterna
 
@@ -129,13 +129,26 @@ Conclusione:
 
 ### Test 02 — scrittura esterna non distruttiva
 
-Stato: da eseguire.
+Script: `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02.py`.
 
-`ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02` deve:
-- creare una timeline vuota con nome univoco;
-- verificare l'incremento del numero timeline;
-- tornare automaticamente alla timeline originale;
-- non toccare clip o timeline originale.
+Risultato osservato:
+- progetto: `blabla`;
+- timeline originale: `Timeline 1`;
+- timeline count prima: `2`;
+- creata timeline vuota `ARPHE_API_WRITE_TEST_20260901_145018`;
+- timeline count dopo: `3`;
+- ritorno all'originale: `True`;
+- timeline finale: `Timeline 1`;
+- exit code: `0`.
+
+Conclusione:
+**Python esterno -> Resolve Studio WRITE non distruttiva è VALIDATED.**
+
+Sono supportate nel nostro ambiente almeno:
+- `MediaPool.CreateEmptyTimeline()`;
+- `Project.SetCurrentTimeline()`.
+
+Il test non dimostra ancora che tutte le altre operazioni write siano affidabili: import, cut/rebuild, transform, Fusion, tracking, captions e render restano da provare singolarmente.
 
 ## E07 — ChatGPT MCP Bridge
 
@@ -180,13 +193,12 @@ Questo test valida l'MCP locale e la traduzione tool -> Resolve, ma NON ancora i
 
 ### Gate successivi E07
 
-1. Completare E06 Write Test 02.
-2. Configurare Secure MCP Tunnel verso `ARPHE_MCP_BRIDGE_READ_01`.
-3. Collegare la custom app a ChatGPT.
-4. Chiamare `resolve_status` direttamente da ChatGPT e validare `ChatGPT -> MCP -> Resolve READ`.
-5. Solo dopo aggiungere una write tool innocua `create_safe_working_timeline`.
-6. Validare `ChatGPT -> MCP -> Resolve WRITE` su timeline nuova e originale intatto.
-7. Successivamente aggiungere tool allowlisted per media, trascrizione, edit plan, benchmark e render.
+1. Configurare Secure MCP Tunnel verso `ARPHE_MCP_BRIDGE_READ_01`.
+2. Collegare la custom app a ChatGPT.
+3. Chiamare `resolve_status` direttamente da ChatGPT e validare `ChatGPT -> MCP -> Resolve READ`.
+4. Solo dopo aggiungere una write tool innocua `create_safe_working_timeline`.
+5. Validare `ChatGPT -> MCP -> Resolve WRITE` su timeline nuova e originale intatto.
+6. Successivamente aggiungere tool allowlisted per media, trascrizione, edit plan, benchmark e render.
 
 ## Architettura superata
 

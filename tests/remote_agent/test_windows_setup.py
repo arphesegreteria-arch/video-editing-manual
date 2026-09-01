@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
+
+import pytest
 
 
 AGENT_ROOT = Path(__file__).parents[2] / "scripts" / "remote_agent"
@@ -220,6 +221,9 @@ def test_readme_documents_manual_release_gate_and_expanded_secret_scan():
     readme = _read("README.md")
 
     assert "HOME_DEV manual release checklist" in readme
+    assert "Automated release gate" in readme
+    assert "requirements-dev.txt" in readme
+    assert "pytest tests/remote_agent -v" in readme
     assert "PING" in readme
     assert "LIST_MEDIA" in readme
     assert "RUN_CAPABILITY_AUDIT" in readme
@@ -230,34 +234,37 @@ def test_readme_documents_manual_release_gate_and_expanded_secret_scan():
 
 
 def test_repo_root_pytest_launcher_can_import_scripts_package():
-    """Catches the external pytest launcher missing the repo root on sys.path."""
+    """Catches the external pytest launcher failing to collect the real remote-agent suite from the repo root."""
     pytest_launcher = Path(sys.executable).with_name("pytest.exe")
     if not pytest_launcher.exists():
         pytest.skip("pytest console launcher is unavailable in this environment")
 
     repo_root = Path(__file__).parents[2]
-    with tempfile.TemporaryDirectory(dir=repo_root) as temp_dir:
-        smoke_test = Path(temp_dir) / "test_console_launcher_import.py"
-        smoke_test.write_text(
-            "from scripts.remote_agent.config import AgentConfig\n\n"
-            "def test_console_launcher_imports_repo_package():\n"
-            "    assert AgentConfig.__name__ == 'AgentConfig'\n",
-            encoding="utf-8",
-        )
-
-        env = os.environ.copy()
-        env.pop("PYTHONPATH", None)
-        result = subprocess.run(
-            [str(pytest_launcher), str(smoke_test), "-q", "-p", "no:cacheprovider"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            check=False,
-            env=env,
-        )
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [
+            str(pytest_launcher),
+            "tests/remote_agent",
+            "--collect-only",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "1 passed" in result.stdout
+    assert (
+        "tests/remote_agent/test_integration_flow.py::"
+        "test_build_application_fails_closed_when_resolve_is_unavailable"
+    ) in result.stdout
+    assert "ERROR collecting" not in result.stdout
+    assert "ModuleNotFoundError" not in result.stdout
 
 
 def test_current_state_records_tested_versions_and_pending_live_gate():
@@ -266,6 +273,8 @@ def test_current_state_records_tested_versions_and_pending_live_gate():
 
     assert "python " in lower
     assert "pytest " in lower
+    assert "requirements-dev.txt" in current_state
+    assert "pytest tests/remote_agent -v" in current_state
     assert "pydantic " in lower
     assert "requests " in lower
     assert "keyring " in lower

@@ -35,6 +35,20 @@ heartbeats.
 Development/test-only dependencies are in `requirements-dev.txt`; production
 setup installs `requirements.txt` only.
 
+## Automated release gate
+
+Use a dedicated development virtual environment for branch verification. After
+activating that environment, install `scripts/remote_agent/requirements-dev.txt`
+so `pytest` is available on the environment PATH, then run the automated gate
+from the repository root:
+
+```powershell
+pytest tests/remote_agent -v
+```
+
+The branch does not require `pytest` on the global machine PATH outside that
+activated development environment.
+
 ## Private GitHub runtime queue
 
 `github` configures the private runtime/job repository only; the included

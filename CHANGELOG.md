@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-09-01 — Remote Agent release gate riproducibile
+
+### Verificato
+- il test del launcher `pytest.exe` ora importa `pytest` esplicitamente e non esplode se il launcher console non e disponibile nell'ambiente corrente;
+- la regressione del launcher non usa piu uno smoke test temporaneo, ma raccoglie in `--collect-only` la vera suite `tests/remote_agent` dal root del repository con `PYTHONPATH` rimosso;
+- il gate automatizzato documentato per il branch e adesso esplicito: attivare un venv di sviluppo dedicato, installare `scripts/remote_agent/requirements-dev.txt`, quindi eseguire `pytest tests/remote_agent -v`.
+
+### Regole chiarite
+- l'assenza di `pytest` sul PATH globale della macchina non e un fallimento del branch;
+- conta il launcher `pytest` del venv di sviluppo usato per la verifica del branch.
+
 ## 2026-08-27 — Longform transcript + audio alignment
 
 ### Validato

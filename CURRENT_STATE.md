@@ -1,6 +1,6 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-08-31.
+Ultimo aggiornamento: sessione 2026-09-01.
 
 ## Obiettivo del progetto
 
@@ -129,7 +129,8 @@ Strategia tracking corrente:
 - Stato documento: release candidate con verifica automatizzata del branch per installazione manuale su `HOME_DEV`; checklist live `HOME_DEV` + Resolve Studio non ancora passato e tag `REMOTE_AGENT_V1_HOME_DEV_TESTED` ancora non impostato.
 - Profilo `POLI_01`: ancora più ristretto di `HOME_DEV` e **non production-ready** in V1.
 - Suite automatizzata più recente in questo branch: `221 passed, 1 skipped`.
-- Il launcher esterno `pytest.exe` ora eredita il root del repository tramite `pytest.ini`, quindi `pytest tests/remote_agent -v -p no:cacheprovider` raccoglie la stessa suite di `python -m pytest` senza `PYTHONPATH` locale.
+- Gate automatizzato documentato per il branch: attivare un venv di sviluppo dedicato, installare `scripts/remote_agent/requirements-dev.txt` cosi `pytest` e disponibile sul PATH del venv, quindi eseguire dal root del repository `pytest tests/remote_agent -v`.
+- Il test di regressione del launcher usa il `pytest.exe` gemello dell'interprete attivo, rimuove `PYTHONPATH` e verifica in `--collect-only` che la vera suite `tests/remote_agent` si raccolga dal root del repository senza errori di import.
 
 Versioni verificate in questo ambiente di sviluppo:
 - Python 3.12.13
@@ -144,3 +145,4 @@ Limitazioni osservate:
 - Il collegamento live a DaVinci Resolve Studio e i probe distruttivi restano subordinati al checklist manuale su `ARPHE_TEST` o `ARPHE_AUDIT_*`.
 - Finché il checklist live non passa, non va pubblicata la dicitura `REMOTE_AGENT_V1_HOME_DEV_TESTED`.
 - La static secret scan PowerShell esatta su `scripts/remote_agent` e `tests/remote_agent`, con esclusione di `__pycache__`, restituisce solo fixture sintetiche in `test_github_queue.py`, `test_job_runner.py`, `test_logging.py`, `test_models.py` e l'header `Authorization` costruito intenzionalmente in `github_queue.py`; nessun secret reale nei file scansionati.
+- L'assenza di `pytest` sul PATH globale della macchina non e un criterio di fallimento del branch: conta solo il venv di sviluppo dedicato usato per il gate automatizzato.

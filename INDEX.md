@@ -9,7 +9,8 @@
 | `EXPERIMENT_LOG.md` | Registro persistente degli esperimenti e dei prossimi step |
 | `CHANGELOG.md` | Storico delle decisioni |
 | `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md` | **Architettura prodotto corrente: ChatGPT -> MCP -> Resolve Studio** |
-| `docs/09_MCP_TUNNEL_ROLLOUT_CHECKLIST.md` | **Procedura operativa click-by-click per tunnel, ChatGPT READ/WRITE gate e primo workflow reale** |
+| `docs/09_MCP_TUNNEL_ROLLOUT_CHECKLIST.md` | Procedura tunnel e gate ChatGPT READ/WRITE |
+| `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md` | **Autostart Windows, PC segreteria vs PC personale, replica e handoff Codex** |
 | `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
 | `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 | `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |
@@ -26,6 +27,10 @@
 Interfaccia primaria:
 
 `Segreteria -> ChatGPT -> custom MCP app -> Secure MCP Tunnel -> bridge Python locale -> Resolve Studio API`
+
+Workstation di riferimento corrente:
+- `PC_SEGRETERIA`: VALIDATED end-to-end READ + SAFE WRITE;
+- `PC_PERSONALE`: PENDING REPLICA.
 
 Non usare i vecchi documenti `ARPHE Remote Agent V1` come piano attuale: sono conservati in `docs/superpowers/` ma marcati **SUPERSEDED**.
 
@@ -45,7 +50,9 @@ Il piano `docs/superpowers/plans/2026-08-28-resolve-studio-capability-audit.md` 
 - `scripts/experiments/ARPHE_STUDIO_EXTERNAL_API_TEST_01.py`: **external READ API superato** su Resolve Studio 21.0.4.5.
 - `scripts/experiments/ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02.py`: **SAFE WRITE superato**; `CreateEmptyTimeline` + ritorno all'originale.
 - `scripts/experiments/ARPHE_MCP_BRIDGE_READ_01.py`: **MCP locale -> Resolve READ superato** con `ping` + `resolve_status`.
-- Prossimo gate: **Secure MCP Tunnel -> ChatGPT -> `resolve_status`**.
+- ChatGPT -> Secure MCP Tunnel -> Resolve READ: **VALIDATED**.
+- ChatGPT -> Secure MCP Tunnel -> Resolve SAFE WRITE: **VALIDATED** per `create_safe_working_timeline`.
+- Prossimo gate infrastrutturale: **autostart persistente sul PC segreteria senza PowerShell manuale**.
 
 ## Benchmark / strumenti di valutazione
 

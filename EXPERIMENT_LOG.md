@@ -90,9 +90,9 @@ Obiettivo:
 Workflow consigliato:
 
 1. Individuare nel podcast originale un intervallo utile, idealmente 8–15 minuti.
-2. Annotare il timecode originale di inizio/fine episodio.
-3. Esportare quella porzione come MP4 autonomo, senza montaggio editoriale.
-4. Questo MP4 diventa la `SOURCE_EXCERPT` e parte da 00:00.
+2. Esportare quella porzione come MP4 autonomo, senza montaggio editoriale.
+3. Dal momento dell'export, ignorare completamente il timecode del podcast originale.
+4. La `SOURCE_EXCERPT` parte da 00:00 ed è la sola sorgente canonica dell'esperimento.
 5. Generare transcript con word timestamps sulla SOURCE_EXCERPT.
 6. Generare il candidate automatico e congelarlo PRIMA di vedere il reference umano.
 7. Montare manualmente la stessa SOURCE_EXCERPT come risultato desiderato.
@@ -101,18 +101,11 @@ Workflow consigliato:
 10. Classificare i mismatch per categoria editoriale.
 11. Aggiornare le regole solo dopo il report.
 
-### Mapping al podcast originale
+### Regola timestamp
 
-Per non perdere il collegamento con l'episodio lungo, salvare sempre:
-- `episode_file`;
-- `excerpt_start_in_episode_sec`;
-- `excerpt_end_in_episode_sec`.
-
-Formula:
-
-`timestamp episodio = timestamp excerpt + excerpt_start_in_episode_sec`
-
-Quindi non serve fornire o processare tutto il podcast ogni volta.
+Nessun mapping verso l'episodio completo durante il benchmark.
+Tutti i file e tutti i timestamp partono da `00:00` della SOURCE_EXCERPT.
+Questo riduce il rischio di offset, conversioni e confusione tra timecode diversi.
 
 ## Naming consigliato dei file
 
@@ -125,6 +118,39 @@ Per evitare confusione:
 `E05_REPORT.txt`
 
 Per esperimenti successivi incrementare E06, E07, ecc.
+
+## E06 — DaVinci Resolve Studio external API / controller
+
+Stato: NEXT dopo installazione Studio.
+
+Obiettivo:
+- verificare se Resolve Studio permette di uscire dal workflow `Workspace -> Scripts -> Utility`;
+- controllare Resolve da un normale processo Python esterno;
+- porre le basi per un controller locale che in futuro possa orchestrare transcript, edit plan, benchmark e operazioni Resolve.
+
+Ordine dei test:
+
+1. Installare e avviare DaVinci Resolve Studio.
+2. Verificare nelle preferenze le opzioni di scripting/remote scripting disponibili nella build installata.
+3. Creare un test Python ESTERNO a Resolve che faccia solo lettura:
+   - connessione a Resolve;
+   - nome progetto corrente;
+   - nome timeline corrente;
+   - FPS timeline;
+   - numero clip V1/A1.
+4. Se la lettura funziona, fare un secondo test di scrittura non distruttivo:
+   - creare una timeline di test o duplicare una timeline;
+   - non toccare mai l'originale.
+5. Solo dopo validare un vero `ARPHE_CONTROLLER` esterno.
+6. Il controller dovrà mantenere separati:
+   - logica editoriale;
+   - analisi audio/transcript;
+   - chiamate Resolve API;
+   - log esperimenti e benchmark.
+
+Principio:
+
+**prima validare Python esterno -> Resolve; solo dopo costruire automazioni più intelligenti sopra quel canale.**
 
 ## Principio di continuità
 

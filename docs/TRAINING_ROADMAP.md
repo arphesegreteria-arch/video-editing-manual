@@ -1,39 +1,69 @@
-# ARPHE Video Automation - Training Roadmap
+# ARPHE Video Automation — Training Roadmap
 
 ## Final objective
 
-Build a reliable workflow where a user can provide source media and a high-level editing request, and the system can produce a publishable DaVinci Resolve timeline with minimal human intervention.
+Build a reliable workflow where the user works **inside ChatGPT** and can provide/select source media, discuss a high-level editing request, approve decisions and have those decisions executed safely in DaVinci Resolve Studio.
 
-Target example: short-form filler ad with a secretary hook, generative lip-inflation/explosion shot, doctor explanation, selected B-roll, music, captions, CTA, and final export.
+Target architecture:
+
+`ChatGPT -> custom MCP app -> Secure MCP Tunnel -> local ARPHE MCP Bridge -> validated editing primitives -> Resolve Studio`
+
+A separate ARPHE desktop GUI is not the intended primary interface.
 
 ## Working rule
 
-A capability enters the ARPHE editing engine only after it passes a repeatable validation test. Long-form development continues in parallel while the short-form primitives are trained.
+A capability enters the ARPHE editing engine only after it passes a repeatable validation test. The model may choose and parameterize validated primitives, but the bridge must reject invalid/arbitrary operations.
 
-## Training sequence
+## 0. DaVinci Resolve Studio capability audit
 
-### 0. DaVinci Resolve Studio capability audit
+**Goal:** determine exactly what can be controlled reliably from external Python/Resolve scripting.
 
-**Goal:** determine exactly what can be controlled reliably from external Python/Resolve scripting before investing in more workarounds.
+### Stato corrente
 
-Test matrix:
-- connect to a running Resolve Studio instance;
-- inspect projects, timelines, tracks, clips and Media Pool;
-- create/modify timelines;
-- import and place media;
-- apply cuts and clip transforms;
-- create/read Fusion compositions;
-- test face/object tracking paths and whether tracking can be started programmatically;
-- test captions/subtitle workflow;
-- test audio controls useful for music/ducking;
-- test render queue and export;
-- test external script execution, logs and error reporting.
+External READ is **SUPPORTED** on Resolve Studio `21.0.4.5`:
+- external Python connects;
+- project/timeline/FPS/tracks/items readable;
+- test `ARPHE_STUDIO_EXTERNAL_API_TEST_01` exit code 0.
 
-**PASS:** repository contains a capability matrix with `SUPPORTED`, `PARTIAL`, or `MANUAL` for every required operation, plus a minimal external script that connects to Resolve and performs a harmless timeline operation.
+External WRITE is still **PENDING**.
+
+### Test matrix
+- external connection/read — SUPPORTED;
+- create empty timeline — NEXT;
+- import/place media;
+- reconstruct/cut timeline;
+- clip transforms;
+- Fusion compositions;
+- tracking paths / programmatic tracking;
+- captions/subtitles;
+- audio controls;
+- render/export;
+- logs/error reporting.
+
+**PASS:** `docs/RESOLVE_STUDIO_CAPABILITIES.md` records each required operation as `SUPPORTED`, `PARTIAL` or `MANUAL` based on live tests.
 
 ---
 
-### 1. Cut Engine
+## 0.5. ChatGPT / MCP bridge
+
+**Goal:** prove that normal ChatGPT conversation can use safe tools on the local ARPHE PC and ultimately drive Resolve Studio.
+
+Validation sequence:
+1. confirm suitable ChatGPT workspace/developer-mode permissions;
+2. local MCP server with `ping` + `resolve_status`;
+3. test locally with MCP Inspector;
+4. connect through Secure MCP Tunnel;
+5. ChatGPT invokes `resolve_status` successfully;
+6. expose `create_safe_working_timeline` only after external WRITE probe passes;
+7. ChatGPT creates one empty test timeline while the original remains untouched.
+
+**PASS:** from a normal ChatGPT chat, a user can ask for Resolve status and then approve a harmless timeline creation that is executed through MCP and verified in Resolve.
+
+**Security:** no arbitrary shell/Python tools; only allowlisted, typed actions; guarded local paths; original timeline protection enforced by code.
+
+---
+
+## 1. Cut Engine
 
 **Goal:** raw talking-head footage becomes a natural rough cut.
 
@@ -44,15 +74,18 @@ Train/test:
 - mistakes;
 - filler words;
 - breathing and phrase endings;
-- waveform-aware cut placement.
+- speech repair;
+- waveform-aware cut placement;
+- conceptual cuts as a separate semantic layer;
+- sensitive content as FLAG ONLY.
 
-Continue validating the current long-form V4.3 work here.
+**PASS:** representative videos require only minor manual corrections and do not systematically miss common repair opportunities or cut words/tails.
 
-**PASS:** 10 consecutive representative videos require only minor manual corrections and do not systematically cut words or phrase tails.
+Benchmark against human references remains mandatory; see `07_EDITORIAL_BENCHMARK.md`.
 
 ---
 
-### 2. Punch-in / Reframe Engine
+## 2. Punch-in / Reframe Engine
 
 **Goal:** deterministic, reusable camera movement primitives.
 
@@ -64,13 +97,11 @@ Primitives:
 - yoyo;
 - reframe.
 
-Then add rule-based automatic punch-in timing.
-
 **PASS:** the same instruction produces visually consistent results across representative clips without manual keyframe repair.
 
 ---
 
-### 3. Tracking Engine
+## 3. Tracking Engine
 
 **Goal:** keep a chosen face/object framed while applying tracked edits.
 
@@ -79,13 +110,13 @@ Targets:
 - `TRACK_OBJECT` where reliable;
 - `TRACKED_PUNCH_IN`.
 
-Resolve Studio features should be tested before preserving any current manual workaround.
+Resolve Studio features must be tested before preserving old Free/manual workarounds.
 
-**PASS:** 20/20 normal talking-head clips complete face tracking without requiring the operator to press Track Forward or repair the path.
+**PASS:** representative normal talking-head clips complete tracking without requiring routine manual Track Forward/path repair.
 
 ---
 
-### 4. Caption Engine
+## 4. Caption Engine
 
 **Goal:** transcription to ARPHE-styled captions with no manual formatting.
 
@@ -97,102 +128,83 @@ Train/test:
 - keyword emphasis;
 - optional animation/highlight.
 
-**PASS:** captions are readable, correctly timed and visually consistent on representative short-form videos with no per-caption manual styling.
+**PASS:** captions are readable, correctly timed and visually consistent without per-caption manual styling.
 
 ---
 
-### 5. B-roll Engine
+## 5. B-roll Engine
 
-**Goal:** automatically place human-selected B-roll over the doctor's audio.
+**Goal:** place human-selected B-roll over continuous speech audio.
 
-V1 deliberately keeps asset selection human-controlled. The engine decides placement, duration, pacing and return to A-roll.
+V1 can keep asset selection human-controlled while the engine decides placement, duration, pacing and return to A-roll.
 
-Train/test:
-- single B-roll insert;
-- image insert;
-- B-roll sequence;
-- fast/normal pacing;
-- maintaining continuous doctor audio.
-
-**PASS:** given A-roll plus 5-10 selected assets, the engine creates a coherent B-roll sequence with only minor editorial corrections.
+**PASS:** given A-roll plus selected assets, the engine creates a coherent B-roll sequence with only minor editorial corrections.
 
 ---
 
-### 6. Music + Sound Design
+## 6. Music + Sound Design
 
-**Goal:** predictable audio finishing without opening Fairlight for routine reels.
+**Goal:** predictable audio finishing without routine manual Fairlight work.
 
 Primitives:
 - add music;
-- set target level;
+- target level;
 - duck under speech;
 - fade in/out;
-- place essential impact/whoosh SFX.
-
-**PASS:** speech remains clear and music/SFX levels are consistent across representative reels.
+- essential impact/whoosh SFX.
 
 ---
 
-### 7. CTA Engine
+## 7. CTA Engine
 
-**Goal:** reusable ARPHE end cards/CTA sequences.
-
-Initial presets can cover filler, Botox and generic consultation/booking CTAs.
-
-**PASS:** one preset call inserts the complete approved CTA package with correct duration, layout and audio behavior.
+**Goal:** reusable approved ARPHE end cards/CTA sequences.
 
 ---
 
-### 8. Boss Fight V1 - Fully assembled reel without generative video
+## 8. Boss Fight V1 — assembled reel
 
 Input:
-- secretary hook clip;
+- hook;
 - doctor clip;
-- 5-10 human-selected B-roll/images;
-- chosen CTA preset.
+- selected B-roll/images;
+- CTA preset.
 
-Expected automated output:
+Expected:
 
-`HOOK -> DOCTOR CUT -> PUNCH/REFRAME -> CAPTIONS -> B-ROLL -> MUSIC -> CTA -> EXPORT`
+`HOOK -> CUT -> PUNCH/REFRAME -> CAPTIONS -> B-ROLL -> MUSIC -> CTA -> EXPORT`
 
-**PASS:** the system returns a publishable first-pass reel that requires only minor creative corrections and no technical reconstruction.
-
-This is the first major product milestone.
+**PASS:** ChatGPT can request a validated plan and the bridge returns a publishable first-pass Resolve timeline requiring only minor creative corrections.
 
 ---
 
-### 9. Runway / Generative Shot
+## 9. Generative Shot
 
-**Goal:** add selected generative shots without changing the core editing engine.
-
-First target: secretary's lips progressively inflate and burst, then transition to the doctor scene.
-
-**PASS:** the generative result can be requested from a preset, returned, imported and substituted into the Resolve timeline with a controlled failure/fallback path.
+Add selected generative shots as optional assets without changing the deterministic core editing engine.
 
 ---
 
-### 10. Autopilot / Edit Plan
+## 10. ChatGPT Autopilot / Edit Plan
 
-**Goal:** high-level natural-language intent becomes a validated edit plan which the existing primitives execute.
+**Goal:** high-level natural-language intent in ChatGPT becomes a validated edit plan executed through MCP tools.
 
-Example final experience:
+Example:
 
-`"Make a punchy filler reel using this secretary hook, this doctor clip and these B-rolls." -> validated edit plan -> Resolve execution -> review/export`
+`"Fammi un reel punchy con questo hook, questo medico e questi B-roll" -> discussione/approvazione -> validated edit plan -> MCP tools -> Resolve execution -> review/export`
 
-**PASS:** the model chooses and parameterizes already-validated primitives without issuing arbitrary Resolve operations, and invalid plans are rejected before timeline execution.
+**PASS:** ChatGPT chooses and parameterizes already-validated primitives, the bridge rejects invalid plans, and Resolve never receives arbitrary model-generated code.
 
 ## Parallel workstreams
 
-### Long-form
+### Editorial benchmark
+Use autonomous podcast excerpts of roughly 8–15 minutes, all starting at `00:00`, freeze the candidate before the human edit and compare quantitatively.
 
-Continue V4.3 validation while the Studio capability audit begins. Long-form remains the main training ground for semantic cuts and waveform-aware joins.
-
-### Short-form
-
-After the Studio audit, prioritize Punch-in/Reframe, Tracking, Captions and B-roll because these are the shortest path to Boss Fight V1.
+### Studio/MCP infrastructure
+Continue the capability audit while validating the MCP path. Do not wait for every advanced Resolve capability before proving the minimal ChatGPT -> MCP -> Resolve read/write loop.
 
 ## Immediate next milestone
 
-**DaVinci Resolve Studio Capability Audit**
-
-Do not build new Studio-specific abstractions until this audit establishes which operations are genuinely reliable through the current Resolve Studio scripting surface.
+1. **Run `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`.**
+2. Build/test a read-only local MCP server (`ping`, `resolve_status`).
+3. Configure Secure MCP Tunnel and connect the custom app in ChatGPT.
+4. Validate ChatGPT -> MCP -> Resolve READ.
+5. If write permissions and Test 02 are both green, validate one harmless MCP WRITE that creates an empty test timeline.

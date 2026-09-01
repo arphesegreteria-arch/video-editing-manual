@@ -44,7 +44,27 @@ Ambiente testato:
 Conclusione:
 **Python esterno -> Resolve Studio è funzionante in lettura.** Non siamo più vincolati a `Workspace -> Scripts -> Utility` come architettura principale.
 
-Dettagli: `docs/RESOLVE_STUDIO_CAPABILITIES.md`.
+### MCP locale -> Resolve Studio READ
+`ARPHE_MCP_BRIDGE_READ_01` eseguito con successo.
+
+Tool MCP validate:
+- `ping`;
+- `resolve_status`.
+
+Risultato:
+- protocollo MCP negoziato;
+- tool discovery riuscita;
+- `ping` OK in modalità `READ_ONLY`;
+- `resolve_status` ha letto Resolve `21.0.4.5`, progetto `blabla`, `Timeline 1`, FPS 30, 1 traccia video, 1 audio, 130 clip V1 e 130 clip A1;
+- exit code 0;
+- nessuna modifica fatta in Resolve.
+
+Conclusione:
+**MCP locale -> tool -> bridge Python -> Resolve Studio READ è funzionante.**
+
+Non è ancora validato il tratto `ChatGPT -> Secure MCP Tunnel -> MCP locale`.
+
+Dettagli: `docs/RESOLVE_STUDIO_CAPABILITIES.md` e `EXPERIMENT_LOG.md`.
 
 ### Cut automatici per ricostruzione timeline
 `ARPHE_AUTOCUT_TEST_01.py`
@@ -116,16 +136,24 @@ Interpretazione:
 
 ## 🎯 DIREZIONE PRODOTTO — CHATGPT + MCP
 
-Ricerca aggiornata al 2026-09-01: la direzione è tecnicamente plausibile.
+ChatGPT è la UI primaria.
 
-ChatGPT supporta custom MCP app che possono esporre tool. Il full MCP con azioni write/modify è attualmente in beta su ChatGPT Business, Enterprise ed Edu sul web. Pro può usare custom MCP in developer mode per read/fetch, ma non dispone oggi del full MCP write.
+Percorso target:
 
-Per un server locale/on-premise ChatGPT non collega direttamente localhost: l'architettura prevista usa **Secure MCP Tunnel** con `tunnel-client`, mantenendo il bridge locale non esposto pubblicamente.
+`Segreteria -> ChatGPT -> custom MCP app -> Secure MCP Tunnel -> ARPHE MCP Bridge locale -> Resolve Studio API`
 
-Dettagli, tool proposti e gate: `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md`.
+Il bridge locale:
+- espone solo tool allowlisted e tipizzati;
+- non espone shell/Python arbitrario;
+- accede solo a cartelle configurate;
+- impone nuova timeline / originale intatto;
+- esegue deterministicamente il piano approvato.
 
-### Vincolo ancora da verificare
-Prima del test ChatGPT -> Resolve in scrittura bisogna verificare il piano/workspace ChatGPT effettivamente usato per ARPHE.
+### Vincoli ancora da verificare
+- piano/workspace ChatGPT effettivamente disponibile per full MCP write;
+- Secure MCP Tunnel configurato e raggiungibile;
+- ChatGPT -> MCP -> Resolve READ reale;
+- write tool MCP innocua e protetta.
 
 ## ⚠️ PARZIALE / DA RIFINIRE
 
@@ -177,10 +205,10 @@ Non trattare parole come `allora`, `cioè`, `quindi`, `praticamente` come stopwo
 ### Track A — infrastruttura ChatGPT / Resolve
 1. Eseguire `ARPHE_STUDIO_EXTERNAL_WRITE_TEST_02`.
 2. Se passa, promuovere `CreateEmptyTimeline` esterno a `SUPPORTED`.
-3. Avviare MCP locale read-only con `ping` + `resolve_status` e testarlo con MCP Inspector.
-4. Configurare Secure MCP Tunnel.
-5. Collegare la custom app a ChatGPT e validare `ChatGPT -> MCP -> Resolve READ`.
-6. Solo dopo esporre una write tool innocua `create_safe_working_timeline` e validare `ChatGPT -> MCP -> Resolve WRITE`.
+3. Configurare Secure MCP Tunnel verso il server MCP locale read-only già validato.
+4. Collegare la custom app a ChatGPT.
+5. Validare `ChatGPT -> MCP -> Resolve READ` chiamando `resolve_status` dalla conversazione.
+6. Solo dopo esporre `create_safe_working_timeline` e validare `ChatGPT -> MCP -> Resolve WRITE`.
 
 ### Track B — Benchmark 02 editoriale
 1. Prendere un estratto podcast autonomo di circa 8–15 minuti.

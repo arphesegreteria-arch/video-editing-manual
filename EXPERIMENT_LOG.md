@@ -328,6 +328,38 @@ PASS PC_SEGRETERIA quando:
 
 PASS PC_PERSONALE solo dopo replica separata e nuovi gate READ + SAFE WRITE.
 
+## E09 — MioDottore Review Social Creative / Fusion
+
+Stato: **PLANNED / BLOCKED ON CONTENT-USE CHECK**.
+
+Obiettivo:
+validare un primo workflow social reale in cui ChatGPT/bridge/Resolve costruiscono una creatività 9:16 a partire da un testo recensione, usando Fusion come motion-design layer e mantenendo il montaggio non distruttivo.
+
+Prerequisito prima di usare recensioni reali:
+- verificare policy/condizioni MioDottore e requisiti applicabili al riutilizzo promozionale dei testi delle recensioni;
+- definire regola definitiva per attribuzione e anonimizzazione/oscuramento del nome;
+- fino a quel momento usare esclusivamente testo fittizio nel test tecnico.
+
+Test tecnico proposto:
+1. creare una timeline di test 9:16 separata;
+2. usare un testo recensione fittizio;
+3. costruire un primo template Fusion `ARPHE_REVIEW_01` con stelle, text reveal, enfasi della frase chiave e end card ARPHÈ;
+4. parametrizzare almeno testo, durata, CTA e background/B-roll;
+5. provare almeno una transizione Fusion riutilizzabile;
+6. verificare che il template possa essere richiamato/adattato via scripting senza modificare l'originale;
+7. produrre una preview, non pubblicarla automaticamente;
+8. valutare qualità visiva, robustezza con testi di lunghezze diverse e possibilità di promuovere il risultato nella libreria ARPHÈ.
+
+Estensione successiva, dopo validazione del template base:
+- variante `ARPHE_REVIEW_BROLL`;
+- famiglie SHORT/MEDIUM per diverse lunghezze di testo;
+- test di composizione automatica dei preset;
+- modalità ADV sperimentale: Fusion dinamico come collante creativo per asset generati con Runway;
+- gli effetti dinamici riusciti vengono revisionati e, se approvati, promossi a preset deterministici della libreria ARPHÈ.
+
+Principio operativo:
+**standard social = preset Fusion approvati e parametrizzati; ADV speciali = pipeline ibrida Resolve + Fusion dinamico + eventuale Runway, sempre con preview/approvazione prima del render/pubblicazione finale.**
+
 ## Architettura superata
 
 Il precedente `ARPHE Remote Agent V1` basato su GUI Tkinter + polling GitHub è **SUPERSEDED**.

@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-09-04 — Windows bridge autostart + READ validati su PC_SEGRETERIA
+
+- Installato `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1` sul PC segreteria con secret DPAPI per-user.
+- Confermato Task Scheduler `At logon` con processo background `pythonw.exe` e nessuna
+  PowerShell persistente.
+- Dopo riavvio/login: `/readyz` HTTP 200, ChatGPT `ping` PASS e `resolve_status` PASS.
+- Corretti alias Python `WindowsApps` incompatibile con Task Scheduler e JSON con BOM di
+  Windows PowerShell 5.1.
+- Stato dichiarato **AUTOSTART + READ VALIDATED**; SAFE WRITE persistente, restart/backoff e
+  audit segreti restano pending.
+
+## 2026-09-01 — ARPHE_WINDOWS_BRIDGE_RUNTIME_V1 (repository)
+
+- Aggiunto runtime Windows limitato a `PC_SEGRETERIA` in `scripts/windows_bridge/`.
+- Autostart per-user via Task Scheduler `At logon` con `pythonw.exe`, senza console persistente.
+- Secret runtime protetto con DPAPI per-user; health `/readyz`, restart/backoff, Job Object e log redatti.
+- Aggiunti install/start/stop/status/uninstall PowerShell, config di esempio, test e guida operativa.
+- Deployment e acceptance test reali sul PC segreteria restano pending; nessuna modifica al PC personale.
+- Fix deployment Windows: lettura config compatibile con BOM di Windows PowerShell 5.1,
+  scrittura UTF-8 senza BOM e rifiuto degli alias Python `WindowsApps` per Task Scheduler.
+
 ## 2026-09-01 — Workstation chiarite + runtime Windows come prossima priorità
 
 - confermato che tutti i test end-to-end del 2026-09-01 sono stati eseguiti sul **PC segreteria**, non sul PC personale;

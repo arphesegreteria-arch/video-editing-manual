@@ -1,6 +1,6 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-09-01.
+Ultimo aggiornamento: sessione 2026-09-04.
 
 ## Obiettivo del progetto
 
@@ -166,7 +166,7 @@ Lezione: il collo di bottiglia principale è la **decisione editoriale**, non so
 
 ## PROSSIMO PERCORSO
 
-### Track A0 — infrastruttura Windows, PRIORITÀ IMMEDIATA
+### Track A0 — infrastruttura Windows, DEPLOYED / READ VALIDATED
 
 Ora che READ e SAFE WRITE end-to-end sono validati, il prossimo step è rimuovere la dipendenza dalla PowerShell aperta manualmente sul PC segreteria.
 
@@ -181,6 +181,20 @@ Implementare `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1` come processo background nella se
 - nessuna write Resolve eseguita autonomamente allo startup.
 
 Questo task è adatto a Codex. Specifica: `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`.
+
+Stato 2026-09-04: `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1` è installato sul solo `PC_SEGRETERIA`.
+La runtime API key è protetta con DPAPI per-user e il tunnel parte tramite Task Scheduler
+`At logon`, usando `pythonw.exe` senza PowerShell persistente. Dopo un riavvio completo e nuovo
+login sono passati `/readyz` HTTP 200, ChatGPT `ping` e `resolve_status` sul Resolve reale.
+
+Durante il deployment sono stati corretti due problemi Windows: alias Python `WindowsApps`
+non eseguibile da Task Scheduler e BOM UTF-8 prodotto da Windows PowerShell 5.1.
+
+Stato gate: **AUTOSTART + READ VALIDATED**. Restano prima del PASS completo della checklist:
+- `create_safe_working_timeline` tramite runtime persistente;
+- chiusura/riapertura Resolve senza reinstallazione;
+- terminazione volontaria del tunnel e verifica restart/backoff;
+- audit finale di config e log per assenza di segreti.
 
 ### Track A1 — prodotto ChatGPT / Resolve
 1. Consolidare le tool validate in un unico bridge/app DEV.

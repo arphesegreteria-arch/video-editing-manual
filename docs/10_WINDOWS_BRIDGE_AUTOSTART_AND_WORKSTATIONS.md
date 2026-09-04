@@ -168,6 +168,33 @@ Il runtime v1 è PASS solo se:
 10. terminando volontariamente il tunnel runtime, il supervisor lo riavvia con backoff;
 11. nessun segreto compare in log/config/repo.
 
+### Stato acceptance — 2026-09-04
+
+Deployment reale eseguito sul `PC_SEGRETERIA`:
+
+- [x] installazione runtime nella sessione dell'utente;
+- [x] API key salvata con DPAPI per-user;
+- [x] Task Scheduler `At logon` con `pythonw.exe`, senza PowerShell persistente;
+- [x] riavvio Windows e nuovo login;
+- [x] supervisor e tunnel avviati automaticamente;
+- [x] `/readyz` -> HTTP 200 `ready`;
+- [x] ChatGPT `ping` dopo il riavvio;
+- [x] ChatGPT `resolve_status` sul Resolve reale dopo il riavvio;
+- [ ] `create_safe_working_timeline` tramite il runtime persistente;
+- [ ] chiusura/riapertura Resolve e nuovo `resolve_status` senza reinstallazione;
+- [ ] terminazione volontaria del tunnel e verifica restart con backoff;
+- [ ] audit finale di config/log per assenza di segreti.
+
+Esito intermedio: **AUTOSTART + READ VALIDATED**. Non dichiarare ancora completata l'intera
+Definition of Done finché i quattro gate rimanenti non sono stati eseguiti.
+
+Note emerse dal deployment:
+
+- non usare gli alias `pyw.exe`/`pythonw.exe` sotto `Microsoft\WindowsApps` nelle azioni di
+  Task Scheduler; risolvere il percorso reale dell'interprete;
+- Windows PowerShell 5.1 può scrivere JSON UTF-8 con BOM: il runtime accetta `utf-8-sig` e
+  l'installer ora genera UTF-8 senza BOM.
+
 ## Replica — PC_PERSONALE
 
 Dopo il PASS del runtime sul PC segreteria:

@@ -1,5 +1,36 @@
 # EXPERIMENT LOG
 
+## 2026-09-04 — ARPHE_WINDOWS_BRIDGE_RUNTIME_V1 / deployment PC_SEGRETERIA
+
+### Risultato
+
+Runtime Windows installato realmente sul PC segreteria:
+
+- runtime API key salvata tramite DPAPI per-user;
+- task `ARPHE Resolve Bridge Runtime V1 - PC_SEGRETERIA` registrato `At logon`;
+- azione background con percorso reale `pythonw.exe`;
+- supervisor e tunnel attivi senza PowerShell persistente;
+- stato locale: supervisor `ready`, `/readyz` HTTP 200 `ready`;
+- riavvio Windows e nuovo login completati;
+- ChatGPT `ping` PASS dopo il riavvio;
+- ChatGPT `resolve_status` PASS sul Resolve reale dopo il riavvio.
+
+### Problemi trovati e corretti
+
+1. Il rilevamento automatico aveva selezionato l'alias `pyw.exe` sotto `Microsoft\WindowsApps`;
+   Task Scheduler terminava con codice `1`. L'installer ora rifiuta gli alias WindowsApps e
+   richiede/usa il percorso reale dell'interprete.
+2. Windows PowerShell 5.1 aveva scritto `bridge_config.json` con BOM UTF-8; il runtime falliva
+   con `JSONDecodeError: Unexpected UTF-8 BOM`. Il lettore ora usa `utf-8-sig` e l'installer
+   scrive UTF-8 senza BOM.
+
+### Stato
+
+**AUTOSTART + READ VALIDATED** su `PC_SEGRETERIA`.
+
+Ancora pending: SAFE WRITE tramite runtime persistente, close/reopen Resolve, kill controllato
+del tunnel con verifica backoff/restart e audit finale dei log. Nessuna attività sul PC personale.
+
 Scopo: tenere un registro persistente degli esperimenti, dei file coinvolti, dell'ipotesi testata, del risultato e del prossimo passo. Questo file deve impedire di perdere il filo quando arrivano nuovi MP4, transcript, edit plan, reference JSON e report.
 
 ## Regola generale

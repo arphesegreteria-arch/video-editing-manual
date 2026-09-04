@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "runtime_id": "ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
+  "workstation_id": "PC_SEGRETERIA",
+  "tunnel_id": "tunnel_REPLACE_ON_PC_SEGRETERIA",
+  "tunnel_client_path": "C:/ARPHE/MCP/tunnel client/tunnel-client-runtime-cloudflared.exe",
+  "mcp_command": "py -3 C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py",
+  "ready_url": "http://127.0.0.1:8080/readyz",
+  "log_dir": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
+  "secret_path": "%LOCALAPPDATA%/ARPHE/WindowsBridgeRuntimeV1/runtime_api_key.dpapi",
+  "state_path": "%LOCALAPPDATA%/ARPHE/WindowsBridgeRuntimeV1/runtime_state.json",
+  "stop_request_path": "%LOCALAPPDATA%/ARPHE/WindowsBridgeRuntimeV1/stop.requested",
+  "health_interval_seconds": 5,
+  "health_failure_threshold": 6,
+  "startup_grace_seconds": 20,
+  "backoff_initial_seconds": 2,
+  "backoff_max_seconds": 60,
+  "backoff_reset_after_seconds": 300
+}

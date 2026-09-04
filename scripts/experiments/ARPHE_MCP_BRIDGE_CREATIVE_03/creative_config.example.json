@@ -1,0 +1,31 @@
+{
+  "runtime_id": "ARPHE_MCP_BRIDGE_CREATIVE_03",
+  "workstation_id": "PC_SEGRETERIA",
+  "asset_root": "C:/ARPHE/MCP/assets/creative",
+  "render_root": "C:/ARPHE/MCP/renders/creative",
+  "state_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/creative_state.json",
+  "audit_log_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/audit.jsonl",
+  "allowed_projects": [],
+  "allowed_timelines": [],
+  "feature_flags": {
+    "CAP_PROJECT": true,
+    "CAP_TIMELINE": true,
+    "CAP_FUSION": false,
+    "CAP_REVIEW": false,
+    "CAP_MOTION": false,
+    "CAP_ASSETS": false,
+    "CAP_RENDER": false
+  },
+  "palette": {
+    "ivory": "#F7F2E8",
+    "cream": "#EFE3CF",
+    "beige": "#D7C2A6",
+    "burgundy": "#6C2438",
+    "warm_brown": "#8A6248",
+    "dark_brown": "#3A2923",
+    "black": "#111111",
+    "white": "#FFFFFF"
+  },
+  "render_format": "mp4",
+  "render_codec": "H264"
+}

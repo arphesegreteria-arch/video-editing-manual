@@ -11,6 +11,7 @@
 | `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md` | **Architettura prodotto corrente: ChatGPT -> MCP -> Resolve Studio** |
 | `docs/09_MCP_TUNNEL_ROLLOUT_CHECKLIST.md` | Procedura tunnel e gate ChatGPT READ/WRITE |
 | `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md` | **Autostart Windows, PC segreteria vs PC personale, replica e handoff Codex** |
+| `docs/11_CREATIVE_BRIDGE_AND_E09.md` | **Creative Bridge 03, sicurezza, feature flag, gate E09 e rollback** |
 | `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
 | `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 | `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |
@@ -52,7 +53,8 @@ Il piano `docs/superpowers/plans/2026-08-28-resolve-studio-capability-audit.md` 
 - `scripts/experiments/ARPHE_MCP_BRIDGE_READ_01.py`: **MCP locale -> Resolve READ superato** con `ping` + `resolve_status`.
 - ChatGPT -> Secure MCP Tunnel -> Resolve READ: **VALIDATED**.
 - ChatGPT -> Secure MCP Tunnel -> Resolve SAFE WRITE: **VALIDATED** per `create_safe_working_timeline`.
-- Prossimo gate infrastrutturale: **autostart persistente sul PC segreteria senza PowerShell manuale**.
+- Autostart persistente sul PC segreteria: **AUTOSTART + READ VALIDATED**.
+- `ARPHE_MCP_BRIDGE_CREATIVE_03`: **IMPLEMENTED / OFFLINE TESTED / GATE A PASS / GATES B-G PENDING**.
 
 ## Benchmark / strumenti di valutazione
 

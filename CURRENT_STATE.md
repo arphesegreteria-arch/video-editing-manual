@@ -141,6 +141,35 @@ Restano da provare singolarmente via bridge esterno/MCP:
 
 Un'operazione non diventa `SUPPORTED` solo perché esiste nella documentazione API: deve essere testata nel nostro ambiente.
 
+### ARPHE_MCP_BRIDGE_CREATIVE_03 — IMPLEMENTED / OFFLINE TESTED
+
+Build modulare aggiunta per E09 MioDottore Review Social Creative. Mantiene `ping`,
+`resolve_status` e `create_safe_working_timeline`, aggiunge primitive semantiche per
+project/timeline, Fusion, review card, motion, asset e preview, senza tool generiche o delete.
+
+Default release:
+- `CAP_PROJECT=true`, `CAP_TIMELINE=true` per Gate A;
+- `CAP_FUSION=false`, `CAP_REVIEW=false`, `CAP_MOTION=false`, `CAP_ASSETS=false`,
+  `CAP_RENDER=false` fino ai gate reali;
+- Gate A `create_project` / `create_timeline` / `get_creative_status`: `SUPPORTED` con evidenza
+  reale; le altre primitive project/timeline e i Gate B-G restano `PENDING`.
+
+Codice: `scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03/`.
+Spec/gate/rollback: `docs/11_CREATIVE_BRIDGE_AND_E09.md`.
+
+Gate A, primo tentativo reale 2026-09-04: `create_project` PASS senza overwrite;
+`create_timeline` ha creato una V1 separata ma Resolve ha rifiutato resolution/FPS impostati
+dopo la creazione, lasciandola 1920x1080/24. La sequenza si è fermata con `ok=false`, senza
+cancellazioni. Dopo la correzione `Project.SetSetting` pre-creazione, il retest V2 è **PASS**:
+progetto `ARPHE_E09_MIODOTTORE_REVIEWS_V2`, timeline `ARPHE_E09_VERTICAL_V2`, 1080x1920/30,
+conferma API e visiva, nessun overwrite. Selezione/versioning/save restano PENDING.
+
+Decisione creativa successiva: il master E09 sarà 16:9, non una Story verticale. Creati e
+verificati senza overwrite il progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9` e la timeline
+`ARPHE_E09_16X9_V1`, 1920x1080/30, attualmente vuota e corrente in Resolve. La V2 verticale
+resta conservata come evidenza Gate A. Prossimo punto di ripartenza: Gate B Fusion sul master
+16:9, abilitando soltanto `CAP_FUSION`.
+
 ## 📊 TRACK EDITORIALE
 
 Benchmark umano su `blabla.mp4` contro `ARPHE_LONGFORM_SAFE_EDIT_PLAN_V3`:
@@ -197,13 +226,13 @@ Stato gate: **AUTOSTART + READ VALIDATED**. Restano prima del PASS completo dell
 - audit finale di config e log per assenza di segreti.
 
 ### Track A1 — prodotto ChatGPT / Resolve
-1. Consolidare le tool validate in un unico bridge/app DEV.
-2. Aggiungere `list_media` limitato a una cartella allowlisted.
-3. Aggiungere `transcribe_media` con faster-whisper locale.
-4. Permettere a ChatGPT di leggere transcript/chunk e proporre decisioni editoriali.
-5. Implementare `apply_edit_plan` minimale su una sorgente di test, sempre creando una nuova timeline.
-6. Validare rebuild/cut via MCP end-to-end.
-7. Solo dopo ampliare a transform, Fusion, captions, render e tracking.
+1. `ARPHE_MCP_BRIDGE_CREATIVE_03` installato e raggiungibile dal PC segreteria.
+2. Gate A PASS; master 16:9 creato in `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`.
+3. Ripartire dal Gate B sul master `ARPHE_E09_16X9_V1`, abilitando solo `CAP_FUSION`.
+4. Validare Gate B-G uno alla volta, aggiornando i flag solo dopo il gate precedente.
+5. Mantenere `ARPHE_MCP_BRIDGE_SAFE_WRITE_02` come rollback immediato.
+6. In parallelo continuare il percorso editoriale `list_media` / transcript / edit plan senza
+   confonderlo con la validazione E09.
 
 ### Track A2 — replica PC personale
 Dopo il PASS del runtime persistente sul PC segreteria:

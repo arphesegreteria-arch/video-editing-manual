@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2026-09-04 — ARPHE_MCP_BRIDGE_CREATIVE_03
+
+- Aggiunta build MCP modulare affiancata per E09 MioDottore Review Social Creative.
+- Mantenute le tool validate `ping`, `resolve_status`, `create_safe_working_timeline`.
+- Aggiunte API semantiche e non distruttive per project/timeline, Fusion, review card, motion,
+  asset e preview; nessuna shell/Python/Fusion property generica e nessuna delete.
+- Aggiunti registry locale, palette e filesystem allowlist, audit metadata-only e feature flag.
+- Project/Timeline attivi per Gate A; Fusion/Review/Motion/Assets/Render disabilitati di default.
+- Aggiunti 21 test offline, installazione PC segreteria, switch runtime e rollback SAFE_WRITE_02.
+- Registrato Gate A parziale: `Timeline.SetSetting` post-creazione rifiutato; corretta la sequenza
+  impostando i default con `Project.SetSetting` prima di creare una nuova timeline.
+- Gate A V2 superato con riscontro API e visivo: progetto ARPHE nuovo, timeline 1080x1920/30,
+  nessun overwrite; le altre primitive project/timeline restano PENDING.
+- Creato e verificato in Resolve il nuovo master E09 16:9
+  `ARPHE_E09_MIODOTTORE_REVIEWS_16X9` / `ARPHE_E09_16X9_V1`, 1920x1080/30; la V2 verticale
+  resta intatta e il prossimo punto di ripartenza è Gate B Fusion.
+- Gate A `create_project` / `create_timeline` / `get_creative_status` è `SUPPORTED`; le altre
+  primitive project/timeline e i Gate B-G restano `PENDING`.
+
 ## 2026-09-04 — Windows bridge autostart + READ validati su PC_SEGRETERIA
 
 - Installato `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1` sul PC segreteria con secret DPAPI per-user.

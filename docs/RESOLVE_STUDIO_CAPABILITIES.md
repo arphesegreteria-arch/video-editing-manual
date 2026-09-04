@@ -39,6 +39,16 @@ Stati ammessi:
 | Tracking automatico Studio / IntelliTrack | PENDING | Rivalutare in Studio; vecchio trigger FusionScript Free non affidabile |
 | Captions/subtitles automation | PENDING | Da auditare |
 | Render queue/export esterno | PENDING | Da auditare |
+| Creative 03: create progetto ARPHE | SUPPORTED | Gate A V2: creato/selezionato progetto nuovo, nessun overwrite |
+| Creative 03: create timeline 1080x1920/30 + status | SUPPORTED | Gate A V2: settings pre-creazione, match API e conferma visiva Resolve |
+| Creative 03: create timeline 1920x1080/30 + status | SUPPORTED | Master E09 16:9 creato e verificato via read-back, nessun overwrite |
+| Creative 03: load/save progetto ARPHE | PENDING | Implementato, da testare separatamente |
+| Creative 03: set/duplicate timeline version | PENDING | Implementato, `DuplicateTimeline` da testare separatamente |
+| Creative 03: Fusion composition/background/Text+ | PENDING | Implementato dietro `CAP_FUSION=false`; Gate B richiesto |
+| Creative 03: review card/highlight/end card | PENDING | Implementato dietro `CAP_REVIEW=false`; Gate C/F richiesti |
+| Creative 03: motion preset/card stack | PENDING | Implementato dietro `CAP_MOTION=false`; Gate D/E richiesti |
+| Creative 03: asset allowlisted | PENDING | Implementato dietro `CAP_ASSETS=false`; import/placement da verificare |
+| Creative 03: render preview | PENDING | Implementato dietro `CAP_RENDER=false`; non abilitare prima del Gate G |
 
 ## Regola
 
@@ -54,8 +64,7 @@ Il write test da ChatGPT ha creato una sola timeline vuota ARPHE, non ha modific
 
 ## Prossimi probe
 
-1. Consolidare un unico bridge/app DEV con tool read + safe write validate.
-2. Testare `list_media` e accesso a una cartella allowlisted.
-3. Esporre `transcribe_media` con faster-whisper locale.
-4. Validare un `apply_edit_plan` minimale su clip di test, sempre creando una nuova timeline.
-5. Solo dopo ampliare a transform, Fusion, captions, render e tracking Studio.
+1. Installare affiancato Creative 03 e svolgere Gate A senza contenuti reali.
+2. Svolgere Gate B-G separatamente, promuovendo una riga a `SUPPORTED` solo con evidenza reale.
+3. Testare `list_media` e accesso a una cartella allowlisted nel track editoriale separato.
+4. Esporre `transcribe_media` e validare un `apply_edit_plan` minimale su una nuova timeline.

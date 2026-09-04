@@ -361,10 +361,12 @@ PASS PC_PERSONALE solo dopo replica separata e nuovi gate READ + SAFE WRITE.
 
 ## E09 — MioDottore Review Social Creative / Fusion
 
-Stato: **PLANNED / BLOCKED ON CONTENT-USE CHECK**.
+Stato: **BRIDGE IMPLEMENTED / OFFLINE TESTED / GATE A PASS / GATES B-G PENDING / REAL CONTENT BLOCKED**.
 
 Obiettivo:
-validare un primo workflow social reale in cui ChatGPT/bridge/Resolve costruiscono una creatività 9:16 a partire da un testo recensione, usando Fusion come motion-design layer e mantenendo il montaggio non distruttivo.
+validare un primo workflow social reale in cui ChatGPT/bridge/Resolve costruiscono una creatività
+master 16:9 a partire da un testo recensione, usando Fusion come motion-design layer e mantenendo
+il montaggio non distruttivo. La variante 9:16 resta un adattamento successivo, non il master.
 
 Prerequisito prima di usare recensioni reali:
 - verificare policy/condizioni MioDottore e requisiti applicabili al riutilizzo promozionale dei testi delle recensioni;
@@ -372,7 +374,7 @@ Prerequisito prima di usare recensioni reali:
 - fino a quel momento usare esclusivamente testo fittizio nel test tecnico.
 
 Test tecnico proposto:
-1. creare una timeline di test 9:16 separata;
+1. creare una timeline master 16:9 separata;
 2. usare un testo recensione fittizio;
 3. costruire un primo template Fusion `ARPHE_REVIEW_01` con stelle, text reveal, enfasi della frase chiave e end card ARPHÈ;
 4. parametrizzare almeno testo, durata, CTA e background/B-roll;
@@ -390,6 +392,69 @@ Estensione successiva, dopo validazione del template base:
 
 Principio operativo:
 **standard social = preset Fusion approvati e parametrizzati; ADV speciali = pipeline ibrida Resolve + Fusion dinamico + eventuale Runway, sempre con preview/approvazione prima del render/pubblicazione finale.**
+
+### Build preparata — 2026-09-04
+
+Creata `ARPHE_MCP_BRIDGE_CREATIVE_03` come build affiancata, senza modificare i bridge
+READ_01/SAFE_WRITE_02 e senza cambiare il runtime Windows installato.
+
+Include:
+- project/timeline con prefisso, collision guard, registry e no-overwrite;
+- Fusion composition, background e Text+ semantici;
+- review card, highlight, end card e timing;
+- preset `ARPHE_SOFT_DROP`, `ARPHE_PAPER_STACK`, `ARPHE_ELEGANT_REVEAL`, `ARPHE_CTA_SETTLE`;
+- asset root e render root allowlisted;
+- feature flags progressive, con Render false;
+- audit metadata-only senza input, path o segreti;
+- installazione affiancata e switch/rollback del solo `MCP_COMMAND`.
+
+Test offline iniziali: 20 PASS, poi estesi a 21 PASS con la correzione delle impostazioni timeline.
+Gate A è stato validato con write reali controllate; Gate B-G restano `PENDING`. Gate e criteri
+sono definiti in `docs/11_CREATIVE_BRIDGE_AND_E09.md`. Fino al content-use check MioDottore, i
+gate tecnici devono usare esclusivamente recensioni fittizie.
+
+### Gate A — primo tentativo reale 2026-09-04
+
+- `create_project`: PASS; creato e selezionato `ARPHE_E09_MIODOTTORE_REVIEWS`, senza overwrite;
+- `create_timeline`: PARTIAL/FAIL SAFE; creata `ARPHE_E09_VERTICAL_V1`, ma
+  `Timeline.SetSetting` ha rifiutato resolution/FPS dopo la creazione e la timeline è rimasta
+  1920x1080/24;
+- `get_creative_status`: non eseguito, correttamente, perché la fase precedente aveva `ok=false`;
+- nessuna timeline cancellata e nessun progetto/timeline preesistente modificato.
+
+Correzione preparata: applicare e verificare `Project.SetSetting` prima di
+`MediaPool.CreateEmptyTimeline`, esclusivamente su un progetto creato/allowlisted dal bridge.
+Il retest deve usare nuovi nomi `ARPHE_E09_MIODOTTORE_REVIEWS_V2` e
+`ARPHE_E09_VERTICAL_V2`; il primo tentativo resta come evidenza diagnostica.
+
+### Gate A — retest V2 PASS 2026-09-04
+
+- `create_project`: PASS, creato/selezionato `ARPHE_E09_MIODOTTORE_REVIEWS_V2`;
+- `create_timeline`: PASS, creata/selezionata `ARPHE_E09_VERTICAL_V2`;
+- `Project.SetSetting`: true per width, height e frame rate prima della creazione;
+- verifica API: actual 1080x1920, 30 fps, `settings_match=true`;
+- `get_creative_status`: PASS su Resolve Studio 21.0.4.5;
+- verifica visiva Resolve: timeline `ARPHE_E09_VERTICAL_V2`, 1080x1920, 30.000 fps;
+- nessun overwrite e nessuna modifica/cancellazione della V1 o di timeline preesistenti.
+
+Gate A: **PASS** per `create_project`, `create_timeline` e `get_creative_status`.
+`set_current_project`, `set_current_timeline`, `duplicate_timeline_version` e `save_project`
+restano da validare separatamente; il gruppo capability complessivo non è ancora interamente
+`SUPPORTED`.
+
+### Master E09 16:9 — stato di ripartenza
+
+Su decisione creativa dell'utente, il formato principale passa da verticale a 16:9. Il
+2026-09-04 sono stati creati tramite le primitive controllate Creative 03:
+
+- progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`;
+- timeline `ARPHE_E09_16X9_V1`;
+- settings richiesti ed effettivi 1920x1080, 30 fps;
+- `settings_match=true`, current timeline impostata, `overwrite=false`;
+- read-back Resolve: 1 traccia video, 1 audio, 0 clip.
+
+La timeline verticale V2 non è stata modificata o cancellata. Prossima azione: Gate B sul master
+16:9, usando testo fittizio e abilitando esclusivamente `CAP_FUSION`.
 
 ## Architettura superata
 

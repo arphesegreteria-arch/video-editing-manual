@@ -6,14 +6,14 @@ from .config import CAPABILITY_NAMES, CreativeConfig
 
 
 IMPLEMENTED = {name: True for name in CAPABILITY_NAMES}
-VALIDATED = {
-    "CAP_PROJECT": False,
-    "CAP_TIMELINE": False,
-    "CAP_FUSION": False,
-    "CAP_REVIEW": False,
-    "CAP_MOTION": False,
-    "CAP_ASSETS": False,
-    "CAP_RENDER": False,
+CAPABILITY_STATUS = {
+    "CAP_PROJECT": "PARTIAL",
+    "CAP_TIMELINE": "PARTIAL",
+    "CAP_FUSION": "PARTIAL",
+    "CAP_REVIEW": "PENDING",
+    "CAP_MOTION": "PENDING",
+    "CAP_ASSETS": "PENDING",
+    "CAP_RENDER": "PENDING",
 }
 
 
@@ -66,8 +66,8 @@ def report(config: CreativeConfig, manager: Any = None, project: Any = None, tim
             "configured": enabled,
             "implemented": IMPLEMENTED[name],
             "technically_available": technically_available,
-            "validated": VALIDATED[name],
-            "status": "SUPPORTED" if VALIDATED[name] else "PENDING",
+            "validated": CAPABILITY_STATUS[name] == "SUPPORTED",
+            "status": CAPABILITY_STATUS[name],
         }
     return capabilities
 

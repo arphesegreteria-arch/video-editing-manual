@@ -39,7 +39,7 @@ A third-party claim never overrides an ARPHE execution result without investigat
 ### 1. Local DaVinci Resolve Developer/Scripting README
 
 **Type:** vendor documentation shipped with Resolve  
-**Status:** `UNVERIFIED` until checked against the installed Studio build  
+**Status:** `TESTED` as the installed API reference on Resolve Studio 21.0.4.5
 **Priority:** CRITICAL
 
 Resolve ships its own Scripting API documentation and representative examples. This should be our first reference during the Studio capability audit because it corresponds most closely to the installed build.
@@ -61,7 +61,7 @@ Useful for:
 
 URL: https://github.com/velvaiss/auto-subs-davinci-resolve  
 Interesting path: `Resolve-Integration/davinci-resolve-fusion/SKILL.md`  
-**Status:** `UNVERIFIED`  
+**Status:** `UNVERIFIED`
 **Priority:** HIGH
 
 Why it is interesting:
@@ -86,7 +86,7 @@ Potential ARPHE value:
 
 URL: https://github.com/mvarge/davinci-scripts  
 Interesting files: `RESOLVE_API_REFERENCE.md`, `RESOLVE_SCRIPTING_GUIDE.md`  
-**Status:** `UNVERIFIED`  
+**Status:** `TESTED` come metodo di introspezione/cleanup; singole affermazioni ancora da verificare
 **Priority:** HIGH
 
 Why it is interesting:
@@ -102,6 +102,9 @@ Potential ARPHE value:
 - Caption Engine;
 - identifying API dead ends before spending test cycles on them.
 
+Esito ARPHE 2026-09-08: adottato il pattern `GetInputList` + `GetInput` e il cleanup tramite
+`Delete()` sui nodi appena creati. Il probe live ha individuato `LayoutWidth`/`LayoutHeight`.
+
 **Caution:** claims labelled as live-verified by the author are still `UNVERIFIED` for ARPHE until we reproduce them on our machine/build.
 
 ---
@@ -109,7 +112,7 @@ Potential ARPHE value:
 ### 4. `tmoroney/auto-subs`
 
 URL: https://github.com/tmoroney/auto-subs  
-**Status:** `UNVERIFIED`  
+**Status:** `TESTED` come riferimento architetturale; macro `.setting` non ancora provata da ARPHE
 **Priority:** HIGH for captions, MEDIUM overall
 
 Why it is interesting:
@@ -123,6 +126,9 @@ Potential ARPHE value:
 - reusable caption templates;
 - transcription integration;
 - Windows/macOS deployment lessons.
+
+Esito ARPHE 2026-09-08: il pattern della macro `.setting` versionata resta il fallback candidato
+se la costruzione dinamica della review card non supera il Gate C V5.
 
 **Caution:** ARPHE should not inherit its architecture wholesale. We already have our own transcription/editing pipeline and only want techniques that simplify our validated design.
 

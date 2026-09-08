@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-09-08 — Gate C V5 hardening e fonti Resolve/Fusion
+
+- Corretto Text+ frame layout: `LayoutWidth`/`LayoutHeight`, non canvas `Width`/`Height`.
+- Verificato il read-back degli input e i collegamenti Fusion; gestito il ritorno `None` delle proxy.
+- Resa `add_review_card` reversibile sui soli nodi creati dalla chiamata fallita.
+- Introdotto lo stato capability `PARTIAL`: Gate B parziale, Gate C ancora pending.
+- Aggiunto un confronto tracciato tra documentazione Blackmagic, probe Resolve 21 e manuali GitHub.
+- Documentato il blocco Smart App Control del tunnel non firmato e il relativo debito di sicurezza.
+
 ## 2026-09-04 — ARPHE_MCP_BRIDGE_CREATIVE_03
 
 - Aggiunta build MCP modulare affiancata per E09 MioDottore Review Social Creative.

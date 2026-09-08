@@ -15,7 +15,12 @@ if (-not $PSCmdlet.ShouldProcess($Destination, 'Install creative bridge beside v
 
 New-Item -ItemType Directory -Path $Destination -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ARPHE_MCP_BRIDGE_CREATIVE_03.py') -Destination $Destination -Force
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'bridge') -Destination $Destination -Recurse -Force
+$bridgeSource = Join-Path $PSScriptRoot 'bridge'
+$bridgeDestination = Join-Path $Destination 'bridge'
+New-Item -ItemType Directory -Path $bridgeDestination -Force | Out-Null
+Get-ChildItem -LiteralPath $bridgeSource -File | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination $bridgeDestination -Force
+}
 New-Item -ItemType Directory -Path $AssetRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $RenderRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $configDir -Force | Out-Null

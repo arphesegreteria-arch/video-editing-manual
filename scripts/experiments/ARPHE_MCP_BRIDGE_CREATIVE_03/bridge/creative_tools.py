@@ -5,7 +5,7 @@ from typing import Any
 from .config import CreativeConfig
 from .feature_flags import require_capability
 from .fusion_tools import (_id, _new_tool, _rgb, _set, _set_color, add_layer,
-                           find_composition, set_visibility_window)
+                           connect_input, find_composition, set_visibility_window)
 from .motion_presets import motion_plan, stack_plan
 from .registry import Registry
 from .resolve_connection import safe_call
@@ -15,19 +15,91 @@ from .safety import (ValidationError, finite_float, validate_color_role,
 
 def _merge(comp: Any, background: Any, foreground: Any, name: str) -> Any:
     merge = _new_tool(comp, "Merge", name)
-    merge.ConnectInput("Background", background)
-    merge.ConnectInput("Foreground", foreground)
+    if not connect_input(merge, "Background", background):
+        raise RuntimeError(f"Collegamento background fallito: {name}")
+    if not connect_input(merge, "Foreground", foreground):
+        raise RuntimeError(f"Collegamento foreground fallito: {name}")
     return merge
 
 
-def _text(comp: Any, name: str, value: str, size: float, color: dict[str, float], y: float) -> Any:
+def _input_matches(tool: Any, name: str, expected: Any) -> bool:
+    actual = safe_call(tool, "GetInput", name)
+    if isinstance(expected, float):
+        try:
+            return abs(float(actual) - expected) < 1e-6
+        except (TypeError, ValueError):
+            return False
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict):
+            return False
+        try:
+            return all(abs(float(actual[key]) - float(value)) < 1e-6
+                       for key, value in expected.items())
+        except (KeyError, TypeError, ValueError):
+            return False
+    return actual == expected
+
+
+def _text(comp: Any, name: str, value: str, size: float, color: dict[str, float], y: float,
+          *, font: str = "Open Sans", style: str = "Regular", layout_type: float = 0.0,
+          frame_width: float | None = None, frame_height: float | None = None) -> Any:
     tool = _new_tool(comp, "TextPlus", name)
-    _set(tool, "StyledText", value)
-    _set(tool, "Size", size)
-    _set(tool, "Center", {1: 0.5, 2: y, 3: 0.0})
+    requested: dict[str, Any] = {
+        "StyledText": value,
+        "Font": font,
+        "Style": style,
+        "Size": float(size),
+        "Center": {1: 0.5, 2: y, 3: 0.0},
+        "LayoutType": float(layout_type),
+        "HorizontalJustificationNew": 3.0,
+        "VerticalJustificationNew": 3.0,
+    }
+    if frame_width is not None:
+        requested["LayoutWidth"] = float(frame_width)
+    if frame_height is not None:
+        requested["LayoutHeight"] = float(frame_height)
+    required = {key: _set(tool, key, value) for key, value in requested.items()}
     for key, channel in (("Red1", "r"), ("Green1", "g"), ("Blue1", "b"), ("Alpha1", "a")):
-        _set(tool, key, color[channel])
+        requested[key] = float(color[channel])
+        required[key] = _set(tool, key, requested[key])
+    failed = [key for key, ok in required.items() if not ok]
+    if failed:
+        raise RuntimeError(f"Configurazione Text+ incompleta per {name}: {', '.join(failed)}")
+    mismatched = [key for key, expected in requested.items()
+                  if not _input_matches(tool, key, expected)]
+    if mismatched:
+        raise RuntimeError(f"Read-back Text+ non corrispondente per {name}: {', '.join(mismatched)}")
     return tool
+
+
+def _tool_name(tool: Any) -> str | None:
+    attrs = safe_call(tool, "GetAttrs") or {}
+    name = attrs.get("TOOLS_Name") if isinstance(attrs, dict) else None
+    return name if isinstance(name, str) and name else None
+
+
+def _tool_snapshot(comp: Any) -> set[str]:
+    tools = safe_call(comp, "GetToolList") or {}
+    values = tools.values() if isinstance(tools, dict) else tools
+    return {name for tool in values if (name := _tool_name(tool))}
+
+
+def _remove_tools_created_after(comp: Any, snapshot: set[str]) -> int:
+    """Best-effort rollback limited to tools created by the current primitive."""
+    tools = safe_call(comp, "GetToolList") or {}
+    values = list(tools.values()) if isinstance(tools, dict) else list(tools)
+    removed = 0
+    for tool in reversed(values):
+        name = _tool_name(tool)
+        # Never delete an unnamed or non-ARPHE tool during recovery.
+        if not name or name in snapshot or not name.startswith("ARPHE_"):
+            continue
+        try:
+            tool.Delete()
+            removed += 1
+        except Exception:
+            pass
+    return removed
 
 
 def add_review_card(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
@@ -40,50 +112,84 @@ def add_review_card(project: Any, timeline: Any, config: CreativeConfig, registr
     validate_color_role(style_role)
     _, comp = find_composition(timeline, registry, composition_id)
     card_id = _id("CARD")
-    background = _new_tool(comp, "Background", f"{card_id}_BG")
-    _set_color(background, _rgb(config.palette[style_role]))
-    mask = _new_tool(comp, "RectangleMask", f"{card_id}_MASK")
-    _set(mask, "Width", 0.78)
-    _set(mask, "Height", 0.34)
-    _set(mask, "CornerRadius", 0.055)
-    background.ConnectInput("EffectMask", mask)
+    snapshot = _tool_snapshot(comp)
+    undo_started = False
+    try:
+        start_undo = getattr(comp, "StartUndo", None)
+        if callable(start_undo):
+            start_undo(f"ARPHE add review card {card_id}")
+            undo_started = True
+    except Exception:
+        pass
+    try:
+        # Text nodes come first: their live schema/read-back is the most fragile part.
+        # Any failure below removes every node created by this primitive.
+        dark = _rgb(config.palette["dark_brown"])
+        review_size = 0.036 if len(text) <= 180 else 0.031
+        review = _text(comp, f"{card_id}_TEXT", text, review_size, dark, 0.49,
+                       layout_type=1.0, frame_width=0.66, frame_height=0.17)
+        stars_tool = _text(comp, f"{card_id}_STARS", " ".join("★" for _ in range(stars)),
+                           0.035, _rgb(config.palette["burgundy"]), 0.62,
+                           font="Segoe UI Symbol", style="Regular")
+        label_tool = (_text(comp, f"{card_id}_LABEL", small_label, 0.019, dark, 0.37)
+                      if small_label else None)
+        highlight_tool = (_text(comp, f"{card_id}_HIGHLIGHT", highlight_text, 0.028,
+                                _rgb(config.palette["burgundy"]), 0.405,
+                                layout_type=1.0, frame_width=0.60, frame_height=0.055)
+                          if highlight_text else None)
 
-    shadow = _new_tool(comp, "Background", f"{card_id}_SHADOW")
-    _set_color(shadow, _rgb(config.palette["black"], 0.13))
-    shadow_mask = _new_tool(comp, "RectangleMask", f"{card_id}_SHADOW_MASK")
-    _set(shadow_mask, "Width", 0.78)
-    _set(shadow_mask, "Height", 0.34)
-    _set(shadow_mask, "CornerRadius", 0.055)
-    _set(shadow_mask, "Center", {1: 0.512, 2: 0.485, 3: 0.0})
-    shadow.ConnectInput("EffectMask", shadow_mask)
-    card = _merge(comp, shadow, background, f"{card_id}_CARD_MERGE")
+        background = _new_tool(comp, "Background", f"{card_id}_BG")
+        _set_color(background, _rgb(config.palette[style_role]))
+        mask = _new_tool(comp, "RectangleMask", f"{card_id}_MASK")
+        _set(mask, "Width", 0.78)
+        _set(mask, "Height", 0.38)
+        _set(mask, "CornerRadius", 0.055)
+        if not connect_input(background, "EffectMask", mask):
+            raise RuntimeError("Collegamento maschera card fallito")
 
-    dark = _rgb(config.palette["dark_brown"])
-    review = _text(comp, f"{card_id}_TEXT", text, 0.047, dark, 0.49)
-    card = _merge(comp, card, review, f"{card_id}_TEXT_MERGE")
-    stars_tool = _text(comp, f"{card_id}_STARS", "★" * stars, 0.042, _rgb(config.palette["burgundy"]), 0.61)
-    card = _merge(comp, card, stars_tool, f"{card_id}_STARS_MERGE")
-    label_tool = _text(comp, f"{card_id}_LABEL", small_label or "", 0.024, dark, 0.38)
-    card = _merge(comp, card, label_tool, f"{card_id}_LABEL_MERGE")
-    highlight_tool = _text(comp, f"{card_id}_HIGHLIGHT", highlight_text or "", 0.037,
-                           _rgb(config.palette["burgundy"]), 0.43)
-    card = _merge(comp, card, highlight_tool, f"{card_id}_HIGHLIGHT_MERGE")
+        shadow = _new_tool(comp, "Background", f"{card_id}_SHADOW")
+        _set_color(shadow, _rgb(config.palette["black"], 0.13))
+        shadow_mask = _new_tool(comp, "RectangleMask", f"{card_id}_SHADOW_MASK")
+        _set(shadow_mask, "Width", 0.78)
+        _set(shadow_mask, "Height", 0.38)
+        _set(shadow_mask, "CornerRadius", 0.055)
+        _set(shadow_mask, "Center", {1: 0.512, 2: 0.485, 3: 0.0})
+        if not connect_input(shadow, "EffectMask", shadow_mask):
+            raise RuntimeError("Collegamento maschera ombra fallito")
+        card = _merge(comp, shadow, background, f"{card_id}_CARD_MERGE")
+        card = _merge(comp, card, review, f"{card_id}_TEXT_MERGE")
+        card = _merge(comp, card, stars_tool, f"{card_id}_STARS_MERGE")
+        if label_tool:
+            card = _merge(comp, card, label_tool, f"{card_id}_LABEL_MERGE")
+        if highlight_tool:
+            card = _merge(comp, card, highlight_tool, f"{card_id}_HIGHLIGHT_MERGE")
 
-    transform = _new_tool(comp, "Transform", f"{card_id}_TRANSFORM")
-    transform.ConnectInput("Input", card)
-    outer_merge_name = f"{card_id}_OUTER_MERGE"
-    outer_merge = add_layer(comp, transform, outer_merge_name)
-    timing_applied = set_visibility_window(comp, outer_merge, start, end)
-    registry.add_element(card_id, {
-        "kind": "review_card", "composition_id": composition_id,
-        "transform_name": f"{card_id}_TRANSFORM",
-        "outer_merge_name": outer_merge_name if outer_merge else None,
-        "highlight_name": f"{card_id}_HIGHLIGHT",
-        "start_frame": start, "end_frame": end,
-    })
+        transform = _new_tool(comp, "Transform", f"{card_id}_TRANSFORM")
+        if not connect_input(transform, "Input", card):
+            raise RuntimeError("Collegamento card al Transform fallito")
+        outer_merge_name = f"{card_id}_OUTER_MERGE"
+        outer_merge = add_layer(comp, transform, outer_merge_name)
+        timing_applied = set_visibility_window(comp, outer_merge, start, end)
+        registry.add_element(card_id, {
+            "kind": "review_card", "composition_id": composition_id,
+            "transform_name": f"{card_id}_TRANSFORM",
+            "outer_merge_name": outer_merge_name if outer_merge else None,
+            "highlight_name": f"{card_id}_HIGHLIGHT" if highlight_tool else None,
+            "start_frame": start, "end_frame": end,
+        })
+    except Exception as exc:
+        removed = _remove_tools_created_after(comp, snapshot)
+        if undo_started:
+            safe_call(comp, "EndUndo", True)
+        raise RuntimeError(f"add_review_card annullata; nodi rimossi={removed}: {exc}") from exc
+    if undo_started:
+        safe_call(comp, "EndUndo", True)
     return {"ok": True, "action": "add_review_card", "composition_id": composition_id,
             "card_id": card_id, "stars": stars, "frame_range": [start, end],
-            "style_role": style_role, "timing_applied": timing_applied, "status": "PENDING"}
+            "style_role": style_role, "timing_applied": timing_applied,
+            "review_layout": "frame", "review_font": "Open Sans",
+            "stars_font": "Segoe UI Symbol", "text_readback_verified": True,
+            "status": "PENDING"}
 
 
 def set_review_highlight(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
@@ -119,7 +225,8 @@ def add_end_card(project: Any, timeline: Any, config: CreativeConfig, registry: 
     cta_tool = _text(comp, f"{element_id}_CTA", cta, 0.045, _rgb(config.palette["cream"]), 0.43)
     merged = _merge(comp, merged, cta_tool, f"{element_id}_CTA_MERGE")
     transform = _new_tool(comp, "Transform", f"{element_id}_TRANSFORM")
-    transform.ConnectInput("Input", merged)
+    if not connect_input(transform, "Input", merged):
+        raise RuntimeError("Collegamento end card al Transform fallito")
     outer_name = f"{element_id}_OUTER_MERGE"
     outer = add_layer(comp, transform, outer_name)
     timing_applied = set_visibility_window(comp, outer, start, end)

@@ -60,7 +60,14 @@ def _new_tool(comp: Any, reg_id: str, name: str) -> Any:
 
 def _set(tool: Any, name: str, value: Any, frame: int | None = None) -> bool:
     try:
-        return bool(tool.SetInput(name, value) if frame is None else tool.SetInput(name, value, frame))
+        # Fusion's Python proxy may return None even when SetInput succeeds.
+        # Treat a call without an exception as accepted; callers that need
+        # stronger guarantees perform an explicit GetInput read-back.
+        if frame is None:
+            tool.SetInput(name, value)
+        else:
+            tool.SetInput(name, value, frame)
+        return True
     except Exception:
         return False
 
@@ -84,6 +91,27 @@ def _media_out(comp: Any) -> Any:
     return None
 
 
+def connect_input(target: Any, input_name: str, source: Any) -> bool:
+    """Connect a named Fusion input and verify the socket, avoiding silent graph failures."""
+    input_socket = safe_call(target, "FindInput", input_name)
+    output_socket = safe_call(source, "FindMainOutput", 1)
+    if input_socket is not None and output_socket is not None:
+        try:
+            input_socket.ConnectTo(output_socket)
+        except Exception:
+            pass
+        if safe_call(input_socket, "GetConnectedOutput") is not None:
+            return True
+    try:
+        target.ConnectInput(input_name, source)
+    except Exception:
+        return False
+    input_socket = safe_call(target, "FindInput", input_name)
+    if input_socket is None:
+        return True
+    return safe_call(input_socket, "GetConnectedOutput") is not None
+
+
 def _connected_input_tool(media_out: Any) -> Any:
     try:
         input_socket = media_out.FindMainInput(1)
@@ -99,12 +127,16 @@ def add_layer(comp: Any, foreground: Any, merge_name: str) -> Any:
         raise RuntimeError("MediaOut non trovato")
     background = _connected_input_tool(media_out)
     if background is None:
-        media_out.ConnectInput("Input", foreground)
+        if not connect_input(media_out, "Input", foreground):
+            raise RuntimeError("Collegamento diretto a MediaOut fallito")
         return None
     merge = _new_tool(comp, "Merge", merge_name)
-    merge.ConnectInput("Background", background)
-    merge.ConnectInput("Foreground", foreground)
-    media_out.ConnectInput("Input", merge)
+    if not connect_input(merge, "Background", background):
+        raise RuntimeError("Collegamento background al Merge fallito")
+    if not connect_input(merge, "Foreground", foreground):
+        raise RuntimeError("Collegamento foreground al Merge fallito")
+    if not connect_input(media_out, "Input", merge):
+        raise RuntimeError("Collegamento Merge a MediaOut fallito")
     return merge
 
 
@@ -145,13 +177,12 @@ def create_composition(project: Any, timeline: Any, config: CreativeConfig, regi
     canvas = _new_tool(comp, "Background", "ARPHE_CANVAS")
     _set_color(canvas, _rgb(config.palette["ivory"], 0.0))
     media_out = _media_out(comp)
-    if media_out:
-        media_out.ConnectInput("Input", canvas)
+    connected = bool(media_out and connect_input(media_out, "Input", canvas))
     composition_id = _id("COMP")
     registry.add_element(composition_id, {"kind": "composition", "timeline": safe_call(timeline, "GetName"),
                                           "timeline_item_id": _item_id(item), "timeline_item_name": safe_call(item, "GetName"),
                                           "start_frame": start, "end_frame": end})
-    return {"ok": bool(media_out), "action": "create_fusion_composition", "composition_id": composition_id,
+    return {"ok": connected, "action": "create_fusion_composition", "composition_id": composition_id,
             "timeline_item": safe_call(item, "GetName"), "requested_frame_range": [start, end],
             "placement_note": "Insert at current Resolve playhead; verify manually in Gate B.", "status": "PENDING"}
 

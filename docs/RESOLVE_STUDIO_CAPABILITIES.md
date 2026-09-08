@@ -44,8 +44,8 @@ Stati ammessi:
 | Creative 03: create timeline 1920x1080/30 + status | SUPPORTED | Master E09 16:9 creato e verificato via read-back, nessun overwrite |
 | Creative 03: load/save progetto ARPHE | PENDING | Implementato, da testare separatamente |
 | Creative 03: set/duplicate timeline version | PENDING | Implementato, `DuplicateTimeline` da testare separatamente |
-| Creative 03: Fusion composition/background/Text+ | PENDING | Implementato dietro `CAP_FUSION=false`; Gate B richiesto |
-| Creative 03: review card/highlight/end card | PENDING | Implementato dietro `CAP_REVIEW=false`; Gate C/F richiesti |
+| Creative 03: Fusion composition/background/Text+ | PARTIAL | Gate B osservato; composizione/canvas/Text+ visibili, da ripetere pulito dopo fix grafo |
+| Creative 03: review card/highlight/end card | PENDING | Gate C V2-V4 diagnostici, nessun PASS grafico; V5 usa schema Text+ live e rollback nodi |
 | Creative 03: motion preset/card stack | PENDING | Implementato dietro `CAP_MOTION=false`; Gate D/E richiesti |
 | Creative 03: asset allowlisted | PENDING | Implementato dietro `CAP_ASSETS=false`; import/placement da verificare |
 | Creative 03: render preview | PENDING | Implementato dietro `CAP_RENDER=false`; non abilitare prima del Gate G |

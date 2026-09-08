@@ -4,7 +4,7 @@ Data: 2026-09-04
 
 ## Stato
 
-`ARPHE_MCP_BRIDGE_CREATIVE_03` è **IMPLEMENTED / OFFLINE TESTED / GATE A PASS / GATES B-G PENDING**.
+`ARPHE_MCP_BRIDGE_CREATIVE_03` è **GATE A PASS / GATE B PARTIAL / GATE C PENDING**.
 
 Non sostituisce né modifica `ARPHE_MCP_BRIDGE_SAFE_WRITE_02`, che resta il fallback validato.
 La presenza di codice o di un metodo nella documentazione Resolve non rende una capability
@@ -86,7 +86,7 @@ e ai preset, non tool MCP arbitrari.
 |---|---:|---:|---:|---|
 | `CAP_PROJECT` | true | sì | parziale | Gate A create/status SUPPORTED; selezione/save PENDING |
 | `CAP_TIMELINE` | true | sì | parziale | Gate A create/status SUPPORTED; selezione/versioning PENDING |
-| `CAP_FUSION` | false | sì | no | PENDING — Gate B |
+| `CAP_FUSION` | false | sì | parziale | PARTIAL — Gate B osservato, retest pulito richiesto |
 | `CAP_REVIEW` | false | sì | no | PENDING — Gate C/F |
 | `CAP_MOTION` | false | sì | no | PENDING — Gate D/E |
 | `CAP_ASSETS` | false | sì | no | PENDING |
@@ -129,7 +129,8 @@ Restano da verificare nel nostro ambiente:
 - placement della Fusion composition: l'API inserisce al playhead corrente;
 - `COMPN_RenderStart/End` regola il work range Fusion, ma non è ancora prova del trim del
   TimelineItem; `retime_creative_duration` lo dichiara esplicitamente;
-- nomi input Text+, RectangleMask, Merge e curve Bezier nel contesto external Python;
+- input RectangleMask, Merge e curve Bezier nel contesto external Python; per Text+ il probe
+  Resolve 21 ha distinto `Width`/`Height` canvas da `LayoutWidth`/`LayoutHeight` frame;
 - corrispondenza visiva tra i valori `easing` semantici e l'interpolazione Bezier effettiva;
 - z-order visivo e qualità effettiva di shadow, corner radius, micro-settle ed easing;
 - semantica `AppendToTimeline` per still/video nei track richiesti;
@@ -147,9 +148,10 @@ Retest V2: **Gate A PASS**. Creati senza overwrite
 confermato 1080x1920 e 30 fps. Il PASS copre `create_project`, `create_timeline` e
 `get_creative_status`; selezione progetto/timeline, versioning e save restano PENDING.
 
-Stato operativo corrente: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`, timeline
-`ARPHE_E09_16X9_V1`, 1920x1080/30, vuota e verificata tramite read-back. Questa è la base da
-usare per il Gate B nei prossimi lavori; non modificare né cancellare la V2 verticale.
+Base originale: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`, timeline
+`ARPHE_E09_16X9_V1`, 1920x1080/30. I test Gate B/C hanno poi creato timeline versionate fino
+alla V4. Non modificare né cancellare la V2 verticale; per il Gate C V5 creare una nuova timeline
+16:9 anziché riutilizzare i grafi diagnostici precedenti.
 
 ## Installazione affiancata — PC_SEGRETERIA
 
@@ -212,17 +214,19 @@ Poi da ChatGPT chiamare `ping`: deve rispondere
 Completato il 2026-09-04 con evidenza API e visiva sulla V2 verticale. È stato inoltre creato e
 verificato il master operativo 16:9 `ARPHE_E09_16X9_V1` a 1920x1080/30. Non ripetere il Gate A.
 
-### Gate B — Fusion composition + background + Text+
+### Gate B — Fusion composition + background + Text+ — PARTIAL
 
-Prossimo punto di ripartenza. Sul progetto/timeline 16:9 corrente, impostare `CAP_FUSION=true`
-nella config locale lasciando tutti gli altri flag avanzati false, quindi chiamare
-`create_fusion_composition`, `add_brand_background` e `add_text_plus` con testo fittizio.
-Aprire la pagina Fusion dalla barra inferiore di Resolve e verificare MediaOut, canvas e Text+.
+Composizione, background e Text+ sono stati creati e osservati sul master 16:9. Il risultato è
+`PARTIAL`, non `SUPPORTED`, perché i tentativi successivi hanno mostrato fragilità di grafo e
+layout. Chiuderlo insieme al Gate C V5 verificando un grafo pulito e il viewer corretto.
 
-### Gate C — Review card statica
+### Gate C — Review card statica — PENDING, prossimo V5
 
-Solo dopo Gate B, impostare `CAP_REVIEW=true`. Chiamare `add_review_card` con testo fittizio,
-stelle 1-5 e label priva di nome paziente. Verificare card, angoli, shadow, stelle e leggibilità.
+V2-V4 sono prove diagnostiche rifiutate come risultato grafico. La causa V4 era il frame Text+
+impostato tramite `Width`/`Height` (canvas) anziché `LayoutWidth`/`LayoutHeight`. La build V5
+corregge lo schema, verifica il read-back e rimuove i soli nodi appena creati in caso di errore.
+Chiamare `add_review_card` con testo fittizio su una nuova timeline, quindi verificare contenimento,
+angoli, shadow, stelle e leggibilità prima di dichiarare il PASS.
 
 ### Gate D — ARPHE_SOFT_DROP
 

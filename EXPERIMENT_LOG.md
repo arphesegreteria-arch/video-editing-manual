@@ -472,3 +472,20 @@ La chat non deve essere l'unico posto in cui vive lo stato del progetto. Prima d
 - `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md`;
 - `docs/RESOLVE_STUDIO_CAPABILITIES.md`;
 - per benchmark editoriali, `docs/07_EDITORIAL_BENCHMARK.md`.
+## 2026-09-08 — Creative 03 Gate B/C, schema Text+ e runtime Windows
+
+- Gate B: composizione Fusion, canvas e Text+ creati e visibili; stato `PARTIAL`, non ancora
+  `SUPPORTED`, perché manca un retest pulito e ripetibile dopo le correzioni al grafo.
+- Gate C V2/V3: output graficamente errato/incompleto; nessun PASS.
+- Gate C V4: `add_review_card` fermata dal read-back su `Width`/`Height`. Probe live read-only:
+  tali input valgono 1920/1080 e descrivono il canvas; il frame Text+ usa
+  `LayoutWidth`/`LayoutHeight`.
+- Correzione: proxy `SetInput` senza eccezioni accettata anche quando ritorna `None`, read-back
+  esplicito, connessioni socket verificate, frame Text+ corretto, costruzione text-first e rollback
+  limitato ai nodi creati dalla primitive fallita.
+- Fonti consultate: README Blackmagic installato; Fusion scripting guide; guide GitHub censite in
+  `docs/PROVISIONAL_REFERENCES.md`. Adottati introspezione live e cleanup esplicito; macro
+  `.setting` mantenuta come alternativa se V5 resta fragile.
+- Runtime: Smart App Control bloccava il tunnel non firmato con WinError 4551. Dopo la
+  disattivazione globale il bridge è tornato HTTP 200 ready. Resta debito di sicurezza.
+- Prossimo test: Gate C V5 su nuova timeline 1920x1080/30, testo esclusivamente fittizio.

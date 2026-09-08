@@ -234,14 +234,33 @@ def run(config: dict[str, Any]) -> int:
             child_env["CONTROL_PLANE_TUNNEL_ID"] = config["tunnel_id"]
             child_env["MCP_COMMAND"] = config["mcp_command"]
             started = time.monotonic()
-            process = subprocess.Popen(
-                [config["tunnel_client_path"], "run"], env=child_env,
-                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="replace", bufsize=1,
-                creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0,
-            )
-            del child_env
-            job.assign(process)
+            process = None
+            try:
+                process = subprocess.Popen(
+                    [config["tunnel_client_path"], "run"], env=child_env,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, encoding="utf-8", errors="replace", bufsize=1,
+                    creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0,
+                )
+                logger.info("Tunnel process created pid=%d", process.pid)
+                job.assign(process)
+            except Exception as exc:
+                logger.error(
+                    "Tunnel startup failed stage=%s type=%s error=%s",
+                    "job-assignment" if process is not None else "process-creation",
+                    type(exc).__name__,
+                    redactor.redact(str(exc)),
+                )
+                if process is not None and process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait(timeout=5)
+                raise
+            finally:
+                del child_env
             output_thread = threading.Thread(target=stream_child, args=(process.stdout, logger, redactor), daemon=True)
             output_thread.start()
             logger.info("Tunnel runtime started pid=%d", process.pid)

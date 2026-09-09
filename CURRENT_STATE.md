@@ -141,7 +141,7 @@ Restano da provare singolarmente via bridge esterno/MCP:
 
 Un'operazione non diventa `SUPPORTED` solo perché esiste nella documentazione API: deve essere testata nel nostro ambiente.
 
-### ARPHE_MCP_BRIDGE_CREATIVE_03 — GATE A PASS / GATE B PARTIAL / GATE C PENDING
+### ARPHE_MCP_BRIDGE_CREATIVE_03 — GATE A/B PASS / GATE C STATIC PASS
 
 Build modulare aggiunta per E09 MioDottore Review Social Creative. Mantiene `ping`,
 `resolve_status` e `create_safe_working_timeline`, aggiunge primitive semantiche per
@@ -169,13 +169,15 @@ verificati senza overwrite il progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9` e la 
 `ARPHE_E09_16X9_V1`, 1920x1080/30, attualmente vuota e corrente in Resolve. La V2 verticale
 resta conservata come evidenza Gate A.
 
-Gate B ha creato e mostrato composizione, canvas e Text+ sul master 16:9, ma resta `PARTIAL`
-finché il risultato non viene ripetuto pulito dopo le correzioni al grafo. Gate C V2-V4 non è
+Gate B è `SUPPORTED`: composizione, canvas e Text+ sono stati ripetuti con grafo pulito nel V5.
+Gate C V2-V4 non è
 un PASS grafico: ha rivelato connessioni da verificare, proxy `SetInput` che restituisce `None`
 anche quando applica la modifica, e soprattutto l'uso errato di `Width`/`Height` al posto di
 `LayoutWidth`/`LayoutHeight` per il frame Text+. Il bridge ora usa gli input osservati dal vivo,
 fa read-back e rimuove i nodi creati dalla chiamata se la primitive fallisce. Prossima azione:
-Gate C V5 con testo fittizio su una nuova timeline, poi verifica visiva prima del PASS.
+Gate C V5 ha superato API/read-back e verifica visiva: testo contenuto, cinque stelle, label,
+card, bordi e shadow corretti. La review card statica è PASS; highlight/end card restano PENDING,
+quindi `CAP_REVIEW` complessiva è `PARTIAL`. Il layout è ancora un prototipo da affinare.
 
 ## 📊 TRACK EDITORIALE
 

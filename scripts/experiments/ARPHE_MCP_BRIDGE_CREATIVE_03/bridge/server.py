@@ -11,6 +11,8 @@ from .creative_tools import (add_end_card as do_add_end_card,
                              add_review_card as do_add_review_card,
                              animate_element, animate_stack,
                              set_review_highlight as do_set_review_highlight)
+from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_frames,
+                               inspect_fusion_graph as do_inspect_fusion_graph)
 from .feature_flags import report as feature_report
 from .fusion_tools import (add_background, add_text, create_composition,
                            retime)
@@ -190,6 +192,28 @@ def get_creative_status() -> dict[str, Any]:
                 "fusion_composition_count": fusion_count,
                 "feature_flags": feature_report(config, manager, project, timeline)}
     except Exception as exc: return _error(exc)
+
+
+@mcp.tool()
+def inspect_fusion_graph(composition_id: str) -> dict[str, Any]:
+    """Inspect an ARPHE Fusion graph without disclosing text content or modifying Resolve."""
+    try:
+        _, _, project, timeline, _, registry, error = _runtime()
+        if error: return error
+        if not project or not timeline: return {"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}
+        return _call(do_inspect_fusion_graph, timeline, registry, composition_id)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool()
+def capture_timeline_frames(frame_offsets: list[int]) -> list[Any]:
+    """Export 1-8 exact ARPHE timeline frames as JPEG images and restore the playhead/page."""
+    try:
+        resolve, _, project, timeline, config, registry, error = _runtime()
+        if error: return [error]
+        if not project or not timeline: return [{"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}]
+        return do_capture_timeline_frames(resolve, project, timeline, config, registry, frame_offsets)
+    except Exception as exc: return [_error(exc)]
 
 
 @mcp.tool()

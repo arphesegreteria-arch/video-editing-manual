@@ -38,7 +38,8 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertEqual("PARTIAL", capabilities["CAP_TIMELINE"]["status"])
         self.assertFalse(capabilities["CAP_FUSION"]["active"])
         self.assertTrue(capabilities["CAP_FUSION"]["technically_available"])
-        self.assertEqual("PARTIAL", capabilities["CAP_FUSION"]["status"])
+        self.assertEqual("SUPPORTED", capabilities["CAP_FUSION"]["status"])
+        self.assertTrue(capabilities["CAP_FUSION"]["validated"])
 
 
 if __name__ == "__main__":

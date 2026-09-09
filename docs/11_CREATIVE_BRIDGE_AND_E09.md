@@ -4,7 +4,7 @@ Data: 2026-09-04
 
 ## Stato
 
-`ARPHE_MCP_BRIDGE_CREATIVE_03` è **GATE A PASS / GATE B PARTIAL / GATE C PENDING**.
+`ARPHE_MCP_BRIDGE_CREATIVE_03` è **GATE A/B PASS / GATE C STATIC PASS**.
 
 Non sostituisce né modifica `ARPHE_MCP_BRIDGE_SAFE_WRITE_02`, che resta il fallback validato.
 La presenza di codice o di un metodo nella documentazione Resolve non rende una capability
@@ -86,8 +86,8 @@ e ai preset, non tool MCP arbitrari.
 |---|---:|---:|---:|---|
 | `CAP_PROJECT` | true | sì | parziale | Gate A create/status SUPPORTED; selezione/save PENDING |
 | `CAP_TIMELINE` | true | sì | parziale | Gate A create/status SUPPORTED; selezione/versioning PENDING |
-| `CAP_FUSION` | false | sì | parziale | PARTIAL — Gate B osservato, retest pulito richiesto |
-| `CAP_REVIEW` | false | sì | no | PENDING — Gate C/F |
+| `CAP_FUSION` | false | sì | sì | SUPPORTED — Gate B e grafo pulito V5 |
+| `CAP_REVIEW` | false | sì | parziale | PARTIAL — review card statica PASS; highlight/end card PENDING |
 | `CAP_MOTION` | false | sì | no | PENDING — Gate D/E |
 | `CAP_ASSETS` | false | sì | no | PENDING |
 | `CAP_RENDER` | false | sì | no | PENDING — Gate G |
@@ -214,19 +214,19 @@ Poi da ChatGPT chiamare `ping`: deve rispondere
 Completato il 2026-09-04 con evidenza API e visiva sulla V2 verticale. È stato inoltre creato e
 verificato il master operativo 16:9 `ARPHE_E09_16X9_V1` a 1920x1080/30. Non ripetere il Gate A.
 
-### Gate B — Fusion composition + background + Text+ — PARTIAL
+### Gate B — Fusion composition + background + Text+ — PASS
 
-Composizione, background e Text+ sono stati creati e osservati sul master 16:9. Il risultato è
-`PARTIAL`, non `SUPPORTED`, perché i tentativi successivi hanno mostrato fragilità di grafo e
-layout. Chiuderlo insieme al Gate C V5 verificando un grafo pulito e il viewer corretto.
+Composizione, background e Text+ sono stati creati e osservati sul master 16:9; il V5 ha
+confermato un grafo pulito e il viewer corretto. `CAP_FUSION` è `SUPPORTED`.
 
-### Gate C — Review card statica — PENDING, prossimo V5
+### Gate C — Review card statica — PASS V5
 
 V2-V4 sono prove diagnostiche rifiutate come risultato grafico. La causa V4 era il frame Text+
 impostato tramite `Width`/`Height` (canvas) anziché `LayoutWidth`/`LayoutHeight`. La build V5
 corregge lo schema, verifica il read-back e rimuove i soli nodi appena creati in caso di errore.
-Chiamare `add_review_card` con testo fittizio su una nuova timeline, quindi verificare contenimento,
-angoli, shadow, stelle e leggibilità prima di dichiarare il PASS.
+Il V5 ha confermato contenimento, angoli, shadow, cinque stelle e leggibilità sia via API/read-back
+sia nel viewer Resolve. La card statica è PASS; qualità grafica finale, highlight ed end card non
+sono comprese in questo PASS.
 
 ### Gate D — ARPHE_SOFT_DROP
 

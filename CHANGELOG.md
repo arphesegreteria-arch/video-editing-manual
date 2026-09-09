@@ -1,11 +1,18 @@
 # CHANGELOG
 
+## 2026-09-09 — Diagnostica visuale e backup verificabile
+
+- Aggiunti `inspect_fusion_graph` e `capture_timeline_frames` per telemetria e JPEG MCP esatti.
+- Verificata la cattura live dei frame 0, 75 e 149 con ripristino di pagina e playhead.
+- Aggiunto backup verificabile di Git, stato Creative e progetto Resolve `.drp` corrente.
+
 ## 2026-09-08 — Gate C V5 hardening e fonti Resolve/Fusion
 
+- Gate B e review card statica Gate C V5 superati via API/read-back e controllo visivo.
 - Corretto Text+ frame layout: `LayoutWidth`/`LayoutHeight`, non canvas `Width`/`Height`.
 - Verificato il read-back degli input e i collegamenti Fusion; gestito il ritorno `None` delle proxy.
 - Resa `add_review_card` reversibile sui soli nodi creati dalla chiamata fallita.
-- Introdotto lo stato capability `PARTIAL`: Gate B parziale, Gate C ancora pending.
+- Introdotto lo stato capability `PARTIAL` per i gate non ancora chiusi completamente.
 - Aggiunto un confronto tracciato tra documentazione Blackmagic, probe Resolve 21 e manuali GitHub.
 - Documentato il blocco Smart App Control del tunnel non firmato e il relativo debito di sicurezza.
 

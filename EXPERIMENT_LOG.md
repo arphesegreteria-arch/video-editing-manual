@@ -474,6 +474,12 @@ La chat non deve essere l'unico posto in cui vive lo stato del progetto. Prima d
 - per benchmark editoriali, `docs/07_EDITORIAL_BENCHMARK.md`.
 ## 2026-09-08 — Creative 03 Gate B/C, schema Text+ e runtime Windows
 
+Aggiornamento V5: timeline 1920x1080/30, composition, background e review card creati con tutti
+gli esiti `ok=true`. Read-back Text+ e timing PASS. Il controllo visivo ha confermato testo
+contenuto, cinque stelle, label, bordi e shadow; grafo pulito collegato a MediaOut. Gate B e review
+card statica Gate C sono PASS. La qualità grafica resta prototipale e highlight/end card sono fuori
+da questo PASS.
+
 - Gate B: composizione Fusion, canvas e Text+ creati e visibili; stato `PARTIAL`, non ancora
   `SUPPORTED`, perché manca un retest pulito e ripetibile dopo le correzioni al grafo.
 - Gate C V2/V3: output graficamente errato/incompleto; nessun PASS.

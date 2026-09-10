@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Callable
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver import Image
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
 from .audit import write_audit
 from .asset_tools import add_asset
@@ -38,6 +41,16 @@ mcp = MCPServer(
     ),
 )
 
+READ_ONLY = ToolAnnotations(
+    readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
+)
+SAFE_WRITE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False
+)
+IDEMPOTENT_WRITE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
+)
+
 
 def _error(exc: Exception) -> dict[str, Any]:
     return {"ok": False, "stage": "validation" if isinstance(exc, ValidationError) else "runtime",
@@ -63,7 +76,7 @@ def _call(operation: Callable[..., dict], *args: Any, **kwargs: Any) -> dict:
     return result
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def ping() -> dict[str, Any]:
     """Harmless bridge/config health check."""
     try:
@@ -74,7 +87,7 @@ def ping() -> dict[str, Any]:
         return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def resolve_status() -> dict[str, Any]:
     """Read the current Resolve context without modifying it."""
     try:
@@ -96,7 +109,7 @@ def resolve_status() -> dict[str, Any]:
         return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_feature_flags() -> dict[str, Any]:
     """Return configured, implemented, available and validated state separately."""
     try:
@@ -106,7 +119,7 @@ def get_feature_flags() -> dict[str, Any]:
         return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def create_safe_working_timeline(name_prefix: str = "ARPHE_CHATGPT_TEST") -> dict[str, Any]:
     """Validated legacy-safe primitive: create one empty ARPHE timeline and restore the original."""
     try:
@@ -117,7 +130,7 @@ def create_safe_working_timeline(name_prefix: str = "ARPHE_CHATGPT_TEST") -> dic
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def create_project(project_name: str) -> dict[str, Any]:
     """Create a new, uniquely named ARPHE project; never overwrite."""
     try:
@@ -127,7 +140,7 @@ def create_project(project_name: str) -> dict[str, Any]:
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
 def set_current_project(project_name: str) -> dict[str, Any]:
     """Load only an ARPHE project registered or explicitly allowlisted locally."""
     try:
@@ -137,7 +150,7 @@ def set_current_project(project_name: str) -> dict[str, Any]:
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def create_timeline(name: str, width: int = 1080, height: int = 1920, fps: float = 30.0) -> dict[str, Any]:
     """Create a separate ARPHE timeline with allowlisted format settings."""
     try:
@@ -148,7 +161,7 @@ def create_timeline(name: str, width: int = 1080, height: int = 1920, fps: float
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
 def set_current_timeline(name: str) -> dict[str, Any]:
     """Select only an ARPHE or locally allowlisted timeline."""
     try:
@@ -158,7 +171,7 @@ def set_current_timeline(name: str) -> dict[str, Any]:
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def duplicate_timeline_version(source_timeline: str, requested_suffix: str | None = "V2",
                                target_name: str | None = None) -> dict[str, Any]:
     """Duplicate an allowed timeline into a new ARPHE version without modifying its source."""
@@ -169,7 +182,7 @@ def duplicate_timeline_version(source_timeline: str, requested_suffix: str | Non
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_creative_status() -> dict[str, Any]:
     """Read project, timeline, duration, track/Fusion counts and capability flags."""
     try:
@@ -194,7 +207,7 @@ def get_creative_status() -> dict[str, Any]:
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def inspect_fusion_graph(composition_id: str) -> dict[str, Any]:
     """Inspect an ARPHE Fusion graph without disclosing text content or modifying Resolve."""
     try:
@@ -205,18 +218,29 @@ def inspect_fusion_graph(composition_id: str) -> dict[str, Any]:
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
-def capture_timeline_frames(frame_offsets: list[int]) -> list[Any]:
+@mcp.tool(annotations=SAFE_WRITE)
+def capture_timeline_frames(frame_offsets: list[int]) -> CallToolResult:
     """Export 1-8 exact ARPHE timeline frames as JPEG images and restore the playhead/page."""
     try:
         resolve, _, project, timeline, config, registry, error = _runtime()
-        if error: return [error]
-        if not project or not timeline: return [{"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}]
-        return do_capture_timeline_frames(resolve, project, timeline, config, registry, frame_offsets)
-    except Exception as exc: return [_error(exc)]
+        if error:
+            result: list[Any] = [error]
+        elif not project or not timeline:
+            result = [{"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}]
+        else:
+            result = do_capture_timeline_frames(
+                resolve, project, timeline, config, registry, frame_offsets
+            )
+    except Exception as exc:
+        result = [_error(exc)]
+
+    metadata = result[0]
+    content = [TextContent(type="text", text=json.dumps(metadata, ensure_ascii=False, indent=2))]
+    content.extend(item.to_image_content() for item in result[1:] if isinstance(item, Image))
+    return CallToolResult(content=content, structuredContent=metadata)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def create_fusion_composition(name: str, start_frame: int, end_frame: int) -> dict[str, Any]:
     """Insert one controlled Fusion composition into the current allowed timeline."""
     try:
@@ -226,7 +250,7 @@ def create_fusion_composition(name: str, start_frame: int, end_frame: int) -> di
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def add_brand_background(composition_id: str, color_role: str = "ivory") -> dict[str, Any]:
     """Set the composition canvas to one configured ARPHE palette role."""
     try:
@@ -244,25 +268,25 @@ def _asset(kind: str, path: str, start_frame: int, end_frame: int, track_index: 
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def add_logo(path: str, start_frame: int, end_frame: int) -> dict[str, Any]:
     """Import one allowlisted logo image onto video track 3."""
     return _asset("image", path, start_frame, end_frame, 3)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def add_image_asset(path: str, start_frame: int, end_frame: int) -> dict[str, Any]:
     """Import one allowlisted image onto video track 2."""
     return _asset("image", path, start_frame, end_frame, 2)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def add_video_background(path: str, start_frame: int, end_frame: int) -> dict[str, Any]:
     """Import one allowlisted video background onto video track 1."""
     return _asset("video", path, start_frame, end_frame, 1)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def add_text_plus(composition_id: str, text: str, start_frame: int, end_frame: int,
                   style_role: str = "dark_brown", size: float = 0.06) -> dict[str, Any]:
     """Add controlled Text+ to a bridge-created composition."""
@@ -274,7 +298,7 @@ def add_text_plus(composition_id: str, text: str, start_frame: int, end_frame: i
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def add_review_card(composition_id: str, text: str, stars: int, start_frame: int, end_frame: int,
                     style_role: str = "cream", highlight_text: str | None = None,
                     small_label: str | None = None) -> dict[str, Any]:
@@ -287,7 +311,7 @@ def add_review_card(composition_id: str, text: str, stars: int, start_frame: int
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def set_review_highlight(composition_id: str, card_id: str, highlight_text: str) -> dict[str, Any]:
     """Set controlled highlight text on a bridge-created review card."""
     try:
@@ -298,7 +322,7 @@ def set_review_highlight(composition_id: str, card_id: str, highlight_text: str)
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def add_end_card(composition_id: str, headline: str, cta: str, start_frame: int,
                  end_frame: int, style_role: str = "burgundy") -> dict[str, Any]:
     """Create a controlled CTA/end card in a bridge-created composition."""
@@ -320,7 +344,7 @@ def _animate(element_id: str, composition_id: str, preset: str, duration_frames:
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def animate_card_entry(composition_id: str, card_id: str, preset: str = "ARPHE_SOFT_DROP",
                        duration_frames: int = 18, direction: str = "top",
                        easing: str = "ease_out", settle: bool = True) -> dict[str, Any]:
@@ -328,7 +352,7 @@ def animate_card_entry(composition_id: str, card_id: str, preset: str = "ARPHE_S
     return _animate(card_id, composition_id, preset, duration_frames, direction, easing, settle, False)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def animate_card_exit(composition_id: str, card_id: str, preset: str = "ARPHE_ELEGANT_REVEAL",
                       duration_frames: int = 15, direction: str = "bottom",
                       easing: str = "ease_in_out", settle: bool = False) -> dict[str, Any]:
@@ -336,7 +360,7 @@ def animate_card_exit(composition_id: str, card_id: str, preset: str = "ARPHE_EL
     return _animate(card_id, composition_id, preset, duration_frames, direction, easing, settle, True)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def animate_review_stack(composition_id: str, card_ids: list[str], start_frame: int,
                          stagger_frames: int = 12, overlap: float = 0.25,
                          direction: str = "top", rotation_pattern: str = "alternate",
@@ -353,7 +377,7 @@ def animate_review_stack(composition_id: str, card_ids: list[str], start_frame: 
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def apply_transition_preset(composition_id: str, element_id: str,
                             preset: str = "ARPHE_ELEGANT_REVEAL",
                             duration_frames: int = 18) -> dict[str, Any]:
@@ -361,7 +385,7 @@ def apply_transition_preset(composition_id: str, element_id: str,
     return _animate(element_id, composition_id, preset, duration_frames, "top", "ease_out", True, False)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def retime_creative_duration(composition_id: str, duration_frames: int) -> dict[str, Any]:
     """Adjust the controlled Fusion work range; timeline trim remains a manual validation gate."""
     try:
@@ -371,7 +395,7 @@ def retime_creative_duration(composition_id: str, duration_frames: int) -> dict[
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
 def save_project() -> dict[str, Any]:
     """Save only the current registered/allowlisted ARPHE project."""
     try:
@@ -381,7 +405,7 @@ def save_project() -> dict[str, Any]:
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool()
+@mcp.tool(annotations=SAFE_WRITE)
 def render_preview(output_name: str = "ARPHE_PREVIEW") -> dict[str, Any]:
     """Queue/start a preview only when CAP_RENDER is explicitly enabled; default is false."""
     try:

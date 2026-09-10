@@ -1,6 +1,6 @@
 # 13 — Diagnostica visuale e backup ARPHE
 
-Data: 2026-09-09
+Data: 2026-09-10
 
 ## Diagnostica Resolve via MCP
 
@@ -19,7 +19,16 @@ ripristina lo stato UI. Non modifica il grafo, non salva il progetto e non usa l
 
 Per sequenze lunghe l'agente deve lavorare a batch: prima campionamento ampio, poi batch contigui
 di massimo otto frame nelle zone critiche. È possibile coprire ogni frame ripetendo le chiamate,
-senza inviare centinaia di PNG in una singola risposta MCP.
+senza inviare centinaia di JPEG in una singola risposta MCP.
+
+Le annotazioni MCP distinguono esplicitamente le letture (`ping`, status, feature flag e ispezione
+grafo) dalle scritture. Tutte le azioni sono dichiarate closed-world e non distruttive;
+`capture_timeline_frames` resta una scrittura non distruttiva perché crea file JPEG temporanei.
+
+Stato app al 2026-09-10: server e snapshot ChatGPT Creative 03 espongono 28 azioni con annotazioni
+corrette. `capture_timeline_frames` costruisce un `CallToolResult` con metadati testuali strutturati
+e blocchi `ImageContent` JPEG; non inserire gli helper `Image` nel JSON strutturato. Il percorso è
+stato validato end-to-end dalla chat sui frame `0`, `75` e `149`, con ripristino del playhead.
 
 ## Backup su disco esterno
 

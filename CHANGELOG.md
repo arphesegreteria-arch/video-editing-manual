@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-09-10 — Schema MCP e annotazioni di sicurezza
+
+- Verificato che il server Creative 03 annuncia 28 azioni, incluse le due diagnostiche.
+- Aggiornato lo snapshot dell'app ChatGPT da 26 a 28 azioni senza creare una nuova app.
+- Aggiunte annotazioni MCP esplicite: letture realmente read-only; tutte le azioni closed-world
+  e non distruttive; scritture e idempotenza dichiarate separatamente.
+- Corretto `capture_timeline_frames`: la risposta usa ora contenuti MCP nativi per testo e JPEG,
+  evitando la serializzazione Pydantic degli helper `Image`.
+- Validata dalla chat la cattura dei frame `0`, `75` e `149` con ripristino del playhead; suite
+  Creative 03 a 35 test verdi.
+
 ## 2026-09-09 — Diagnostica visuale e backup verificabile
 
 - Aggiunti `inspect_fusion_graph` e `capture_timeline_frames` per telemetria e JPEG MCP esatti.

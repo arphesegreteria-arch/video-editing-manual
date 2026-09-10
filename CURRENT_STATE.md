@@ -1,6 +1,6 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-09-08.
+Ultimo aggiornamento: sessione 2026-09-10.
 
 ## Obiettivo del progetto
 
@@ -134,7 +134,7 @@ Restano da provare singolarmente via bridge esterno/MCP:
 - import media;
 - rebuild/cut da edit plan;
 - TimelineItem transforms;
-- Fusion create/read/write avanzato (la composition/Text+ Creative 03 è solo `PARTIAL`);
+- Fusion create/read/write oltre le primitive Creative 03 validate;
 - tracking Studio / IntelliTrack;
 - captions/subtitles;
 - render/export.
@@ -174,10 +174,17 @@ Gate C V2-V4 non è
 un PASS grafico: ha rivelato connessioni da verificare, proxy `SetInput` che restituisce `None`
 anche quando applica la modifica, e soprattutto l'uso errato di `Width`/`Height` al posto di
 `LayoutWidth`/`LayoutHeight` per il frame Text+. Il bridge ora usa gli input osservati dal vivo,
-fa read-back e rimuove i nodi creati dalla chiamata se la primitive fallisce. Prossima azione:
+fa read-back e rimuove i nodi creati dalla chiamata se la primitive fallisce.
 Gate C V5 ha superato API/read-back e verifica visiva: testo contenuto, cinque stelle, label,
 card, bordi e shadow corretti. La review card statica è PASS; highlight/end card restano PENDING,
 quindi `CAP_REVIEW` complessiva è `PARTIAL`. Il layout è ancora un prototipo da affinare.
+
+Il server installato e l'app ChatGPT Creative 03 pubblicata espongono ora 28 azioni MCP, incluse
+`inspect_fusion_graph` e `capture_timeline_frames`. Lo snapshot è stato aggiornato in-place senza
+creare una nuova app. Le annotazioni MCP dichiarano letture read-only, tutte le azioni closed-world
+e non distruttive, scritture e idempotenza separate. La risposta di `capture_timeline_frames` usa
+contenuti MCP nativi invece di serializzare gli helper `Image`: dalla chat sono stati acquisiti e
+mostrati correttamente i frame `0`, `75` e `149`, con ripristino del playhead.
 
 ## 📊 TRACK EDITORIALE
 
@@ -242,10 +249,11 @@ Stato gate: **AUTOSTART + READ VALIDATED**. Restano prima del PASS completo dell
 ### Track A1 — prodotto ChatGPT / Resolve
 1. `ARPHE_MCP_BRIDGE_CREATIVE_03` installato e raggiungibile dal PC segreteria.
 2. Gate A PASS; master 16:9 creato in `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`.
-3. Eseguire Gate C V5 su una nuova timeline 16:9 con `CAP_FUSION` e `CAP_REVIEW` attive.
-4. Chiudere formalmente Gate B soltanto insieme a un grafo pulito; proseguire ai Gate D-G solo dopo il PASS visivo C.
-5. Mantenere `ARPHE_MCP_BRIDGE_SAFE_WRITE_02` come rollback immediato.
-6. In parallelo continuare il percorso editoriale `list_media` / transcript / edit plan senza
+3. Gate B e review card statica Gate C V5 PASS; highlight/end card restano PENDING.
+4. Snapshot ChatGPT a 28 azioni e diagnostica frame MCP validata end-to-end.
+5. Validare `inspect_fusion_graph` dalla chat, poi proseguire ai Gate D-G.
+6. Mantenere `ARPHE_MCP_BRIDGE_SAFE_WRITE_02` come rollback immediato.
+7. In parallelo continuare il percorso editoriale `list_media` / transcript / edit plan senza
    confonderlo con la validazione E09.
 
 ### Track A2 — replica PC personale

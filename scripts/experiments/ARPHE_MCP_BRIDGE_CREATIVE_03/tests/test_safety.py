@@ -6,6 +6,10 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+
+from mcp.server.mcpserver import Image
+from mcp.types import ImageContent, TextContent
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,6 +22,7 @@ from bridge.safety import (ValidationError, allowed_asset, arphe_name,
                            validate_frame_range, validate_preset,
                            validate_review, validate_timeline_settings)  # noqa: E402
 from bridge.tool_catalog import EXPOSED_TOOL_NAMES, FORBIDDEN_GENERIC_TOOLS  # noqa: E402
+from bridge.server import mcp  # noqa: E402
 
 
 class SafetyTests(unittest.TestCase):
@@ -134,6 +139,43 @@ class MotionTests(unittest.TestCase):
         self.assertEqual(cards, [plan["card_id"] for plan in plans])
         self.assertEqual([1, 2, 3, 4, 5], [plan["z_order"] for plan in plans])
         self.assertTrue(all(plans[index]["keys"][0]["frame"] < plans[index + 1]["keys"][0]["frame"] for index in range(4)))
+
+
+class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tools_are_closed_world_and_non_destructive(self):
+        tools = {tool.name: tool for tool in await mcp.list_tools()}
+        self.assertEqual(set(EXPOSED_TOOL_NAMES), set(tools))
+        for tool in tools.values():
+            self.assertFalse(tool.annotations.destructive_hint, tool.name)
+            self.assertFalse(tool.annotations.open_world_hint, tool.name)
+
+    async def test_diagnostic_reads_and_capture_are_classified_explicitly(self):
+        tools = {tool.name: tool for tool in await mcp.list_tools()}
+        for name in ("ping", "resolve_status", "get_feature_flags", "get_creative_status",
+                     "inspect_fusion_graph"):
+            self.assertTrue(tools[name].annotations.read_only_hint, name)
+            self.assertTrue(tools[name].annotations.idempotent_hint, name)
+        self.assertFalse(tools["capture_timeline_frames"].annotations.read_only_hint)
+        self.assertFalse(tools["capture_timeline_frames"].annotations.idempotent_hint)
+
+    async def test_capture_tool_returns_mcp_content_without_serializing_image_helpers(self):
+        metadata = {
+            "ok": True,
+            "action": "capture_timeline_frames",
+            "captures": [{"frame_offset": 0, "timecode": "01:00:00:00"}],
+        }
+        runtime = (object(), object(), object(), object(), object(), object(), None)
+        with patch("bridge.server._runtime", return_value=runtime), patch(
+            "bridge.server.do_capture_timeline_frames",
+            return_value=[metadata, Image(data=b"fake-jpeg", format="jpeg")],
+        ):
+            result = await mcp.call_tool("capture_timeline_frames", {"frame_offsets": [0]})
+
+        self.assertFalse(result.is_error)
+        self.assertEqual(metadata, result.structured_content)
+        self.assertIsInstance(result.content[0], TextContent)
+        self.assertIsInstance(result.content[1], ImageContent)
+        self.assertEqual("image/jpeg", result.content[1].mime_type)
 
 
 if __name__ == "__main__":

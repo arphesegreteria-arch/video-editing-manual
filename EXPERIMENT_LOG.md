@@ -361,21 +361,23 @@ PASS PC_PERSONALE solo dopo replica separata e nuovi gate READ + SAFE WRITE.
 
 ## E09 — MioDottore Review Social Creative / Fusion
 
-Stato: **BRIDGE IMPLEMENTED / OFFLINE TESTED / GATE A PASS / GATES B-G PENDING / REAL CONTENT BLOCKED**.
+Stato: **BRIDGE VALIDATED / GATE A-B PASS / GATE C STATIC PASS / GATES D-G PENDING / APPROVED REAL CONTENT**.
 
 Obiettivo:
 validare un primo workflow social reale in cui ChatGPT/bridge/Resolve costruiscono una creatività
 master 16:9 a partire da un testo recensione, usando Fusion come motion-design layer e mantenendo
 il montaggio non distruttivo. La variante 9:16 resta un adattamento successivo, non il master.
 
-Prerequisito prima di usare recensioni reali:
-- verificare policy/condizioni MioDottore e requisiti applicabili al riutilizzo promozionale dei testi delle recensioni;
-- definire regola definitiva per attribuzione e anonimizzazione/oscuramento del nome;
-- fino a quel momento usare esclusivamente testo fittizio nel test tecnico.
+Decisione contenuti aggiornata il 2026-09-10 dopo chiusura del content-use check:
+- usare recensioni reali selezionate e approvate da ARPHE;
+- rimuovere i nomi dei pazienti e non passare dati identificativi al bridge;
+- fornire il testo a runtime, senza hardcodarlo nel codice, nei test o nella repository pubblica;
+- non registrare nei log il testo o i dati di provenienza;
+- mantenere la pubblicazione come approvazione umana esplicita, fuori dal bridge.
 
 Test tecnico proposto:
 1. creare una timeline master 16:9 separata;
-2. usare un testo recensione fittizio;
+2. usare una recensione reale approvata e anonimizzata, fornita soltanto a runtime;
 3. costruire un primo template Fusion `ARPHE_REVIEW_01` con stelle, text reveal, enfasi della frase chiave e end card ARPHÈ;
 4. parametrizzare almeno testo, durata, CTA e background/B-roll;
 5. provare almeno una transizione Fusion riutilizzabile;
@@ -408,10 +410,10 @@ Include:
 - audit metadata-only senza input, path o segreti;
 - installazione affiancata e switch/rollback del solo `MCP_COMMAND`.
 
-Test offline iniziali: 20 PASS, poi estesi a 21 PASS con la correzione delle impostazioni timeline.
-Gate A è stato validato con write reali controllate; Gate B-G restano `PENDING`. Gate e criteri
-sono definiti in `docs/11_CREATIVE_BRIDGE_AND_E09.md`. Fino al content-use check MioDottore, i
-gate tecnici devono usare esclusivamente recensioni fittizie.
+Test offline iniziali: 20 PASS, poi estesi progressivamente fino a 35 PASS. Gate A e B sono PASS;
+la review card statica Gate C V5 è PASS, mentre highlight/end card restano PENDING. Gate e criteri
+sono definiti in `docs/11_CREATIVE_BRIDGE_AND_E09.md`. Il content-use check è chiuso: i gate
+successivi possono usare recensioni reali approvate e anonimizzate come input runtime.
 
 ### Gate A — primo tentativo reale 2026-09-04
 
@@ -453,8 +455,9 @@ Su decisione creativa dell'utente, il formato principale passa da verticale a 16
 - `settings_match=true`, current timeline impostata, `overwrite=false`;
 - read-back Resolve: 1 traccia video, 1 audio, 0 clip.
 
-La timeline verticale V2 non è stata modificata o cancellata. Prossima azione: Gate B sul master
-16:9, usando testo fittizio e abilitando esclusivamente `CAP_FUSION`.
+La timeline verticale V2 non è stata modificata o cancellata. Questa indicazione storica è stata
+superata: Gate B e la card statica Gate C V5 sono PASS; la prossima azione è Gate D su una nuova
+timeline versionata, lasciando intatta la V5.
 
 ## Architettura superata
 
@@ -480,8 +483,8 @@ contenuto, cinque stelle, label, bordi e shadow; grafo pulito collegato a MediaO
 card statica Gate C sono PASS. La qualità grafica resta prototipale e highlight/end card sono fuori
 da questo PASS.
 
-- Gate B: composizione Fusion, canvas e Text+ creati e visibili; stato `PARTIAL`, non ancora
-  `SUPPORTED`, perché manca un retest pulito e ripetibile dopo le correzioni al grafo.
+- Gate B: composizione Fusion, canvas e Text+ creati e visibili; V5 pulita e ripetibile,
+  stato `SUPPORTED`.
 - Gate C V2/V3: output graficamente errato/incompleto; nessun PASS.
 - Gate C V4: `add_review_card` fermata dal read-back su `Width`/`Height`. Probe live read-only:
   tali input valgono 1920/1080 e descrivono il canvas; il frame Text+ usa
@@ -494,4 +497,13 @@ da questo PASS.
   `.setting` mantenuta come alternativa se V5 resta fragile.
 - Runtime: Smart App Control bloccava il tunnel non firmato con WinError 4551. Dopo la
   disattivazione globale il bridge è tornato HTTP 200 ready. Resta debito di sicurezza.
-- Prossimo test: Gate C V5 su nuova timeline 1920x1080/30, testo esclusivamente fittizio.
+- Gate C V5: PASS API/read-back e visivo sulla card statica. Prossimo test: Gate D su nuova
+  timeline versionata con una recensione reale approvata fornita a runtime.
+
+## 2026-09-10 — Diagnostica MCP e snapshot ChatGPT
+
+- App `ARPHE Resolve Creative 03` aggiornata in-place da 26 a 28 azioni.
+- Annotazioni MCP corrette: letture read-only; tutte le azioni closed-world e non distruttive.
+- `capture_timeline_frames` corretto per restituire testo e JPEG come blocchi MCP nativi.
+- Test reale dalla chat: frame `0`, `75`, `149` mostrati; timecode coerenti; playhead ripristinato.
+- Suite Creative 03: 35 test PASS. `inspect_fusion_graph` pubblicato, test chat ancora da chiudere.

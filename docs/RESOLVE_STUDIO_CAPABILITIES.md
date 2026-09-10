@@ -46,6 +46,7 @@ Stati ammessi:
 | Creative 03: set/duplicate timeline version | PENDING | Implementato, `DuplicateTimeline` da testare separatamente |
 | Creative 03: Fusion composition/background/Text+ | SUPPORTED | Gate B + V5: composizione/canvas/Text+ visibili e grafo pulito |
 | Creative 03: review card statica | SUPPORTED | Gate C V5: API/read-back e verifica visiva PASS |
+| Creative 03: diagnostica grafo/frame | PARTIAL | Cattura JPEG frame 0/75/149 e ripristino playhead SUPPORTED; `inspect_fusion_graph` pubblicato ma test chat PENDING |
 | Creative 03: review highlight/end card | PENDING | Primitive implementate, Gate F richiesto |
 | Creative 03: motion preset/card stack | PENDING | Implementato dietro `CAP_MOTION=false`; Gate D/E richiesti |
 | Creative 03: asset allowlisted | PENDING | Implementato dietro `CAP_ASSETS=false`; import/placement da verificare |

@@ -11,8 +11,11 @@ Bridge MCP sperimentale, affiancato ai bridge validati e dedicato alle creative 
 Installazione, tool, flag, gate e rollback sono documentati in
 `docs/11_CREATIVE_BRIDGE_AND_E09.md`.
 
-Stato: **IMPLEMENTED / OFFLINE TESTED / GATE A PASS / GATES B-G PENDING**.
+Le feature progressive si modificano nella config locale, senza cambiare lo schema MCP, tramite
+`set_feature_flag.ps1`; dopo la modifica riavviare il runtime Creative03.
 
-Stato operativo E09: Gate A PASS; master corrente
-`ARPHE_E09_MIODOTTORE_REVIEWS_16X9` / `ARPHE_E09_16X9_V1`, 1920x1080/30. Prossimo gate: B,
-con il solo `CAP_FUSION` da abilitare.
+Stato: **35 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATES D-G PENDING**.
+
+Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 è la baseline
+visiva da conservare. L'app ChatGPT espone 28 azioni e la cattura frame MCP è validata. Prossimo
+gate: D su una nuova timeline versionata, con `CAP_MOTION` abilitata e V5 lasciata intatta.

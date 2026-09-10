@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-09-10 — E09 riallineato alla chat e Gate D preparato
+
+- Registrata la chiusura del content-use check: E09 usa recensioni reali già approvate da ARPHE,
+  anonimizzate e fornite a runtime; testi e dati di provenienza non vengono hardcoded o versionati.
+- Riallineati README, log esperimenti e schema Fusion: Gate B e card statica Gate C V5 sono PASS.
+- Registrato il progresso della chat: app Creative 03 aggiornata in-place a 28 azioni e cattura
+  JPEG dei frame `0`, `75`, `149` validata con ripristino del playhead.
+- Definito Gate D su una nuova timeline versionata, lasciando V5 intatta.
+
 ## 2026-09-10 — Schema MCP e annotazioni di sicurezza
 
 - Verificato che il server Creative 03 annuncia 28 azioni, incluse le due diagnostiche.

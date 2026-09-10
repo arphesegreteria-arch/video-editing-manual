@@ -179,6 +179,11 @@ Gate C V5 ha superato API/read-back e verifica visiva: testo contenuto, cinque s
 card, bordi e shadow corretti. La review card statica è PASS; highlight/end card restano PENDING,
 quindi `CAP_REVIEW` complessiva è `PARTIAL`. Il layout è ancora un prototipo da affinare.
 
+Il content-use check è chiuso per il workflow E09: si usano recensioni reali selezionate e già
+approvate da ARPHE, senza nomi dei pazienti. I testi arrivano esclusivamente come input runtime e
+non vengono hardcoded, salvati nei log o versionati nella repository pubblica. La pubblicazione
+resta un passaggio umano esplicito: il bridge non pubblica autonomamente.
+
 Il server installato e l'app ChatGPT Creative 03 pubblicata espongono ora 28 azioni MCP, incluse
 `inspect_fusion_graph` e `capture_timeline_frames`. Lo snapshot è stato aggiornato in-place senza
 creare una nuova app. Le annotazioni MCP dichiarano letture read-only, tutte le azioni closed-world
@@ -251,7 +256,8 @@ Stato gate: **AUTOSTART + READ VALIDATED**. Restano prima del PASS completo dell
 2. Gate A PASS; master 16:9 creato in `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`.
 3. Gate B e review card statica Gate C V5 PASS; highlight/end card restano PENDING.
 4. Snapshot ChatGPT a 28 azioni e diagnostica frame MCP validata end-to-end.
-5. Validare `inspect_fusion_graph` dalla chat, poi proseguire ai Gate D-G.
+5. Validare `inspect_fusion_graph` dalla chat e svolgere Gate D su una nuova timeline versionata,
+   usando una recensione reale approvata come input runtime.
 6. Mantenere `ARPHE_MCP_BRIDGE_SAFE_WRITE_02` come rollback immediato.
 7. In parallelo continuare il percorso editoriale `list_media` / transcript / edit plan senza
    confonderlo con la validazione E09.

@@ -112,8 +112,8 @@ metodi richiesti. Lo stato resta `PENDING` finché il gate non è registrato con
 - preset limitati a `ARPHE_SOFT_DROP`, `ARPHE_PAPER_STACK`, `ARPHE_ELEGANT_REVEAL`,
   `ARPHE_CTA_SETTLE`;
 - immagini/video soltanto sotto `asset_root`, con estensioni allowlisted;
-- nessuna recensione reale hardcoded; per E09 usare testo fittizio finché il content-use check
-  MioDottore non è concluso;
+- recensioni reali consentite soltanto se già approvate da ARPHE e anonimizzate; il testo arriva
+  come input runtime e non viene hardcoded, registrato nei log o versionato nella repo pubblica;
 - `CAP_RENDER=false` iniziale; nessuna pubblicazione automatica.
 
 ## Limiti tecnici noti prima dei gate
@@ -234,9 +234,30 @@ Solo dopo Gate C, impostare `CAP_MOTION=true`; chiamare `animate_card_entry` con
 `preset="ARPHE_SOFT_DROP"`. Riprodurre la timeline e verificare ingresso dall'alto, rotazione
 lieve, decelerazione e micro-settle senza bounce aggressivo.
 
+Non usare `duplicate_timeline_version` per questo gate: la duplicazione di una timeline non
+rimappa ancora nel registry gli ID degli elementi Fusion copiati. Creare invece una timeline
+vuota `ARPHE_E09_16X9_GATE_D_V1`, ricreare composition/background/card e animare soltanto i nuovi
+ID restituiti. V5 resta intatta.
+
+Abilitazione locale controllata:
+
+```powershell
+.\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\set_feature_flag.ps1 `
+  -Name CAP_MOTION -Enabled $true
+.\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\switch_runtime_bridge.ps1 -Mode Creative03
+```
+
+PASS soltanto se:
+- progetto e timeline corrispondono al target Gate D;
+- `inspect_fusion_graph` conferma il nuovo grafo;
+- i 18 frame dell'ingresso sono acquisiti in batch massimi da otto;
+- V5 non cambia;
+- ingresso, opacità, scala, rotazione e micro-settle risultano visivamente coerenti.
+
 ### Gate E — ARPHE_PAPER_STACK
 
-Creare cinque card fittizie, poi chiamare `animate_review_stack` con stagger 12, overlap 0.25,
+Creare cinque card da recensioni reali approvate e anonimizzate, passate a runtime, poi chiamare
+`animate_review_stack` con stagger 12, overlap 0.25,
 rotazioni alternate e durata 18 frame. Verificare ordine, sovrapposizione e z-order.
 
 ### Gate F — End card / CTA

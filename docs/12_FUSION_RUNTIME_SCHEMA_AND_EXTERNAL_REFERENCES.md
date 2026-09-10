@@ -71,12 +71,13 @@ degli input Text+ né il comportamento delle proxy COM/Fusion.
 ## Correzioni di processo derivate
 
 - Le capability ora distinguono `PARTIAL` da `SUPPORTED` e `PENDING`.
-- Gate B è `PARTIAL`: composizione, canvas e Text+ sono stati creati e visti, ma manca ancora
-  una prova pulita e ripetibile dopo la correzione del grafo.
-- Gate C resta `PENDING`: V2/V3/V4 hanno prodotto evidenza diagnostica, non un PASS grafico.
+- Gate B è `SUPPORTED`: il V5 ha confermato composizione, canvas, Text+ e grafo pulito.
+- Gate C statico è `SUPPORTED`: V2/V3/V4 restano evidenze diagnostiche fallite, mentre V5 ha
+  superato read-back e controllo visivo. Highlight ed end card restano `PENDING`.
 - `add_review_card` crea prima i Text+ fragili, verifica il read-back e, in caso di errore,
   elimina soltanto i nodi creati dalla chiamata corrente.
-- Una macro `.setting` ARPHE è il fallback progettuale da valutare solo se V5 non supera il gate.
+- Una macro `.setting` ARPHE resta un possibile asset versionato futuro, non è necessaria per
+  dichiarare il PASS della card statica V5.
 
 ## Debito di sicurezza Windows
 

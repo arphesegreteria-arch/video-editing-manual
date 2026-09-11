@@ -316,12 +316,31 @@ def add_review_card(composition_id: str, text: str, stars: int, start_frame: int
 def create_review_sequence(name: str, reviews: list[dict[str, Any]],
                            duration_frames: int = 90, stagger_frames: int = 24,
                            style_role: str = "cream") -> dict[str, Any]:
-    """Create separate timeline clips for 1-8 controlled review cards."""
+    """Compatibility wrapper; create one gap-free sequence for older clients."""
+    try:
+        _, _, project, timeline, config, registry, error = _runtime()
+        if error: return error
+        requested = duration_frames + max(0, len(reviews) - 1) * stagger_frames
+        total = max(len(reviews), min(150, requested))
+        result = _call(do_create_review_sequence, project, timeline, config, registry,
+                       name, reviews, total, style_role)
+        if isinstance(result, dict):
+            result["compatibility_mode"] = True
+            result["preferred_tool"] = "create_review_sequence_v2"
+        return result
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def create_review_sequence_v2(name: str, reviews: list[dict[str, Any]],
+                              total_duration_frames: int = 150,
+                              style_role: str = "cream") -> dict[str, Any]:
+    """Create 1-8 controlled review cards as one gap-free Fusion sequence."""
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
         return _call(do_create_review_sequence, project, timeline, config, registry,
-                     name, reviews, duration_frames, stagger_frames, style_role)
+                     name, reviews, total_duration_frames, style_role)
     except Exception as exc: return _error(exc)
 
 

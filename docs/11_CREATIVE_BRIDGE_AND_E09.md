@@ -279,12 +279,21 @@ non promuovere `CAP_MOTION` e non considerare valide le animazioni finché una s
 non mostra contenuto nei frame iniziali, intermedi e finali. La timeline statica è mantenuta come
 baseline di confronto.
 
-È stata aggiunta la primitiva sperimentale `create_review_sequence`, che inserisce una Fusion
-composition autonoma per ogni card e sposta il playhead tra le clip con uno stagger controllato.
-La primitiva non modifica le timeline validate. Il 2026-09-11 è stata installata nella copia
-runtime e pubblicata in-place nell'app ChatGPT attiva: lo schema è passato da 28 a 29 azioni e
-`create_review_sequence` è visibile con i parametri `name`, `reviews`, `duration_frames`,
-`stagger_frames` e `style_role`. Resta `PENDING` soltanto la validazione visiva in Resolve.
+La prima implementazione di `create_review_sequence`, con una Fusion composition autonoma per
+card inserita a playhead sfalsati, non è valida: `InsertFusionCompositionIntoTimeline()` crea
+clip predefinite da 150 frame e gli inserimenti interni spezzano/spostano quelle precedenti. Le
+timeline diagnostiche V1-V4 documentano il difetto e non sono baseline.
+
+La versione validata crea invece una sola composition da massimo 150 frame e divide l'intervallo
+totale in finestre intere consecutive, una per recensione. È esposta dal runtime come
+`create_review_sequence_v2` con `name`, `reviews`, `total_duration_frames` e `style_role`; non
+salva recensioni nel codice o nella repository. Il vecchio `create_review_sequence` resta come
+wrapper di compatibilità per le chat che hanno già memorizzato il precedente schema. La
+timeline `ARPHE_E09_16X9_SEQUENCE_V5` ha verificato in immagine i confini 0/36, 37/74, 75/111 e
+112/149: quattro testi corretti, nessun frame vuoto e playhead ripristinato. La causa tecnica
+era anche l'ordine di creazione dei modificatori Fusion: il `BezierSpline` deve essere collegato
+all'input prima di ricevere i keyframe. La stessa correzione è stata applicata alle curve motion,
+ma Gate E resta PENDING finché non viene ripetuta la sua verifica visuale.
 
 Nota operativa: il refresh della console legge la copia installata sotto `C:\ARPHE\MCP`, non i
 file sorgente della repository. Dopo una modifica al bridge eseguire prima
@@ -292,6 +301,16 @@ file sorgente della repository. Dopo una modifica al bridge eseguire prima
 Vedi dettagli → Aggiorna**. La console amministrativa è lenta con elenchi estesi: attendere almeno
 30 secondi senza ricaricare. Se l'app è già in **Attivate**, il salvataggio aggiorna direttamente
 lo schema attivo e può non comparire alcun pulsante **Pubblica** separato.
+
+Una modifica della sola firma di un'azione già pubblicata può lasciare **Aggiorna** disabilitato
+e mostrare ancora la descrizione precedente. In questo caso non creare una nuova app: aggiungere
+nello stesso server un nome versionato (`*_v2`) e mantenere un wrapper compatibile. Il nuovo nome
+forza il rilevamento senza rompere le chat esistenti.
+
+Stato console al termine della sessione: runtime e tunnel servono 30 azioni, ma la pagina admin
+ChatGPT è rimasta bloccata durante il caricamento e non ha consentito di premere **Aggiorna**.
+La scheda attiva non va quindi dichiarata aggiornata finché la UI non mostra esplicitamente
+`create_review_sequence_v2` e il salvataggio non è confermato.
 
 ### Gate F — End card / CTA
 

@@ -146,13 +146,19 @@ def set_visibility_window(comp: Any, merge: Any, start_frame: int, end_frame: in
         return False
     start, end = validate_frame_range(start_frame, end_frame)
     try:
-        blend = comp.BezierSpline()
+        # Fusion must own the modifier before its keyframes are populated.
+        # Filling a detached BezierSpline and assigning it afterwards creates the
+        # modifier node but leaves Blend at its default value in Resolve 21.
+        merge.Blend = comp.BezierSpline()
+        blend = merge.Blend
         if start > 0:
+            # Fusion extrapolates a spline before its first keyframe.  Anchor the
+            # composition origin explicitly or a later layer can appear at frame 0.
+            blend[0] = 0.0
             blend[start - 1] = 0.0
         blend[start] = 1.0
         blend[end - 1] = 1.0
         blend[end] = 0.0
-        merge.Blend = blend
         return True
     except Exception:
         return False

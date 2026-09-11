@@ -14,6 +14,7 @@ from bridge.project_tools import create_project  # noqa: E402
 from bridge.registry import Registry  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 from bridge.timeline_tools import create_timeline  # noqa: E402
+from bridge.creative_tools import _frame_to_timecode, _sequence_boundaries  # noqa: E402
 from bridge.fusion_tools import set_visibility_window  # noqa: E402
 
 
@@ -106,6 +107,13 @@ class FakeProject:
 
 
 class ProjectTimelineSafetyTests(unittest.TestCase):
+    def test_review_sequence_timecode_preserves_resolve_start_hour(self):
+        self.assertEqual("01:00:00:00", _frame_to_timecode(108000, 30))
+        self.assertEqual("01:00:03:00", _frame_to_timecode(108090, 30))
+
+    def test_review_sequence_boundaries_are_gap_free(self):
+        self.assertEqual([0, 37, 75, 112, 150], _sequence_boundaries(4, 150))
+
     def test_project_collision_stops_before_create(self):
         with tempfile.TemporaryDirectory() as directory:
             manager = FakeManager()
@@ -147,7 +155,7 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
 
         merge = FakeMerge()
         self.assertTrue(set_visibility_window(FakeComp(), merge, 10, 20))
-        self.assertEqual({9: 0.0, 10: 1.0, 19: 1.0, 20: 0.0}, merge.Blend)
+        self.assertEqual({0: 0.0, 9: 0.0, 10: 1.0, 19: 1.0, 20: 0.0}, merge.Blend)
 
 
 if __name__ == "__main__":

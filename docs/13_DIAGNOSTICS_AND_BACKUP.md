@@ -25,8 +25,11 @@ Le annotazioni MCP distinguono esplicitamente le letture (`ping`, status, featur
 grafo) dalle scritture. Tutte le azioni sono dichiarate closed-world e non distruttive;
 `capture_timeline_frames` resta una scrittura non distruttiva perché crea file JPEG temporanei.
 
-Stato app al 2026-09-11: server e scheda ChatGPT Creative 03 attiva espongono 29 azioni con
-annotazioni corrette, inclusa `create_review_sequence`. Il refresh dello schema vede soltanto la
+Stato app al 2026-09-11: il server Creative 03 espone 30 azioni con annotazioni corrette. La
+sequenza validata è `create_review_sequence_v2`: usa una sola composition e i parametri `name`,
+`reviews`, `total_duration_frames` (massimo 150) e `style_role`; il nome non versionato resta un
+wrapper per i client con schema precedente. Il test V5
+ha coperto in immagine tutti i confini delle quattro finestre senza buchi. Il refresh dello schema vede soltanto la
 copia installata in `C:\ARPHE\MCP\ARPHE_MCP_BRIDGE_CREATIVE_03`: modificare la repository e
 riavviare il vecchio processo non basta, occorre rieseguire `install_on_segreteria.ps1` prima
 dello switch/restart. Nella console ChatGPT il caricamento dell'app e dell'elenco azioni può
@@ -34,9 +37,18 @@ richiedere almeno 30 secondi; evitare refresh ripetuti. Su un'app già attivata,
 dettagli → Aggiorna** seguito dal salvataggio aggiorna direttamente la versione attiva e non
 mostra un ulteriore pulsante **Pubblica**.
 
+Se cambia soltanto la firma di un tool già pubblicato, la console può lasciare **Aggiorna** grigio
+e mostrare la descrizione precedente. Pubblicare un nome versione aggiuntivo nella stessa app
+forza il confronto dell'elenco azioni; non serve creare un'altra app.
+
+Nell'ultima prova il runtime/tunnel a 30 azioni era sano, ma tre istanze della pagina admin sono
+rimaste congelate anche durante una lettura e **Aggiorna** non è stato premuto. Questo è un blocco
+UI distinto dal bridge: considerare la pubblicazione della trentesima azione ancora PENDING.
+
 `capture_timeline_frames` costruisce un `CallToolResult` con metadati testuali strutturati e
 blocchi `ImageContent` JPEG; non inserire gli helper `Image` nel JSON strutturato. Il percorso è
-stato validato end-to-end dalla chat sui frame `0`, `75` e `149`, con ripristino del playhead.
+stato validato end-to-end dalla chat sia sui frame `0`, `75` e `149`, sia sugli otto lati dei
+confini della sequenza V5, con ripristino del playhead.
 
 ## Backup su disco esterno
 

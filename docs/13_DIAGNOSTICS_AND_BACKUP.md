@@ -25,9 +25,17 @@ Le annotazioni MCP distinguono esplicitamente le letture (`ping`, status, featur
 grafo) dalle scritture. Tutte le azioni sono dichiarate closed-world e non distruttive;
 `capture_timeline_frames` resta una scrittura non distruttiva perché crea file JPEG temporanei.
 
-Stato app al 2026-09-10: server e snapshot ChatGPT Creative 03 espongono 28 azioni con annotazioni
-corrette. `capture_timeline_frames` costruisce un `CallToolResult` con metadati testuali strutturati
-e blocchi `ImageContent` JPEG; non inserire gli helper `Image` nel JSON strutturato. Il percorso è
+Stato app al 2026-09-11: server e scheda ChatGPT Creative 03 attiva espongono 29 azioni con
+annotazioni corrette, inclusa `create_review_sequence`. Il refresh dello schema vede soltanto la
+copia installata in `C:\ARPHE\MCP\ARPHE_MCP_BRIDGE_CREATIVE_03`: modificare la repository e
+riavviare il vecchio processo non basta, occorre rieseguire `install_on_segreteria.ps1` prima
+dello switch/restart. Nella console ChatGPT il caricamento dell'app e dell'elenco azioni può
+richiedere almeno 30 secondi; evitare refresh ripetuti. Su un'app già attivata, **Modifica → Vedi
+dettagli → Aggiorna** seguito dal salvataggio aggiorna direttamente la versione attiva e non
+mostra un ulteriore pulsante **Pubblica**.
+
+`capture_timeline_frames` costruisce un `CallToolResult` con metadati testuali strutturati e
+blocchi `ImageContent` JPEG; non inserire gli helper `Image` nel JSON strutturato. Il percorso è
 stato validato end-to-end dalla chat sui frame `0`, `75` e `149`, con ripristino del playhead.
 
 ## Backup su disco esterno

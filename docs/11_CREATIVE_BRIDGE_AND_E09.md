@@ -281,8 +281,17 @@ baseline di confronto.
 
 È stata aggiunta la primitiva sperimentale `create_review_sequence`, che inserisce una Fusion
 composition autonoma per ogni card e sposta il playhead tra le clip con uno stagger controllato.
-La primitiva non modifica le timeline validate e resta `PENDING` finché l'azione non viene esposta
-nello schema dell'app e verificata visivamente in Resolve.
+La primitiva non modifica le timeline validate. Il 2026-09-11 è stata installata nella copia
+runtime e pubblicata in-place nell'app ChatGPT attiva: lo schema è passato da 28 a 29 azioni e
+`create_review_sequence` è visibile con i parametri `name`, `reviews`, `duration_frames`,
+`stagger_frames` e `style_role`. Resta `PENDING` soltanto la validazione visiva in Resolve.
+
+Nota operativa: il refresh della console legge la copia installata sotto `C:\ARPHE\MCP`, non i
+file sorgente della repository. Dopo una modifica al bridge eseguire prima
+`install_on_segreteria.ps1`, quindi lo switch/restart `Creative03`; solo dopo usare **Modifica →
+Vedi dettagli → Aggiorna**. La console amministrativa è lenta con elenchi estesi: attendere almeno
+30 secondi senza ricaricare. Se l'app è già in **Attivate**, il salvataggio aggiorna direttamente
+lo schema attivo e può non comparire alcun pulsante **Pubblica** separato.
 
 ### Gate F — End card / CTA
 

@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-09-11 — Creative 03 aggiornata in-place a 29 azioni
+
+- Reinstallata nel runtime locale la build contenente `create_review_sequence`, preservando la
+  configurazione Creative esistente, e riavviato il bridge in modalità `Creative03`.
+- Aggiornato lo schema dell'app ChatGPT già attiva da 28 a 29 azioni; verificata nella scheda
+  amministrativa la presenza e la firma completa di `create_review_sequence`.
+- Allineato `EXPOSED_TOOL_NAMES` alla ventinovesima azione dopo che la suite completa aveva
+  correttamente segnalato il catalogo di sicurezza rimasto alla versione precedente.
+- Confermato il comportamento reale della console: legge la copia installata sotto
+  `C:\ARPHE\MCP`, può richiedere almeno 30 secondi per caricare e, per un'app già attivata,
+  salva direttamente lo schema attivo senza mostrare un secondo pulsante `Pubblica`.
+- La nuova primitiva resta sperimentale finché non supera la verifica visiva su una timeline
+  separata; nessuna timeline Resolve è stata modificata durante l'aggiornamento dello schema.
+
 ## 2026-09-11 — Primitiva sperimentale sequenza review
 
 - Aggiunta `create_review_sequence`: card come clip Fusion autonome con durata e posizionamento

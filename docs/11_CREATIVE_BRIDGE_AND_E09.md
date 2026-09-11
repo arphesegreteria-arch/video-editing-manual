@@ -272,6 +272,13 @@ Creare cinque card da recensioni reali approvate e anonimizzate, passate a runti
 `animate_review_stack` con stagger 12, overlap 0.25,
 rotazioni alternate e durata 18 frame. Verificare ordine, sovrapposizione e z-order.
 
+Stato diagnostico 2026-09-11: la card statica renderizza correttamente sulla timeline
+`ARPHE_E09_16X9_GATE_E_STATIC_V1`, ma l'applicazione delle keyframe (sia `animate_card_entry`
+sia `animate_review_stack`) produce uno sfondo vuoto in cattura. Il Gate E resta quindi PENDING;
+non promuovere `CAP_MOTION` e non considerare valide le animazioni finché una sequenza animata
+non mostra contenuto nei frame iniziali, intermedi e finali. La timeline statica è mantenuta come
+baseline di confronto.
+
 ### Gate F — End card / CTA
 
 Chiamare `add_end_card` con headline e CTA di test, poi `apply_transition_preset` con

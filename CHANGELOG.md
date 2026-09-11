@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-09-11 — Gate E: diagnosi animazione card
+
+- Registrata la baseline statica Gate E e la prova con cinque card e entrate sfalsate.
+- Confermato che le card statiche sono visibili, mentre le keyframe dello stack producono
+  frame vuoti; `CAP_MOTION` resta `PARTIAL` e Gate E `PENDING`.
+- Nessuna modifica al codice, nessun salvataggio o render effettuato.
+
 ## 2026-09-11 — Gate D ARPHE_SOFT_DROP PASS
 
 - Validato end-to-end `ARPHE_SOFT_DROP` sulla nuova timeline

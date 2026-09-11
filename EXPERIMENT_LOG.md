@@ -523,3 +523,17 @@ da questo PASS.
 - Nessun testo di recensione o dato di provenienza registrato in questo log o nella repository.
 - Esito capability: diagnostica grafo/frame `SUPPORTED`; `CAP_MOTION` `PARTIAL`, perché
   l'ingresso singola card è validato ma lo stack multi-card del Gate E è ancora PENDING.
+
+## 2026-09-11 — Gate E diagnostica stack e durata
+
+- Creata la baseline statica `ARPHE_E09_16X9_GATE_E_STATIC_V1` (150 frame, 1920x1080, 30 fps):
+  cattura al frame 60 leggibile con sfondo, stelle, testo e label.
+- Provata una timeline separata `ARPHE_E09_16X9_GATE_E_ANIM_V1` con cinque card, entrate
+  sfalsate (24 frame), durata ingresso 18 frame, opacità iniziale 0, scala iniziale 0.94,
+  rotazioni alternate e settle.
+- La chiamata `animate_review_stack` restituisce `ok:true`, ma le catture ai frame
+  `0, 9, 18, 36, 60, 90, 120, 149` mostrano solo lo sfondo ivory: la durata delle card è
+  presente nel modello, mentre la valutazione Fusion delle keyframe rende il contenuto
+  trasparente.
+- Esito: Gate E PENDING; nessuna modifica al codice o promozione capability. La baseline statica
+  resta il riferimento per la prossima correzione delle entrate sfalsate.

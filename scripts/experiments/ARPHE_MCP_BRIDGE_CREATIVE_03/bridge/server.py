@@ -13,6 +13,7 @@ from .config import load_config
 from .creative_tools import (add_end_card as do_add_end_card,
                              add_review_card as do_add_review_card,
                              animate_element, animate_stack,
+                             create_review_sequence as do_create_review_sequence,
                              set_review_highlight as do_set_review_highlight)
 from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_frames,
                                inspect_fusion_graph as do_inspect_fusion_graph)
@@ -308,6 +309,19 @@ def add_review_card(composition_id: str, text: str, stars: int, start_frame: int
         if error: return error
         return _call(do_add_review_card, project, timeline, config, registry, composition_id,
                      text, stars, start_frame, end_frame, style_role, highlight_text, small_label)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def create_review_sequence(name: str, reviews: list[dict[str, Any]],
+                           duration_frames: int = 90, stagger_frames: int = 24,
+                           style_role: str = "cream") -> dict[str, Any]:
+    """Create separate timeline clips for 1-8 controlled review cards."""
+    try:
+        _, _, project, timeline, config, registry, error = _runtime()
+        if error: return error
+        return _call(do_create_review_sequence, project, timeline, config, registry,
+                     name, reviews, duration_frames, stagger_frames, style_role)
     except Exception as exc: return _error(exc)
 
 

@@ -5,12 +5,79 @@ from typing import Any
 from .config import CreativeConfig
 from .feature_flags import require_capability
 from .fusion_tools import (_id, _new_tool, _rgb, _set, _set_color, add_layer,
-                           connect_input, find_composition, set_visibility_window)
+                           add_background, connect_input, create_composition,
+                           find_composition, set_visibility_window)
 from .motion_presets import motion_plan, stack_plan
 from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import (ValidationError, finite_float, validate_color_role,
                      validate_frame_range, validate_preset, validate_review)
+
+
+def _frame_to_timecode(frame: int, fps: float, start_frame: int = 0) -> str:
+    """Convert an absolute Resolve frame to a non-drop-frame timecode."""
+    relative = max(0, int(frame) - int(start_frame))
+    rate = max(1, int(round(float(fps))))
+    total_seconds, frames = divmod(relative, rate)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
+
+
+def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
+                           name: str, reviews: list[dict[str, Any]], duration_frames: int = 90,
+                           stagger_frames: int = 24, style_role: str = "cream") -> dict:
+    """Create one Fusion clip per review and stagger their timeline placement.
+
+    This deliberately avoids stack keyframes: each card has its own clip and
+    validated frame window, so Resolve's timeline performs the sequencing.
+    """
+    require_capability("CAP_REVIEW", config, None, project, timeline)
+    require_capability("CAP_FUSION", config, None, project, timeline)
+    if not isinstance(reviews, list) or not 1 <= len(reviews) <= 8:
+        raise ValidationError("reviews deve contenere 1-8 card")
+    if isinstance(duration_frames, bool) or not isinstance(duration_frames, int) or not 2 <= duration_frames <= 900:
+        raise ValidationError("duration_frames deve essere tra 2 e 900")
+    if isinstance(stagger_frames, bool) or not isinstance(stagger_frames, int) or not 0 <= stagger_frames <= 300:
+        raise ValidationError("stagger_frames deve essere tra 0 e 300")
+    validate_color_role(style_role)
+    timeline_name = str(safe_call(timeline, "GetName") or "")
+    if not timeline_name.startswith("ARPHE_"):
+        raise ValidationError("La sequenza richiede una timeline ARPHE")
+    fps = float(safe_call(timeline, "GetSetting", "timelineFrameRate") or 30.0)
+    timeline_start = int(safe_call(timeline, "GetStartFrame") or 0)
+    original_timecode = safe_call(timeline, "GetCurrentTimecode")
+    results: list[dict[str, Any]] = []
+    for index, review in enumerate(reviews):
+        if not isinstance(review, dict):
+            raise ValidationError("Ogni review deve essere un oggetto")
+        text = review.get("text")
+        stars = review.get("stars", 5)
+        label = review.get("small_label", "Recensione")
+        target_frame = timeline_start + index * stagger_frames
+        target_tc = _frame_to_timecode(target_frame, fps, timeline_start)
+        if index and not safe_call(timeline, "SetCurrentTimecode", target_tc):
+            return {"ok": False, "action": "create_review_sequence", "stage": "position",
+                    "index": index, "timecode": target_tc, "results": results}
+        comp = create_composition(project, timeline, config, registry,
+                                  f"{name}_CARD_{index + 1}", 0, duration_frames)
+        if not comp.get("ok"):
+            return {"ok": False, "action": "create_review_sequence", "stage": "composition",
+                    "index": index, "results": results, "composition": comp}
+        composition_id = comp["composition_id"]
+        add_background(project, timeline, config, registry, composition_id, "ivory")
+        card = add_review_card(project, timeline, config, registry, composition_id,
+                               text, stars, 0, duration_frames, style_role,
+                               review.get("highlight_text"), label)
+        results.append({"index": index, "timecode": target_tc,
+                        "composition_id": composition_id, "card_id": card["card_id"],
+                        "duration_frames": duration_frames})
+    if original_timecode:
+        safe_call(timeline, "SetCurrentTimecode", original_timecode)
+    return {"ok": True, "action": "create_review_sequence", "timeline": timeline_name,
+            "clips": results, "duration_frames": duration_frames,
+            "stagger_frames": stagger_frames, "playhead_restored": bool(original_timecode),
+            "status": "PENDING"}
 
 
 def _merge(comp: Any, background: Any, foreground: Any, name: str) -> Any:

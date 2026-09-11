@@ -279,6 +279,11 @@ non promuovere `CAP_MOTION` e non considerare valide le animazioni finché una s
 non mostra contenuto nei frame iniziali, intermedi e finali. La timeline statica è mantenuta come
 baseline di confronto.
 
+È stata aggiunta la primitiva sperimentale `create_review_sequence`, che inserisce una Fusion
+composition autonoma per ogni card e sposta il playhead tra le clip con uno stagger controllato.
+La primitiva non modifica le timeline validate e resta `PENDING` finché l'azione non viene esposta
+nello schema dell'app e verificata visivamente in Resolve.
+
 ### Gate F — End card / CTA
 
 Chiamare `add_end_card` con headline e CTA di test, poi `apply_transition_preset` con

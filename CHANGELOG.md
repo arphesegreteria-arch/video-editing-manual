@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-09-11 — Primitiva sperimentale sequenza review
+
+- Aggiunta `create_review_sequence`: card come clip Fusion autonome con durata e posizionamento
+  sfalsato a livello timeline.
+- La nuova azione è isolata dalle animazioni stack esistenti e resta sperimentale fino al test
+  visivo su Resolve; nessuna timeline validata viene modificata automaticamente.
+
 ## 2026-09-11 — Gate E: diagnosi animazione card
 
 - Registrata la baseline statica Gate E e la prova con cinque card e entrate sfalsate.

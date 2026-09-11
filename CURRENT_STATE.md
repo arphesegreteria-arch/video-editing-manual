@@ -141,7 +141,7 @@ Restano da provare singolarmente via bridge esterno/MCP:
 
 Un'operazione non diventa `SUPPORTED` solo perché esiste nella documentazione API: deve essere testata nel nostro ambiente.
 
-### ARPHE_MCP_BRIDGE_CREATIVE_03 — GATE A/B PASS / GATE C STATIC PASS
+### ARPHE_MCP_BRIDGE_CREATIVE_03 — GATE A/B PASS / GATE C STATIC PASS / GATE D PASS
 
 Build modulare aggiunta per E09 MioDottore Review Social Creative. Mantiene `ping`,
 `resolve_status` e `create_safe_working_timeline`, aggiunge primitive semantiche per
@@ -178,6 +178,14 @@ fa read-back e rimuove i nodi creati dalla chiamata se la primitive fallisce.
 Gate C V5 ha superato API/read-back e verifica visiva: testo contenuto, cinque stelle, label,
 card, bordi e shadow corretti. La review card statica è PASS; highlight/end card restano PENDING,
 quindi `CAP_REVIEW` complessiva è `PARTIAL`. Il layout è ancora un prototipo da affinare.
+
+Gate D ha superato il test reale sulla timeline separata `ARPHE_E09_16X9_GATE_D_V1`:
+composition `ARPHE_COMP_BCB45B060D`, card `ARPHE_CARD_48A11B058C`, preset
+`ARPHE_SOFT_DROP`, keyframe `0`, `15`, `18` e grafo Fusion di 19 nodi. Tutti gli stati dal
+frame `0` al frame `18` sono stati acquisiti e mostrati in ordine come 19 immagini, in batch
+`8 + 8 + 3`, con ripristino del playhead. Tutte le chiamate hanno restituito `ok:true`.
+`CAP_MOTION` è attiva nella configurazione locale del test e diventa `PARTIAL`: ingresso card
+SUPPORTED, stack multi-card Gate E ancora PENDING.
 
 Il content-use check è chiuso per il workflow E09: si usano recensioni reali selezionate e già
 approvate da ARPHE, senza nomi dei pazienti. I testi arrivano esclusivamente come input runtime e
@@ -255,11 +263,13 @@ Stato gate: **AUTOSTART + READ VALIDATED**. Restano prima del PASS completo dell
 1. `ARPHE_MCP_BRIDGE_CREATIVE_03` installato e raggiungibile dal PC segreteria.
 2. Gate A PASS; master 16:9 creato in `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`.
 3. Gate B e review card statica Gate C V5 PASS; highlight/end card restano PENDING.
-4. Snapshot ChatGPT a 28 azioni e diagnostica frame MCP validata end-to-end.
-5. Validare `inspect_fusion_graph` dalla chat e svolgere Gate D su una nuova timeline versionata,
-   usando una recensione reale approvata come input runtime.
-6. Mantenere `ARPHE_MCP_BRIDGE_SAFE_WRITE_02` come rollback immediato.
-7. In parallelo continuare il percorso editoriale `list_media` / transcript / edit plan senza
+4. Snapshot ChatGPT a 28 azioni; diagnostica grafo e frame MCP validata end-to-end.
+5. Gate D `ARPHE_SOFT_DROP` PASS sulla timeline separata `ARPHE_E09_16X9_GATE_D_V1`, con
+   19 nodi Fusion e acquisizione completa dei frame `0`-`18`.
+6. Svolgere Gate E su una nuova timeline, usando cinque recensioni reali approvate e
+   anonimizzate come input esclusivamente runtime.
+7. Mantenere `ARPHE_MCP_BRIDGE_SAFE_WRITE_02` come rollback immediato.
+8. In parallelo continuare il percorso editoriale `list_media` / transcript / edit plan senza
    confonderlo con la validazione E09.
 
 ### Track A2 — replica PC personale

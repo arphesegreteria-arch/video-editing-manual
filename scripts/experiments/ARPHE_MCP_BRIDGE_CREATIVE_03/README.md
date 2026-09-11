@@ -14,8 +14,9 @@ Installazione, tool, flag, gate e rollback sono documentati in
 Le feature progressive si modificano nella config locale, senza cambiare lo schema MCP, tramite
 `set_feature_flag.ps1`; dopo la modifica riavviare il runtime Creative03.
 
-Stato: **35 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATES D-G PENDING**.
+Stato: **35 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / GATES E-G PENDING**.
 
-Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 è la baseline
-visiva da conservare. L'app ChatGPT espone 28 azioni e la cattura frame MCP è validata. Prossimo
-gate: D su una nuova timeline versionata, con `CAP_MOTION` abilitata e V5 lasciata intatta.
+Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
+`ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. L'app ChatGPT espone 28 azioni;
+diagnostica grafo/frame e `ARPHE_SOFT_DROP` sono validate. `CAP_MOTION` è attiva nella config
+locale del test. Prossimo gate: E su una nuova timeline, lasciando intatte le baseline.

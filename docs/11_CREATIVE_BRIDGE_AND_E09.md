@@ -4,7 +4,7 @@ Data: 2026-09-04
 
 ## Stato
 
-`ARPHE_MCP_BRIDGE_CREATIVE_03` è **GATE A/B PASS / GATE C STATIC PASS**.
+`ARPHE_MCP_BRIDGE_CREATIVE_03` è **GATE A/B PASS / GATE C STATIC PASS / GATE D PASS**.
 
 Non sostituisce né modifica `ARPHE_MCP_BRIDGE_SAFE_WRITE_02`, che resta il fallback validato.
 La presenza di codice o di un metodo nella documentazione Resolve non rende una capability
@@ -88,7 +88,7 @@ e ai preset, non tool MCP arbitrari.
 | `CAP_TIMELINE` | true | sì | parziale | Gate A create/status SUPPORTED; selezione/versioning PENDING |
 | `CAP_FUSION` | false | sì | sì | SUPPORTED — Gate B e grafo pulito V5 |
 | `CAP_REVIEW` | false | sì | parziale | PARTIAL — review card statica PASS; highlight/end card PENDING |
-| `CAP_MOTION` | false | sì | no | PENDING — Gate D/E |
+| `CAP_MOTION` | false | sì | parziale | PARTIAL — Gate D soft drop PASS; Gate E stack PENDING |
 | `CAP_ASSETS` | false | sì | no | PENDING |
 | `CAP_RENDER` | false | sì | no | PENDING — Gate G |
 
@@ -228,7 +228,7 @@ Il V5 ha confermato contenimento, angoli, shadow, cinque stelle e leggibilità s
 sia nel viewer Resolve. La card statica è PASS; qualità grafica finale, highlight ed end card non
 sono comprese in questo PASS.
 
-### Gate D — ARPHE_SOFT_DROP
+### Gate D — ARPHE_SOFT_DROP — PASS 2026-09-11
 
 Solo dopo Gate C, impostare `CAP_MOTION=true`; chiamare `animate_card_entry` con
 `preset="ARPHE_SOFT_DROP"`. Riprodurre la timeline e verificare ingresso dall'alto, rotazione
@@ -250,9 +250,21 @@ Abilitazione locale controllata:
 PASS soltanto se:
 - progetto e timeline corrispondono al target Gate D;
 - `inspect_fusion_graph` conferma il nuovo grafo;
-- i 18 frame dell'ingresso sono acquisiti in batch massimi da otto;
+- tutti gli stati dal frame 0 al 18 sono acquisiti come 19 immagini, in batch massimi da otto;
 - V5 non cambia;
 - ingresso, opacità, scala, rotazione e micro-settle risultano visivamente coerenti.
+
+Evidenza reale:
+- timeline `ARPHE_E09_16X9_GATE_D_V1`;
+- composition `ARPHE_COMP_BCB45B060D` e card `ARPHE_CARD_48A11B058C`;
+- preset `ARPHE_SOFT_DROP`, keyframe `0`, `15`, `18`;
+- grafo Fusion di 19 nodi confermato da `inspect_fusion_graph`;
+- 19 immagini restituite e mostrate in ordine per i frame inclusivi `0`-`18`, in batch
+  `8 + 8 + 3`, con playhead ripristinato dopo ogni acquisizione;
+- tutte le chiamate `ok:true`; nessun save, render o write estranea al gate.
+
+Gate D è quindi PASS. La parte ingresso di `CAP_MOTION` è `SUPPORTED`; la capability aggregata
+resta `PARTIAL` fino al Gate E.
 
 ### Gate E — ARPHE_PAPER_STACK
 

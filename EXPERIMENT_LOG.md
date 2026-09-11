@@ -361,7 +361,7 @@ PASS PC_PERSONALE solo dopo replica separata e nuovi gate READ + SAFE WRITE.
 
 ## E09 — MioDottore Review Social Creative / Fusion
 
-Stato: **BRIDGE VALIDATED / GATE A-B PASS / GATE C STATIC PASS / GATES D-G PENDING / APPROVED REAL CONTENT**.
+Stato: **BRIDGE VALIDATED / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / GATES E-G PENDING / APPROVED REAL CONTENT**.
 
 Obiettivo:
 validare un primo workflow social reale in cui ChatGPT/bridge/Resolve costruiscono una creatività
@@ -456,8 +456,8 @@ Su decisione creativa dell'utente, il formato principale passa da verticale a 16
 - read-back Resolve: 1 traccia video, 1 audio, 0 clip.
 
 La timeline verticale V2 non è stata modificata o cancellata. Questa indicazione storica è stata
-superata: Gate B e la card statica Gate C V5 sono PASS; la prossima azione è Gate D su una nuova
-timeline versionata, lasciando intatta la V5.
+superata: Gate B, la card statica Gate C V5 e Gate D sono PASS; la prossima azione è Gate E su
+una nuova timeline, lasciando intatte le baseline precedenti.
 
 ## Architettura superata
 
@@ -497,8 +497,8 @@ da questo PASS.
   `.setting` mantenuta come alternativa se V5 resta fragile.
 - Runtime: Smart App Control bloccava il tunnel non firmato con WinError 4551. Dopo la
   disattivazione globale il bridge è tornato HTTP 200 ready. Resta debito di sicurezza.
-- Gate C V5: PASS API/read-back e visivo sulla card statica. Prossimo test: Gate D su nuova
-  timeline versionata con una recensione reale approvata fornita a runtime.
+- Gate C V5: PASS API/read-back e visivo sulla card statica. Gate D è stato poi chiuso con
+  evidenza completa sulla timeline separata descritta sotto.
 
 ## 2026-09-10 — Diagnostica MCP e snapshot ChatGPT
 
@@ -506,4 +506,20 @@ da questo PASS.
 - Annotazioni MCP corrette: letture read-only; tutte le azioni closed-world e non distruttive.
 - `capture_timeline_frames` corretto per restituire testo e JPEG come blocchi MCP nativi.
 - Test reale dalla chat: frame `0`, `75`, `149` mostrati; timecode coerenti; playhead ripristinato.
-- Suite Creative 03: 35 test PASS. `inspect_fusion_graph` pubblicato, test chat ancora da chiudere.
+- Suite Creative 03: 35 test PASS. `inspect_fusion_graph` pubblicato; il test chat è stato poi
+  chiuso nel Gate D con un grafo Fusion di 19 nodi.
+
+## 2026-09-11 — Gate D ARPHE_SOFT_DROP PASS
+
+- Timeline nuova e separata: `ARPHE_E09_16X9_GATE_D_V1`; baseline Gate C V5 non modificata.
+- Composition: `ARPHE_COMP_BCB45B060D`.
+- Review card: `ARPHE_CARD_48A11B058C`.
+- Preset: `ARPHE_SOFT_DROP`, con keyframe `0`, `15`, `18`.
+- `inspect_fusion_graph`: PASS, 19 nodi Fusion osservati.
+- `capture_timeline_frames`: PASS su tutti i frame inclusivi `0`-`18`, restituiti e mostrati
+  in ordine in batch `8 + 8 + 3`; playhead ripristinato dopo ogni acquisizione.
+- Tutte le chiamate del gate: `ok:true`.
+- Nessun salvataggio, render o altra modifica fuori dal perimetro del gate.
+- Nessun testo di recensione o dato di provenienza registrato in questo log o nella repository.
+- Esito capability: diagnostica grafo/frame `SUPPORTED`; `CAP_MOTION` `PARTIAL`, perché
+  l'ingresso singola card è validato ma lo stack multi-card del Gate E è ancora PENDING.

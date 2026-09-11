@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-09-11 — Gate D ARPHE_SOFT_DROP PASS
+
+- Validato end-to-end `ARPHE_SOFT_DROP` sulla nuova timeline
+  `ARPHE_E09_16X9_GATE_D_V1`, lasciando intatta la baseline Gate C V5.
+- Confermati composition `ARPHE_COMP_BCB45B060D`, review card `ARPHE_CARD_48A11B058C`,
+  keyframe `0`, `15`, `18` e grafo Fusion di 19 nodi.
+- Acquisiti e mostrati in ordine tutti i frame da `0` a `18` in tre batch `8 + 8 + 3`,
+  con ripristino del playhead dopo ogni acquisizione.
+- Promossa la diagnostica grafo/frame a `SUPPORTED`; `CAP_MOTION` resta complessivamente
+  `PARTIAL` fino alla validazione del Gate E.
+- Nessun testo di recensione, dato di provenienza o contenuto sensibile è stato versionato.
+
 ## 2026-09-10 — E09 riallineato alla chat e Gate D preparato
 
 - Registrata la chiusura del content-use check: E09 usa recensioni reali già approvate da ARPHE,

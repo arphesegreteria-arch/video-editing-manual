@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bridge.config import DEFAULT_FLAGS, load_config  # noqa: E402
+from bridge.creative_tools import _animate  # noqa: E402
 from bridge.motion_presets import motion_plan, stack_plan  # noqa: E402
 from bridge.safety import (ValidationError, allowed_asset, arphe_name,
                            ensure_no_collision, validate_color_role,
@@ -139,6 +140,31 @@ class MotionTests(unittest.TestCase):
         self.assertEqual(cards, [plan["card_id"] for plan in plans])
         self.assertEqual([1, 2, 3, 4, 5], [plan["z_order"] for plan in plans])
         self.assertTrue(all(plans[index]["keys"][0]["frame"] < plans[index + 1]["keys"][0]["frame"] for index in range(4)))
+
+    def test_motion_opacity_targets_card_transform_not_composite_merge(self):
+        class FakeTool:
+            Center = None
+            Size = None
+            Angle = None
+            Blend = {0: 1.0, 19: 1.0, 20: 0.0}
+
+        transform = FakeTool()
+        merge = FakeTool()
+
+        class FakeComp:
+            def BezierSpline(self):
+                return {}
+
+            def FindTool(self, name):
+                return {"CARD_TRANSFORM": transform, "CARD_OUTER": merge}.get(name)
+
+        plan = motion_plan("ARPHE_SOFT_DROP", 10, 10)
+        record = {"transform_name": "CARD_TRANSFORM", "outer_merge_name": "CARD_OUTER",
+                  "start_frame": 10, "end_frame": 30}
+        self.assertTrue(_animate(FakeComp(), record, plan))
+        self.assertEqual(0.0, transform.Blend[10])
+        self.assertEqual(1.0, transform.Blend[20])
+        self.assertEqual({0: 1.0, 19: 1.0, 20: 0.0}, merge.Blend)
 
 
 class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):

@@ -30,6 +30,19 @@ def _sequence_boundaries(card_count: int, total_duration_frames: int) -> list[in
             for index in range(card_count + 1)]
 
 
+def _sequence_windows(card_count: int, total_duration_frames: int,
+                      transition_overlap_frames: int = 10) -> list[tuple[int, int]]:
+    """Return contiguous starts with enough tail for an incoming-card crossfade."""
+    boundaries = _sequence_boundaries(card_count, total_duration_frames)
+    overlap = min(max(0, int(transition_overlap_frames)),
+                  max(0, total_duration_frames // card_count - 1))
+    return [
+        (boundaries[index], min(total_duration_frames, boundaries[index + 1] +
+                                (overlap if index < card_count - 1 else 0)))
+        for index in range(card_count)
+    ]
+
+
 def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
                            name: str, reviews: list[dict[str, Any]],
                            total_duration_frames: int = 150,
@@ -61,7 +74,8 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
 
     # Integer boundaries cover [0, total_duration_frames) exactly, including
     # durations that are not divisible by the number of reviews.
-    boundaries = _sequence_boundaries(len(reviews), total_duration_frames)
+    transition_overlap_frames = min(10, max(0, total_duration_frames // len(reviews) - 1))
+    windows = _sequence_windows(len(reviews), total_duration_frames, transition_overlap_frames)
     results: list[dict[str, Any]] = []
     for index, review in enumerate(reviews):
         if not isinstance(review, dict):
@@ -69,8 +83,7 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
         text = review.get("text")
         stars = review.get("stars", 5)
         label = review.get("small_label", "Recensione")
-        start = boundaries[index]
-        end = boundaries[index + 1]
+        start, end = windows[index]
         card = add_review_card(project, timeline, config, registry, composition_id,
                                text, stars, start, end, style_role,
                                review.get("highlight_text"), label)
@@ -81,6 +94,7 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
             "timeline_item": composition.get("timeline_item"),
             "cards": results, "total_duration_frames": total_duration_frames,
             "coverage": [0, total_duration_frames], "gap_free": True,
+            "transition_overlap_frames": transition_overlap_frames,
             "status": "PENDING"}
 
 
@@ -319,29 +333,17 @@ def _animate(comp: Any, record: dict, plan: dict, reverse: bool = False) -> bool
     transform.Center = comp.BezierSpline()
     transform.Size = comp.BezierSpline()
     transform.Angle = comp.BezierSpline()
+    transform.Blend = comp.BezierSpline()
     center = transform.Center
     size = transform.Size
     angle = transform.Angle
+    opacity = transform.Blend
     for index, key in enumerate(keys):
         frame = plan["keys"][index]["frame"]
         center[frame] = {1: 0.5 + key["x"], 2: 0.5 + key["y"], 3: 0.0}
         size[frame] = key["scale"]
         angle[frame] = key["rotation"]
-    merge = safe_call(comp, "FindTool", record.get("outer_merge_name")) if record.get("outer_merge_name") else None
-    if merge:
-        merge.Blend = comp.BezierSpline()
-        blend = merge.Blend
-        record_start = int(record["start_frame"])
-        record_end = int(record["end_frame"])
-        if record_start > 0:
-            blend[0] = 0.0
-            blend[record_start - 1] = 0.0
-        blend[record_start] = 1.0
-        for index, key in enumerate(keys):
-            blend[plan["keys"][index]["frame"]] = key["opacity"]
-        if not reverse:
-            blend[record_end - 1] = 1.0
-        blend[record_end] = 0.0
+        opacity[frame] = key["opacity"]
     return True
 
 

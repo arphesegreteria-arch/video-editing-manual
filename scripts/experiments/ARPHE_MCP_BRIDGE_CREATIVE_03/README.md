@@ -14,8 +14,8 @@ Installazione, tool, flag, gate e rollback sono documentati in
 Le feature progressive si modificano nella config locale, senza cambiare lo schema MCP, tramite
 `set_feature_flag.ps1`; dopo la modifica riavviare il runtime Creative03.
 
-Stato: **37 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
-GATE E MOTION TECHNICAL PASS / TRANSITION CONTINUITY + GATES F-G PENDING**.
+Stato: **40 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
+GATE E SEQUENCE TRANSITION PASS / PAPER STACK + GATES F-G PENDING**.
 
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato
@@ -25,8 +25,10 @@ una sola composition, divide fino a 150 frame in finestre consecutive e ha super
 `ARPHE_E09_16X9_SEQUENCE_V5`. `CAP_MOTION` è attiva nella config locale del test; la correzione
 BezierSpline è applicata anche alle animazioni. Il retest del 2026-09-14 sulla timeline
 `ARPHE_E09_16X9_GATE_E_RETEST_V2` ha verificato quattro ingressi `ARPHE_SOFT_DROP` tramite
-catture iniziali/intermedie/finali. Il motion engine è valido; resta da correggere un frame vuoto
-ai confini 37/75/112, causato da finestre non sovrapposte e opacità iniziale zero.
+catture iniziali/intermedie/finali. Il successivo fix usa finestre sovrapposte di 10 frame e
+anima l'opacità sul Transform della sola card, non sul Merge della catena. La timeline
+`ARPHE_E09_16X9_GATE_E_OVERLAP_V2` ha confermato card visibili ai confini 37/75/112 e fino al
+frame finale 149. La transizione sequenziale è PASS; `ARPHE_PAPER_STACK` resta un gate distinto.
 
 Pubblicazione UI della trentesima azione: **PENDING**. L'aggiornamento manuale è stato completato,
 ma la conversazione di verifica espone ancora 29 azioni e non include

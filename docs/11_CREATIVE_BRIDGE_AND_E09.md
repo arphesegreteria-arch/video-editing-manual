@@ -5,7 +5,7 @@ Data: 2026-09-04
 ## Stato
 
 `ARPHE_MCP_BRIDGE_CREATIVE_03` è **GATE A/B PASS / GATE C STATIC PASS / GATE D PASS /
-GATE E MOTION TECHNICAL PASS**.
+GATE E SEQUENCE TRANSITION PASS**.
 
 Non sostituisce né modifica `ARPHE_MCP_BRIDGE_SAFE_WRITE_02`, che resta il fallback validato.
 La presenza di codice o di un metodo nella documentazione Resolve non rende una capability
@@ -89,7 +89,7 @@ e ai preset, non tool MCP arbitrari.
 | `CAP_TIMELINE` | true | sì | parziale | Gate A create/status SUPPORTED; selezione/versioning PENDING |
 | `CAP_FUSION` | false | sì | sì | SUPPORTED — Gate B e grafo pulito V5 |
 | `CAP_REVIEW` | false | sì | parziale | PARTIAL — review card statica PASS; highlight/end card PENDING |
-| `CAP_MOTION` | false | sì | parziale | PARTIAL — Gate D soft drop PASS; Gate E motion technical PASS, continuità transizioni PENDING |
+| `CAP_MOTION` | false | sì | parziale | PARTIAL — Gate D soft drop PASS; Gate E sequence transition PASS; paper stack helper PENDING |
 | `CAP_ASSETS` | false | sì | no | PENDING |
 | `CAP_RENDER` | false | sì | no | PENDING — Gate G |
 
@@ -267,7 +267,7 @@ Evidenza reale:
 Gate D è quindi PASS. La parte ingresso di `CAP_MOTION` è `SUPPORTED`; la capability aggregata
 resta `PARTIAL` fino al Gate E.
 
-### Gate E — motion su sequenza recensioni — TECHNICAL PASS 2026-09-14
+### Gate E — motion su sequenza recensioni — SEQUENCE TRANSITION PASS 2026-09-14
 
 Creare cinque card da recensioni reali approvate e anonimizzate, passate a runtime, poi chiamare
 `animate_review_stack` con stagger 12, overlap 0.25,
@@ -311,12 +311,26 @@ Le catture ai frame iniziale, intermedio, settle e finale di ogni card hanno con
 opacità, traslazione, scala e assestamento reali; ogni acquisizione ha ripristinato il playhead.
 Il motore di animazione è quindi **TECHNICAL PASS**.
 
-Resta un conflitto editoriale aperto: le finestre della V5 sono contigue ma non sovrapposte e
-l'animazione imposta opacità zero esattamente ai frame `37`, `75` e `112`. La card precedente è
-già terminata, quindi in ciascun cambio compare un frame del solo sfondo. Prima di dichiarare il
-Gate E completamente chiuso occorre introdurre overlap/crossfade tra card oppure separare la
-visibilità della card dalla sua curva di ingresso. Non correggere questo difetto modificando la
-V5: produrre una nuova timeline versionata.
+Il primo retest ha inoltre rivelato un conflitto editoriale: le finestre della V5 erano contigue
+ma non sovrapposte e l'opacità animata sul Merge rendeva trasparente l'intera catena, compresa la
+card precedente. Ne risultava un frame del solo sfondo ai confini `37`, `75` e `112`.
+
+Correzione validata senza modificare la V5:
+
+- ogni finestra, esclusa l'ultima, mantiene una coda di overlap pari ai 10 frame d'ingresso;
+- la curva di opacità è collegata al Transform della sola card, mentre il Merge conserva la
+  propria finestra di visibilità;
+- le finestre reali diventano `0-47`, `37-85`, `75-122`, `112-150`;
+- la timeline diagnostica `ARPHE_E09_16X9_GATE_E_OVERLAP_V1` documenta il tentativo intermedio
+  non valido; la timeline valida è `ARPHE_E09_16X9_GATE_E_OVERLAP_V2`;
+- catture ai frame `36/37/41/46/47`, `74/75/79/84/85`, `111/112/116/121/122` e
+  `147/148/149` confermano continuità, movimento e assenza di frame vuoti, sempre con playhead
+  ripristinato.
+
+La transizione sequenziale è quindi PASS. `CAP_MOTION` resta aggregata `PARTIAL` finché il diverso
+helper `animate_review_stack`/`ARPHE_PAPER_STACK` non viene verificato come stack sovrapposto;
+la rifinitura estetica delle card resta intenzionalmente separata e verrà ripresa con il kit
+grafico dedicato.
 
 Nota operativa: il refresh della console legge la copia installata sotto `C:\ARPHE\MCP`, non i
 file sorgente della repository. Dopo una modifica al bridge eseguire prima

@@ -14,7 +14,8 @@ from bridge.project_tools import create_project  # noqa: E402
 from bridge.registry import Registry  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 from bridge.timeline_tools import create_timeline  # noqa: E402
-from bridge.creative_tools import _frame_to_timecode, _sequence_boundaries  # noqa: E402
+from bridge.creative_tools import (_frame_to_timecode, _sequence_boundaries,
+                                   _sequence_windows)  # noqa: E402
 from bridge.fusion_tools import set_visibility_window  # noqa: E402
 
 
@@ -113,6 +114,14 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
 
     def test_review_sequence_boundaries_are_gap_free(self):
         self.assertEqual([0, 37, 75, 112, 150], _sequence_boundaries(4, 150))
+
+    def test_review_sequence_windows_overlap_for_incoming_motion(self):
+        self.assertEqual([(0, 47), (37, 85), (75, 122), (112, 150)],
+                         _sequence_windows(4, 150, 10))
+
+    def test_review_sequence_windows_never_exceed_composition(self):
+        self.assertEqual([(0, 1), (1, 2), (2, 3), (3, 4)],
+                         _sequence_windows(4, 4, 10))
 
     def test_project_collision_stops_before_create(self):
         with tempfile.TemporaryDirectory() as directory:

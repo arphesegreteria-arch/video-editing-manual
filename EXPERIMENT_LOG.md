@@ -537,3 +537,19 @@ da questo PASS.
   trasparente.
 - Esito: Gate E PENDING; nessuna modifica al codice o promozione capability. La baseline statica
   resta il riferimento per la prossima correzione delle entrate sfalsate.
+
+## 2026-09-14 — Longform 04, transcript locale completo
+
+- Sorgente: `Angolo delle recensioni (degli altri) ep 2.mp4`, 1280x720, 30 fps, durata
+  3091,876 secondi. Il video originale non è stato modificato.
+- Trascrizione locale completata con `faster-whisper small`, CPU `int8`, italiano, VAD e timestamp
+  parola-per-parola: 1375 segmenti, 7278 parole, ultimo timestamp 3090,66 secondi.
+- Output: `ARPHE_TRANSCRIPT_V1`, circa 1,23 MB, conservato esclusivamente nella directory locale
+  `%LOCALAPPDATA%\ARPHE\Longform04\transcripts` e ignorato da Git.
+- Aggiunto `ARPHE_LONGFORM_TRANSCRIBE_01.py`, con scrittura atomica e checkpoint ogni 20 segmenti.
+  Il programma storico V4.3 citato nei manuali non era presente nella repository ed è quindi stato
+  ricostruito come utility minima, senza applicare tagli né toccare Resolve.
+- Decisione architetturale: il futuro bridge userà job asincroni (`start` -> `status` -> chunk JSON),
+  perché una chiamata MCP bloccante lunga quanto la trascrizione rischia HTTP 504.
+- Prossimo passo: produrre un indice temporale compatto e un candidate edit plan; nessun taglio sarà
+  applicato prima della revisione, e l'esecuzione creerà sempre una nuova timeline.

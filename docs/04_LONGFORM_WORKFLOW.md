@@ -109,3 +109,20 @@ Il benchmark umano ha però mostrato che il problema maggiore resta anche **cosa
 Mai sovrascrivere la timeline originale.
 
 Ogni tool o script che applica un piano deve creare una nuova timeline con nome esplicito. Questa regola dovrà essere imposta anche nel bridge MCP, non lasciata alla discrezione del modello.
+
+## Prima acquisizione longform completa — 2026-09-14
+
+La sorgente locale `Angolo delle recensioni (degli altri) ep 2.mp4` è stata trascritta senza API
+esterne con `faster-whisper small`, CPU `int8`, lingua italiana e timestamp parola-per-parola.
+Il file dura 3091,876 secondi; il risultato `ARPHE_TRANSCRIPT_V1` contiene 1375 segmenti e 7278
+parole, con ultimo timestamp a 3090,66 secondi.
+
+Il transcript resta locale sotto `%LOCALAPPDATA%\ARPHE\Longform04\transcripts` e non deve essere
+committato: può contenere materiale editoriale o dati personali. La repository contiene soltanto
+il trascrittore checkpointed `scripts/experiments/ARPHE_LONGFORM_TRANSCRIBE_01.py`; `*.transcript.json`
+è escluso da Git.
+
+Per l'integrazione MCP, una trascrizione longform non deve occupare una singola richiesta HTTP fino
+alla fine. Il contratto previsto è asincrono: avvio job, lettura stato, metadati e chunk JSON. In
+questo modo si evitano timeout 504 e ChatGPT carica soltanto le finestre temporali necessarie alla
+decisione editoriale.

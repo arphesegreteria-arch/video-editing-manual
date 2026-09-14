@@ -283,13 +283,18 @@ Dopo il PASS del runtime persistente sul PC segreteria:
 7. dichiarare il PC personale validato solo dopo entrambi i gate.
 
 ### Track B — Benchmark 02 editoriale
-1. Usare un estratto podcast autonomo di circa 8–15 minuti.
-2. Trattarlo da `00:00` come unica sorgente canonica.
-3. Generare transcript.
+1. Transcript completo locale di `Angolo delle recensioni (degli altri) ep 2.mp4`: **COMPLETATO**
+   (`ARPHE_TRANSCRIPT_V1`, 1375 segmenti, 7278 parole, 3091,876 s).
+2. Generare un indice temporale compatto e selezionare un estratto autonomo di circa 8–15 minuti.
+3. Trattare l'estratto da `00:00` come unica sorgente canonica.
 4. Congelare il candidate automatico prima del montaggio umano.
 5. Montare manualmente lo stesso estratto.
 6. Esportare reference e confrontare.
 7. Classificare mismatch e aggiornare le regole solo dopo il report.
+
+Il transcript resta in `%LOCALAPPDATA%\ARPHE\Longform04\transcripts` ed è escluso da Git. Il bridge
+longform dovrà esporre trascrizione asincrona, stato e lettura a chunk per evitare timeout e carichi
+di contesto inutili.
 
 ## Direzione scartata
 

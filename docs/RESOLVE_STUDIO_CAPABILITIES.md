@@ -48,7 +48,7 @@ Stati ammessi:
 | Creative 03: review card statica | SUPPORTED | Gate C V5: API/read-back e verifica visiva PASS |
 | Creative 03: diagnostica grafo/frame | SUPPORTED | Gate D: grafo Fusion di 19 nodi e cattura completa frame 0-18 in batch 8+8+3, con ripristino playhead |
 | Creative 03: review highlight/end card | PENDING | Primitive implementate, Gate F richiesto |
-| Creative 03: motion preset/card stack | PARTIAL | `ARPHE_SOFT_DROP` Gate D SUPPORTED; `CAP_MOTION` attiva localmente per i gate, stack Gate E PENDING |
+| Creative 03: motion preset/card stack | PARTIAL | Gate D SUPPORTED; Gate E technical motion PASS su quattro card (frame intermedi verificati), ma i confini 37/75/112 mostrano un frame vuoto: overlap/crossfade PENDING |
 | Creative 03: asset allowlisted | PENDING | Implementato dietro `CAP_ASSETS=false`; import/placement da verificare |
 | Creative 03: render preview | PENDING | Implementato dietro `CAP_RENDER=false`; non abilitare prima del Gate G |
 

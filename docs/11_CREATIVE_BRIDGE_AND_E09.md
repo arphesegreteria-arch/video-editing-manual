@@ -4,7 +4,8 @@ Data: 2026-09-04
 
 ## Stato
 
-`ARPHE_MCP_BRIDGE_CREATIVE_03` è **GATE A/B PASS / GATE C STATIC PASS / GATE D PASS**.
+`ARPHE_MCP_BRIDGE_CREATIVE_03` è **GATE A/B PASS / GATE C STATIC PASS / GATE D PASS /
+GATE E MOTION TECHNICAL PASS**.
 
 Non sostituisce né modifica `ARPHE_MCP_BRIDGE_SAFE_WRITE_02`, che resta il fallback validato.
 La presenza di codice o di un metodo nella documentazione Resolve non rende una capability
@@ -88,7 +89,7 @@ e ai preset, non tool MCP arbitrari.
 | `CAP_TIMELINE` | true | sì | parziale | Gate A create/status SUPPORTED; selezione/versioning PENDING |
 | `CAP_FUSION` | false | sì | sì | SUPPORTED — Gate B e grafo pulito V5 |
 | `CAP_REVIEW` | false | sì | parziale | PARTIAL — review card statica PASS; highlight/end card PENDING |
-| `CAP_MOTION` | false | sì | parziale | PARTIAL — Gate D soft drop PASS; Gate E stack PENDING |
+| `CAP_MOTION` | false | sì | parziale | PARTIAL — Gate D soft drop PASS; Gate E motion technical PASS, continuità transizioni PENDING |
 | `CAP_ASSETS` | false | sì | no | PENDING |
 | `CAP_RENDER` | false | sì | no | PENDING — Gate G |
 
@@ -266,7 +267,7 @@ Evidenza reale:
 Gate D è quindi PASS. La parte ingresso di `CAP_MOTION` è `SUPPORTED`; la capability aggregata
 resta `PARTIAL` fino al Gate E.
 
-### Gate E — ARPHE_PAPER_STACK
+### Gate E — motion su sequenza recensioni — TECHNICAL PASS 2026-09-14
 
 Creare cinque card da recensioni reali approvate e anonimizzate, passate a runtime, poi chiamare
 `animate_review_stack` con stagger 12, overlap 0.25,
@@ -292,8 +293,30 @@ wrapper di compatibilità per le chat che hanno già memorizzato il precedente s
 timeline `ARPHE_E09_16X9_SEQUENCE_V5` ha verificato in immagine i confini 0/36, 37/74, 75/111 e
 112/149: quattro testi corretti, nessun frame vuoto e playhead ripristinato. La causa tecnica
 era anche l'ordine di creazione dei modificatori Fusion: il `BezierSpline` deve essere collegato
-all'input prima di ricevere i keyframe. La stessa correzione è stata applicata alle curve motion,
-ma Gate E resta PENDING finché non viene ripetuta la sua verifica visuale.
+all'input prima di ricevere i keyframe. La stessa correzione è stata applicata alle curve motion.
+
+Retest reale del 2026-09-14: il progetto salvato
+`ARPHE_E09_MIODOTTORE_REVIEWS_16X9` è stato riaperto dal Project Manager dopo il riavvio del PC;
+la V5 originale è rimasta intatta ed è stata duplicata nella timeline non distruttiva
+`ARPHE_E09_16X9_GATE_E_RETEST_V2`. Sulle quattro card della composition
+`ARPHE_COMP_645C1A1DF0` è stato applicato `ARPHE_SOFT_DROP`, ingresso da `top`, durata 10 frame,
+`ease_out` e micro-settle. Le finestre/keyframe verificate sono:
+
+- Medicina estetica: `0 / 8 / 10`;
+- Ambiente: `37 / 45 / 47`;
+- Personale: `75 / 83 / 85`;
+- Competenza: `112 / 120 / 122`.
+
+Le catture ai frame iniziale, intermedio, settle e finale di ogni card hanno confermato
+opacità, traslazione, scala e assestamento reali; ogni acquisizione ha ripristinato il playhead.
+Il motore di animazione è quindi **TECHNICAL PASS**.
+
+Resta un conflitto editoriale aperto: le finestre della V5 sono contigue ma non sovrapposte e
+l'animazione imposta opacità zero esattamente ai frame `37`, `75` e `112`. La card precedente è
+già terminata, quindi in ciascun cambio compare un frame del solo sfondo. Prima di dichiarare il
+Gate E completamente chiuso occorre introdurre overlap/crossfade tra card oppure separare la
+visibilità della card dalla sua curva di ingresso. Non correggere questo difetto modificando la
+V5: produrre una nuova timeline versionata.
 
 Nota operativa: il refresh della console legge la copia installata sotto `C:\ARPHE\MCP`, non i
 file sorgente della repository. Dopo una modifica al bridge eseguire prima
@@ -307,10 +330,11 @@ e mostrare ancora la descrizione precedente. In questo caso non creare una nuova
 nello stesso server un nome versionato (`*_v2`) e mantenere un wrapper compatibile. Il nuovo nome
 forza il rilevamento senza rompere le chat esistenti.
 
-Stato console al termine della sessione: runtime e tunnel servono 30 azioni, ma la pagina admin
-ChatGPT è rimasta bloccata durante il caricamento e non ha consentito di premere **Aggiorna**.
-La scheda attiva non va quindi dichiarata aggiornata finché la UI non mostra esplicitamente
-`create_review_sequence_v2` e il salvataggio non è confermato.
+Stato console al 2026-09-14: l'aggiornamento manuale della scheda è stato completato, ma questa
+conversazione espone ancora 29 azioni e non mostra `create_review_sequence_v2`. Il wrapper
+compatibile `create_review_sequence` continua comunque a usare l'implementazione V2 installata.
+Trattare quindi la trentesima azione come non pubblicata/non propagata finché una nuova
+conversazione non la espone esplicitamente; non creare un'altra app per aggirare la cache.
 
 ### Gate F — End card / CTA
 

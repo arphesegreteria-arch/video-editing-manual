@@ -14,7 +14,7 @@ Installazione, tool, flag, gate e rollback sono documentati in
 Le feature progressive si modificano nella config locale, senza cambiare lo schema MCP, tramite
 `set_feature_flag.ps1`; dopo la modifica riavviare il runtime Creative03.
 
-Stato: **49 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
+Stato: **50 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
 GATE E SEQUENCE TRANSITION PASS / PAPER STACK + GATES F-G PENDING**.
 
 Il modulo longform aggiunge nove azioni gated: lettura media/transcript, validazione e applicazione

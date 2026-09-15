@@ -170,6 +170,10 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
     for clip in plan:
         start = clip["source_in_frame"]
         end_inclusive = clip["source_out_frame_exclusive"] - 1
+        if not safe_call(project, "SetCurrentTimeline", master):
+            return {"ok": False, "action": "apply_longform_edit_plan", "stage": "select_master",
+                    "failed_clip": clip["clip_id"], "project": project_name,
+                    "master_timeline": master_name}
         appended = append_range(record, start, end_inclusive)
         if not appended:
             return {"ok": False, "action": "apply_longform_edit_plan", "stage": "append_master",
@@ -182,6 +186,9 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
                     "failed_clip": clip["clip_id"]}
         registry.add_timeline(project_name, timeline_name)
         individual_start = int(safe_call(individual, "GetStartFrame") or 0)
+        if not safe_call(project, "SetCurrentTimeline", individual):
+            return {"ok": False, "action": "apply_longform_edit_plan",
+                    "stage": "select_clip_timeline", "failed_clip": clip["clip_id"]}
         one = append_range(individual_start, start, end_inclusive)
         if not one:
             return {"ok": False, "action": "apply_longform_edit_plan", "stage": "append_clip_timeline",

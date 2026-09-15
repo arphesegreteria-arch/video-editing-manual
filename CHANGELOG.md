@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-09-15 — Correzione routing timeline long-form
+
+- Il controllo read-only sul primo progetto audio-clean ha mostrato 12 timeline esistenti ma
+  contenuti distribuiti sulla timeline corrente precedente: master con un solo estratto e diverse
+  timeline individuali con due estratti.
+- `apply_longform_edit_plan` ora seleziona esplicitamente la master prima di ogni append master e
+  la timeline individuale prima di ogni append clip; nessun affidamento sul cambio implicito della
+  timeline corrente di Resolve.
+- Aggiunto un test di regressione che simula il comportamento reale di `CreateEmptyTimeline` e
+  verifica esattamente quattro inserimenti sulla master e due su ciascuna clip per un piano di due
+  estratti con audio sostitutivo. Suite: 50 test verdi. Schema MCP invariato a 39 azioni.
+
 ## 2026-09-15 — Audio long-form prima dei tagli ed export separati
 
 - Aggiunto il preset conservativo `ARPHE_DIALOGUE_CLEAN_V1`: passa-alto 80 Hz, riduzione rumore,

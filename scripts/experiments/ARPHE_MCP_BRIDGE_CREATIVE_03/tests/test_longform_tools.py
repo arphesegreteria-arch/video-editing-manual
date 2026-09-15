@@ -12,7 +12,8 @@ sys.path.insert(0, str(ROOT))
 
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 from bridge.longform_tools import (allowed_media, transcript_chunk, transcript_metadata,
-                                   validate_plan)  # noqa: E402
+                                   apply_plan, validate_plan)  # noqa: E402
+from bridge.registry import Registry  # noqa: E402
 from bridge.feature_flags import availability  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 from bridge.server import mcp  # noqa: E402
@@ -21,18 +22,85 @@ from bridge.server import mcp  # noqa: E402
 def config(root: Path) -> CreativeConfig:
     media = root / "media"
     transcripts = root / "transcripts"
+    audio = root / "audio"
+    audio_jobs = root / "audio_jobs"
     media.mkdir()
     transcripts.mkdir()
+    audio.mkdir()
+    audio_jobs.mkdir()
     return CreativeConfig(
         path=root / "config.json", asset_root=root / "assets", render_root=root / "renders",
         state_path=root / "state.json", audit_log_path=root / "audit.jsonl",
         palette=dict(DEFAULT_PALETTE), flags=dict(DEFAULT_FLAGS), allowed_projects=frozenset(),
         allowed_timelines=frozenset(), render_format="mp4", render_codec="H264",
-        media_roots=(media,), transcript_root=transcripts,
+        media_roots=(media,), transcript_root=transcripts, audio_root=audio,
+        audio_jobs_root=audio_jobs,
     )
 
 
 class LongformTests(unittest.TestCase):
+    def test_apply_selects_master_and_each_clip_before_append(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cfg = config(root)
+            cfg.flags["CAP_LONGFORM"] = True
+            media = cfg.media_roots[0] / "source.mp4"
+            audio = cfg.audio_root / "clean.wav"
+            media.write_bytes(b"video")
+            audio.write_bytes(b"audio")
+
+            class Timeline:
+                def __init__(self, name): self.name, self.entries = name, []
+                def GetName(self): return self.name
+                def GetStartFrame(self): return 108000
+
+            class Pool:
+                def __init__(self, project): self.project = project
+                def CreateEmptyTimeline(self, name):
+                    item = Timeline(name)
+                    self.project.timelines.append(item)
+                    self.project.current = item
+                    return item
+                def ImportMedia(self, _paths): return [object()]
+                def AppendToTimeline(self, entries):
+                    self.project.current.entries.extend(entries)
+                    return entries
+
+            class Project:
+                def __init__(self):
+                    self.timelines, self.current = [], None
+                    self.pool = Pool(self)
+                def GetMediaPool(self): return self.pool
+                def GetCurrentTimeline(self): return self.current
+                def SetCurrentTimeline(self, timeline): self.current = timeline; return True
+                def SetSetting(self, *_): return True
+                def GetSetting(self, *_): return "30"
+                def GetTimelineCount(self): return len(self.timelines)
+                def GetTimelineByIndex(self, index): return self.timelines[index - 1]
+
+            initial, created = Project(), Project()
+            class Manager:
+                def GetCurrentProject(self): return initial
+                def CreateProject(self, _name): return created
+                def LoadProject(self, *_): return True
+                def SaveProject(self, *_): return True
+                def GetProjectListInCurrentFolder(self): return []
+            class Storage:
+                def AddItemListToMediaPool(self, _path): return [object()]
+            class Resolve:
+                def GetMediaStorage(self): return Storage()
+
+            result = apply_plan(Resolve(), Manager(), cfg, Registry(cfg.state_path), str(media),
+                                "ARPHE_TEST_PROJECT", "ARPHE_TEST_MASTER", [
+                                    {"clip_id": "ARPHE_CLIP_01", "start_second": 1, "end_second": 2},
+                                    {"clip_id": "ARPHE_CLIP_02", "start_second": 3, "end_second": 4},
+                                ], 30, str(audio))
+            self.assertTrue(result["ok"])
+            by_name = {item.name: item for item in created.timelines}
+            self.assertEqual(4, len(by_name["ARPHE_TEST_MASTER"].entries))
+            self.assertEqual(2, len(by_name["ARPHE_CLIP_01"].entries))
+            self.assertEqual(2, len(by_name["ARPHE_CLIP_02"].entries))
+
     def test_longform_is_technically_available_from_current_project(self):
         class Api:
             def __getattr__(self, _name):

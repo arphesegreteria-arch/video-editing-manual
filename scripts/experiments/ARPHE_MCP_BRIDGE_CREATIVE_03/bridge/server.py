@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from typing import Any, Callable
 
 from mcp.server import MCPServer
@@ -155,9 +156,12 @@ def validate_longform_edit_plan(clips: list[dict[str, Any]], fps: float = 30.0) 
     """Validate a non-destructive longform plan and convert seconds to source frames."""
     try:
         plan = do_validate_longform_plan(clips, fps)
-        return {"ok": True, "action": "validate_longform_edit_plan", "clips": plan,
+        canonical = json.dumps(plan, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return {"ok": True, "action": "validate_longform_edit_plan",
                 "clip_count": len(plan), "total_frames": sum(v["duration_frames"] for v in plan),
-                "fps": float(fps), "writes_performed": False}
+                "maximum_clip_frames": max(v["duration_frames"] for v in plan),
+                "fps": float(fps), "plan_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+                "writes_performed": False}
     except Exception as exc: return _error(exc)
 
 

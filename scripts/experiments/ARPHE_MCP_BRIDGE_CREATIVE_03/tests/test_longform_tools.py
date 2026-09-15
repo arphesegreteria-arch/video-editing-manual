@@ -14,6 +14,7 @@ from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa
 from bridge.longform_tools import (allowed_media, transcript_chunk, transcript_metadata,
                                    validate_plan)  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
+from bridge.server import mcp  # noqa: E402
 
 
 def config(root: Path) -> CreativeConfig:
@@ -66,6 +67,19 @@ class LongformTests(unittest.TestCase):
             }), encoding="utf-8")
             self.assertTrue(transcript_metadata(str(transcript), cfg)["ok"])
             self.assertEqual(1, len(transcript_chunk(str(transcript), cfg, 0, 3)["segments"]))
+
+
+class LongformMcpTests(unittest.IsolatedAsyncioTestCase):
+    async def test_validation_returns_compact_summary_not_expanded_plan(self):
+        result = await mcp.call_tool("validate_longform_edit_plan", {"clips": [
+            {"clip_id": "ARPHE_TEST_01", "start_second": 10, "end_second": 12},
+        ], "fps": 30})
+        payload = result.structured_content
+        self.assertTrue(payload["ok"])
+        self.assertNotIn("clips", payload)
+        self.assertEqual(1, payload["clip_count"])
+        self.assertEqual(60, payload["total_frames"])
+        self.assertEqual(64, len(payload["plan_sha256"]))
 
 
 if __name__ == "__main__":

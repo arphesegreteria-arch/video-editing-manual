@@ -11,6 +11,8 @@
   e timeline individuali; originale preservato e salvataggio automatico disabilitato.
 - Installer retrocompatibile: migra la config esistente aggiungendo i path longform e la flag
   spenta. Suite: 43 test PASS.
+- Alleggerita la risposta di `validate_longform_edit_plan`: restituisce conteggi, durata massima e
+  SHA-256 canonico invece di rimandare l'intero piano espanso attraverso il tunnel.
 
 ## 2026-09-11 — Creative 03 aggiornata in-place a 29 azioni
 

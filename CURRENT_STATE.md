@@ -296,6 +296,11 @@ Il transcript resta in `%LOCALAPPDATA%\ARPHE\Longform04\transcripts` ed è esclu
 longform dovrà esporre trascrizione asincrona, stato e lettura a chunk per evitare timeout e carichi
 di contesto inutili.
 
+Stato implementazione 2026-09-15: lettura media/transcript, validazione e applicazione del piano
+sono implementate dietro `CAP_LONGFORM`; il job di trascrizione asincrono resta il passo successivo.
+Prima applicazione prevista: 11 estratti approvati dell'episodio 2, tutti entro 3 minuti, su progetto
+e timeline nuovi.
+
 ## Direzione scartata
 
 La vecchia GUI desktop ARPHE + polling GitHub (`ARPHE Remote Agent V1`) è **SUPERSEDED**. ChatGPT è la UI primaria; il componente locale deve restare un bridge MCP/Resolve.

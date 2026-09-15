@@ -33,6 +33,24 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     Write-Host "Created local config: $configPath"
 } else {
     Write-Host "Preserved existing local config: $configPath"
+    $config = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
+    $changed = $false
+    if ($null -eq $config.PSObject.Properties['media_roots']) {
+        $config | Add-Member -NotePropertyName media_roots -NotePropertyValue @((Join-Path $env:USERPROFILE 'Downloads').Replace('\', '/'))
+        $changed = $true
+    }
+    if ($null -eq $config.PSObject.Properties['transcript_root']) {
+        $config | Add-Member -NotePropertyName transcript_root -NotePropertyValue ((Join-Path $env:LOCALAPPDATA 'ARPHE\Longform04\transcripts').Replace('\', '/'))
+        $changed = $true
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_LONGFORM']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_LONGFORM -NotePropertyValue $false
+        $changed = $true
+    }
+    if ($changed) {
+        [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 16), [Text.UTF8Encoding]::new($false))
+        Write-Host 'Migrated existing config with gated longform paths and CAP_LONGFORM=false.'
+    }
 }
 
 Write-Host "Installed ARPHE_MCP_BRIDGE_CREATIVE_03 beside existing bridges."

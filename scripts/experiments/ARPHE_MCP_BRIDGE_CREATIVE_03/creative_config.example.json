@@ -3,6 +3,8 @@
   "workstation_id": "PC_SEGRETERIA",
   "asset_root": "C:/ARPHE/MCP/assets/creative",
   "render_root": "C:/ARPHE/MCP/renders/creative",
+  "media_roots": ["%USERPROFILE%/Downloads"],
+  "transcript_root": "%LOCALAPPDATA%/ARPHE/Longform04/transcripts",
   "state_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/creative_state.json",
   "audit_log_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/audit.jsonl",
   "allowed_projects": [],
@@ -14,7 +16,8 @@
     "CAP_REVIEW": false,
     "CAP_MOTION": false,
     "CAP_ASSETS": false,
-    "CAP_RENDER": false
+    "CAP_RENDER": false,
+    "CAP_LONGFORM": false
   },
   "palette": {
     "ivory": "#F7F2E8",

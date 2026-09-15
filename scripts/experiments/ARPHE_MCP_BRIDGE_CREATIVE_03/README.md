@@ -14,8 +14,13 @@ Installazione, tool, flag, gate e rollback sono documentati in
 Le feature progressive si modificano nella config locale, senza cambiare lo schema MCP, tramite
 `set_feature_flag.ps1`; dopo la modifica riavviare il runtime Creative03.
 
-Stato: **40 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
+Stato: **43 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
 GATE E SEQUENCE TRANSITION PASS / PAPER STACK + GATES F-G PENDING**.
+
+Il modulo longform aggiunge cinque azioni gated: elenco media allowlisted, metadata/chunk del
+transcript, validazione del piano e applicazione non distruttiva. `CAP_LONGFORM` è disabilitata di
+default. L'applicazione crea sempre un progetto nuovo, una master timeline e una timeline per ogni
+estratto (massimo 32, massimo 180 secondi ciascuno); non sovrascrive né salva automaticamente.
 
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato

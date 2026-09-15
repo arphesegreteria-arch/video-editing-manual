@@ -20,6 +20,11 @@ from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_fr
 from .feature_flags import report as feature_report
 from .fusion_tools import (add_background, add_text, create_composition,
                            retime)
+from .longform_tools import (apply_plan as do_apply_longform_plan,
+                             list_media as do_list_longform_media,
+                             transcript_chunk as do_transcript_chunk,
+                             transcript_metadata as do_transcript_metadata,
+                             validate_plan as do_validate_longform_plan)
 from .project_tools import (create_project as do_create_project,
                             save_project as do_save_project,
                             set_current_project as do_set_current_project)
@@ -118,6 +123,54 @@ def get_feature_flags() -> dict[str, Any]:
         return {"ok": True, "connection": error, "capabilities": feature_report(config, manager, project, timeline)}
     except Exception as exc:
         return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def list_longform_media() -> dict[str, Any]:
+    """List video files only inside locally allowlisted longform folders."""
+    try:
+        return _call(do_list_longform_media, load_config())
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_transcript_metadata(transcript_path: str) -> dict[str, Any]:
+    """Read metadata and counts from one allowlisted ARPHE_TRANSCRIPT_V1 JSON."""
+    try:
+        return _call(do_transcript_metadata, transcript_path, load_config())
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_transcript_chunk(transcript_path: str, start_second: float,
+                         end_second: float) -> dict[str, Any]:
+    """Read at most ten minutes from one allowlisted transcript JSON."""
+    try:
+        return _call(do_transcript_chunk, transcript_path, load_config(), start_second, end_second)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def validate_longform_edit_plan(clips: list[dict[str, Any]], fps: float = 30.0) -> dict[str, Any]:
+    """Validate a non-destructive longform plan and convert seconds to source frames."""
+    try:
+        plan = do_validate_longform_plan(clips, fps)
+        return {"ok": True, "action": "validate_longform_edit_plan", "clips": plan,
+                "clip_count": len(plan), "total_frames": sum(v["duration_frames"] for v in plan),
+                "fps": float(fps), "writes_performed": False}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_longform_edit_plan(media_path: str, project_name: str, master_timeline_name: str,
+                             clips: list[dict[str, Any]], fps: float = 30.0) -> dict[str, Any]:
+    """Create a new project, one master and separate clip timelines; never alter the source."""
+    try:
+        resolve, manager, _, _, config, registry, error = _runtime()
+        if error: return error
+        return _call(do_apply_longform_plan, resolve, manager, config, registry, media_path,
+                     project_name, master_timeline_name, clips, fps)
+    except Exception as exc: return _error(exc)
 
 
 @mcp.tool(annotations=SAFE_WRITE)

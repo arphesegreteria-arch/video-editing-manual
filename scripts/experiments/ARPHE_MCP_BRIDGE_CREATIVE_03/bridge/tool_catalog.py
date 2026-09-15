@@ -1,5 +1,7 @@
 EXPOSED_TOOL_NAMES = (
     "ping", "resolve_status", "create_safe_working_timeline", "get_feature_flags",
+    "list_longform_media", "get_transcript_metadata", "get_transcript_chunk",
+    "validate_longform_edit_plan", "apply_longform_edit_plan",
     "create_project", "set_current_project", "create_timeline", "set_current_timeline",
     "duplicate_timeline_version", "get_creative_status", "create_fusion_composition",
     "inspect_fusion_graph", "capture_timeline_frames",

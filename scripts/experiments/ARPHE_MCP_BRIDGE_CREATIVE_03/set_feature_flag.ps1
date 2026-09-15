@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)]
     [ValidateSet('CAP_PROJECT', 'CAP_TIMELINE', 'CAP_FUSION', 'CAP_REVIEW',
-                 'CAP_MOTION', 'CAP_ASSETS', 'CAP_RENDER')]
+                 'CAP_MOTION', 'CAP_ASSETS', 'CAP_RENDER', 'CAP_LONGFORM')]
     [string]$Name,
 
     [Parameter(Mandatory)]

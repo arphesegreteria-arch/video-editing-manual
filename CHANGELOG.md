@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-09-15 — Longform tools nel bridge Creative 03
+
+- Aggiunta capability gated `CAP_LONGFORM`, disabilitata per default.
+- Aggiunte cinque azioni MCP: `list_longform_media`, `get_transcript_metadata`,
+  `get_transcript_chunk`, `validate_longform_edit_plan`, `apply_longform_edit_plan`.
+- Media e transcript sono limitati a directory locali allowlisted; ogni estratto è limitato a
+  180 secondi e il piano a 32 estratti.
+- L'applicazione rifiuta collisioni e crea esclusivamente un progetto nuovo, una timeline master
+  e timeline individuali; originale preservato e salvataggio automatico disabilitato.
+- Installer retrocompatibile: migra la config esistente aggiungendo i path longform e la flag
+  spenta. Suite: 43 test PASS.
+
 ## 2026-09-11 — Creative 03 aggiornata in-place a 29 azioni
 
 - Reinstallata nel runtime locale la build contenente `create_review_sequence`, preservando la

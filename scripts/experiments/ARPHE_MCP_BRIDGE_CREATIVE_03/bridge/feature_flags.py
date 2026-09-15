@@ -14,6 +14,7 @@ CAPABILITY_STATUS = {
     "CAP_MOTION": "PENDING",
     "CAP_ASSETS": "PENDING",
     "CAP_RENDER": "PENDING",
+    "CAP_LONGFORM": "PENDING",
 }
 
 
@@ -51,6 +52,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_MOTION": fusion_ok,
         "CAP_ASSETS": assets_ok,
         "CAP_RENDER": render_ok,
+        "CAP_LONGFORM": project_ok and assets_ok,
     }
 
 

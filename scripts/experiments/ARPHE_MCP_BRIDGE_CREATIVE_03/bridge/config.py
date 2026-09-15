@@ -9,7 +9,7 @@ from typing import Any
 
 CAPABILITY_NAMES = (
     "CAP_PROJECT", "CAP_TIMELINE", "CAP_FUSION", "CAP_REVIEW",
-    "CAP_MOTION", "CAP_ASSETS", "CAP_RENDER",
+    "CAP_MOTION", "CAP_ASSETS", "CAP_RENDER", "CAP_LONGFORM",
 )
 
 DEFAULT_PALETTE = {
@@ -31,6 +31,7 @@ DEFAULT_FLAGS = {
     "CAP_MOTION": False,
     "CAP_ASSETS": False,
     "CAP_RENDER": False,
+    "CAP_LONGFORM": False,
 }
 
 ALLOWED_RENDER_PAIRS = {("mp4", "H264")}
@@ -56,6 +57,8 @@ class CreativeConfig:
     allowed_timelines: frozenset[str]
     render_format: str
     render_codec: str
+    media_roots: tuple[Path, ...] = ()
+    transcript_root: Path = Path(".")
 
 
 def _path(value: str, base: Path) -> Path:
@@ -104,4 +107,9 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         allowed_timelines=frozenset(str(v) for v in raw.get("allowed_timelines", [])),
         render_format=render_format,
         render_codec=render_codec,
+        media_roots=tuple(_path(str(v), base) for v in raw.get(
+            "media_roots", [str(Path(os.environ.get("USERPROFILE", "C:/Users/auras")) / "Downloads")]
+        )),
+        transcript_root=_path(str(raw.get("transcript_root", "")),
+                              Path(os.environ.get("LOCALAPPDATA", str(base))) / "ARPHE" / "Longform04" / "transcripts"),
     )

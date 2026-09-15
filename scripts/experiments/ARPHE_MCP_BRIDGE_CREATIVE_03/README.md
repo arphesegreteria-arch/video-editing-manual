@@ -35,10 +35,10 @@ anima l'opacità sul Transform della sola card, non sul Merge della catena. La t
 `ARPHE_E09_16X9_GATE_E_OVERLAP_V2` ha confermato card visibili ai confini 37/75/112 e fino al
 frame finale 149. La transizione sequenziale è PASS; `ARPHE_PAPER_STACK` resta un gate distinto.
 
-Pubblicazione UI della trentesima azione: **PENDING**. L'aggiornamento manuale è stato completato,
-ma la conversazione di verifica espone ancora 29 azioni e non include
-`create_review_sequence_v2`; il wrapper `create_review_sequence` resta operativo sulla nuova
-implementazione.
+Pubblicazione UI: **35 AZIONI CONFERMATE** il 2026-09-15, incluse le cinque primitive longform.
+Il runtime reale espone `CAP_LONGFORM=true` ed è stato verificato con `/readyz` HTTP 200, `ping` e
+`get_feature_flags`. I task già aperti possono conservare il catalogo precedente: usare un nuovo
+contesto per il primo test delle azioni appena pubblicate.
 
 Procedura di aggiornamento app ChatGPT già verificata: prima reinstallare la copia runtime con
 `install_on_segreteria.ps1` e riavviare in modalità `Creative03`; poi, nella scheda dell'app già

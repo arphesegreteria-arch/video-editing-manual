@@ -298,8 +298,14 @@ di contesto inutili.
 
 Stato implementazione 2026-09-15: lettura media/transcript, validazione e applicazione del piano
 sono implementate dietro `CAP_LONGFORM`; il job di trascrizione asincrono resta il passo successivo.
-Prima applicazione prevista: 11 estratti approvati dell'episodio 2, tutti entro 3 minuti, su progetto
-e timeline nuovi.
+La build è installata su `PC_SEGRETERIA`, `CAP_LONGFORM` è attiva, runtime e tunnel sono HTTP 200 e
+l'app ChatGPT è aggiornata a 35 azioni. Il piano unico di 11 estratti è approvato e validato
+(33180 frame, 18:26 totali, massimo 2:57). Nessuna write Resolve è ancora stata eseguita.
+
+Prossimo gate: in un nuovo contesto che carichi il catalogo a 35 azioni, validare nuovamente il
+piano e applicarlo creando soltanto progetto `ARPHE_ANGOLO_RECENSIONI_EP2_CUTS`, master
+`ARPHE_EP2_PUBLISHABLE_MASTER_V1` e 11 timeline individuali. In seguito rifinire i confini con
+controllo parola/audio/frame prima di dichiarare definitivi i tagli.
 
 ## Direzione scartata
 

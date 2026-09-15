@@ -553,3 +553,23 @@ da questo PASS.
   perché una chiamata MCP bloccante lunga quanto la trascrizione rischia HTTP 504.
 - Prossimo passo: produrre un indice temporale compatto e un candidate edit plan; nessun taglio sarà
   applicato prima della revisione, e l'esecuzione creerà sempre una nuova timeline.
+
+## 2026-09-15 — Longform 04, selezione unica e bridge deploy
+
+- Analizzata l'intera trascrizione in un solo passaggio e approvati 11 estratti pubblicabili,
+  ciascuno entro 180 secondi. Piano complessivo: 33180 frame a 30 fps, pari a 18:26;
+  estratto più lungo: 5310 frame, pari a 2:57.
+- Piano validato con lo stesso `validate_plan` usato dal bridge: `ok=true`, nessuna write.
+- Build Creative 03 con cinque azioni longform installata su `PC_SEGRETERIA`; config esistente
+  migrata conservativamente e `CAP_LONGFORM` attivata esplicitamente.
+- Runtime dopo il riavvio: supervisor e tunnel running, `/readyz` HTTP 200, restart count 0.
+- Console amministrativa ChatGPT: schema dell'app esistente aggiornato e verificato a 35 azioni.
+- `ping` e `get_feature_flags` end-to-end: bridge Creative 03 raggiungibile, Resolve connesso,
+  `CAP_LONGFORM` configurata, implementata, tecnicamente disponibile e attiva; stato ancora
+  `PENDING` fino al primo test di applicazione.
+- Il task Codex già aperto conservava il vecchio catalogo delle azioni: per il primo test delle
+  cinque nuove primitive è necessario un nuovo contesto che carichi lo schema a 35 azioni.
+- Nessun progetto, timeline, taglio, salvataggio o render Resolve eseguito in questo gate.
+- Prossimo test: `validate_longform_edit_plan`, quindi `apply_longform_edit_plan` per creare
+  `ARPHE_ANGOLO_RECENSIONI_EP2_CUTS`, master `ARPHE_EP2_PUBLISHABLE_MASTER_V1` e 11 timeline
+  individuali. La rifinitura audiovisiva dei bordi resta un gate separato prima del montaggio finale.

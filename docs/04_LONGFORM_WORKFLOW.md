@@ -126,3 +126,20 @@ Per l'integrazione MCP, una trascrizione longform non deve occupare una singola 
 alla fine. Il contratto previsto è asincrono: avvio job, lettura stato, metadati e chunk JSON. In
 questo modo si evitano timeout 504 e ChatGPT carica soltanto le finestre temporali necessarie alla
 decisione editoriale.
+
+## Selezione episodio 2 e primo gate applicativo — 2026-09-15
+
+L'intera trascrizione è stata analizzata in un'unica sessione editoriale. Sono stati approvati 11
+estratti, tutti entro 3 minuti, per evitare cicli ripetuti di analisi e montaggio. Il piano validato
+contiene 33180 frame a 30 fps (18:26 complessivi); il clip più lungo dura 5310 frame (2:57).
+
+La prima applicazione deve creare esclusivamente:
+
+- progetto `ARPHE_ANGOLO_RECENSIONI_EP2_CUTS`;
+- master `ARPHE_EP2_PUBLISHABLE_MASTER_V1`;
+- 11 timeline individuali, una per estratto.
+
+Il piano iniziale è conservativo. L'approvazione semantica non equivale ancora a un edit point
+definitivo: prima del PASS finale ogni confine deve essere raffinato e documentato secondo la
+gerarchia `significato -> timestamp parola -> audio -> frame -> controllo audiovisivo`. Nessun
+render o salvataggio automatico è incluso nel gate applicativo.

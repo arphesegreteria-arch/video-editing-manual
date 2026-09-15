@@ -13,6 +13,8 @@
   spenta. Suite: 43 test PASS.
 - Alleggerita la risposta di `validate_longform_edit_plan`: restituisce conteggi, durata massima e
   SHA-256 canonico invece di rimandare l'intero piano espanso attraverso il tunnel.
+- Corretto il preflight di `apply_longform_edit_plan`: la disponibilità tecnica viene verificata
+  sul progetto corrente prima di crearne uno nuovo, invece di passare un contesto progetto nullo.
 
 ## 2026-09-11 — Creative 03 aggiornata in-place a 29 azioni
 

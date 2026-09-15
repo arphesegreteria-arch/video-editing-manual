@@ -105,7 +105,9 @@ def validate_plan(clips: list[dict[str, Any]], fps: float = 30.0) -> list[dict[s
 def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Registry, media_path: str,
                project_name: str, master_timeline_name: str, clips: list[dict[str, Any]],
                fps: float = 30.0) -> dict[str, Any]:
-    require_capability("CAP_LONGFORM", config, manager, None, None)
+    current_project = safe_call(manager, "GetCurrentProject")
+    current_timeline = safe_call(current_project, "GetCurrentTimeline")
+    require_capability("CAP_LONGFORM", config, manager, current_project, current_timeline)
     media = allowed_media(media_path, config)
     plan = validate_plan(clips, fps)
     project_name = arphe_name(project_name, "LONGFORM")

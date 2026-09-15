@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 from bridge.longform_tools import (allowed_media, transcript_chunk, transcript_metadata,
                                    validate_plan)  # noqa: E402
+from bridge.feature_flags import availability  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 from bridge.server import mcp  # noqa: E402
 
@@ -32,6 +33,18 @@ def config(root: Path) -> CreativeConfig:
 
 
 class LongformTests(unittest.TestCase):
+    def test_longform_is_technically_available_from_current_project(self):
+        class Api:
+            def __getattr__(self, _name):
+                return lambda *args: None
+
+        manager = Api()
+        project = Api()
+        pool = Api()
+        project.GetMediaPool = lambda: pool
+        state = availability(manager, project, Api())
+        self.assertTrue(state["CAP_LONGFORM"])
+
     def test_plan_converts_seconds_to_exclusive_frames(self):
         result = validate_plan([{"clip_id": "CLIP_01", "title": "Test",
                                  "start_second": 10.0, "end_second": 12.5}], 30)

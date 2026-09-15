@@ -43,13 +43,21 @@ if (-not (Test-Path -LiteralPath $configPath)) {
         $config | Add-Member -NotePropertyName transcript_root -NotePropertyValue ((Join-Path $env:LOCALAPPDATA 'ARPHE\Longform04\transcripts').Replace('\', '/'))
         $changed = $true
     }
+    if ($null -eq $config.PSObject.Properties['audio_root']) {
+        $config | Add-Member -NotePropertyName audio_root -NotePropertyValue ((Join-Path $env:LOCALAPPDATA 'ARPHE\Longform04\audio').Replace('\', '/'))
+        $changed = $true
+    }
+    if ($null -eq $config.PSObject.Properties['audio_jobs_root']) {
+        $config | Add-Member -NotePropertyName audio_jobs_root -NotePropertyValue ((Join-Path $env:LOCALAPPDATA 'ARPHE\Longform04\audio_jobs').Replace('\', '/'))
+        $changed = $true
+    }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_LONGFORM']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_LONGFORM -NotePropertyValue $false
         $changed = $true
     }
     if ($changed) {
         [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 16), [Text.UTF8Encoding]::new($false))
-        Write-Host 'Migrated existing config with gated longform paths and CAP_LONGFORM=false.'
+        Write-Host 'Migrated existing config with missing gated longform fields; existing flag values preserved.'
     }
 }
 

@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-09-15 — Audio long-form prima dei tagli ed export separati
+
+- Aggiunto il preset conservativo `ARPHE_DIALOGUE_CLEAN_V1`: passa-alto 80 Hz, riduzione rumore,
+  compressione moderata e limiter a circa -1 dB. L'intera sorgente viene trattata una sola volta
+  in WAV PCM 48 kHz stereo, prima di costruire gli estratti.
+- Il restauro gira come job asincrono (`start_prepare_longform_audio` e
+  `get_longform_audio_job`) per evitare timeout e verifica la deriva temporale entro un frame.
+- `apply_longform_edit_plan` accetta `enhanced_audio_path`: usa il video originale senza il suo
+  audio e il WAV restaurato come unica sorgente sincronizzata sulla master e sulle timeline clip.
+- `queue_longform_exports` prepara in Deliver un job distinto per ogni timeline senza render;
+  `start_longform_exports` avvia solo quel batch e resta protetto da `CAP_RENDER`.
+- Catalogo codice portato da 35 a 39 azioni; pubblicazione UI ancora da aggiornare. Suite: 49 test
+  verdi, incluso filtro audio reale su segnale sintetico e batch export separato.
+
 ## 2026-09-15 — Longform tools nel bridge Creative 03
 
 - Aggiunta capability gated `CAP_LONGFORM`, disabilitata per default.

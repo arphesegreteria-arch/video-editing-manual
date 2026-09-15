@@ -57,3 +57,14 @@ class Registry:
 
     def element(self, element_id: str) -> dict[str, Any] | None:
         return self._load()["elements"].get(element_id)
+
+    def set_longform_batch(self, project: str, master_timeline: str,
+                           clip_timelines: list[str]) -> None:
+        data = self._load()
+        record = data["projects"].setdefault(project, {"timelines": []})
+        record["longform_batch"] = {"master_timeline": master_timeline,
+                                    "clip_timelines": list(clip_timelines)}
+        self._save(data)
+
+    def longform_batch(self, project: str) -> dict[str, Any] | None:
+        return self._load()["projects"].get(project, {}).get("longform_batch")

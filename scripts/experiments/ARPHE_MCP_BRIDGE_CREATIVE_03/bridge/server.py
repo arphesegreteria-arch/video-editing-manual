@@ -10,6 +10,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
 from .audit import write_audit
 from .asset_tools import add_asset
+from .audio_tools import audio_job as do_audio_job, start_audio_job as do_start_audio_job
 from .config import load_config
 from .creative_tools import (add_end_card as do_add_end_card,
                              add_review_card as do_add_review_card,
@@ -30,7 +31,9 @@ from .project_tools import (create_project as do_create_project,
                             save_project as do_save_project,
                             set_current_project as do_set_current_project)
 from .registry import Registry
-from .render_tools import render_preview as do_render_preview
+from .render_tools import (queue_longform_exports as do_queue_longform_exports,
+                           render_preview as do_render_preview,
+                           start_longform_exports as do_start_longform_exports)
 from .resolve_connection import context, safe_call
 from .safety import ValidationError
 from .timeline_tools import (create_safe_working_timeline as do_safe_timeline,
@@ -167,13 +170,31 @@ def validate_longform_edit_plan(clips: list[dict[str, Any]], fps: float = 30.0) 
 
 @mcp.tool(annotations=SAFE_WRITE)
 def apply_longform_edit_plan(media_path: str, project_name: str, master_timeline_name: str,
-                             clips: list[dict[str, Any]], fps: float = 30.0) -> dict[str, Any]:
+                             clips: list[dict[str, Any]], fps: float = 30.0,
+                             enhanced_audio_path: str | None = None) -> dict[str, Any]:
     """Create a new project, one master and separate clip timelines; never alter the source."""
     try:
         resolve, manager, _, _, config, registry, error = _runtime()
         if error: return error
         return _call(do_apply_longform_plan, resolve, manager, config, registry, media_path,
-                     project_name, master_timeline_name, clips, fps)
+                     project_name, master_timeline_name, clips, fps, enhanced_audio_path)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def start_prepare_longform_audio(media_path: str,
+                                 preset: str = "ARPHE_DIALOGUE_CLEAN_V1") -> dict[str, Any]:
+    """Start whole-source dialogue restoration asynchronously; poll its job before cutting."""
+    try:
+        return _call(do_start_audio_job, load_config(), media_path, preset)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_longform_audio_job(job_id: str) -> dict[str, Any]:
+    """Read progress and output path for a previously started audio-restoration job."""
+    try:
+        return _call(do_audio_job, load_config(), job_id)
     except Exception as exc: return _error(exc)
 
 
@@ -502,6 +523,28 @@ def render_preview(output_name: str = "ARPHE_PREVIEW") -> dict[str, Any]:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
         return _call(do_render_preview, project, timeline, config, registry, output_name)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def queue_longform_exports() -> dict[str, Any]:
+    """Create one Deliver job per registered long-form clip timeline without starting render."""
+    try:
+        _, manager, project, _, config, registry, error = _runtime()
+        if error: return error
+        if not project: return {"ok": False, "stage": "preflight", "error": "Serve un progetto aperto."}
+        return _call(do_queue_longform_exports, manager, project, config, registry)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def start_longform_exports() -> dict[str, Any]:
+    """Start only the separately queued long-form export jobs."""
+    try:
+        _, _, project, _, config, registry, error = _runtime()
+        if error: return error
+        if not project: return {"ok": False, "stage": "preflight", "error": "Serve un progetto aperto."}
+        return _call(do_start_longform_exports, project, config, registry)
     except Exception as exc: return _error(exc)
 
 

@@ -104,11 +104,15 @@ def validate_plan(clips: list[dict[str, Any]], fps: float = 30.0) -> list[dict[s
 
 def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Registry, media_path: str,
                project_name: str, master_timeline_name: str, clips: list[dict[str, Any]],
-               fps: float = 30.0) -> dict[str, Any]:
+               fps: float = 30.0, enhanced_audio_path: str | None = None) -> dict[str, Any]:
     current_project = safe_call(manager, "GetCurrentProject")
     current_timeline = safe_call(current_project, "GetCurrentTimeline")
     require_capability("CAP_LONGFORM", config, manager, current_project, current_timeline)
     media = allowed_media(media_path, config)
+    enhanced_audio = None
+    if enhanced_audio_path:
+        from .audio_tools import allowed_audio
+        enhanced_audio = allowed_audio(enhanced_audio_path, config)
     plan = validate_plan(clips, fps)
     project_name = arphe_name(project_name, "LONGFORM")
     master_name = arphe_name(master_timeline_name, "LONGFORM_MASTER")
@@ -135,6 +139,28 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
     if not item:
         return {"ok": False, "action": "apply_longform_edit_plan", "stage": "import_media",
                 "project": project_name}
+    audio_item = None
+    if enhanced_audio is not None:
+        imported_audio = safe_call(media_storage, "AddItemListToMediaPool", str(enhanced_audio)) if media_storage else None
+        if not imported_audio:
+            imported_audio = safe_call(pool, "ImportMedia", [str(enhanced_audio)])
+        audio_item = imported_audio[0] if imported_audio else None
+        if not audio_item:
+            return {"ok": False, "action": "apply_longform_edit_plan", "stage": "import_enhanced_audio",
+                    "project": project_name}
+
+    def append_range(record_frame: int, start: int, end_inclusive: int) -> bool:
+        if audio_item is None:
+            return bool(safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": item, "startFrame": start,
+                                                               "endFrame": end_inclusive,
+                                                               "recordFrame": record_frame}]))
+        video = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": item, "mediaType": 1,
+                                                        "startFrame": start, "endFrame": end_inclusive,
+                                                        "recordFrame": record_frame}])
+        audio = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": audio_item, "mediaType": 2,
+                                                        "startFrame": start, "endFrame": end_inclusive,
+                                                        "recordFrame": record_frame}])
+        return bool(video and audio)
     master = safe_call(pool, "CreateEmptyTimeline", master_name)
     if not master:
         return {"ok": False, "action": "apply_longform_edit_plan", "stage": "create_master"}
@@ -144,8 +170,7 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
     for clip in plan:
         start = clip["source_in_frame"]
         end_inclusive = clip["source_out_frame_exclusive"] - 1
-        appended = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": item, "startFrame": start,
-                                                          "endFrame": end_inclusive, "recordFrame": record}])
+        appended = append_range(record, start, end_inclusive)
         if not appended:
             return {"ok": False, "action": "apply_longform_edit_plan", "stage": "append_master",
                     "failed_clip": clip["clip_id"], "project": project_name, "master_timeline": master_name}
@@ -157,16 +182,17 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
                     "failed_clip": clip["clip_id"]}
         registry.add_timeline(project_name, timeline_name)
         individual_start = int(safe_call(individual, "GetStartFrame") or 0)
-        one = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": item, "startFrame": start,
-                                                     "endFrame": end_inclusive, "recordFrame": individual_start}])
+        one = append_range(individual_start, start, end_inclusive)
         if not one:
             return {"ok": False, "action": "apply_longform_edit_plan", "stage": "append_clip_timeline",
                     "failed_clip": clip["clip_id"]}
         created_timelines.append(timeline_name)
+    registry.set_longform_batch(project_name, master_name, created_timelines)
     safe_call(project, "SetCurrentTimeline", master)
     return {"ok": True, "action": "apply_longform_edit_plan", "project": project_name,
             "master_timeline": master_name, "clip_timelines": created_timelines,
             "clip_count": len(plan), "total_frames": sum(v["duration_frames"] for v in plan),
             "fps": rate, "resolution": {"width": 1920, "height": 1080},
             "source_preserved": True, "overwrite": False, "saved": False,
+            "enhanced_audio_used": audio_item is not None,
             "plan": plan}

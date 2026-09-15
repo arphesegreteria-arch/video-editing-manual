@@ -14,13 +14,19 @@ Installazione, tool, flag, gate e rollback sono documentati in
 Le feature progressive si modificano nella config locale, senza cambiare lo schema MCP, tramite
 `set_feature_flag.ps1`; dopo la modifica riavviare il runtime Creative03.
 
-Stato: **43 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
+Stato: **49 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
 GATE E SEQUENCE TRANSITION PASS / PAPER STACK + GATES F-G PENDING**.
 
-Il modulo longform aggiunge cinque azioni gated: elenco media allowlisted, metadata/chunk del
-transcript, validazione del piano e applicazione non distruttiva. `CAP_LONGFORM` è disabilitata di
-default. L'applicazione crea sempre un progetto nuovo, una master timeline e una timeline per ogni
-estratto (massimo 32, massimo 180 secondi ciascuno); non sovrascrive né salva automaticamente.
+Il modulo longform aggiunge nove azioni gated: lettura media/transcript, validazione e applicazione
+del piano, restauro asincrono dell'intera sorgente audio e batch Deliver separato. `CAP_LONGFORM` è
+disabilitata di default. L'ordine corretto è: completare il WAV restaurato, passarlo a
+`apply_longform_edit_plan`, poi preparare un job per ogni timeline-estratto. L'applicazione crea
+sempre un progetto nuovo, una master timeline e una timeline per ogni estratto (massimo 32, massimo
+180 secondi ciascuno); non sovrascrive né salva automaticamente.
+
+`ARPHE_DIALOGUE_CLEAN_V1` usa passa-alto, denoise conservativo, compressore moderato e limiter.
+Produce PCM WAV 48 kHz stereo e rifiuta il risultato se la durata differisce di oltre un frame.
+`queue_longform_exports` non avvia il render; l'avvio resta separato e protetto da `CAP_RENDER`.
 
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato
@@ -39,6 +45,10 @@ Pubblicazione UI: **35 AZIONI CONFERMATE** il 2026-09-15, incluse le cinque prim
 Il runtime reale espone `CAP_LONGFORM=true` ed è stato verificato con `/readyz` HTTP 200, `ping` e
 `get_feature_flags`. I task già aperti possono conservare il catalogo precedente: usare un nuovo
 contesto per il primo test delle azioni appena pubblicate.
+
+Stato codice successivo: **39 AZIONI / 49 TEST PASS**. Le quattro nuove azioni audio/export e il
+parametro `enhanced_audio_path` richiedono ancora **Aggiorna** nella scheda amministrativa dell'app;
+fino a quel momento la versione attiva mostra correttamente 35 azioni.
 
 Procedura di aggiornamento app ChatGPT già verificata: prima reinstallare la copia runtime con
 `install_on_segreteria.ps1` e riavviare in modalità `Creative03`; poi, nella scheda dell'app già

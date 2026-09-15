@@ -5,6 +5,8 @@
   "render_root": "C:/ARPHE/MCP/renders/creative",
   "media_roots": ["%USERPROFILE%/Downloads"],
   "transcript_root": "%LOCALAPPDATA%/ARPHE/Longform04/transcripts",
+  "audio_root": "%LOCALAPPDATA%/ARPHE/Longform04/audio",
+  "audio_jobs_root": "%LOCALAPPDATA%/ARPHE/Longform04/audio_jobs",
   "state_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/creative_state.json",
   "audit_log_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/audit.jsonl",
   "allowed_projects": [],

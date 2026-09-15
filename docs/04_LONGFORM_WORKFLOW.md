@@ -10,6 +10,21 @@ Usare il contenuto parlato per creare un primo rough cut automatico, mantenendo 
 
 ## Pipeline editoriale corrente
 
+### Ordine obbligatorio: audio → tagli → Deliver
+
+1. Avviare `start_prepare_longform_audio` sulla registrazione originale.
+2. Controllare `get_longform_audio_job` fino allo stato `COMPLETED`.
+3. Ascoltare un campione del WAV e conservare il suo `output_path`.
+4. Validare il piano una sola volta e chiamare `apply_longform_edit_plan` passando
+   `enhanced_audio_path`.
+5. Verificare contenuto e sincronizzazione delle timeline individuali.
+6. Chiamare `queue_longform_exports`: in Deliver compare un job per ogni estratto.
+7. Solo dopo il gate umano e con `CAP_RENDER=true`, chiamare `start_longform_exports`.
+
+Il trattamento precede i tagli, quindi ogni estratto riceve la stessa correzione e non dipende da
+interventi manuali clip per clip. Il video rimane quello originale; il suo audio viene escluso e
+sostituito dal WAV sincronizzato. La preparazione dei job non avvia automaticamente il render.
+
 1. Selezionare una sorgente o una `SOURCE_EXCERPT` autonoma.
 2. Conservare sempre la sorgente/timeline originale intoccabile.
 3. Trascrivere localmente con `faster-whisper`.

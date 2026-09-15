@@ -59,6 +59,8 @@ class CreativeConfig:
     render_codec: str
     media_roots: tuple[Path, ...] = ()
     transcript_root: Path = Path(".")
+    audio_root: Path = Path(".")
+    audio_jobs_root: Path = Path(".")
 
 
 def _path(value: str, base: Path) -> Path:
@@ -112,4 +114,8 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         )),
         transcript_root=_path(str(raw.get("transcript_root", "")),
                               Path(os.environ.get("LOCALAPPDATA", str(base))) / "ARPHE" / "Longform04" / "transcripts"),
+        audio_root=_path(str(raw.get("audio_root", "")),
+                         Path(os.environ.get("LOCALAPPDATA", str(base))) / "ARPHE" / "Longform04" / "audio"),
+        audio_jobs_root=_path(str(raw.get("audio_jobs_root", "")),
+                              Path(os.environ.get("LOCALAPPDATA", str(base))) / "ARPHE" / "Longform04" / "audio_jobs"),
     )

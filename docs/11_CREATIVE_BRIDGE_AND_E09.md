@@ -92,6 +92,7 @@ e ai preset, non tool MCP arbitrari.
 | `CAP_MOTION` | false | sì | parziale | PARTIAL — Gate D soft drop PASS; Gate E sequence transition PASS; paper stack helper PENDING |
 | `CAP_ASSETS` | false | sì | no | PENDING |
 | `CAP_RENDER` | false | sì | no | PENDING — Gate G |
+| `CAP_LONGFORM` | false | sì | parziale | Piano/tagli implementati; audio pre-cut ed export separati in test runtime |
 
 `get_feature_flags` separa `configured`, `implemented`, `technically_available`, `active` e
 `validated`. Un flag configurato diventa `active` solo se l'oggetto Resolve corrente espone i

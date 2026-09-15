@@ -307,6 +307,10 @@ piano e applicarlo creando soltanto progetto `ARPHE_ANGOLO_RECENSIONI_EP2_CUTS`,
 `ARPHE_EP2_PUBLISHABLE_MASTER_V1` e 11 timeline individuali. In seguito rifinire i confini con
 controllo parola/audio/frame prima di dichiarare definitivi i tagli.
 
+Il piano approvato completo è versionato in `plans/ARPHE_EP2_PUBLISHABLE_V1.json`; non deve essere
+ricostruito dalla memoria della chat. Lo stato `APPROVED_ROUGH_BOUNDARIES` indica che contenuti e
+finestre sono approvati, mentre i punti di lama finali richiedono ancora il gate audiovisivo.
+
 ## Direzione scartata
 
 La vecchia GUI desktop ARPHE + polling GitHub (`ARPHE Remote Agent V1`) è **SUPERSEDED**. ChatGPT è la UI primaria; il componente locale deve restare un bridge MCP/Resolve.

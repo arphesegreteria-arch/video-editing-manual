@@ -570,6 +570,9 @@ da questo PASS.
 - Il task Codex già aperto conservava il vecchio catalogo delle azioni: per il primo test delle
   cinque nuove primitive è necessario un nuovo contesto che carichi lo schema a 35 azioni.
 - Nessun progetto, timeline, taglio, salvataggio o render Resolve eseguito in questo gate.
+- Dopo che un nuovo contesto non ha trovato gli 11 intervalli, il piano completo è stato reso un
+  artefatto versionato: `plans/ARPHE_EP2_PUBLISHABLE_V1.json`. Questa è la sorgente canonica degli
+  input e sostituisce qualunque dipendenza dalla memoria della conversazione.
 - Prossimo test: `validate_longform_edit_plan`, quindi `apply_longform_edit_plan` per creare
   `ARPHE_ANGOLO_RECENSIONI_EP2_CUTS`, master `ARPHE_EP2_PUBLISHABLE_MASTER_V1` e 11 timeline
   individuali. La rifinitura audiovisiva dei bordi resta un gate separato prima del montaggio finale.

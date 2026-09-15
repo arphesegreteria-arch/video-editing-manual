@@ -1,0 +1,34 @@
+{
+  "schema": "ARPHE_LONGFORM_EDIT_PLAN_V1",
+  "status": "APPROVED_ROUGH_BOUNDARIES",
+  "source_file": "Angolo delle recensioni (degli altri) ep 2.mp4",
+  "project_name": "ARPHE_ANGOLO_RECENSIONI_EP2_CUTS",
+  "master_timeline_name": "ARPHE_EP2_PUBLISHABLE_MASTER_V1",
+  "fps": 30,
+  "clips": [
+    {"clip_id": "ARPHE_E02_CLIP_01", "title": "Come funziona il format", "start_second": 278, "end_second": 307},
+    {"clip_id": "ARPHE_E02_CLIP_02", "title": "Nutrizione personalizzata", "start_second": 388, "end_second": 506},
+    {"clip_id": "ARPHE_E02_CLIP_03", "title": "Certificati sportivi", "start_second": 647, "end_second": 746},
+    {"clip_id": "ARPHE_E02_CLIP_04", "title": "Prevenzione e paziente", "start_second": 1272, "end_second": 1340},
+    {"clip_id": "ARPHE_E02_CLIP_05", "title": "Recuperare un errore di prenotazione", "start_second": 1495, "end_second": 1627},
+    {"clip_id": "ARPHE_E02_CLIP_06", "title": "Autonomia della segreteria", "start_second": 1687, "end_second": 1761},
+    {"clip_id": "ARPHE_E02_CLIP_07", "title": "Durata della visita, domande ed empatia", "start_second": 1802, "end_second": 1979},
+    {"clip_id": "ARPHE_E02_CLIP_08", "title": "Scelta dei professionisti", "start_second": 2020, "end_second": 2127},
+    {"clip_id": "ARPHE_E02_CLIP_09", "title": "Quando indirizzare a un collega", "start_second": 2434, "end_second": 2562},
+    {"clip_id": "ARPHE_E02_CLIP_10", "title": "Medicina sportiva e fretta percepita", "start_second": 2749, "end_second": 2883},
+    {"clip_id": "ARPHE_E02_CLIP_11", "title": "Chiusura e call to action", "start_second": 3050, "end_second": 3090}
+  ],
+  "totals": {
+    "clip_count": 11,
+    "duration_seconds": 1106,
+    "duration_frames": 33180,
+    "maximum_clip_seconds": 177
+  },
+  "safety": {
+    "source_preserved": true,
+    "overwrite": false,
+    "automatic_save": false,
+    "automatic_render": false,
+    "final_boundary_refinement_required": true
+  }
+}

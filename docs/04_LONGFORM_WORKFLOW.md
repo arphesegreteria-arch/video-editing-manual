@@ -158,3 +158,26 @@ Il piano iniziale è conservativo. L'approvazione semantica non equivale ancora 
 definitivo: prima del PASS finale ogni confine deve essere raffinato e documentato secondo la
 gerarchia `significato -> timestamp parola -> audio -> frame -> controllo audiovisivo`. Nessun
 render o salvataggio automatico è incluso nel gate applicativo.
+
+## Episodio 1: recupero di una seconda voce distante — 2026-09-17
+
+La sorgente `Commenta la mia dieta (ep 1).mp4` ha due interlocutori registrati sulla stessa traccia;
+la seconda voce è stata ripresa con il microfono troppo lontano. Il piano editoriale approvato crea
+12 estratti ed è versionato in `plans/ARPHE_EP1_PUBLISHABLE_V1.json`.
+
+Il bridge espone tre preset distinti:
+
+- `ARPHE_DIALOGUE_CLEAN_V1`: pulizia conservativa per materiale già bilanciato;
+- `ARPHE_DIALOGUE_LEVEL_V2`: livellamento dinamico per differenze moderate;
+- `ARPHE_DIALOGUE_DISTANT_V3`: recupero più deciso con denoise, presenza, livellamento e limiter.
+
+Il confronto in Resolve ha confermato che V3 rende la voce distante più leggibile, ma non ricrea il
+segnale mancante. Un test basato sui singoli turni ha sollevato eccessivamente ambiente e riverbero
+ed è stato scartato. Per registrazioni future servono microfoni separati o un mixer; in postproduzione
+va conservato il preset globale che supera l'ascolto umano, senza inseguire automaticamente ogni
+passaggio debole.
+
+Per gli estratti parlati usare transizioni minime: fade audio di 2–4 frame quando il taglio cade su
+rumore ambiente, nessun fade se taglia una parola, e fade-out finale di 6–10 frame. Sul video basta
+un ingresso diretto o una dissolvenza molto breve; l'uscita può usare 6–8 frame verso nero soltanto
+quando la clip non prosegue in una end card. Le transizioni non devono mascherare edit point errati.

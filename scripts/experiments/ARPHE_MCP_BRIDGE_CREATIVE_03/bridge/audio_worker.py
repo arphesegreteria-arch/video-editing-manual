@@ -5,10 +5,14 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 import traceback
 
 
 PRESET = "ARPHE_DIALOGUE_CLEAN_V1"
+LEVEL_PRESET = "ARPHE_DIALOGUE_LEVEL_V2"
+DISTANT_PRESET = "ARPHE_DIALOGUE_DISTANT_V3"
+PRESETS = frozenset({PRESET, LEVEL_PRESET, DISTANT_PRESET})
 
 
 def _save(path: Path, payload: dict) -> None:
@@ -17,14 +21,24 @@ def _save(path: Path, payload: dict) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2, sort_keys=True)
-        os.replace(temporary, path)
+        for attempt in range(6):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if attempt == 5:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
 
 
-def process_audio(source: Path, output: Path, job_path: Path) -> None:
+def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRESET) -> None:
     import av
+
+    if preset not in PRESETS:
+        raise ValueError("Preset audio non consentito")
 
     state = json.loads(job_path.read_text(encoding="utf-8-sig"))
     state.update(status="RUNNING", progress_percent=0)
@@ -52,14 +66,60 @@ def process_audio(source: Path, output: Path, job_path: Path) -> None:
                     f"sample_fmt={frame.format.name}:channel_layout={frame.layout.name}"
                 ))
                 highpass = graph.add("highpass", "f=80")
-                denoise = graph.add("afftdn", "nr=8:nf=-50:tn=1")
-                compressor = graph.add("acompressor", "threshold=0.125:ratio=3:attack=15:release=150:makeup=1.4")
-                limiter = graph.add("alimiter", "limit=0.891:attack=5:release=50")
+                denoise = graph.add(
+                    "afftdn",
+                    "nr=14:nf=-48:tn=1" if preset == DISTANT_PRESET else "nr=8:nf=-50:tn=1",
+                )
+                if preset in {LEVEL_PRESET, DISTANT_PRESET}:
+                    if preset == DISTANT_PRESET:
+                        presence = graph.add("equalizer", "f=3200:t=q:w=1.2:g=3")
+                        booster = graph.add("volume", "volume=6dB")
+                        level_options = "f=300:g=15:p=0.82:m=8:r=0.16:s=8:t=0.008:o=0.5"
+                        compressor_options = "threshold=0.10:ratio=2.5:attack=10:release=180:makeup=1.15"
+                    else:
+                        presence = None
+                        booster = None
+                        level_options = "f=400:g=21:p=0.85:m=4:r=0.12:s=6:t=0.01:o=0.5"
+                        compressor_options = "threshold=0.125:ratio=2:attack=15:release=150:makeup=1.1"
+                    leveler = graph.add(
+                        "dynaudnorm",
+                        level_options,
+                    )
+                    compressor = graph.add(
+                        "acompressor",
+                        compressor_options,
+                    )
+                else:
+                    presence = None
+                    booster = None
+                    leveler = None
+                    compressor = graph.add(
+                        "acompressor",
+                        "threshold=0.125:ratio=3:attack=15:release=150:makeup=1.4",
+                    )
+                limiter_options = (
+                    "limit=0.8:attack=5:release=50:level=false"
+                    if preset == DISTANT_PRESET
+                    else "limit=0.891:attack=5:release=50"
+                )
+                limiter = graph.add("alimiter", limiter_options)
                 sink = graph.add("abuffersink")
                 source_node.link_to(highpass)
                 highpass.link_to(denoise)
-                denoise.link_to(compressor)
-                compressor.link_to(limiter)
+                if leveler is not None:
+                    if presence is not None:
+                        denoise.link_to(presence)
+                        presence.link_to(leveler)
+                    else:
+                        denoise.link_to(leveler)
+                    leveler.link_to(compressor)
+                else:
+                    denoise.link_to(compressor)
+                if booster is not None:
+                    compressor.link_to(booster)
+                    booster.link_to(limiter)
+                else:
+                    compressor.link_to(limiter)
                 limiter.link_to(sink)
                 graph.configure()
             graph.push(frame)
@@ -113,10 +173,11 @@ def main() -> int:
     parser.add_argument("--source", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--job", required=True)
+    parser.add_argument("--preset", default=PRESET, choices=sorted(PRESETS))
     args = parser.parse_args()
     job = Path(args.job)
     try:
-        process_audio(Path(args.source), Path(args.output), job)
+        process_audio(Path(args.source), Path(args.output), job, args.preset)
         return 0
     except Exception as exc:
         state = json.loads(job.read_text(encoding="utf-8-sig")) if job.is_file() else {}

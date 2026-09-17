@@ -1,0 +1,30 @@
+{
+  "schema": "ARPHE_LONGFORM_PLAN_V1",
+  "status": "APPLIED_NEEDS_AV_AND_MEDICAL_REVIEW",
+  "source_file": "C:\\Users\\auras\\Downloads\\Commenta la mia dieta (ep 1).mp4",
+  "enhanced_audio_path": "C:\\Users\\auras\\AppData\\Local\\ARPHE\\Longform04\\audio\\ARPHE_CLEAN_Commenta_la_mia_dieta_ep_1_69ab4f98.wav",
+  "project_name": "ARPHE_COMMENTA_DIETA_EP1_CLEAN_V1",
+  "master_timeline_name": "ARPHE_EP1_PUBLISHABLE_MASTER_V1",
+  "fps": 30,
+  "plan_sha256": "95ee033a49f2997b25879d4031a28f102044e64807e52b80b41cf636c7d00a1c",
+  "clips": [
+    {"clip_id":"ARPHE_E01_CLIP_01","title":"Dalla palestra alla nutrizione","start_second":180.30,"end_second":296.74},
+    {"clip_id":"ARPHE_E01_CLIP_02","title":"Come riconoscere un professionista valido","start_second":522.99,"end_second":604.97},
+    {"clip_id":"ARPHE_E01_CLIP_03","title":"Dietista e biologo nutrizionista","start_second":765.17,"end_second":843.23},
+    {"clip_id":"ARPHE_E01_CLIP_04","title":"Il titolo di studio non basta","start_second":902.69,"end_second":1036.53},
+    {"clip_id":"ARPHE_E01_CLIP_05","title":"Insegnare al paziente a diventare autonomo","start_second":1095.49,"end_second":1192.45},
+    {"clip_id":"ARPHE_E01_CLIP_06","title":"Scegliere un professionista dai social","start_second":1325.73,"end_second":1499.75},
+    {"clip_id":"ARPHE_E01_CLIP_07","title":"Mangiare dopo le 21 e 30 fa ingrassare","start_second":1553.60,"end_second":1715.30},
+    {"clip_id":"ARPHE_E01_CLIP_08","title":"La frutta è uno spreco di calorie","start_second":2026.58,"end_second":2157.68},
+    {"clip_id":"ARPHE_E01_CLIP_09","title":"Quando i social complicano la nutrizione","start_second":2253.66,"end_second":2313.18},
+    {"clip_id":"ARPHE_E01_CLIP_10","title":"Mangiare male non significa ingrassare","start_second":2395.48,"end_second":2431.76},
+    {"clip_id":"ARPHE_E01_CLIP_11","title":"Cosa rivela un diario senza proteine","start_second":2530.67,"end_second":2705.47},
+    {"clip_id":"ARPHE_E01_CLIP_12","title":"Il diario alimentare fatto bene","start_second":2784.91,"end_second":2900.33}
+  ],
+  "review_notes": [
+    "Verificare audiovisivamente tutti i punti di ingresso e uscita.",
+    "Rivedere le affermazioni sanitarie prima della pubblicazione, in particolare le clip 03, 07, 08, 10 e 11.",
+    "Controllare livelli, dinamica e mixer sul render di prova prima del render definitivo.",
+    "Il progetto non è stato salvato e non sono stati accodati render."
+  ]
+}

@@ -26,6 +26,16 @@ sempre un progetto nuovo, una master timeline e una timeline per ogni estratto (
 
 `ARPHE_DIALOGUE_CLEAN_V1` usa passa-alto, denoise conservativo, compressore moderato e limiter.
 Produce PCM WAV 48 kHz stereo e rifiuta il risultato se la durata differisce di oltre un frame.
+`ARPHE_DIALOGUE_LEVEL_V2` aggiunge un livellamento dinamico locale per registrazioni con voci a
+distanze diverse dal microfono. Recupera fino a circa 12 dB, ignora i tratti sotto la soglia voce,
+usa transizioni morbide e conserva il limiter finale. Non esegue diarizzazione: il gate umano deve
+verificare che rumore ambientale e respiri non vengano sollevati in modo innaturale.
+`ARPHE_DIALOGUE_DISTANT_V3` è il preset di recupero per una seconda voce registrata lontano:
+usa denoise più deciso, un rinforzo moderato della presenza intorno a 3,2 kHz, livellamento locale
+fino a circa 18 dB e compressione controllata. È intenzionalmente conservato come preset separato,
+perché richiede ascolto comparativo prima dell'uso sul montaggio completo. Non sostituisce due
+microfoni separati: il recupero selettivo dei turni può amplificare ambiente e riverbero e va
+scartato quando peggiora l'ascolto.
 `queue_longform_exports` non avvia il render; l'avvio resta separato e protetto da `CAP_RENDER`.
 
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
@@ -46,7 +56,7 @@ Il runtime reale espone `CAP_LONGFORM=true` ed è stato verificato con `/readyz`
 `get_feature_flags`. I task già aperti possono conservare il catalogo precedente: usare un nuovo
 contesto per il primo test delle azioni appena pubblicate.
 
-Stato codice successivo: **39 AZIONI / 49 TEST PASS**. Le quattro nuove azioni audio/export e il
+Stato codice successivo: **39 AZIONI / 52 TEST PASS**. Le quattro nuove azioni audio/export e il
 parametro `enhanced_audio_path` richiedono ancora **Aggiorna** nella scheda amministrativa dell'app;
 fino a quel momento la versione attiva mostra correttamente 35 azioni.
 

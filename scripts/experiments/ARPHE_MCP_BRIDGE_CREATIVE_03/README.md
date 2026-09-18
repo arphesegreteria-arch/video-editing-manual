@@ -37,6 +37,9 @@ perché richiede ascolto comparativo prima dell'uso sul montaggio completo. Non 
 microfoni separati: il recupero selettivo dei turni può amplificare ambiente e riverbero e va
 scartato quando peggiora l'ascolto.
 `queue_longform_exports` non avvia il render; l'avvio resta separato e protetto da `CAP_RENDER`.
+`create_edge_fade_test` duplica una timeline con una sola clip V1/A1 e applica un fade video Fusion
+e un WAV audio derivato con fade lineari. Il preset predefinito è 6/8 frame video e 4/10 frame audio;
+la timeline sorgente resta intatta e il progetto non viene salvato automaticamente.
 
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato
@@ -56,7 +59,7 @@ Il runtime reale espone `CAP_LONGFORM=true` ed è stato verificato con `/readyz`
 `get_feature_flags`. I task già aperti possono conservare il catalogo precedente: usare un nuovo
 contesto per il primo test delle azioni appena pubblicate.
 
-Stato codice successivo: **39 AZIONI / 52 TEST PASS**. Le quattro nuove azioni audio/export e il
+Stato codice successivo: **40 AZIONI / 53 TEST PASS**. Le azioni audio/export, il preset edge fade e il
 parametro `enhanced_audio_path` richiedono ancora **Aggiorna** nella scheda amministrativa dell'app;
 fino a quel momento la versione attiva mostra correttamente 35 azioni.
 

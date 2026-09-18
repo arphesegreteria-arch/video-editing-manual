@@ -181,3 +181,9 @@ Per gli estratti parlati usare transizioni minime: fade audio di 2–4 frame qua
 rumore ambiente, nessun fade se taglia una parola, e fade-out finale di 6–10 frame. Sul video basta
 un ingresso diretto o una dissolvenza molto breve; l'uscita può usare 6–8 frame verso nero soltanto
 quando la clip non prosegue in una end card. Le transizioni non devono mascherare edit point errati.
+
+Il preset programmabile `create_edge_fade_test` realizza questo gate su una copia della timeline:
+video 6 frame in / 8 frame out tramite Fusion e audio 4 frame in / 10 frame out tramite WAV PCM
+derivato. Il gate V3 del 2026-09-18 ha verificato nero ai due estremi, progressione intermedia,
+durata audio invariata e campioni iniziale/finale a zero. La prima versione supporta timeline con
+esattamente una clip su V1 e una su A1.

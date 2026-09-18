@@ -19,6 +19,7 @@ from .creative_tools import (add_end_card as do_add_end_card,
                              set_review_highlight as do_set_review_highlight)
 from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_frames,
                                inspect_fusion_graph as do_inspect_fusion_graph)
+from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
 from .feature_flags import report as feature_report
 from .fusion_tools import (add_background, add_text, create_composition,
                            retime)
@@ -258,6 +259,19 @@ def duplicate_timeline_version(source_timeline: str, requested_suffix: str | Non
         _, _, project, _, config, registry, error = _runtime()
         if error: return error
         return _call(do_duplicate_timeline, project, config, registry, source_timeline, requested_suffix, target_name)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def create_edge_fade_test(source_timeline: str, target_name: str,
+                          video_in_frames: int = 6, video_out_frames: int = 8,
+                          audio_in_frames: int = 4, audio_out_frames: int = 10) -> dict[str, Any]:
+    """Duplicate a one-clip timeline and add deterministic video/audio edge fades."""
+    try:
+        _, _, project, _, config, registry, error = _runtime()
+        if error: return error
+        return _call(do_create_edge_fade_test, project, config, registry, source_timeline, target_name,
+                     video_in_frames, video_out_frames, audio_in_frames, audio_out_frames)
     except Exception as exc: return _error(exc)
 
 

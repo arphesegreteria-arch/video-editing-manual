@@ -18,6 +18,17 @@
   },
   "saved": true,
   "render_jobs_queued": false,
+  "longform_render_preset": {
+    "preset": "YouTube - 1080p",
+    "format": "MP4",
+    "video_codec": "H.264",
+    "encoding_profile": "High",
+    "audio_codec": "AAC",
+    "audio_sample_rate": 48000,
+    "estimated_size_gb": 4.06,
+    "output_name": "ARPHE_EP1_LONGFORM_YOUTUBE_V1",
+    "output_directory": "Desktop"
+  },
   "review_notes": [
     "Ascoltare il longform e tutti i cut su telefono prima della pubblicazione.",
     "Controllare in particolare la voce registrata con microfono distante.",

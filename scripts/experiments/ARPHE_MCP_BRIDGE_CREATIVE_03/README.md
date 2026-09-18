@@ -43,6 +43,9 @@ la timeline sorgente resta intatta e il progetto non viene salvato automaticamen
 `apply_longform_edit_plan` accetta inoltre `full_timeline_name` e `apply_edge_fades`: può creare nello
 stesso progetto una timeline integrale con audio restaurato e applicare il preset edge fade a ogni
 timeline individuale. Il master concatenato resta privo di fade interni.
+`queue_publish_package_exports` prepara longform e cut con il preset `YouTube - 1080p`, audio AAC
+48 kHz e output sul Desktop. Richiede coda inizialmente vuota, rifiuta collisioni e può avviare il
+batch soltanto con `CAP_RENDER=true`.
 
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato

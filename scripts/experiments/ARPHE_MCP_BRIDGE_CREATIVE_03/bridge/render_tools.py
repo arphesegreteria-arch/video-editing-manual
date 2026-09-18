@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 from .config import CreativeConfig
 from .feature_flags import require_capability
@@ -91,3 +92,68 @@ def start_longform_exports(project: Any, config: CreativeConfig, registry: Regis
     started = bool(safe_call(project, "StartRendering", job_ids))
     return {"ok": started, "action": "start_longform_exports", "project": project_name,
             "job_count": len(job_ids), "status": "RENDERING" if started else "PENDING"}
+
+
+def queue_publish_package_exports(manager: Any, project: Any, config: CreativeConfig, registry: Registry,
+                                  full_timeline_name: str, clip_timeline_names: list[str],
+                                  output_directory: str, start_render: bool = True) -> dict:
+    """Queue one full timeline plus publishable clips with a fixed YouTube/AAC preset."""
+    current = safe_call(project, "GetCurrentTimeline")
+    require_capability("CAP_LONGFORM", config, manager, project, current)
+    if start_render:
+        require_capability("CAP_RENDER", config, None, project, current)
+    project_name = str(safe_call(project, "GetName") or "")
+    require_arphe_name(project_name, "progetto")
+    names = [full_timeline_name, *clip_timeline_names]
+    if len(names) < 2 or len(names) > 33 or len(set(names)) != len(names):
+        raise ValidationError("Pacchetto render non valido")
+    timelines = _timeline_map(project)
+    for name in names:
+        require_arphe_name(name, "timeline")
+        if name not in timelines or not registry.timeline_allowed(project_name, name):
+            raise ValidationError(f"Timeline non disponibile o non consentita: {name}")
+    destination = Path(output_directory).expanduser().resolve(strict=True)
+    desktop_candidates = {
+        (Path.home() / "Desktop").resolve(),
+        (Path.home() / "OneDrive" / "Desktop").resolve(),
+    }
+    if destination not in desktop_candidates or not destination.is_dir():
+        raise ValidationError("Output consentito soltanto sul Desktop locale dell'utente")
+    if safe_call(project, "GetRenderJobList"):
+        raise ValidationError("La coda render deve essere vuota prima del batch pubblicabile")
+    existing = {item.stem.casefold() for item in destination.iterdir() if item.is_file()}
+    collisions = [name for name in names if name.casefold() in existing]
+    if collisions:
+        raise ValidationError("Output già presenti sul Desktop: " + ", ".join(collisions))
+    original = current
+    jobs = []
+    try:
+        for name in names:
+            timeline = timelines[name]
+            if not safe_call(project, "SetCurrentTimeline", timeline):
+                raise RuntimeError(f"Selezione timeline fallita: {name}")
+            if not safe_call(project, "LoadRenderPreset", "YouTube - 1080p"):
+                raise RuntimeError("Preset YouTube - 1080p non disponibile")
+            setting_groups = [
+                {"TargetDir": str(destination), "CustomName": name, "SelectAllFrames": True,
+                 "ExportVideo": True, "ExportAudio": True},
+                {"FormatWidth": 1920, "FormatHeight": 1080, "FrameRate": 30.0},
+                {"AudioCodec": "aac", "AudioSampleRate": 48000},
+                {"EncodingProfile": "High"},
+            ]
+            if not all(bool(safe_call(project, "SetRenderSettings", settings)) for settings in setting_groups):
+                raise RuntimeError(f"Impostazioni render rifiutate per {name}")
+            job_id = safe_call(project, "AddRenderJob")
+            if not job_id:
+                raise RuntimeError(f"Creazione job fallita per {name}")
+            jobs.append({"timeline": name, "job_id": job_id})
+    finally:
+        if original:
+            safe_call(project, "SetCurrentTimeline", original)
+    registry.add_element(f"PUBLISH_EXPORTS::{project_name}", {"kind": "publish_exports", "jobs": jobs})
+    started = bool(safe_call(project, "StartRendering", [job["job_id"] for job in jobs], False)) if start_render else False
+    return {"ok": bool(jobs) and (started if start_render else True),
+            "action": "queue_publish_package_exports", "project": project_name,
+            "job_count": len(jobs), "jobs": jobs, "preset": "YouTube - 1080p",
+            "audio_codec": "AAC", "output_directory": "Desktop",
+            "render_started": started, "status": "RENDERING" if started else "QUEUED"}

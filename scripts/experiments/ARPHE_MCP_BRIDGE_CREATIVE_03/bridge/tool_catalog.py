@@ -12,7 +12,7 @@ EXPOSED_TOOL_NAMES = (
     "add_end_card",
     "animate_card_entry", "animate_card_exit", "animate_review_stack",
     "apply_transition_preset", "retime_creative_duration", "save_project", "render_preview",
-    "queue_longform_exports", "start_longform_exports",
+    "queue_longform_exports", "start_longform_exports", "queue_publish_package_exports",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {

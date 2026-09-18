@@ -33,6 +33,7 @@ from .project_tools import (create_project as do_create_project,
                             set_current_project as do_set_current_project)
 from .registry import Registry
 from .render_tools import (queue_longform_exports as do_queue_longform_exports,
+                           queue_publish_package_exports as do_queue_publish_package_exports,
                            render_preview as do_render_preview,
                            start_longform_exports as do_start_longform_exports)
 from .resolve_connection import context, safe_call
@@ -562,6 +563,18 @@ def start_longform_exports() -> dict[str, Any]:
         if error: return error
         if not project: return {"ok": False, "stage": "preflight", "error": "Serve un progetto aperto."}
         return _call(do_start_longform_exports, project, config, registry)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def queue_publish_package_exports(full_timeline_name: str, clip_timeline_names: list[str],
+                                  output_directory: str, start_render: bool = True) -> dict[str, Any]:
+    """Queue and optionally start a YouTube 1080p/AAC publish package on the user's Desktop."""
+    try:
+        _, manager, project, _, config, registry, error = _runtime()
+        if error: return error
+        return _call(do_queue_publish_package_exports, manager, project, config, registry,
+                     full_timeline_name, clip_timeline_names, output_directory, start_render)
     except Exception as exc: return _error(exc)
 
 

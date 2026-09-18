@@ -100,6 +100,18 @@ def create_edge_fade_test(project: Any, config: CreativeConfig, registry: Regist
     if not duplicated.get("ok"):
         return {**duplicated, "action": "create_edge_fade_test"}
     timeline = safe_call(project, "GetCurrentTimeline")
+    result = apply_edge_fades_to_timeline(project, timeline, config,
+                                          video_in_frames, video_out_frames,
+                                          audio_in_frames, audio_out_frames)
+    return {"ok": True, "action": "create_edge_fade_test", "source_timeline": source_timeline,
+            "created_timeline": safe_call(timeline, "GetName"), **result,
+            "saved": False, "source_preserved": True}
+
+
+def apply_edge_fades_to_timeline(project: Any, timeline: Any, config: CreativeConfig,
+                                 video_in_frames: int = 6, video_out_frames: int = 8,
+                                 audio_in_frames: int = 4, audio_out_frames: int = 10) -> dict[str, Any]:
+    """Apply the edge-fade preset to a newly created one-clip timeline."""
     video_items = safe_call(timeline, "GetItemListInTrack", "video", 1) or []
     audio_items = safe_call(timeline, "GetItemListInTrack", "audio", 1) or []
     if len(video_items) != 1 or len(audio_items) != 1:
@@ -116,7 +128,9 @@ def create_edge_fade_test(project: Any, config: CreativeConfig, registry: Regist
         raise ValidationError("La clip audio deve provenire da un WAV locale")
     source_start = float(safe_call(audio_item, "GetSourceStartFrame") or 0) / fps
     duration_frames = int(safe_call(audio_item, "GetDuration") or 0)
-    output = config.audio_root / f"{arphe_name(target_name, 'EDGE_FADE')}_AUDIO.wav"
+    project_name = str(safe_call(project, "GetName") or "PROJECT")
+    timeline_name = str(safe_call(timeline, "GetName") or "TIMELINE")
+    output = config.audio_root / f"{arphe_name(project_name + '_' + timeline_name, 'EDGE_FADE')}_AUDIO.wav"
     _render_audio_excerpt(source_path, output, source_start, duration_frames / fps,
                           audio_in_frames / fps, audio_out_frames / fps)
     pool = safe_call(project, "GetMediaPool")
@@ -130,8 +144,7 @@ def create_edge_fade_test(project: Any, config: CreativeConfig, registry: Regist
                                                        "trackIndex": 1, "recordFrame": record_frame}])
     if not appended:
         raise RuntimeError("Inserimento WAV edge fade fallito")
-    return {"ok": True, "action": "create_edge_fade_test", "source_timeline": source_timeline,
-            "created_timeline": safe_call(timeline, "GetName"), "video_fade": video_result,
+    return {"video_fade": video_result,
             "video_in_frames": video_in_frames, "video_out_frames": video_out_frames,
             "audio_in_frames": audio_in_frames, "audio_out_frames": audio_out_frames,
-            "audio_path": str(output), "saved": False, "source_preserved": True}
+            "audio_path": str(output)}

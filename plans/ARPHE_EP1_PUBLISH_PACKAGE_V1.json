@@ -1,0 +1,26 @@
+{
+  "schema": "ARPHE_LONGFORM_PUBLISH_PACKAGE_V1",
+  "status": "CREATED_SAVED_NEEDS_AV_REVIEW",
+  "source_file": "C:\\Users\\auras\\Downloads\\Commenta la mia dieta (ep 1).mp4",
+  "enhanced_audio_path": "C:\\Users\\auras\\AppData\\Local\\ARPHE\\Longform04\\audio\\ARPHE_DISTANT_Commenta_la_mia_dieta_ep_1_501448f2.wav",
+  "audio_preset": "ARPHE_DIALOGUE_DISTANT_V3",
+  "project_name": "ARPHE_COMMENTA_DIETA_EP1_PUBLISH_V1",
+  "full_timeline_name": "ARPHE_EP1_LONGFORM_YOUTUBE_V1",
+  "cuts_master_timeline_name": "ARPHE_EP1_CUTS_MASTER_V1",
+  "clip_plan_file": "plans/ARPHE_EP1_PUBLISHABLE_V1.json",
+  "clip_count": 12,
+  "fps": 30,
+  "edge_fades": {
+    "video_in_frames": 6,
+    "video_out_frames": 8,
+    "audio_in_frames": 4,
+    "audio_out_frames": 10
+  },
+  "saved": true,
+  "render_jobs_queued": false,
+  "review_notes": [
+    "Ascoltare il longform e tutti i cut su telefono prima della pubblicazione.",
+    "Controllare in particolare la voce registrata con microfono distante.",
+    "Usare MP4 H.264 con audio AAC per WhatsApp e piattaforme social."
+  ]
+}

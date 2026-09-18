@@ -187,3 +187,9 @@ video 6 frame in / 8 frame out tramite Fusion e audio 4 frame in / 10 frame out 
 derivato. Il gate V3 del 2026-09-18 ha verificato nero ai due estremi, progressione intermedia,
 durata audio invariata e campioni iniziale/finale a zero. La prima versione supporta timeline con
 esattamente una clip su V1 e una su A1.
+
+Il pacchetto pubblicabile dell'episodio 1 è stato creato e salvato il 2026-09-18 nel progetto
+`ARPHE_COMMENTA_DIETA_EP1_PUBLISH_V1`. Contiene il longform `ARPHE_EP1_LONGFORM_YOUTUBE_V1`, il
+master `ARPHE_EP1_CUTS_MASTER_V1` e 12 timeline individuali. Longform e cut usano il WAV V3 e il
+preset edge fade; nessun render è stato accodato. Il manifest operativo è
+`plans/ARPHE_EP1_PUBLISH_PACKAGE_V1.json`.

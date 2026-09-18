@@ -104,7 +104,8 @@ def validate_plan(clips: list[dict[str, Any]], fps: float = 30.0) -> list[dict[s
 
 def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Registry, media_path: str,
                project_name: str, master_timeline_name: str, clips: list[dict[str, Any]],
-               fps: float = 30.0, enhanced_audio_path: str | None = None) -> dict[str, Any]:
+               fps: float = 30.0, enhanced_audio_path: str | None = None,
+               full_timeline_name: str | None = None, apply_edge_fades: bool = False) -> dict[str, Any]:
     current_project = safe_call(manager, "GetCurrentProject")
     current_timeline = safe_call(current_project, "GetCurrentTimeline")
     require_capability("CAP_LONGFORM", config, manager, current_project, current_timeline)
@@ -161,6 +162,27 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
                                                         "startFrame": start, "endFrame": end_inclusive,
                                                         "recordFrame": record_frame}])
         return bool(video and audio)
+    created_full_timeline = None
+    if full_timeline_name:
+        full_name = arphe_name(full_timeline_name, "LONGFORM_FULL")
+        full = safe_call(pool, "CreateEmptyTimeline", full_name)
+        if not full:
+            return {"ok": False, "action": "apply_longform_edit_plan", "stage": "create_full_timeline"}
+        registry.add_timeline(project_name, full_name)
+        if not safe_call(project, "SetCurrentTimeline", full):
+            return {"ok": False, "action": "apply_longform_edit_plan", "stage": "select_full_timeline"}
+        if audio_item is not None:
+            import wave
+            with wave.open(str(enhanced_audio), "rb") as handle:
+                full_frames = int(round(handle.getnframes() / handle.getframerate() * rate))
+        else:
+            full_frames = int(safe_call(item, "GetClipProperty", "Frames") or 0)
+        if full_frames <= 0 or not append_range(int(safe_call(full, "GetStartFrame") or 0), 0, full_frames - 1):
+            return {"ok": False, "action": "apply_longform_edit_plan", "stage": "append_full_timeline"}
+        if apply_edge_fades:
+            from .edge_fade_tools import apply_edge_fades_to_timeline
+            apply_edge_fades_to_timeline(project, full, config)
+        created_full_timeline = full_name
     master = safe_call(pool, "CreateEmptyTimeline", master_name)
     if not master:
         return {"ok": False, "action": "apply_longform_edit_plan", "stage": "create_master"}
@@ -193,6 +215,9 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
         if not one:
             return {"ok": False, "action": "apply_longform_edit_plan", "stage": "append_clip_timeline",
                     "failed_clip": clip["clip_id"]}
+        if apply_edge_fades:
+            from .edge_fade_tools import apply_edge_fades_to_timeline
+            apply_edge_fades_to_timeline(project, individual, config)
         created_timelines.append(timeline_name)
     registry.set_longform_batch(project_name, master_name, created_timelines)
     safe_call(project, "SetCurrentTimeline", master)
@@ -202,4 +227,6 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
             "fps": rate, "resolution": {"width": 1920, "height": 1080},
             "source_preserved": True, "overwrite": False, "saved": False,
             "enhanced_audio_used": audio_item is not None,
+            "full_timeline": created_full_timeline,
+            "edge_fades_applied": apply_edge_fades,
             "plan": plan}

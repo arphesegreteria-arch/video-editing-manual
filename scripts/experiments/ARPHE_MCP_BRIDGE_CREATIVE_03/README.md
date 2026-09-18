@@ -40,6 +40,9 @@ scartato quando peggiora l'ascolto.
 `create_edge_fade_test` duplica una timeline con una sola clip V1/A1 e applica un fade video Fusion
 e un WAV audio derivato con fade lineari. Il preset predefinito è 6/8 frame video e 4/10 frame audio;
 la timeline sorgente resta intatta e il progetto non viene salvato automaticamente.
+`apply_longform_edit_plan` accetta inoltre `full_timeline_name` e `apply_edge_fades`: può creare nello
+stesso progetto una timeline integrale con audio restaurato e applicare il preset edge fade a ogni
+timeline individuale. Il master concatenato resta privo di fade interni.
 
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato

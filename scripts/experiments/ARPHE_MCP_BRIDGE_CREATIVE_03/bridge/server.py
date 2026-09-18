@@ -172,13 +172,16 @@ def validate_longform_edit_plan(clips: list[dict[str, Any]], fps: float = 30.0) 
 @mcp.tool(annotations=SAFE_WRITE)
 def apply_longform_edit_plan(media_path: str, project_name: str, master_timeline_name: str,
                              clips: list[dict[str, Any]], fps: float = 30.0,
-                             enhanced_audio_path: str | None = None) -> dict[str, Any]:
+                             enhanced_audio_path: str | None = None,
+                             full_timeline_name: str | None = None,
+                             apply_edge_fades: bool = False) -> dict[str, Any]:
     """Create a new project, one master and separate clip timelines; never alter the source."""
     try:
         resolve, manager, _, _, config, registry, error = _runtime()
         if error: return error
         return _call(do_apply_longform_plan, resolve, manager, config, registry, media_path,
-                     project_name, master_timeline_name, clips, fps, enhanced_audio_path)
+                     project_name, master_timeline_name, clips, fps, enhanced_audio_path,
+                     full_timeline_name, apply_edge_fades)
     except Exception as exc: return _error(exc)
 
 

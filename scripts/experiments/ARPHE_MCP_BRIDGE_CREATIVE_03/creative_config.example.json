@@ -19,7 +19,8 @@
     "CAP_MOTION": false,
     "CAP_ASSETS": false,
     "CAP_RENDER": false,
-    "CAP_LONGFORM": false
+    "CAP_LONGFORM": false,
+    "CAP_CLEANUP": false
   },
   "palette": {
     "ivory": "#F7F2E8",

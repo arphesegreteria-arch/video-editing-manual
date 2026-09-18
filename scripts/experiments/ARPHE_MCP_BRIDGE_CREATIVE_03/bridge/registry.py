@@ -50,6 +50,18 @@ class Registry:
     def timeline_allowed(self, project: str, timeline: str) -> bool:
         return timeline in self._load()["projects"].get(project, {}).get("timelines", [])
 
+    def remove_timeline(self, project: str, timeline: str) -> None:
+        data = self._load()
+        record = data["projects"].get(project)
+        if record and timeline in record.get("timelines", []):
+            record["timelines"].remove(timeline)
+        self._save(data)
+
+    def remove_project(self, project: str) -> None:
+        data = self._load()
+        data["projects"].pop(project, None)
+        self._save(data)
+
     def add_element(self, element_id: str, payload: dict[str, Any]) -> None:
         data = self._load()
         data["elements"][element_id] = payload

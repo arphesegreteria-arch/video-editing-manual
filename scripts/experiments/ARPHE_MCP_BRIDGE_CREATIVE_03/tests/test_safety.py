@@ -183,11 +183,12 @@ class MotionTests(unittest.TestCase):
 
 
 class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_tools_are_closed_world_and_non_destructive(self):
+    async def test_tools_are_closed_world_and_only_cleanup_is_destructive(self):
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         self.assertEqual(set(EXPOSED_TOOL_NAMES), set(tools))
         for tool in tools.values():
-            self.assertFalse(tool.annotations.destructive_hint, tool.name)
+            self.assertEqual(tool.name == "apply_publish_cleanup",
+                             tool.annotations.destructive_hint, tool.name)
             self.assertFalse(tool.annotations.open_world_hint, tool.name)
 
     async def test_diagnostic_reads_and_capture_are_classified_explicitly(self):

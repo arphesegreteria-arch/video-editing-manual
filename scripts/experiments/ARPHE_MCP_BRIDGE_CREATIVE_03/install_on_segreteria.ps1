@@ -60,6 +60,10 @@ if (-not (Test-Path -LiteralPath $configPath)) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_LONGFORM -NotePropertyValue $false
         $changed = $true
     }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_CLEANUP']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_CLEANUP -NotePropertyValue $false
+        $changed = $true
+    }
     if ($changed) {
         [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 16), [Text.UTF8Encoding]::new($false))
         Write-Host 'Migrated existing config with missing gated longform fields; existing flag values preserved.'

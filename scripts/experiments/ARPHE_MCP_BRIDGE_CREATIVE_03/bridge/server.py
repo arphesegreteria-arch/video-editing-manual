@@ -12,6 +12,8 @@ from .audit import write_audit
 from .asset_tools import add_asset
 from .audio_tools import audio_job as do_audio_job, start_audio_job as do_start_audio_job
 from .config import load_config
+from .cleanup_tools import (apply_publish_cleanup as do_apply_publish_cleanup,
+                            preview_publish_cleanup as do_preview_publish_cleanup)
 from .creative_tools import (add_end_card as do_add_end_card,
                              add_review_card as do_add_review_card,
                              animate_element, animate_stack,
@@ -61,6 +63,9 @@ SAFE_WRITE = ToolAnnotations(
 )
 IDEMPOTENT_WRITE = ToolAnnotations(
     readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
+)
+DESTRUCTIVE_WRITE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False
 )
 
 
@@ -580,6 +585,32 @@ def queue_publish_package_exports(full_timeline_name: str, clip_timeline_names: 
         if error: return error
         return _call(do_queue_publish_package_exports, manager, project, config, registry,
                      full_timeline_name, clip_timeline_names, output_directory, start_render)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def preview_publish_cleanup(keep_timeline_names: list[str], candidate_timeline_names: list[str],
+                            candidate_project_names: list[str], candidate_file_paths: list[str]) -> dict[str, Any]:
+    """Preview an explicit cleanup plan and return the token required to apply it."""
+    try:
+        _, manager, project, _, config, registry, error = _runtime()
+        if error: return error
+        return _call(do_preview_publish_cleanup, manager, project, config, registry, keep_timeline_names,
+                     candidate_timeline_names, candidate_project_names, candidate_file_paths)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=DESTRUCTIVE_WRITE)
+def apply_publish_cleanup(keep_timeline_names: list[str], candidate_timeline_names: list[str],
+                          candidate_project_names: list[str], candidate_file_paths: list[str],
+                          confirmation_token: str) -> dict[str, Any]:
+    """Remove the exact previewed timelines and recycle the exact previewed files."""
+    try:
+        _, manager, project, _, config, registry, error = _runtime()
+        if error: return error
+        return _call(do_apply_publish_cleanup, manager, project, config, registry,
+                     keep_timeline_names, candidate_timeline_names, candidate_project_names,
+                     candidate_file_paths, confirmation_token)
     except Exception as exc: return _error(exc)
 
 

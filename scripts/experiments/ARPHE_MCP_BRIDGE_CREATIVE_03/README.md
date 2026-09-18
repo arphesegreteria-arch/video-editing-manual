@@ -46,6 +46,10 @@ timeline individuale. Il master concatenato resta privo di fade interni.
 `queue_publish_package_exports` prepara longform e cut con il preset `YouTube - 1080p`, audio AAC
 48 kHz e output sul Desktop. Richiede coda inizialmente vuota, rifiuta collisioni e può avviare il
 batch soltanto con `CAP_RENDER=true`.
+`preview_publish_cleanup` produce un piano senza modifiche e un token legato esattamente ai file e
+ai progetti, alle timeline e ai file scelti. `apply_publish_cleanup` richiede lo stesso token e
+`CAP_CLEANUP=true`: elimina solo progetti e timeline ARPHE registrati, salva il progetto corrente e
+sposta i file nel Cestino di Windows.
 
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato

@@ -1,0 +1,47 @@
+{
+  "schema": "ARPHE_LONGFORM_PLAN_V1",
+  "status": "CREATED_SAVED_RENDERING_NEEDS_AV_AND_MEDICAL_REVIEW",
+  "source_file": "C:\\Users\\auras\\Downloads\\Orrori da filler_ episodio 2.mp4",
+  "enhanced_audio_path": "C:\\Users\\auras\\AppData\\Local\\ARPHE\\Longform04\\audio\\ARPHE_DISTANT_Orrori_da_filler_episodio_2_82d24fc5.wav",
+  "audio_preset": "ARPHE_DIALOGUE_DISTANT_V3",
+  "project_name": "ARPHE_ORRORI_FILLER_EP2_PUBLISH_V1",
+  "full_timeline_name": "ARPHE_OF2_LONGFORM_YOUTUBE_V1",
+  "master_timeline_name": "ARPHE_OF2_CUTS_MASTER_V1",
+  "fps": 30,
+  "clips": [
+    {"clip_id":"ARPHE_OF2_CLIP_01","title":"Filler e canoni estetici nelle diverse culture","start_second":150.7,"end_second":328.1},
+    {"clip_id":"ARPHE_OF2_CLIP_02","title":"Quando valutare davvero il risultato del filler","start_second":449.2,"end_second":520.9},
+    {"clip_id":"ARPHE_OF2_CLIP_03","title":"Migrazione del filler e trattamento","start_second":579.8,"end_second":727.3},
+    {"clip_id":"ARPHE_OF2_CLIP_04","title":"Gestire le aspettative del paziente","start_second":784.9,"end_second":869.3},
+    {"clip_id":"ARPHE_OF2_CLIP_05","title":"Reazione allergica dopo il filler","start_second":898.7,"end_second":1071.4},
+    {"clip_id":"ARPHE_OF2_CLIP_06","title":"Russian lips e conseguenze nel tempo","start_second":1110.9,"end_second":1208.6},
+    {"clip_id":"ARPHE_OF2_CLIP_07","title":"Quando il medico deve dire no","start_second":1385.8,"end_second":1504.6},
+    {"clip_id":"ARPHE_OF2_CLIP_08","title":"Protesi facciali e dismorfofobia","start_second":1520.3,"end_second":1636.0},
+    {"clip_id":"ARPHE_OF2_CLIP_09","title":"Nuovi nomi e marketing delle tecniche","start_second":1799.0,"end_second":1894.7},
+    {"clip_id":"ARPHE_OF2_CLIP_10","title":"Le labbra non sono soltanto volume","start_second":1904.4,"end_second":2001.2},
+    {"clip_id":"ARPHE_OF2_CLIP_11","title":"Chiusura e invito al confronto","start_second":2001.2,"end_second":2057.7}
+  ],
+  "edge_fades": {
+    "video_in_frames": 6,
+    "video_out_frames": 8,
+    "audio_in_frames": 4,
+    "audio_out_frames": 10
+  },
+  "render": {
+    "job_count": 12,
+    "status": "RENDERING",
+    "output_directory": "C:\\Users\\auras\\OneDrive\\Desktop",
+    "preset": "YouTube - 1080p",
+    "format": "MP4",
+    "video_codec": "H.264 Intel Quick Sync",
+    "encoding_profile": "High",
+    "audio_codec": "AAC",
+    "audio_sample_rate": 48000
+  },
+  "saved": true,
+  "review_notes": [
+    "Verificare audiovisivamente ogni ingresso e uscita prima della pubblicazione.",
+    "Rivedere le affermazioni mediche, soprattutto allergie, dissoluzione, migrazione e dismorfofobia.",
+    "Controllare l'intelligibilita delle due voci su telefono prima della pubblicazione."
+  ]
+}

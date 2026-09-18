@@ -17,8 +17,15 @@ import tempfile
 
 
 CRYPTPROTECT_UI_FORBIDDEN = 0x1
-_DESCRIPTION = "ARPHE_WINDOWS_BRIDGE_RUNTIME_V1:PC_SEGRETERIA"
-_ENTROPY = b"ARPHE_WINDOWS_BRIDGE_RUNTIME_V1|PC_SEGRETERIA|CONTROL_PLANE_API_KEY"
+_DEFAULT_WORKSTATION = "PC_SEGRETERIA"
+
+
+def _identity(workstation_id: str) -> tuple[str, bytes]:
+    if not workstation_id.startswith("PC_") or not workstation_id.replace("_", "").isalnum():
+        raise ValueError("Invalid workstation_id")
+    description = f"ARPHE_WINDOWS_BRIDGE_RUNTIME_V1:{workstation_id}"
+    entropy = f"ARPHE_WINDOWS_BRIDGE_RUNTIME_V1|{workstation_id}|CONTROL_PLANE_API_KEY".encode("ascii")
+    return description, entropy
 
 
 class DATA_BLOB(ctypes.Structure):
@@ -36,10 +43,11 @@ def _input_blob(data: bytes) -> tuple[DATA_BLOB, object]:
     return blob, buffer
 
 
-def _dpapi(protect: bool, data: bytes) -> bytes:
+def _dpapi(protect: bool, data: bytes, workstation_id: str = _DEFAULT_WORKSTATION) -> bytes:
     _require_windows()
     source, source_buffer = _input_blob(data)
-    entropy, entropy_buffer = _input_blob(_ENTROPY)
+    dpapi_description, dpapi_entropy = _identity(workstation_id)
+    entropy, entropy_buffer = _input_blob(dpapi_entropy)
     output = DATA_BLOB()
     description = ctypes.c_wchar_p()
     crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
@@ -58,7 +66,7 @@ def _dpapi(protect: bool, data: bytes) -> bytes:
     kernel32.LocalFree.argtypes = (ctypes.c_void_p,)
     if protect:
         ok = crypt32.CryptProtectData(
-            ctypes.byref(source), _DESCRIPTION, ctypes.byref(entropy), None, None,
+            ctypes.byref(source), dpapi_description, ctypes.byref(entropy), None, None,
             CRYPTPROTECT_UI_FORBIDDEN, ctypes.byref(output)
         )
     else:
@@ -79,10 +87,10 @@ def _dpapi(protect: bool, data: bytes) -> bytes:
             kernel32.LocalFree(description)
 
 
-def store_secret(path: Path, secret: str) -> None:
+def store_secret(path: Path, secret: str, workstation_id: str = _DEFAULT_WORKSTATION) -> None:
     if not secret or "\x00" in secret:
         raise ValueError("The runtime API key must be non-empty and contain no NUL characters")
-    ciphertext = _dpapi(True, secret.encode("utf-8"))
+    ciphertext = _dpapi(True, secret.encode("utf-8"), workstation_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
     try:
@@ -96,8 +104,8 @@ def store_secret(path: Path, secret: str) -> None:
             os.unlink(temporary)
 
 
-def load_secret(path: Path) -> str:
-    plaintext = bytearray(_dpapi(False, path.read_bytes()))
+def load_secret(path: Path, workstation_id: str = _DEFAULT_WORKSTATION) -> str:
+    plaintext = bytearray(_dpapi(False, path.read_bytes(), workstation_id))
     try:
         secret = plaintext.decode("utf-8")
         if not secret:
@@ -120,6 +128,7 @@ def _main() -> int:
     parser = argparse.ArgumentParser(description="Manage the per-user DPAPI runtime API key")
     parser.add_argument("action", choices=("set", "status", "delete"))
     parser.add_argument("--path", required=True, type=Path)
+    parser.add_argument("--workstation-id", default=_DEFAULT_WORKSTATION)
     args = parser.parse_args()
     if args.action == "status":
         print("present" if args.path.is_file() else "missing")
@@ -132,7 +141,7 @@ def _main() -> int:
     if first != second:
         print("The two values do not match.", file=sys.stderr)
         return 2
-    store_secret(args.path, first)
+    store_secret(args.path, first, args.workstation_id)
     print("Runtime API key stored with Windows DPAPI for the current user.")
     return 0
 

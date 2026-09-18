@@ -1,6 +1,6 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-09-10.
+Ultimo aggiornamento: sessione 2026-09-18.
 
 ## Obiettivo del progetto
 
@@ -27,6 +27,11 @@ Il tunnel usato nei test è `ARPHE-RESOLVE-HOME`; il nome è legacy/fuorviante p
 ### PC_PERSONALE — PENDING REPLICA
 
 Il PC personale non è ancora configurato né validato.
+
+Il codice è ora portabile: runtime e Creative Bridge accettano l'identità `PC_PERSONALE`, esiste
+un installer coordinato e la procedura completa è in `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md`.
+Restano necessariamente locali la creazione del tunnel, la chiave Restricted e la registrazione
+della app nel workspace ChatGPT Business.
 
 La replica dovrà usare:
 - stesso codice/versioni controllate tramite repository;

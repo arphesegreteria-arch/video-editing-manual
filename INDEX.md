@@ -14,6 +14,7 @@
 | `docs/11_CREATIVE_BRIDGE_AND_E09.md` | **Creative Bridge 03, sicurezza, feature flag, gate E09 e rollback** |
 | `docs/12_FUSION_RUNTIME_SCHEMA_AND_EXTERNAL_REFERENCES.md` | **Schema Fusion osservato, fonti GitHub e contraddizioni aperte** |
 | `docs/13_DIAGNOSTICS_AND_BACKUP.md` | **Accesso visuale frame-by-frame e backup verificabile** |
+| `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` | **Installazione completa e sicura sul PC personale** |
 | `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
 | `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 | `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |

@@ -103,6 +103,15 @@ class SafetyTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "runtime_id"):
                 load_config(path)
 
+    def test_config_accepts_personal_workstation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps({
+                "runtime_id": "ARPHE_MCP_BRIDGE_CREATIVE_03",
+                "workstation_id": "PC_PERSONALE",
+            }), encoding="utf-8")
+            self.assertEqual(path.resolve(), load_config(path).path)
+
     def test_config_rejects_unallowlisted_render_codec(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"

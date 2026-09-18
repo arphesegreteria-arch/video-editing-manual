@@ -1,5 +1,14 @@
 # EXPERIMENT LOG
 
+## 2026-09-18 — Preparazione replica PC_PERSONALE
+
+### Risultato
+
+Il codice del bridge è stato reso portabile senza copiare credenziali della segreteria. Aggiunti
+installer coordinato, dipendenze dichiarate e manuale di installazione. La replica reale resta
+`PENDING` finché sul PC personale non vengono creati tunnel/key dedicati e superati i gate READ +
+SAFE WRITE dopo un riavvio.
+
 ## 2026-09-04 — ARPHE_WINDOWS_BRIDGE_RUNTIME_V1 / deployment PC_SEGRETERIA
 
 ### Risultato

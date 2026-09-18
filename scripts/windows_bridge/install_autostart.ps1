@@ -1,5 +1,6 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
+    [ValidatePattern('^PC_[A-Z0-9_]{2,48}$')][string]$WorkstationId = 'PC_SEGRETERIA',
     [Parameter(Mandatory)][ValidatePattern('^tunnel_[A-Za-z0-9_-]+$')][string]$TunnelId,
     [string]$TunnelClientPath = 'C:\ARPHE\MCP\tunnel client\tunnel-client-runtime-cloudflared.exe',
     [string]$McpCommand = 'py -3 C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py',
@@ -11,7 +12,7 @@ param(
     [switch]$DoNotStart
 )
 
-. (Join-Path $PSScriptRoot 'common.ps1')
+. (Join-Path $PSScriptRoot 'common.ps1') -WorkstationId $WorkstationId
 
 function Resolve-Executable {
     param([string]$Requested, [string[]]$Candidates)
@@ -27,9 +28,7 @@ function Resolve-Executable {
     throw "Could not find a real executable for: $($Candidates -join ', '). WindowsApps aliases are not valid for Task Scheduler; pass an explicit Python path."
 }
 
-if ($env:COMPUTERNAME -and $env:COMPUTERNAME -ne $script:ArpheWorkstationId) {
-    Write-Warning "Windows computer name is '$env:COMPUTERNAME'; this package is intentionally configured as PC_SEGRETERIA."
-}
+Write-Host "Installing logical workstation identity $script:ArpheWorkstationId on Windows computer '$env:COMPUTERNAME'."
 
 $TunnelClientPath = (Resolve-Path -LiteralPath $TunnelClientPath -ErrorAction Stop).Path
 $PythonPath = Resolve-Executable -Requested $PythonPath -Candidates @('py.exe', 'python.exe')
@@ -42,7 +41,7 @@ foreach ($file in $sourceFiles) {
     }
 }
 
-if (-not $PSCmdlet.ShouldProcess("$script:ArpheTaskPath$script:ArpheTaskName", 'Install PC_SEGRETERIA bridge runtime and scheduled task')) { return }
+if (-not $PSCmdlet.ShouldProcess("$script:ArpheTaskPath$script:ArpheTaskName", "Install $WorkstationId bridge runtime and scheduled task")) { return }
 
 New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $script:ArpheDataDir -Force | Out-Null
@@ -76,7 +75,8 @@ $configJson = $config | ConvertTo-Json
 if (-not $KeepExistingSecret -or -not (Test-Path -LiteralPath $script:ArpheSecretPath -PathType Leaf)) {
     $secretArgs = @()
     if ([IO.Path]::GetFileName($PythonPath) -ieq 'py.exe') { $secretArgs += '-3' }
-    $secretArgs += @((Join-Path $InstallRoot 'secret_store.py'), 'set', '--path', $script:ArpheSecretPath)
+    $secretArgs += @((Join-Path $InstallRoot 'secret_store.py'), 'set', '--path', $script:ArpheSecretPath,
+                     '--workstation-id', $script:ArpheWorkstationId)
     & $PythonPath @secretArgs
     if ($LASTEXITCODE -ne 0) { throw "DPAPI secret storage failed with exit code $LASTEXITCODE" }
 }

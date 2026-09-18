@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -77,8 +78,8 @@ def load_config(path: Path | None = None) -> CreativeConfig:
     raw: dict[str, Any] = json.loads(selected.read_text(encoding="utf-8-sig"))
     if raw.get("runtime_id") != "ARPHE_MCP_BRIDGE_CREATIVE_03":
         raise ValueError("runtime_id config non valido")
-    if raw.get("workstation_id") != "PC_SEGRETERIA":
-        raise ValueError("Questa build è limitata a PC_SEGRETERIA")
+    if not re.fullmatch(r"PC_[A-Z0-9_]{2,48}", str(raw.get("workstation_id", ""))):
+        raise ValueError("workstation_id non valido: usare PC_ seguito da lettere, numeri o underscore")
     flags_raw = raw.get("feature_flags", {})
     if not isinstance(flags_raw, dict):
         raise ValueError("feature_flags deve essere un oggetto JSON")

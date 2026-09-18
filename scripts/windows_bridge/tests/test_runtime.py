@@ -50,7 +50,7 @@ class RuntimeTests(unittest.TestCase):
     def test_ready_rejects_unexpected_body(self, _urlopen):
         self.assertFalse(check_ready("http://127.0.0.1:8080/readyz").ready)
 
-    def test_config_is_locked_to_segreteria(self):
+    def test_config_accepts_personal_workstation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             client = root / "tunnel.exe"
@@ -69,7 +69,23 @@ class RuntimeTests(unittest.TestCase):
             }
             path = root / "config.json"
             path.write_text(json.dumps(config), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "PC_SEGRETERIA"):
+            self.assertEqual("PC_PERSONALE", load_config(path)["workstation_id"])
+
+    def test_config_rejects_invalid_workstation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            client = root / "tunnel.exe"
+            client.write_bytes(b"")
+            config = {
+                "runtime_id": "ARPHE_WINDOWS_BRIDGE_RUNTIME_V1", "workstation_id": "personal pc",
+                "tunnel_id": "tunnel_test", "tunnel_client_path": str(client), "mcp_command": "ignored",
+                "ready_url": "http://127.0.0.1:8080/readyz", "log_dir": str(root / "logs"),
+                "secret_path": str(root / "secret"), "state_path": str(root / "state"),
+                "stop_request_path": str(root / "stop"),
+            }
+            path = root / "config.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "workstation_id"):
                 load_config(path)
 
     def test_config_accepts_windows_powershell_utf8_bom(self):

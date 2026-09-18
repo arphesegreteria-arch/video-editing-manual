@@ -1,6 +1,6 @@
-# ARPHE Windows Bridge Runtime v1 — PC_SEGRETERIA
+# ARPHE Windows Bridge Runtime v1 — workstation Windows
 
-Implementazione limitata a `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1` per il PC della segreteria. Non contiene GUI, non modifica Resolve allo startup e non aggiunge tool MCP. Avvia esclusivamente il tunnel già validato, che a sua volta esegue il bridge indicato da `MCP_COMMAND`.
+Runtime condiviso da `PC_SEGRETERIA` e `PC_PERSONALE`. Non contiene GUI, non modifica Resolve allo startup e non aggiunge tool MCP. Avvia esclusivamente il tunnel configurato, che a sua volta esegue il bridge indicato da `MCP_COMMAND`.
 
 ## Sicurezza e comportamento
 
@@ -14,7 +14,7 @@ Implementazione limitata a `ARPHE_WINDOWS_BRIDGE_RUNTIME_V1` per il PC della seg
 - Un Job Object con `KILL_ON_JOB_CLOSE` impedisce processi tunnel/bridge orfani.
 - Mutex per-user: una sola istanza del supervisor.
 
-## Prerequisiti sul PC segreteria
+## Prerequisiti sulla workstation
 
 1. Python 3 con `python.exe` + `pythonw.exe`, oppure Windows launcher `py.exe` + `pyw.exe`.
 2. Il binario `tunnel-client-runtime-cloudflared.exe` già validato.

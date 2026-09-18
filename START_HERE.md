@@ -26,6 +26,7 @@ Non costruire una GUI desktop ARPHE separata come interfaccia primaria salvo nuo
 10. `docs/04_LONGFORM_WORKFLOW.md` — pipeline longform e trascrizione.
 11. `docs/05_OPERATOR_GUIDE.md` — procedure manuali di test/fallback.
 12. `docs/06_TROUBLESHOOTING.md` — errori noti e cosa fare.
+13. `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` — replica sicura sul PC personale.
 
 ## Regola per ChatGPT
 

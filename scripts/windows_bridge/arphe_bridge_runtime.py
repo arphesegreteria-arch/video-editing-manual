@@ -1,4 +1,4 @@
-"""Background supervisor for ARPHE_WINDOWS_BRIDGE_RUNTIME_V1 (PC_SEGRETERIA)."""
+"""Background supervisor for one ARPHE Windows bridge workstation."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from secret_store import load_secret
 
 
 RUNTIME_ID = "ARPHE_WINDOWS_BRIDGE_RUNTIME_V1"
-WORKSTATION_ID = "PC_SEGRETERIA"
+WORKSTATION_PATTERN = re.compile(r"^PC_[A-Z0-9_]{2,48}$")
 CREATE_NO_WINDOW = 0x08000000
 ERROR_ALREADY_EXISTS = 183
 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
@@ -45,8 +45,10 @@ def load_config(path: Path) -> dict[str, Any]:
     missing = [key for key in required if not config.get(key)]
     if missing:
         raise ValueError("Missing config values: " + ", ".join(missing))
-    if config["runtime_id"] != RUNTIME_ID or config["workstation_id"] != WORKSTATION_ID:
-        raise ValueError(f"This build is restricted to {RUNTIME_ID} on {WORKSTATION_ID}")
+    if config["runtime_id"] != RUNTIME_ID:
+        raise ValueError(f"runtime_id must be {RUNTIME_ID}")
+    if not WORKSTATION_PATTERN.fullmatch(str(config["workstation_id"])):
+        raise ValueError("workstation_id must match PC_[A-Z0-9_] and be 5-51 characters")
     if config["ready_url"] != "http://127.0.0.1:8080/readyz":
         raise ValueError("ready_url must be exactly http://127.0.0.1:8080/readyz")
     client = expand_path(config["tunnel_client_path"])
@@ -168,7 +170,7 @@ class WindowsJob:
             self._kernel32.TerminateJobObject(self.handle, exit_code)
 
 
-def acquire_single_instance() -> object:
+def acquire_single_instance(workstation_id: str) -> object:
     if os.name != "nt":
         return object()
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -177,7 +179,7 @@ def acquire_single_instance() -> object:
     kernel32.CloseHandle.restype = wintypes.BOOL
     kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
     ctypes.set_last_error(0)
-    handle = kernel32.CreateMutexW(None, False, f"Local\\{RUNTIME_ID}_{WORKSTATION_ID}")
+    handle = kernel32.CreateMutexW(None, False, f"Local\\{RUNTIME_ID}_{workstation_id}")
     if not handle:
         raise ctypes.WinError(ctypes.get_last_error())
     if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:
@@ -210,8 +212,9 @@ def stop_child(process: subprocess.Popen[str], logger: logging.Logger) -> None:
 
 
 def run(config: dict[str, Any]) -> int:
+    workstation_id = str(config["workstation_id"])
     secret_path = Path(config["secret_path"])
-    secret = load_secret(secret_path)
+    secret = load_secret(secret_path, workstation_id)
     logger, redactor = configure_logging(Path(config["log_dir"]), secret)
     state_path = Path(config["state_path"])
     stop_path = Path(config["stop_request_path"])
@@ -223,7 +226,7 @@ def run(config: dict[str, Any]) -> int:
     reset_after = float(config.get("backoff_reset_after_seconds", 300))
     restart_count = 0
     job = WindowsJob()
-    logger.info("Supervisor started runtime=%s workstation=%s", RUNTIME_ID, WORKSTATION_ID)
+    logger.info("Supervisor started runtime=%s workstation=%s", RUNTIME_ID, workstation_id)
     try:
         while not stop_event.is_set():
             if stop_path.exists():
@@ -277,7 +280,7 @@ def run(config: dict[str, Any]) -> int:
                     ready = result.ready
                     failures = 0 if ready else failures + 1
                     atomic_json(state_path, {
-                        "runtime_id": RUNTIME_ID, "workstation_id": WORKSTATION_ID,
+                        "runtime_id": RUNTIME_ID, "workstation_id": workstation_id,
                         "supervisor_pid": os.getpid(), "tunnel_pid": process.pid,
                         "status": "ready" if ready else "starting_or_unhealthy",
                         "ready": ready, "health_detail": result.detail,
@@ -303,7 +306,7 @@ def run(config: dict[str, Any]) -> int:
             restart_count += 1
             logger.warning("Tunnel runtime exited code=%s after %.1fs; restart in %.1fs", exit_code, runtime_seconds, backoff)
             atomic_json(state_path, {
-                "runtime_id": RUNTIME_ID, "workstation_id": WORKSTATION_ID,
+                "runtime_id": RUNTIME_ID, "workstation_id": workstation_id,
                 "supervisor_pid": os.getpid(), "tunnel_pid": None, "status": "backoff",
                 "ready": False, "last_exit_code": exit_code, "restart_count": restart_count,
                 "backoff_seconds": backoff, "updated_unix": int(time.time()),
@@ -312,7 +315,7 @@ def run(config: dict[str, Any]) -> int:
                 break
             backoff = float(config.get("backoff_initial_seconds", 2)) if runtime_seconds >= reset_after else min(max_backoff, backoff * 2)
         atomic_json(state_path, {
-            "runtime_id": RUNTIME_ID, "workstation_id": WORKSTATION_ID,
+            "runtime_id": RUNTIME_ID, "workstation_id": workstation_id,
             "supervisor_pid": os.getpid(), "tunnel_pid": None, "status": "stopped",
             "ready": False, "restart_count": restart_count, "updated_unix": int(time.time()),
         })
@@ -333,8 +336,9 @@ def main() -> int:
     parser.add_argument("--config", required=True, type=Path)
     args = parser.parse_args()
     try:
-        acquire_single_instance()
-        return run(load_config(args.config.resolve()))
+        config = load_config(args.config.resolve())
+        acquire_single_instance(str(config["workstation_id"]))
+        return run(config)
     except Exception as exc:
         # No secret values are included in configuration/DPAPI errors produced here.
         print(f"{RUNTIME_ID} failed: {type(exc).__name__}: {exc}", file=sys.stderr)

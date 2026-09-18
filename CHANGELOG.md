@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-09-18 — Pacchetto portabile per PC personale
+
+- Rimossi i vincoli applicativi che limitavano runtime Windows e Creative Bridge a
+  `PC_SEGRETERIA`, mantenendo quella identità come default retrocompatibile.
+- Aggiunto `scripts/install_personal_pc.ps1`, che installa bridge e autostart con identità
+  `PC_PERSONALE` e salva la nuova chiave esclusivamente tramite DPAPI locale.
+- Aggiunti requirements, esclusioni Git per config/segreti/stato e il manuale completo
+  `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md`.
+- Tunnel, Runtime API key e app ChatGPT Business restano intenzionalmente risorse dedicate e non
+  versionate. Test runtime e Creative Bridge verdi.
+
 ## 2026-09-15 — Correzione routing timeline long-form
 
 - Il controllo read-only sul primo progetto audio-clean ha mostrato 12 timeline esistenti ma

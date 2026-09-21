@@ -15,6 +15,7 @@
 | `docs/12_FUSION_RUNTIME_SCHEMA_AND_EXTERNAL_REFERENCES.md` | **Schema Fusion osservato, fonti GitHub e contraddizioni aperte** |
 | `docs/13_DIAGNOSTICS_AND_BACKUP.md` | **Accesso visuale frame-by-frame e backup verificabile** |
 | `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` | **Installazione completa e sicura sul PC personale** |
+| `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md` | **Regola di isolamento PC, incidente tunnel del 2026-09-21 e recupero** |
 | `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
 | `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 | `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |
@@ -34,7 +35,10 @@ Interfaccia primaria:
 
 Workstation di riferimento corrente:
 - `PC_SEGRETERIA`: VALIDATED end-to-end READ + SAFE WRITE;
-- `PC_PERSONALE`: PENDING REPLICA.
+- `PC_PERSONALE`: runtime locale READ verificato il 2026-09-21, ma tunnel dedicato ancora PENDING.
+
+Regola inderogabile: un tunnel, una Runtime API key e una configurazione locale per workstation.
+Non collegare contemporaneamente due PC allo stesso `tunnel_id`.
 
 Non usare i vecchi documenti `ARPHE Remote Agent V1` come piano attuale: sono conservati in `docs/superpowers/` ma marcati **SUPERSEDED**.
 

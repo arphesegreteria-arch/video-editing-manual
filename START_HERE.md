@@ -15,24 +15,26 @@ Non costruire una GUI desktop ARPHE separata come interfaccia primaria salvo nuo
 ## Ordine di lettura
 
 1. `CURRENT_STATE.md` — cosa funziona oggi e cosa no.
-2. `EXPERIMENT_LOG.md` — esperimenti, file, risultati e prossimo passo.
-3. `INDEX.md` — indice di documenti e script.
-4. `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md` — architettura prodotto corrente.
-5. `docs/RESOLVE_STUDIO_CAPABILITIES.md` — matrice delle operazioni Studio effettivamente testate.
-6. `docs/07_EDITORIAL_BENCHMARK.md` — benchmark umano e profilo editoriale.
-7. `docs/01_SETUP_RESOLVE_PYTHON.md` — setup Resolve/Python e fallback legacy.
-8. `docs/02_SHORTFORM_WORKFLOW.md` — workflow shorts/ADV.
-9. `docs/03_TRACKING_FUSION.md` — lezioni su tracking, Fusion e yoyo.
-10. `docs/04_LONGFORM_WORKFLOW.md` — pipeline longform e trascrizione.
-11. `docs/05_OPERATOR_GUIDE.md` — procedure manuali di test/fallback.
-12. `docs/06_TROUBLESHOOTING.md` — errori noti e cosa fare.
-13. `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` — replica sicura sul PC personale.
+2. `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md` — regola tunnel per PC e diagnosi dell'incidente più recente.
+3. `EXPERIMENT_LOG.md` — esperimenti, file, risultati e prossimo passo.
+4. `INDEX.md` — indice di documenti e script.
+5. `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md` — architettura prodotto corrente.
+6. `docs/RESOLVE_STUDIO_CAPABILITIES.md` — matrice delle operazioni Studio effettivamente testate.
+7. `docs/07_EDITORIAL_BENCHMARK.md` — benchmark umano e profilo editoriale.
+8. `docs/01_SETUP_RESOLVE_PYTHON.md` — setup Resolve/Python e fallback legacy.
+9. `docs/02_SHORTFORM_WORKFLOW.md` — workflow shorts/ADV.
+10. `docs/03_TRACKING_FUSION.md` — lezioni su tracking, Fusion e yoyo.
+11. `docs/04_LONGFORM_WORKFLOW.md` — pipeline longform e trascrizione.
+12. `docs/05_OPERATOR_GUIDE.md` — procedure manuali di test/fallback.
+13. `docs/06_TROUBLESHOOTING.md` — errori noti e cosa fare.
+14. `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` — replica sicura sul PC personale.
 
 ## Regola per ChatGPT
 
 Quando questa repository viene usata in una nuova sessione:
 - leggere prima `START_HERE.md`;
 - poi `CURRENT_STATE.md` e `EXPERIMENT_LOG.md`;
+- in caso di routing ambiguo tra PC, leggere subito `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md`;
 - usare `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md` come fonte della direzione prodotto;
 - consultare solo i file pertinenti al task;
 - non assumere che gli script nella cartella `experiments/` siano affidabili;

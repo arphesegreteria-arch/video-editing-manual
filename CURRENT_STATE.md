@@ -1,6 +1,17 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-09-18.
+Ultimo aggiornamento: sessione 2026-09-21.
+
+## Avviso operativo - isolamento workstation
+
+Il 2026-09-21 il runtime del PC personale e quello del PC segreteria sono risultati collegati allo
+stesso tunnel legacy `ARPHE-RESOLVE-HOME`. Un test remoto parallelo ha prodotto risultati
+incoerenti e il log personale ha ricevuto solo una delle due richieste. Il bridge personale e
+Resolve funzionano localmente; la causa più probabile è il prelievo delle richieste da due client
+differenti sullo stesso tunnel.
+
+Fino alla separazione dei tunnel non eseguire write remote. Vedere
+`docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md`.
 
 ## Obiettivo del progetto
 
@@ -24,9 +35,14 @@ Root locale corrente:
 
 Il tunnel usato nei test è `ARPHE-RESOLVE-HOME`; il nome è legacy/fuorviante perché il runtime è sul PC segreteria. Quando possibile rinominarlo in `ARPHE-RESOLVE-SEGRETERIA`, oppure mantenere il nome legacy documentando il mapping.
 
-### PC_PERSONALE — PENDING REPLICA
+### PC_PERSONALE — LOCAL READ PASS / TUNNEL ISOLATION PENDING
 
-Il PC personale non è ancora configurato né validato.
+Il PC personale ha ora Resolve Studio `21.0.4.5`, Python `3.12.10`, runtime automatico `ready` e
+collegamento locale read-only a Resolve verificato sul progetto `New Project 4`.
+
+Non è ancora validato end-to-end: il runtime personale usa temporaneamente il tunnel legacy
+della segreteria. Deve ricevere `ARPHE-RESOLVE-PERSONALE` prima di ripetere READ e SAFE WRITE
+remote.
 
 Il codice è ora portabile: runtime e Creative Bridge accettano l'identità `PC_PERSONALE`, esiste
 un installer coordinato e la procedura completa è in `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md`.

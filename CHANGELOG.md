@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-09-21 - Isolamento workstation e incidente tunnel condiviso
+
+- Verificato sul PC personale il collegamento locale Python `3.12.10` -> DaVinci Resolve Studio
+  `21.0.4.5`, con runtime `ready` e progetto `New Project 4` leggibile.
+- Un test remoto parallelo ha restituito risultati incompatibili; il log personale ha ricevuto
+  soltanto una delle due richieste, nonostante i test locali concorrenti fossero verdi.
+- Identificato con confidenza alta il tunnel condiviso tra due workstation come causa primaria
+  del routing ambiguo. Le write remote restano sospese fino alla separazione.
+- Stabilita la regola definitiva: un solo branch `main`, codice condiviso, profili di deployment
+  separati, un tunnel e una Runtime API key per workstation.
+- Aggiunti il runbook dell'incidente e il design dei profili multi-workstation.
+
 ## 2026-09-18 — Pacchetto portabile per PC personale
 
 - Rimossi i vincoli applicativi che limitavano runtime Windows e Creative Bridge a

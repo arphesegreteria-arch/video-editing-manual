@@ -16,10 +16,10 @@ Runtime condiviso da `PC_SEGRETERIA` e `PC_PERSONALE`. Non contiene GUI, non mod
 
 ## Prerequisiti sulla workstation
 
-1. Python 3 con `python.exe` + `pythonw.exe`, oppure Windows launcher `py.exe` + `pyw.exe`.
+1. Python 64 bit con percorsi reali `python.exe` + `pythonw.exe`; non usare alias WindowsApps.
 2. Il binario `tunnel-client-runtime-cloudflared.exe` già validato.
-3. Il bridge validato `ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py` e le sue dipendenze.
-4. Tunnel ID del PC segreteria e relativa Runtime API key Restricted (`Tunnels Read + Use`).
+3. Un profilo locale derivato dall'esempio della workstation corretta.
+4. Tunnel ID dedicato alla workstation e relativa Runtime API key Restricted (`Tunnels Read + Use`).
 
 Prima dell'installazione, verificare i percorsi. Questi comandi sono di sola lettura:
 
@@ -29,7 +29,26 @@ Test-Path 'C:\ARPHE\MCP\ARPHE_MCP_BRIDGE_SAFE_WRITE_02\ARPHE_MCP_BRIDGE_SAFE_WRI
 Get-Command py.exe, pyw.exe -ErrorAction SilentlyContinue
 ```
 
-## Installazione
+## Installazione tramite profilo (canonica)
+
+Dalla root della repository copiare l'esempio corretto, compilare tunnel ID e percorsi nella sola
+copia `.local.json`, quindi eseguire il preflight senza scritture:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+Copy-Item .\scripts\windows_bridge\profiles\pc_segreteria.example.json `
+  .\scripts\windows_bridge\profiles\pc_segreteria.local.json
+.\scripts\install_workstation_profile.ps1 `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json `
+  -PreflightOnly
+```
+
+Solo dopo `Preflight PASS`, ripetere senza `-PreflightOnly`. L'installer crea un ambiente Python
+isolato e chiede la Runtime API key in un campo mascherato. Per aggiornamenti usare
+`-KeepExistingSecret`. Un cambio tunnel richiede `-AllowTunnelChange` e una verifica esplicita
+del nuovo tunnel dedicato.
+
+## Installer basso livello (solo diagnostica)
 
 Aprire PowerShell come lo stesso utente Windows che usa Resolve. Dalla root di questa repository:
 

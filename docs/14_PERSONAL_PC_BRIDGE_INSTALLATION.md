@@ -25,15 +25,27 @@ Aprire PowerShell con il normale utente che usa Resolve:
 git clone https://github.com/arphesegreteria-arch/video-editing-manual.git C:\ARPHE\video-editing-manual
 cd C:\ARPHE\video-editing-manual
 Set-ExecutionPolicy -Scope Process Bypass
-& 'C:\PERCORSO\python.exe' -m pip install -r .\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\requirements.txt
-.\scripts\install_personal_pc.ps1 `
-  -TunnelId 'tunnel_ID_PERSONALE' `
-  -TunnelClientPath 'C:\PERCORSO\tunnel-client-runtime-cloudflared.exe' `
-  -PythonPath 'C:\PERCORSO\python.exe' `
-  -PythonwPath 'C:\PERCORSO\pythonw.exe'
+Copy-Item .\scripts\windows_bridge\profiles\pc_personale.example.json `
+  .\scripts\windows_bridge\profiles\pc_personale.local.json
 ```
 
-L'ultimo comando chiede due volte la chiave in un campo mascherato. Non inserirla mai nel comando o in un file della repository.
+Modificare esclusivamente la copia `.local.json`: inserire il nuovo `tunnel_id` personale e
+verificare i percorsi. Il file locale è escluso da Git. Prima di installare eseguire il preflight,
+che non scrive file, task o segreti:
+
+```powershell
+.\scripts\install_personal_pc.ps1 `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_personale.local.json `
+  -PreflightOnly
+```
+
+Solo dopo `Preflight PASS` eseguire lo stesso comando senza `-PreflightOnly`. L'installer crea un
+ambiente Python isolato e chiede due volte la Runtime API key in un campo mascherato. Non inserire
+mai la chiave nel comando o nel profilo.
+
+Se una config `PC_PERSONALE` esistente usa ancora il tunnel legacy, il cambio viene bloccato per
+impostazione predefinita. Dopo aver verificato il nuovo tunnel dedicato, aggiungere una sola volta
+`-AllowTunnelChange`.
 
 ## Collegamento a ChatGPT Business
 
@@ -59,7 +71,10 @@ Le feature flag avanzate partono disabilitate nella config nuova. Vanno abilitat
 
 ## Aggiornamenti futuri
 
-Eseguire `git pull`, reinstallare le dipendenze se cambia `requirements.txt`, quindi rilanciare l'installer creativo con `-WorkstationId PC_PERSONALE`. Se cambia l'elenco delle azioni MCP, aggiornare e ripubblicare lo schema della app ChatGPT; per sole correzioni interne non serve creare una nuova app.
+Eseguire `git pull`, poi rilanciare prima il preflight e quindi l'installer con lo stesso profilo
+locale e `-KeepExistingSecret`. Le dipendenze vengono aggiornate nell'ambiente isolato del profilo.
+Se cambia l'elenco delle azioni MCP, aggiornare e ripubblicare lo schema della app ChatGPT; per
+sole correzioni interne non serve creare una nuova app.
 
 ## Backup
 

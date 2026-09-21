@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "workstation_id": "PC_SEGRETERIA",
+  "tunnel_name": "ARPHE-RESOLVE-SEGRETERIA",
+  "tunnel_id": "tunnel_REPLACE_SEGRETERIA",
+  "python_path": "C:/Users/REPLACE/AppData/Local/Programs/Python/Python313/python.exe",
+  "pythonw_path": "C:/Users/REPLACE/AppData/Local/Programs/Python/Python313/pythonw.exe",
+  "python_version": "3.13.15",
+  "tunnel_client_path": "C:/ARPHE/MCP/tunnel client/tunnel-client-runtime-cloudflared.exe",
+  "install_root": "C:/ARPHE/MCP/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
+  "log_dir": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
+  "creative_destination": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_CREATIVE_03",
+  "mcp_entrypoint": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_CREATIVE_03/ARPHE_MCP_BRIDGE_CREATIVE_03.py",
+  "requirements_path": "C:/ARPHE/video-editing-manual/scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03/requirements.txt",
+  "venv_root": "C:/ARPHE/MCP/runtimes/PC_SEGRETERIA/venv",
+  "feature_flags": {
+    "CAP_PROJECT": true,
+    "CAP_TIMELINE": true
+  }
+}

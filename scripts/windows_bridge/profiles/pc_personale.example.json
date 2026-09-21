@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "workstation_id": "PC_PERSONALE",
+  "tunnel_name": "ARPHE-RESOLVE-PERSONALE",
+  "tunnel_id": "tunnel_REPLACE_PERSONAL",
+  "python_path": "C:/Program Files/Python312/python.exe",
+  "pythonw_path": "C:/Program Files/Python312/pythonw.exe",
+  "python_version": "3.12.10",
+  "tunnel_client_path": "C:/ARPHE/MCP/tunnel client/tunnel-client-runtime-cloudflared.exe",
+  "install_root": "C:/ARPHE/MCP/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
+  "log_dir": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
+  "creative_destination": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_CREATIVE_03",
+  "mcp_entrypoint": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_CREATIVE_03/ARPHE_MCP_BRIDGE_CREATIVE_03.py",
+  "requirements_path": "C:/ARPHE/video-editing-manual/scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03/requirements.txt",
+  "venv_root": "C:/ARPHE/MCP/runtimes/PC_PERSONALE/venv",
+  "feature_flags": {
+    "CAP_PROJECT": true,
+    "CAP_TIMELINE": true
+  }
+}

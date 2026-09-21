@@ -6,3 +6,4 @@ __pycache__/
 **/*.dpapi
 **/runtime_state.json
 **/audit.jsonl
+scripts/windows_bridge/profiles/*.local.json

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -33,6 +34,15 @@ class FakeResponse:
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_runtime_starts_when_python_omits_the_script_directory(self):
+        result = subprocess.run(
+            [sys.executable, "-I", str(MODULE_DIR / "arphe_bridge_runtime.py"), "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+
     def test_redacts_exact_secret_and_common_key_formats(self):
         redact = SecretRedactor("super-secret-value").redact
         text = redact("super-secret-value CONTROL_PLANE_API_KEY=abc Authorization: Bearer xyz sk-1234567890abcdef")

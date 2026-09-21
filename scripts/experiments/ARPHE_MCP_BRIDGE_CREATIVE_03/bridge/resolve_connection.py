@@ -3,7 +3,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
+import threading
 from typing import Any
+
+
+RESOLVE_ACCESS_LOCK = threading.RLock()
 
 
 def safe_call(obj: Any, method_name: str, *args: Any) -> Any:
@@ -37,15 +41,16 @@ def configure_api() -> dict[str, Any]:
 
 
 def context() -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
-    paths = configure_api()
-    try:
-        import DaVinciResolveScript as dvr
-        resolve = dvr.scriptapp("Resolve")
-    except Exception as exc:
-        return None, None, None, None, {"ok": False, "stage": "connect", "error": f"{type(exc).__name__}: {exc}", "api_paths": paths}
-    if resolve is None:
-        return None, None, None, None, {"ok": False, "stage": "connect", "error": "Resolve non raggiungibile."}
-    manager = safe_call(resolve, "GetProjectManager")
-    project = safe_call(manager, "GetCurrentProject")
-    timeline = safe_call(project, "GetCurrentTimeline") if project else None
-    return resolve, manager, project, timeline, None
+    with RESOLVE_ACCESS_LOCK:
+        paths = configure_api()
+        try:
+            import DaVinciResolveScript as dvr
+            resolve = dvr.scriptapp("Resolve")
+        except Exception as exc:
+            return None, None, None, None, {"ok": False, "stage": "connect", "error": f"{type(exc).__name__}: {exc}", "api_paths": paths}
+        if resolve is None:
+            return None, None, None, None, {"ok": False, "stage": "connect", "error": "Resolve non raggiungibile."}
+        manager = safe_call(resolve, "GetProjectManager")
+        project = safe_call(manager, "GetCurrentProject")
+        timeline = safe_call(project, "GetCurrentTimeline") if project else None
+        return resolve, manager, project, timeline, None

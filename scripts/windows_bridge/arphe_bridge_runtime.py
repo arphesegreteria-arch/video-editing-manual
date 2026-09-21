@@ -19,6 +19,10 @@ import threading
 import time
 from typing import Any
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
 from health import check_ready
 from secret_store import load_secret
 
@@ -227,6 +231,7 @@ def run(config: dict[str, Any]) -> int:
     restart_count = 0
     job = WindowsJob()
     logger.info("Supervisor started runtime=%s workstation=%s", RUNTIME_ID, workstation_id)
+    logger.info("Configured MCP command=%s", config["mcp_command"])
     try:
         while not stop_event.is_set():
             if stop_path.exists():

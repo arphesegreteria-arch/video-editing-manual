@@ -36,7 +36,7 @@ from .render_tools import (queue_longform_exports as do_queue_longform_exports,
                            queue_publish_package_exports as do_queue_publish_package_exports,
                            render_preview as do_render_preview,
                            start_longform_exports as do_start_longform_exports)
-from .resolve_connection import context, safe_call
+from .resolve_connection import RESOLVE_ACCESS_LOCK, context, safe_call
 from .safety import ValidationError
 from .timeline_tools import (create_safe_working_timeline as do_safe_timeline,
                              create_timeline as do_create_timeline,
@@ -102,33 +102,35 @@ def ping() -> dict[str, Any]:
 @mcp.tool(annotations=READ_ONLY)
 def resolve_status() -> dict[str, Any]:
     """Read the current Resolve context without modifying it."""
-    try:
-        resolve, _, project, timeline, _, _, error = _runtime()
-        if error:
-            return error
-        result = {"ok": True, "resolve_version": safe_call(resolve, "GetVersionString") or safe_call(resolve, "GetVersion"),
-                  "project_name": safe_call(project, "GetName") if project else None,
-                  "timeline_name": safe_call(timeline, "GetName") if timeline else None,
-                  "timeline_fps": safe_call(timeline, "GetSetting", "timelineFrameRate") if timeline else None,
-                  "video_track_count": safe_call(timeline, "GetTrackCount", "video") if timeline else None,
-                  "audio_track_count": safe_call(timeline, "GetTrackCount", "audio") if timeline else None,
-                  "v1_clip_count": None, "a1_clip_count": None}
-        if timeline:
-            result["v1_clip_count"] = len(safe_call(timeline, "GetItemListInTrack", "video", 1) or [])
-            result["a1_clip_count"] = len(safe_call(timeline, "GetItemListInTrack", "audio", 1) or [])
-        return result
-    except Exception as exc:
-        return _error(exc)
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            resolve, _, project, timeline, _, _, error = _runtime()
+            if error:
+                return error
+            result = {"ok": True, "resolve_version": safe_call(resolve, "GetVersionString") or safe_call(resolve, "GetVersion"),
+                      "project_name": safe_call(project, "GetName") if project else None,
+                      "timeline_name": safe_call(timeline, "GetName") if timeline else None,
+                      "timeline_fps": safe_call(timeline, "GetSetting", "timelineFrameRate") if timeline else None,
+                      "video_track_count": safe_call(timeline, "GetTrackCount", "video") if timeline else None,
+                      "audio_track_count": safe_call(timeline, "GetTrackCount", "audio") if timeline else None,
+                      "v1_clip_count": None, "a1_clip_count": None}
+            if timeline:
+                result["v1_clip_count"] = len(safe_call(timeline, "GetItemListInTrack", "video", 1) or [])
+                result["a1_clip_count"] = len(safe_call(timeline, "GetItemListInTrack", "audio", 1) or [])
+            return result
+        except Exception as exc:
+            return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)
 def get_feature_flags() -> dict[str, Any]:
     """Return configured, implemented, available and validated state separately."""
-    try:
-        _, manager, project, timeline, config, _, error = _runtime()
-        return {"ok": True, "connection": error, "capabilities": feature_report(config, manager, project, timeline)}
-    except Exception as exc:
-        return _error(exc)
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, manager, project, timeline, config, _, error = _runtime()
+            return {"ok": True, "connection": error, "capabilities": feature_report(config, manager, project, timeline)}
+        except Exception as exc:
+            return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)

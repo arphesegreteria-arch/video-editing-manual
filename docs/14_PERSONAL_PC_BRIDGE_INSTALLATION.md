@@ -1,3 +1,18 @@
+# Matrice di validazione per workstation
+
+| Controllo | PC_PERSONALE | PC_SEGRETERIA |
+|---|---|---|
+| Runtime isolato e `/readyz` | PASS | PASS baseline |
+| Gate B composizione + testo | PASS | PASS |
+| Gate C grafico/card | PASS | PASS |
+| Gate D motion card | prima prova FAIL visiva; correzione installata | non aggiornato da questa sessione |
+| Gate E stack motion | da eseguire | da ripetere solo se si aggiorna quel runtime |
+| Suite creativa automatica | PASS: 59 test | non rieseguita |
+| Suite Windows PowerShell | 4 test bloccati dalla modalità linguaggio ristretto | baseline non rieseguita |
+
+Un PASS su una workstation non viene usato come prova dell'altra. File, task, tunnel e segreti
+restano per-workstation.
+
 # Replica del bridge sul PC personale
 
 Questa è la procedura canonica per ottenere sul PC personale un bridge equivalente a quello della segreteria. Il codice è in Git; tunnel e chiave restano locali e non devono mai essere caricati nella repository.

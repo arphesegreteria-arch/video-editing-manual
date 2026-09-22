@@ -46,6 +46,7 @@ if (-not $PSCmdlet.ShouldProcess("$script:ArpheTaskPath$script:ArpheTaskName", "
 New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $script:ArpheDataDir -Force | Out-Null
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+if ($KeepExistingSecret) { Copy-ArpheLegacySecretForWorkstation | Out-Null }
 foreach ($file in $sourceFiles) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $InstallRoot $file) -Force
 }

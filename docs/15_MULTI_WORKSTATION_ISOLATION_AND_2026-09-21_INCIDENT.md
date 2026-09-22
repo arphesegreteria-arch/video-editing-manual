@@ -119,6 +119,38 @@ Se stai leggendo questo documento dal PC di segreteria:
 
 La configurazione locale e i segreti non vanno copiati tra i due PC e non vanno inseriti in Git.
 
+## Completamento sul PC personale - 2026-09-22
+
+Sul PC personale sono stati completati questi passaggi:
+
+- creato e associato il tunnel dedicato `ARPHE-RESOLVE-PERSONALE`;
+- creata una Runtime API key dedicata, Restricted, con soli permessi `Tunnels Read + Use`;
+- chiave salvata esclusivamente con DPAPI per `PC_PERSONALE`;
+- ambiente Python isolato in `C:\ARPHE\MCP\runtimes\PC_PERSONALE\venv` con Python `3.12.10`;
+- task Windows `ARPHE Resolve Bridge Runtime V1 - PC_PERSONALE`;
+- config, stato e blob DPAPI spostati nel percorso per-workstation
+  `%LOCALAPPDATA%\ARPHE\WindowsBridgeRuntimeV1\PC_PERSONALE\`;
+- vecchio processo manuale sul tunnel condiviso arrestato;
+- verifica nel contesto reale del task: workstation corretta, tunnel personale, MCP su Python 3.12,
+  stato `ready` e `/readyz` uguale a `ready`.
+
+Il PC di segreteria non è stato modificato. Il suo upgrade va eseguito separatamente usando il
+profilo `PC_SEGRETERIA`, il suo interprete Python e il suo tunnel.
+
+### Seconda causa operativa individuata
+
+Durante l'installazione remota, il filesystem isolato della sessione Codex mostrava nuovi file in
+`AppData` che il Task Scheduler dell'utente non vedeva. Questo ha prodotto un task con exit code
+`1`, mentre lo stesso comando manuale risultava sano. Una prova eseguita nel contesto del task ha
+mostrato `FileNotFoundError` per i file appena creati e ha confermato che config e blob legacy erano
+invece visibili.
+
+Regola di diagnosi: se il comando manuale funziona ma il task termina subito, non rigenerare chiavi
+e non cambiare tunnel. Verificare prima, dal contesto del task, che config e blob DPAPI esistano. In
+un'installazione normale avviata dalla PowerShell dell'utente i file sono creati direttamente nel
+contesto corretto; in una sessione remota isolata può essere necessario materializzarli tramite un
+processo eseguito come quell'utente.
+
 ## Riferimento ufficiale
 
 Il funzionamento del client, che esegue long-polling, preleva richieste MCP in coda e le inoltra al

@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-09-22 - Tunnel personale operativo e stato runtime per-workstation
+
+- Creati tunnel e Runtime API key dedicati al PC personale; la key resta cifrata con DPAPI e ha
+  soltanto `Tunnels Read + Use`.
+- Installato il runtime personale con Python `3.12.10` e venv dedicato; arrestato il vecchio
+  processo manuale collegato al tunnel condiviso.
+- Config, stato, stop request e blob DPAPI ora vivono sotto una directory per workstation in
+  `%LOCALAPPDATA%\ARPHE\WindowsBridgeRuntimeV1\<WORKSTATION_ID>\`.
+- Aggiunta migrazione controllata del blob legacy solo quando l'identità workstation coincide.
+- Aggiunti test di regressione sui percorsi isolati e sulla migrazione del blob.
+- Documentata la diagnosi delle installazioni remote con filesystem isolato, nelle quali i file
+  creati dalla sessione di automazione possono non essere visibili al Task Scheduler reale.
+- Verifica finale nel contesto del task: `PC_PERSONALE`, tunnel personale, MCP su Python 3.12,
+  stato `ready` e `/readyz` uguale a `ready`.
+
 ## 2026-09-21 - Isolamento workstation e incidente tunnel condiviso
 
 - Verificato sul PC personale il collegamento locale Python `3.12.10` -> DaVinci Resolve Studio

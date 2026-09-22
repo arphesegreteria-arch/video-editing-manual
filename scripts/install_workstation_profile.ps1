@@ -37,14 +37,18 @@ if ($LASTEXITCODE -ne 0 -or $actualPythonVersion -ne [string]$profile.python_ver
     throw "Python version mismatch: profile requires $($profile.python_version), executable reports $actualPythonVersion."
 }
 
-$runtimeConfigPath = Join-Path $env:LOCALAPPDATA 'ARPHE\WindowsBridgeRuntimeV1\bridge_config.json'
-if (Test-Path -LiteralPath $runtimeConfigPath -PathType Leaf) {
-    $existing = Get-Content -Raw -LiteralPath $runtimeConfigPath | ConvertFrom-Json
-    if ([string]$existing.workstation_id -ne [string]$profile.workstation_id) {
-        throw "Existing runtime config belongs to $($existing.workstation_id), not $($profile.workstation_id)."
-    }
-    if ([string]$existing.tunnel_id -ne [string]$profile.tunnel_id -and -not $AllowTunnelChange) {
-        throw 'Existing runtime uses a different tunnel. Re-run with -AllowTunnelChange only after verifying the new workstation-specific tunnel.'
+$runtimeBaseDir = Join-Path $env:LOCALAPPDATA 'ARPHE\WindowsBridgeRuntimeV1'
+$runtimeConfigPath = Join-Path (Join-Path $runtimeBaseDir ([string]$profile.workstation_id)) 'bridge_config.json'
+$legacyRuntimeConfigPath = Join-Path $runtimeBaseDir 'bridge_config.json'
+foreach ($existingConfigPath in @($runtimeConfigPath, $legacyRuntimeConfigPath)) {
+    if (Test-Path -LiteralPath $existingConfigPath -PathType Leaf) {
+        $existing = Get-Content -Raw -LiteralPath $existingConfigPath | ConvertFrom-Json
+        if ([string]$existing.workstation_id -ne [string]$profile.workstation_id) {
+            throw "Existing runtime config belongs to $($existing.workstation_id), not $($profile.workstation_id)."
+        }
+        if ([string]$existing.tunnel_id -ne [string]$profile.tunnel_id -and -not $AllowTunnelChange) {
+            throw 'Existing runtime uses a different tunnel. Re-run with -AllowTunnelChange only after verifying the new workstation-specific tunnel.'
+        }
     }
 }
 

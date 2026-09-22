@@ -6,7 +6,8 @@ Runtime condiviso da `PC_SEGRETERIA` e `PC_PERSONALE`. Non contiene GUI, non mod
 
 - Task Scheduler `At logon`, nella sessione dell'utente e con privilegi limitati.
 - Azione diretta `pythonw.exe`/`pyw.exe`: nessuna finestra PowerShell permanente.
-- API key cifrata con Windows DPAPI per-user in `%LOCALAPPDATA%\ARPHE\WindowsBridgeRuntimeV1\runtime_api_key.dpapi`.
+- API key cifrata con Windows DPAPI per-user e per-workstation in
+  `%LOCALAPPDATA%\ARPHE\WindowsBridgeRuntimeV1\<WORKSTATION_ID>\runtime_api_key.dpapi`.
 - La key entra solo nell'environment del processo tunnel come `CONTROL_PLANE_API_KEY`.
 - Config e stato non contengono la key. Output del tunnel redatto prima della rotazione dei log.
 - Health gate fisso `http://127.0.0.1:8080/readyz`: richiede HTTP 200 e body `ready`.
@@ -69,7 +70,21 @@ Se Python non è rilevato automaticamente, aggiungere percorsi espliciti:
   -PythonwPath 'C:\Users\NOME\AppData\Local\Programs\Python\Python313\pythonw.exe'
 ```
 
-Reinstallando il codice, usare `-KeepExistingSecret` per conservare il blob DPAPI. La config è in `%LOCALAPPDATA%`; i moduli runtime sono copiati in `C:\ARPHE\MCP\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1`.
+Reinstallando il codice, usare `-KeepExistingSecret` per conservare il blob DPAPI. Config, stato,
+stop request e secret sono isolati in
+`%LOCALAPPDATA%\ARPHE\WindowsBridgeRuntimeV1\<WORKSTATION_ID>\`; i moduli runtime sono copiati in
+`C:\ARPHE\MCP\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1`.
+
+L'installer migra il blob DPAPI legacy solo quando la configurazione legacy dichiara la stessa
+workstation. Non copiare manualmente blob tra `PC_PERSONALE` e `PC_SEGRETERIA`.
+
+### Nota per installazioni remote da un ambiente isolato
+
+Un ambiente di automazione con filesystem virtualizzato può vedere file nuovi in `AppData` che
+non sono ancora visibili al Task Scheduler dell'utente reale. Il sintomo è: avvio manuale riuscito,
+task con exit code `1`, nessun nuovo state file. Prima di cambiare tunnel o Python, verificare la
+visibilità di config e blob **dal contesto del task**. In una normale PowerShell aperta dall'utente
+questa particolarità non si presenta.
 
 ## Start, stop e stato
 
@@ -97,7 +112,8 @@ Log redatti: `C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1\runtime.log`.
 5. Verificare il backoff terminando **solo il processo tunnel indicato da `TunnelPid`**:
 
    ```powershell
-   $s = Get-Content "$env:LOCALAPPDATA\ARPHE\WindowsBridgeRuntimeV1\runtime_state.json" -Raw | ConvertFrom-Json
+   $workstation = 'PC_SEGRETERIA'
+   $s = Get-Content "$env:LOCALAPPDATA\ARPHE\WindowsBridgeRuntimeV1\$workstation\runtime_state.json" -Raw | ConvertFrom-Json
    Stop-Process -Id $s.tunnel_pid
    Start-Sleep -Seconds 5
    .\scripts\windows_bridge\status_bridge.ps1
@@ -109,7 +125,8 @@ Log redatti: `C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1\runtime.log`.
    ```powershell
    $secretPattern = 'CONTROL_PLANE_API_KEY\s*[=:]\s*(?!\[REDACTED\])\S+|Authorization:\s*Bearer\s+(?!\[REDACTED\])\S+|\bsk-[A-Za-z0-9_-]{12,}\b'
    Select-String -Path 'C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1\*.log' -Pattern $secretPattern
-   Select-String -Path "$env:LOCALAPPDATA\ARPHE\WindowsBridgeRuntimeV1\*.json" -Pattern $secretPattern
+   Get-ChildItem "$env:LOCALAPPDATA\ARPHE\WindowsBridgeRuntimeV1" -Filter *.json -Recurse |
+     Select-String -Pattern $secretPattern
    ```
 
 Il test del restart è circoscritto al PID tunnel. Non terminare processi Resolve e non cancellare task/file per provarlo.

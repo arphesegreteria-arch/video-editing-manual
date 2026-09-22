@@ -75,6 +75,17 @@ stop request e secret sono isolati in
 `%LOCALAPPDATA%\ARPHE\WindowsBridgeRuntimeV1\<WORKSTATION_ID>\`; i moduli runtime sono copiati in
 `C:\ARPHE\MCP\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1`.
 
+Il profilo installato salva inoltre `creative_config_path` come percorso assoluto e il supervisore
+lo inoltra al solo processo MCP tramite `ARPHE_CREATIVE_CONFIG`. In questo modo ogni workstation
+usa la propria configurazione Creative03 anche quando Windows virtualizza `LOCALAPPDATA` per il
+processo che avvia l'installazione.
+
+Il file `bridge_config.json` usato dall'attività pianificata viene salvato sotto
+`<install_root>\runtime-configs\<WORKSTATION_ID>\`, fuori da `AppData`. Segreto DPAPI, stato e stop
+request restano invece isolati sotto `%LOCALAPPDATA%`. Questa separazione evita che un installer
+eseguito da un'app Windows pacchettizzata aggiorni una copia virtualizzata diversa da quella letta
+dall'attività pianificata.
+
 L'installer migra il blob DPAPI legacy solo quando la configurazione legacy dichiara la stessa
 workstation. Non copiare manualmente blob tra `PC_PERSONALE` e `PC_SEGRETERIA`.
 

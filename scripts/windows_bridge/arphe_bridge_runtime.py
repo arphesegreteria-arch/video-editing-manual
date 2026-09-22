@@ -61,7 +61,24 @@ def load_config(path: Path) -> dict[str, Any]:
     config["tunnel_client_path"] = str(client)
     for key in ("log_dir", "secret_path", "state_path", "stop_request_path"):
         config[key] = str(expand_path(config[key]))
+    creative_config_path = config.get("creative_config_path")
+    if creative_config_path:
+        creative_config = expand_path(str(creative_config_path))
+        if not creative_config.is_file():
+            raise FileNotFoundError(f"Creative config not found: {creative_config}")
+        config["creative_config_path"] = str(creative_config)
     return config
+
+
+def build_child_environment(config: dict[str, Any], secret: str,
+                            base_environment: dict[str, str] | None = None) -> dict[str, str]:
+    child_env = dict(os.environ if base_environment is None else base_environment)
+    child_env["CONTROL_PLANE_API_KEY"] = secret
+    child_env["CONTROL_PLANE_TUNNEL_ID"] = str(config["tunnel_id"])
+    child_env["MCP_COMMAND"] = str(config["mcp_command"])
+    if config.get("creative_config_path"):
+        child_env["ARPHE_CREATIVE_CONFIG"] = str(config["creative_config_path"])
+    return child_env
 
 
 class SecretRedactor(logging.Filter):
@@ -237,10 +254,7 @@ def run(config: dict[str, Any]) -> int:
             if stop_path.exists():
                 stop_event.set()
                 break
-            child_env = os.environ.copy()
-            child_env["CONTROL_PLANE_API_KEY"] = secret
-            child_env["CONTROL_PLANE_TUNNEL_ID"] = config["tunnel_id"]
-            child_env["MCP_COMMAND"] = config["mcp_command"]
+            child_env = build_child_environment(config, secret)
             started = time.monotonic()
             process = None
             try:

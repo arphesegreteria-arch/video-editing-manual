@@ -5,6 +5,7 @@
   "tunnel_id": "tunnel_REPLACE_ON_PC_SEGRETERIA",
   "tunnel_client_path": "C:/ARPHE/MCP/tunnel client/tunnel-client-runtime-cloudflared.exe",
   "mcp_command": "py -3 C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py",
+  "creative_config_path": "C:/Users/replace/AppData/Local/ARPHE/CreativeBridge03/creative_config.json",
   "ready_url": "http://127.0.0.1:8080/readyz",
   "log_dir": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
   "secret_path": "%LOCALAPPDATA%/ARPHE/WindowsBridgeRuntimeV1/PC_SEGRETERIA/runtime_api_key.dpapi",

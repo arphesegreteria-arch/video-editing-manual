@@ -13,7 +13,7 @@ from unittest.mock import patch
 MODULE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MODULE_DIR))
 
-from arphe_bridge_runtime import SecretRedactor, load_config  # noqa: E402
+from arphe_bridge_runtime import SecretRedactor, build_child_environment, load_config  # noqa: E402
 from health import check_ready  # noqa: E402
 from secret_store import delete_secret, load_secret, store_secret  # noqa: E402
 
@@ -118,6 +118,48 @@ class RuntimeTests(unittest.TestCase):
             path = root / "config.json"
             path.write_text(json.dumps(config), encoding="utf-8-sig")
             self.assertEqual("PC_SEGRETERIA", load_config(path)["workstation_id"])
+
+    def test_config_normalizes_explicit_creative_config_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            client = root / "tunnel.exe"
+            client.write_bytes(b"")
+            creative = root / "creative.json"
+            creative.write_text("{}", encoding="utf-8")
+            config = {
+                "runtime_id": "ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
+                "workstation_id": "PC_PERSONALE",
+                "tunnel_id": "tunnel_test",
+                "tunnel_client_path": str(client),
+                "mcp_command": "ignored",
+                "creative_config_path": str(creative),
+                "ready_url": "http://127.0.0.1:8080/readyz",
+                "log_dir": str(root / "logs"),
+                "secret_path": str(root / "secret"),
+                "state_path": str(root / "state"),
+                "stop_request_path": str(root / "stop"),
+            }
+            path = root / "config.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+
+            loaded = load_config(path)
+
+            self.assertEqual(str(creative.resolve()), loaded["creative_config_path"])
+
+    def test_child_environment_pins_explicit_creative_config(self):
+        config = {
+            "tunnel_id": "tunnel_personal",
+            "mcp_command": "personal bridge",
+            "creative_config_path": r"C:\personal\creative_config.json",
+        }
+
+        child = build_child_environment(config, "test-secret", {"KEEP": "value"})
+
+        self.assertEqual("value", child["KEEP"])
+        self.assertEqual("test-secret", child["CONTROL_PLANE_API_KEY"])
+        self.assertEqual("tunnel_personal", child["CONTROL_PLANE_TUNNEL_ID"])
+        self.assertEqual("personal bridge", child["MCP_COMMAND"])
+        self.assertEqual(r"C:\personal\creative_config.json", child["ARPHE_CREATIVE_CONFIG"])
 
     @unittest.skipUnless(os.name == "nt", "DPAPI is Windows-only")
     def test_dpapi_round_trip_uses_ciphertext(self):

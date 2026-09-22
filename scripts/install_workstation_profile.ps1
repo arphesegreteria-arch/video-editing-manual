@@ -38,9 +38,10 @@ if ($LASTEXITCODE -ne 0 -or $actualPythonVersion -ne [string]$profile.python_ver
 }
 
 $runtimeBaseDir = Join-Path $env:LOCALAPPDATA 'ARPHE\WindowsBridgeRuntimeV1'
-$runtimeConfigPath = Join-Path (Join-Path $runtimeBaseDir ([string]$profile.workstation_id)) 'bridge_config.json'
+$runtimeConfigPath = Join-Path (Join-Path (Join-Path ([string]$profile.install_root) 'runtime-configs') ([string]$profile.workstation_id)) 'bridge_config.json'
+$virtualizedRuntimeConfigPath = Join-Path (Join-Path $runtimeBaseDir ([string]$profile.workstation_id)) 'bridge_config.json'
 $legacyRuntimeConfigPath = Join-Path $runtimeBaseDir 'bridge_config.json'
-foreach ($existingConfigPath in @($runtimeConfigPath, $legacyRuntimeConfigPath)) {
+foreach ($existingConfigPath in @($runtimeConfigPath, $virtualizedRuntimeConfigPath, $legacyRuntimeConfigPath)) {
     if (Test-Path -LiteralPath $existingConfigPath -PathType Leaf) {
         $existing = Get-Content -Raw -LiteralPath $existingConfigPath | ConvertFrom-Json
         if ([string]$existing.workstation_id -ne [string]$profile.workstation_id) {
@@ -102,6 +103,8 @@ $runtimeArgs = @{
     TunnelId = [string]$profile.tunnel_id
     TunnelClientPath = $tunnelClient
     McpCommand = $mcpCommand
+    CreativeConfigPath = $creativeConfigPath
+    RuntimeConfigPath = $runtimeConfigPath
     InstallRoot = [string]$profile.install_root
     LogDir = [string]$profile.log_dir
     PythonPath = $venvPython

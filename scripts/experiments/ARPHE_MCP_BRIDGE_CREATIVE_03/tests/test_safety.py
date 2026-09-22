@@ -152,7 +152,7 @@ class MotionTests(unittest.TestCase):
         self.assertEqual([1, 2, 3, 4, 5], [plan["z_order"] for plan in plans])
         self.assertTrue(all(plans[index]["keys"][0]["frame"] < plans[index + 1]["keys"][0]["frame"] for index in range(4)))
 
-    def test_motion_opacity_targets_card_transform_not_composite_merge(self):
+    def test_motion_uses_path_center_and_composite_opacity(self):
         class FakeTool:
             Center = None
             Size = None
@@ -166,6 +166,9 @@ class MotionTests(unittest.TestCase):
             def BezierSpline(self):
                 return {}
 
+            def Path(self):
+                return {}
+
             def FindTool(self, name):
                 return {"CARD_TRANSFORM": transform, "CARD_OUTER": merge}.get(name)
 
@@ -173,9 +176,10 @@ class MotionTests(unittest.TestCase):
         record = {"transform_name": "CARD_TRANSFORM", "outer_merge_name": "CARD_OUTER",
                   "start_frame": 10, "end_frame": 30}
         self.assertTrue(_animate(FakeComp(), record, plan))
-        self.assertEqual(0.0, transform.Blend[10])
-        self.assertEqual(1.0, transform.Blend[20])
-        self.assertEqual({0: 1.0, 19: 1.0, 20: 0.0}, merge.Blend)
+        self.assertEqual({1: 0.525, 2: 0.32, 3: 0.0}, transform.Center[10])
+        self.assertEqual(1.0, transform.Blend)
+        self.assertEqual(0.0, merge.Blend[10])
+        self.assertEqual(1.0, merge.Blend[20])
 
 
 class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):

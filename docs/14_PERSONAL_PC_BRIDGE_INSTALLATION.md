@@ -79,3 +79,14 @@ sole correzioni interne non serve creare una nuova app.
 ## Backup
 
 GitHub contiene codice e manuali. Fare inoltre backup separato di progetti Resolve, media e asset. Non archiviare in GitHub chiavi, file `.dpapi`, config locali, log o materiale clinico/personale.
+### Aggiornamento 2026-09-22 — runtime personale e motion
+
+Il runtime personale `PC_PERSONALE` usa una configurazione stabile sotto
+`C:\\ARPHE\\MCP\\runtime-configs\\PC_PERSONALE`; non condivide file di stato o runtime con
+`PC_SEGRETERIA`. Questo evita la virtualizzazione della copia sotto AppData del pacchetto Codex.
+
+La verifica locale del bridge creativo è verde (59 test). Durante il Gate D è stato isolato un
+difetto di animazione: Fusion riceveva la posizione 2D come `BezierSpline` e l'opacità sul
+`Transform.Blend`, che non è l'opacità dell'elemento. La correzione usa `Path` per `Center` e il
+`Blend` del merge esterno per l'opacità. La copia installata sul solo PC personale è stata
+aggiornata; la nuova prova visiva va eseguita alla prossima sessione con crediti disponibili.

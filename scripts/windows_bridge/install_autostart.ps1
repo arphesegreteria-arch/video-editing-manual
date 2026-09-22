@@ -6,6 +6,8 @@ param(
     [string]$McpCommand = 'py -3 C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py',
     [string]$InstallRoot = 'C:\ARPHE\MCP\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1',
     [string]$LogDir = 'C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1',
+    [string]$CreativeConfigPath = '',
+    [string]$RuntimeConfigPath = '',
     [string]$PythonPath = '',
     [string]$PythonwPath = '',
     [switch]$KeepExistingSecret,
@@ -13,6 +15,10 @@ param(
 )
 
 . (Join-Path $PSScriptRoot 'common.ps1') -WorkstationId $WorkstationId
+
+if ($RuntimeConfigPath) {
+    $script:ArpheConfigPath = [IO.Path]::GetFullPath($RuntimeConfigPath)
+}
 
 function Resolve-Executable {
     param([string]$Requested, [string[]]$Candidates)
@@ -45,6 +51,7 @@ if (-not $PSCmdlet.ShouldProcess("$script:ArpheTaskPath$script:ArpheTaskName", "
 
 New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $script:ArpheDataDir -Force | Out-Null
+New-Item -ItemType Directory -Path (Split-Path -Parent $script:ArpheConfigPath) -Force | Out-Null
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 if ($KeepExistingSecret) { Copy-ArpheLegacySecretForWorkstation | Out-Null }
 foreach ($file in $sourceFiles) {
@@ -69,6 +76,10 @@ $config = [ordered]@{
     backoff_initial_seconds = 2
     backoff_max_seconds = 60
     backoff_reset_after_seconds = 300
+}
+if ($CreativeConfigPath) {
+    $resolvedCreativeConfig = (Resolve-Path -LiteralPath $CreativeConfigPath -ErrorAction Stop).Path
+    $config.creative_config_path = $resolvedCreativeConfig.Replace('\', '/')
 }
 $configJson = $config | ConvertTo-Json
 [IO.File]::WriteAllText($script:ArpheConfigPath, $configJson, [Text.UTF8Encoding]::new($false))

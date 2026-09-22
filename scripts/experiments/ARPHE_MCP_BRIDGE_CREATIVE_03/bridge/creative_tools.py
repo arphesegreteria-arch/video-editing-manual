@@ -327,23 +327,34 @@ def _animate(comp: Any, record: dict, plan: dict, reverse: bool = False) -> bool
     transform = safe_call(comp, "FindTool", record.get("transform_name"))
     if not transform:
         return False
+    outer = safe_call(comp, "FindTool", record.get("outer_merge_name"))
     keys = list(reversed(plan["keys"])) if reverse else plan["keys"]
     # Attach modifiers before populating them; Resolve 21 otherwise creates the
     # spline nodes but continues evaluating the inputs at their defaults.
-    transform.Center = comp.BezierSpline()
+    # Center is a 2D point, so Resolve evaluates it through a Path modifier.
+    # BezierSpline silently accepts the assignment but leaves Center static.
+    transform.Center = comp.Path()
     transform.Size = comp.BezierSpline()
     transform.Angle = comp.BezierSpline()
-    transform.Blend = comp.BezierSpline()
     center = transform.Center
     size = transform.Size
     angle = transform.Angle
-    opacity = transform.Blend
+    opacity = None
+    if outer:
+        outer.Blend = comp.BezierSpline()
+        opacity = outer.Blend
+    # Transform.Blend is the transform contribution, not card opacity. Keep it
+    # fully enabled; opacity belongs on the outer composite merge.
+    transform.Blend = 1.0
     for index, key in enumerate(keys):
-        frame = plan["keys"][index]["frame"]
+        frame = key["frame"]
         center[frame] = {1: 0.5 + key["x"], 2: 0.5 + key["y"], 3: 0.0}
         size[frame] = key["scale"]
         angle[frame] = key["rotation"]
-        opacity[frame] = key["opacity"]
+        if opacity is not None:
+            opacity[frame] = key["opacity"]
+    if opacity is not None and record.get("end_frame") is not None:
+        opacity[int(record["end_frame"])] = 0.0
     return True
 
 

@@ -94,6 +94,7 @@ def ping() -> dict[str, Any]:
     try:
         config = load_config()
         return {"ok": True, "bridge": "ARPHE_MCP_BRIDGE_CREATIVE_03", "mode": "CREATIVE_GATED",
+                "workstation_id": config.workstation_id,
                 "configured_feature_flags": config.flags, "arbitrary_execution": False}
     except Exception as exc:
         return _error(exc)
@@ -104,10 +105,11 @@ def resolve_status() -> dict[str, Any]:
     """Read the current Resolve context without modifying it."""
     with RESOLVE_ACCESS_LOCK:
         try:
-            resolve, _, project, timeline, _, _, error = _runtime()
+            resolve, _, project, timeline, config, _, error = _runtime()
             if error:
-                return error
-            result = {"ok": True, "resolve_version": safe_call(resolve, "GetVersionString") or safe_call(resolve, "GetVersion"),
+                return {**error, "workstation_id": config.workstation_id}
+            result = {"ok": True, "workstation_id": config.workstation_id,
+                      "resolve_version": safe_call(resolve, "GetVersionString") or safe_call(resolve, "GetVersion"),
                       "project_name": safe_call(project, "GetName") if project else None,
                       "timeline_name": safe_call(timeline, "GetName") if timeline else None,
                       "timeline_fps": safe_call(timeline, "GetSetting", "timelineFrameRate") if timeline else None,
@@ -128,7 +130,8 @@ def get_feature_flags() -> dict[str, Any]:
     with RESOLVE_ACCESS_LOCK:
         try:
             _, manager, project, timeline, config, _, error = _runtime()
-            return {"ok": True, "connection": error, "capabilities": feature_report(config, manager, project, timeline)}
+            return {"ok": True, "workstation_id": config.workstation_id,
+                    "connection": error, "capabilities": feature_report(config, manager, project, timeline)}
         except Exception as exc:
             return _error(exc)
 

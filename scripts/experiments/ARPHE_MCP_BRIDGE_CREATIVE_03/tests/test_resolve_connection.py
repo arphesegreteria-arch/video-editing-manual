@@ -68,7 +68,8 @@ class ResolveConnectionTests(unittest.TestCase):
                 raise RuntimeError("concurrent Resolve read")
             return value
 
-        runtime = (object(), object(), object(), None, object(), object(), None)
+        config = types.SimpleNamespace(workstation_id="PC_PERSONALE")
+        runtime = (object(), object(), object(), None, config, object(), None)
         start = threading.Barrier(3)
         results = []
 
@@ -91,6 +92,29 @@ class ResolveConnectionTests(unittest.TestCase):
 
         self.assertEqual(2, len(results))
         self.assertTrue(all(result.get("ok") is True for result in results), results)
+
+    def test_read_only_identity_tools_report_the_configured_workstation(self):
+        config = types.SimpleNamespace(workstation_id="PC_PERSONALE", flags={})
+        runtime = (object(), object(), None, None, config, object(), None)
+
+        with patch.object(server, "load_config", return_value=config), \
+             patch.object(server, "_runtime", return_value=runtime), \
+             patch.object(server, "safe_call", return_value="21.0.4.5"), \
+             patch.object(server, "feature_report", return_value={}):
+            results = (server.ping(), server.resolve_status(), server.get_feature_flags())
+
+        self.assertTrue(all(result["workstation_id"] == "PC_PERSONALE" for result in results), results)
+
+    def test_resolve_status_error_still_reports_the_configured_workstation(self):
+        config = types.SimpleNamespace(workstation_id="PC_PERSONALE")
+        connection_error = {"ok": False, "stage": "connect", "error": "Resolve non raggiungibile"}
+        runtime = (None, None, None, None, config, object(), connection_error)
+
+        with patch.object(server, "_runtime", return_value=runtime):
+            result = server.resolve_status()
+
+        self.assertEqual("PC_PERSONALE", result["workstation_id"])
+        self.assertEqual(connection_error["error"], result["error"])
 
 
 if __name__ == "__main__":

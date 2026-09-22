@@ -110,7 +110,9 @@ class SafetyTests(unittest.TestCase):
                 "runtime_id": "ARPHE_MCP_BRIDGE_CREATIVE_03",
                 "workstation_id": "PC_PERSONALE",
             }), encoding="utf-8")
-            self.assertEqual(path.resolve(), load_config(path).path)
+            config = load_config(path)
+            self.assertEqual(path.resolve(), config.path)
+            self.assertEqual("PC_PERSONALE", config.workstation_id)
 
     def test_config_rejects_unallowlisted_render_codec(self):
         with tempfile.TemporaryDirectory() as directory:

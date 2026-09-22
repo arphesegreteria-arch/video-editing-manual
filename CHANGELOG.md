@@ -2,6 +2,14 @@
 
 ## 2026-09-22 - Tunnel personale operativo e stato runtime per-workstation
 
+- Creata e connessa nell'area Business l'app `ARPHE Resolve Personale`, associata esclusivamente
+  al tunnel personale; l'app legacy resta invariata.
+- `ping`, `resolve_status` e `get_feature_flags` ora restituiscono `workstation_id`, cosi' una
+  verifica remota identifica senza ambiguita' la workstation che ha risposto.
+- Test end-to-end ChatGPT -> tunnel personale -> bridge -> Resolve superato in sola lettura:
+  `PC_PERSONALE`, Resolve `21.0.4.5`, progetto `New Project 4`, `ok=true`.
+- Suite Creative Bridge aggiornata: `59` test superati. La safe-write resta intenzionalmente
+  sospesa finche' non e' attiva una timeline di partenza nel progetto di test.
 - Creati tunnel e Runtime API key dedicati al PC personale; la key resta cifrata con DPAPI e ha
   soltanto `Tunnels Read + Use`.
 - Installato il runtime personale con Python `3.12.10` e venv dedicato; arrestato il vecchio

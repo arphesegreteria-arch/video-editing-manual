@@ -151,6 +151,38 @@ un'installazione normale avviata dalla PowerShell dell'utente i file sono creati
 contesto corretto; in una sessione remota isolata può essere necessario materializzarli tramite un
 processo eseguito come quell'utente.
 
+### App ChatGPT e verifica end-to-end
+
+Nell'area Business `ARPHE' POLIAMBULATORI` e' stata creata l'app `ARPHE Resolve Personale`,
+collegata esclusivamente a `ARPHE-RESOLVE-PERSONALE`. L'app precedente
+`ARPHE Resolve Creative 03` non e' stata modificata o rimossa.
+
+Il primo test remoto read-only ha raggiunto correttamente Resolve `21.0.4.5`, il progetto
+`New Project 4` e le capability previste, ma ha mostrato una lacuna diagnostica: la config validava
+`workstation_id` senza conservarlo nell'oggetto runtime, quindi gli strumenti read-only non
+potevano restituirlo.
+
+La correzione conserva l'identita' caricata dalla config e la include in:
+
+- `ping`;
+- `resolve_status`;
+- `get_feature_flags`.
+
+La suite aggiornata contiene `59` test verdi. Dopo il deployment limitato al solo runtime
+`PC_PERSONALE`, un nuovo `ping` inviato da ChatGPT ha restituito:
+
+- `ok: true`;
+- `workstation_id: PC_PERSONALE`;
+- nessuna modifica a Resolve.
+
+La safe-write non e' stata eseguita perche' `New Project 4` non aveva una timeline corrente.
+`create_safe_working_timeline` richiede intenzionalmente una timeline attiva da ripristinare alla
+fine del test. Non aggirare questo preflight: aprire o creare esplicitamente una timeline di prova,
+poi ripetere il gate di scrittura innocua.
+
+Sul PC di segreteria non e' stato distribuito alcun file e non e' stato modificato alcun task,
+tunnel, segreto o profilo locale.
+
 ## Riferimento ufficiale
 
 Il funzionamento del client, che esegue long-polling, preleva richieste MCP in coda e le inoltra al

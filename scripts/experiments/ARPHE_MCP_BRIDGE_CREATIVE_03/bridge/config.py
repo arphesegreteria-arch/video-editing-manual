@@ -62,6 +62,7 @@ class CreativeConfig:
     transcript_root: Path = Path(".")
     audio_root: Path = Path(".")
     audio_jobs_root: Path = Path(".")
+    workstation_id: str = "PC_UNSPECIFIED"
 
 
 def _path(value: str, base: Path) -> Path:
@@ -119,4 +120,5 @@ def load_config(path: Path | None = None) -> CreativeConfig:
                          Path(os.environ.get("LOCALAPPDATA", str(base))) / "ARPHE" / "Longform04" / "audio"),
         audio_jobs_root=_path(str(raw.get("audio_jobs_root", "")),
                               Path(os.environ.get("LOCALAPPDATA", str(base))) / "ARPHE" / "Longform04" / "audio_jobs"),
+        workstation_id=str(raw["workstation_id"]),
     )

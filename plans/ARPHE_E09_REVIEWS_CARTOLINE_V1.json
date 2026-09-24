@@ -20,13 +20,13 @@
     "entry_direction": "left",
     "exit_direction": "right",
     "stagger_frames": 10,
-    "card_duration_frames": "automatic_reading_time_4_to_7_seconds",
+    "card_duration_frames": "automatic_reading_time_3_to_5_seconds",
     "total_duration_frames": 0,
     "entry_duration_frames": 8,
     "motion_settle": false,
-    "intro": {"headline": "Dicono di noi", "text": "su MioDottore", "duration_frames": 120},
+    "intro": {"headline": "Dicono di noi", "text": "su MioDottore", "duration_frames": 90},
     "review_labels": "none",
-    "transition_note": "Entrate singole laterali, senza rotazione/overshoot dello stack; oltre 150 frame il bridge crea automaticamente un Fusion Clip su carrier tecnico interno, fino a 9.000 frame. Con durata 0, ogni recensione riceve 4-7 secondi in base al testo e la CTA finale almeno 4 secondi."
+    "transition_note": "Entrate singole laterali, senza rotazione/overshoot dello stack; oltre 150 frame il bridge crea automaticamente un Fusion Clip su carrier tecnico interno, fino a 9.000 frame. Con durata 0, ogni recensione riceve 3-5 secondi in base al testo e la CTA finale almeno 4 secondi. L'intro è un pannello editoriale ivory/cream/burgundy, non una semplice slide testuale."
   },
   "reviews": [
     {
@@ -72,5 +72,5 @@
   ],
   "cta": {"headline": "Scopri Arphè", "text": "Prenota la tua visita", "url": "https://www.miodottore.it/strutture/arphe-poliambulatorio-3"},
   "writes_allowed": false,
-  "notes": "La versione definitiva applicata in Resolve è ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V4 / ARPHE_COMP_D17B59294D. Usa il kit canonico (ivory, cream, beige, burgundy e dark brown), intro di 120 frame con ‘Dicono di noi’ / ‘su MioDottore’, cinque card anonime senza medico né ‘Paziente verificato’, carrier interno e durata automatica 4-7 secondi per card, più CTA in coda. Durata totale: 1020 frame / 34 secondi. Le catture di intro, card centrali e frame finale CTA sono state verificate."
+  "notes": "La V4 precedente è ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V4 / ARPHE_COMP_D17B59294D. La variante snella verificata in Resolve è ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V5 / ARPHE_COMP_67E8864064: usa il kit canonico (ivory, cream, beige, burgundy e dark brown), intro editoriale di 90 frame con ‘Dicono di noi’ / ‘su MioDottore’, cinque card anonime senza medico né ‘Paziente verificato’, carrier interno e durata automatica 3-5 secondi per card, più CTA in coda. Durata totale: 810 frame / 27 secondi; catture di intro, due card e CTA verificate."
 }

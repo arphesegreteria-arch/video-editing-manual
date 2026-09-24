@@ -47,13 +47,13 @@ def _review_reading_frames(review: dict[str, Any]) -> int:
     """Return a comfortable on-screen duration for one review.
 
     This is deliberately a conservative reading-time estimate, rather than a
-    fixed card length: four seconds is the floor for a very short review, with
+    fixed card length: three seconds is the floor for a very short review, with
     a short extra beat for an entry and a final pause.  A cap protects the
     sequence from an accidentally pasted essay.
     """
     words = len(str(review.get("text") or "").split())
-    reading_seconds = words / 4.5  # concise, still comfortable on-screen pace
-    seconds = max(4, min(7, int(reading_seconds + 1.999)))
+    reading_seconds = words / 5.5  # brisk, but still readable on a full-HD card
+    seconds = max(3, min(5, int(reading_seconds + 1.999)))
     return seconds * 30
 
 
@@ -79,7 +79,7 @@ def _cta_duration_frames(cta: dict[str, Any]) -> int:
 
 def _intro_duration_frames(_intro: dict[str, Any]) -> int:
     """Keep a concise, recognisable opening card before the reviews."""
-    return 120
+    return 90
 
 
 def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
@@ -428,17 +428,41 @@ def add_end_card(project: Any, timeline: Any, config: CreativeConfig, registry: 
 def add_intro_card(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
                    composition_id: str, headline: str, subheading: str, start_frame: int,
                    end_frame: int) -> dict:
-    """Add an ARPHÈ ivory opening card using only the canonical kit palette."""
+    """Add a layered ARPHÈ opening card using only the canonical kit palette."""
     start, end = validate_frame_range(start_frame, end_frame)
     _, comp = find_composition(timeline, registry, composition_id)
     element_id = _id("INTRO_CARD")
     background = _new_tool(comp, "Background", f"{element_id}_BG")
     _set_color(background, _rgb(config.palette["ivory"]))
-    heading = _text(comp, f"{element_id}_HEADLINE", headline, 0.075,
-                    _rgb(config.palette["burgundy"]), 0.55)
-    merged = _merge(comp, background, heading, f"{element_id}_HEADLINE_MERGE")
-    subheading_tool = _text(comp, f"{element_id}_SUBHEADING", subheading, 0.045,
-                            _rgb(config.palette["warm_brown"]), 0.43)
+    # A restrained editorial panel is more recognisable than a bare pair of
+    # lines: cream card, a slim burgundy rule and generous ivory negative space.
+    panel = _new_tool(comp, "Background", f"{element_id}_PANEL")
+    _set_color(panel, _rgb(config.palette["cream"]))
+    panel_mask = _new_tool(comp, "RectangleMask", f"{element_id}_PANEL_MASK")
+    _set(panel_mask, "Width", 0.58)
+    _set(panel_mask, "Height", 0.46)
+    _set(panel_mask, "CornerRadius", 0.07)
+    if not connect_input(panel, "EffectMask", panel_mask):
+        raise RuntimeError("Collegamento pannello intro fallito")
+    merged = _merge(comp, background, panel, f"{element_id}_PANEL_MERGE")
+    rule = _new_tool(comp, "Background", f"{element_id}_RULE")
+    _set_color(rule, _rgb(config.palette["burgundy"]))
+    rule_mask = _new_tool(comp, "RectangleMask", f"{element_id}_RULE_MASK")
+    _set(rule_mask, "Width", 0.008)
+    _set(rule_mask, "Height", 0.24)
+    _set(rule_mask, "Center", {1: 0.345, 2: 0.5, 3: 0.0})
+    if not connect_input(rule, "EffectMask", rule_mask):
+        raise RuntimeError("Collegamento accento intro fallito")
+    merged = _merge(comp, merged, rule, f"{element_id}_RULE_MERGE")
+    eyebrow = _text(comp, f"{element_id}_EYEBROW", "ARPHE  •  RECENSIONI", 0.021,
+                    _rgb(config.palette["warm_brown"]), 0.64, font="Open Sans", style="Bold")
+    merged = _merge(comp, merged, eyebrow, f"{element_id}_EYEBROW_MERGE")
+    heading = _text(comp, f"{element_id}_HEADLINE", headline, 0.085,
+                    _rgb(config.palette["burgundy"]), 0.525, font="Open Sans", style="Bold",
+                    layout_type=1.0, frame_width=0.42, frame_height=0.16)
+    merged = _merge(comp, merged, heading, f"{element_id}_HEADLINE_MERGE")
+    subheading_tool = _text(comp, f"{element_id}_SUBHEADING", subheading, 0.038,
+                            _rgb(config.palette["warm_brown"]), 0.385, font="Open Sans", style="Regular")
     merged = _merge(comp, merged, subheading_tool, f"{element_id}_SUBHEADING_MERGE")
     transform = _new_tool(comp, "Transform", f"{element_id}_TRANSFORM")
     if not connect_input(transform, "Input", merged):

@@ -69,7 +69,7 @@ interno `arphe_fusion_carrier_5m.mp4`: Resolve riceve prima un clip tecnico con 
 richiesta e poi un Fusion Clip sopra di esso. Il canvas ARPHÈ lo copre integralmente. La durata
 è quindi automatica fino a 9.000 frame (5 minuti a 30 fps), senza trim manuale in timeline.
 Per `create_review_sequence_v2`, `total_duration_frames: 0` (il valore predefinito) assegna a
-ciascuna card il proprio tempo di lettura: 4–7 secondi in base al testo e una breve
+ciascuna card il proprio tempo di lettura: 3–5 secondi in base al testo e una breve
 sovrapposizione fra le card. Le card non aggiungono un'etichetta se `small_label` viene
 omesso: è il comportamento raccomandato per recensioni anonime, senza medico o dicitura
 “Paziente verificato”. Gli oggetti opzionali `intro` e `cta` aggiungono rispettivamente

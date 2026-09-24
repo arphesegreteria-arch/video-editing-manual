@@ -19,7 +19,15 @@ if (-not $detectedWorkstation -and (Test-Path -LiteralPath $script:ArpheBaseData
 if (-not $detectedWorkstation) { $detectedWorkstation = 'PC_SEGRETERIA' }
 if ($detectedWorkstation -notmatch '^PC_[A-Z0-9_]{2,48}$') { throw "Invalid workstation id: $detectedWorkstation" }
 $script:ArpheWorkstationId = $detectedWorkstation
-$script:ArpheDataDir = Join-Path $script:ArpheBaseDataDir $script:ArpheWorkstationId
+$profileDataDir = Join-Path $script:ArpheBaseDataDir $script:ArpheWorkstationId
+# Backward compatibility: older validated installs kept the config directly under
+# WindowsBridgeRuntimeV1. Reuse that profile only when its identity matches; new
+# workstation profiles continue to use the isolated directory.
+$script:ArpheDataDir = $profileDataDir
+if (-not (Test-Path -LiteralPath (Join-Path $profileDataDir 'bridge_config.json') -PathType Leaf) -and
+    (Test-Path -LiteralPath $script:ArpheLegacyConfigPath -PathType Leaf)) {
+    $script:ArpheDataDir = $script:ArpheBaseDataDir
+}
 $script:ArpheConfigPath = Join-Path $script:ArpheDataDir 'bridge_config.json'
 $script:ArpheTaskName = "ARPHE Resolve Bridge Runtime V1 - $detectedWorkstation"
 $script:ArpheTaskPath = '\'

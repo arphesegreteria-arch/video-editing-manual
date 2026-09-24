@@ -6,7 +6,7 @@
     "policy": "testo originale; nessuna recensione inventata o riscritta"
   },
   "project_name": "ARPHE_E09_MIODOTTORE_REVIEWS_CARTOLINE_V1",
-  "timeline_name": "ARPHE_E09_REVIEWS_CARTOLINE_16X9_V1",
+  "timeline_name": "ARPHE_E09_REVIEWS_CARTOLINE_16X9_V3",
   "format": {"width": 1920, "height": 1080, "fps": 30},
   "design": {
     "style_role": "cream",
@@ -16,11 +16,15 @@
     "text_role": "dark_brown",
     "card_width": 0.78,
     "card_height": 0.34,
-    "transition": "ARPHE_PAPER_STACK",
+    "transition": "ARPHE_ELEGANT_REVEAL",
     "entry_direction": "left",
     "exit_direction": "right",
-    "stagger_frames": 12,
-    "card_duration_frames": 90
+    "stagger_frames": 90,
+    "card_duration_frames": 100,
+    "total_duration_frames": 480,
+    "entry_duration_frames": 8,
+    "motion_settle": false,
+    "transition_note": "Entrate singole laterali, senza rotazione/overshoot dello stack; la clip Fusion va estesa manualmente a 480 frame in Resolve perché l'API crea la timeline iniziale a 150 frame."
   },
   "reviews": [
     {
@@ -76,5 +80,5 @@
   ],
   "cta": {"headline": "Scopri Arphè", "text": "Prenota la tua visita", "url": "https://www.miodottore.it/strutture/arphe-poliambulatorio-3"},
   "writes_allowed": false,
-  "notes": "Piano preparatorio, non ancora applicato a Resolve."
+  "notes": "V3 applicata a Resolve come ARPHE_COMP_EDBE5399C6; cinque card su finestre 0-100, 90-190, 180-280, 270-370, 360-450 e CTA 450-480. La verifica cattura 0-149 mostra testo nitido e prima entrata stabile; resta da estendere manualmente la clip Fusion oltre i 150 frame."
 }

@@ -10,15 +10,15 @@ Ogni cartolina deve avere fondo cream, bordo/ombra beige molto leggeri, testo da
 
 ## Transizione “cartoline che scorrono”
 
-La sequenza è 16:9, 1920×1080, 30 fps. Una card occupa circa il 78% della larghezza e il 34% dell'altezza. Le card entrano da sinistra, restano leggibili, poi escono a destra; l'ingresso successivo è sfalsato di 12 frame. Il preset da usare è `ARPHE_PAPER_STACK`, con easing morbido e rotazione minima o nulla. La CTA finale resta più a lungo e non viene trattata come recensione.
+La sequenza è 16:9, 1920×1080, 30 fps. Una card occupa circa il 78% della larghezza e il 34% dell'altezza. La V3 lascia circa 100 frame (3,3 secondi) per recensione, con 10 frame di sovrapposizione tra card. Per evitare la sfocatura percepita nella prima entrata non usa più lo stack ruotato: applica ingressi singoli `ARPHE_ELEGANT_REVEAL`, da sinistra, di 8 frame, senza overshoot. La CTA finale occupa i frame 450–480.
 
 Prima applicazione prevista:
 
 1. creare progetto e timeline nuovi;
 2. creare le cinque card con `create_review_sequence_v2` oppure, se serve controllo singolo, `add_review_card`;
-3. applicare `animate_review_stack` con il preset cartolina;
+3. applicare `animate_card_entry` singolarmente con `ARPHE_ELEGANT_REVEAL`;
 4. aggiungere CTA in una finestra separata;
 5. catturare frame iniziali, intermedi e finali per verificare leggibilità, ordine e assenza di testo tagliato;
 6. solo dopo autorizzazione, salvare/renderizzare.
 
-Il primo tentativo è volutamente un test visivo. Non modifica timeline esistenti e non pubblica nulla.
+La V3 è stata applicata alla nuova timeline `ARPHE_E09_REVIEWS_CARTOLINE_16X9_V3` e alla composition `ARPHE_COMP_EDBE5399C6`; i frame catturati nella finestra 0–149 risultano nitidi e leggibili. Resolve crea però la clip Fusion iniziale a 150 frame: prima della verifica completa occorre estenderne manualmente il bordo destro a 480 frame (16 secondi), senza salvare o renderizzare.

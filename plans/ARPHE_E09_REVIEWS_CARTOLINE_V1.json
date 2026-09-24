@@ -6,7 +6,7 @@
     "policy": "testo originale; nessuna recensione inventata o riscritta"
   },
   "project_name": "ARPHE_E09_MIODOTTORE_REVIEWS_CARTOLINE_V1",
-  "timeline_name": "ARPHE_E09_REVIEWS_CARTOLINE_16X9_V3",
+  "timeline_name": "ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V4",
   "format": {"width": 1920, "height": 1080, "fps": 30},
   "design": {
     "style_role": "cream",
@@ -24,14 +24,14 @@
     "total_duration_frames": 0,
     "entry_duration_frames": 8,
     "motion_settle": false,
+    "intro": {"headline": "Dicono di noi", "text": "su MioDottore", "duration_frames": 120},
+    "review_labels": "none",
     "transition_note": "Entrate singole laterali, senza rotazione/overshoot dello stack; oltre 150 frame il bridge crea automaticamente un Fusion Clip su carrier tecnico interno, fino a 9.000 frame. Con durata 0, ogni recensione riceve 4-7 secondi in base al testo e la CTA finale almeno 4 secondi."
   },
   "reviews": [
     {
       "id": "review_lucchini_trattamento_2026_09_01",
       "category": "medicina_estetica_dottore",
-      "author_display": "Paziente verificato",
-      "doctor": "Dott. Alessandro Lucchini",
       "date": "2026-09-01",
       "service": "prima visita di medicina estetica",
       "stars": 5,
@@ -40,8 +40,6 @@
     {
       "id": "review_lucchini_professionalita_2026_05_14",
       "category": "medicina_estetica_dottore",
-      "author_display": "Paziente verificato",
-      "doctor": "Dott. Alessandro Lucchini",
       "date": "2026-05-14",
       "service": "prima visita di medicina estetica",
       "stars": 5,
@@ -50,8 +48,6 @@
     {
       "id": "review_ambiente_staff_2026_06_05",
       "category": "ambiente_personale",
-      "author_display": "Paziente verificato",
-      "doctor": "Arphè Poliambulatorio",
       "date": "2026-06-05",
       "service": "Altro",
       "stars": 5,
@@ -60,8 +56,6 @@
     {
       "id": "review_ambiente_atmosfera_2026_04_13",
       "category": "ambiente",
-      "author_display": "Paziente verificato",
-      "doctor": "Arphè Poliambulatorio",
       "date": "2026-04-13",
       "service": "Altro",
       "stars": 5,
@@ -70,8 +64,6 @@
     {
       "id": "review_personale_prenotazione_2026_09_21",
       "category": "personale_organizzazione",
-      "author_display": "Paziente verificato",
-      "doctor": "Arphè Poliambulatorio",
       "date": "2026-09-21",
       "service": "certificato medico sportivo agonistico",
       "stars": 5,
@@ -80,5 +72,5 @@
   ],
   "cta": {"headline": "Scopri Arphè", "text": "Prenota la tua visita", "url": "https://www.miodottore.it/strutture/arphe-poliambulatorio-3"},
   "writes_allowed": false,
-  "notes": "V3 applicata a Resolve come ARPHE_COMP_EDBE5399C6; cinque card su finestre 0-100, 90-190, 180-280, 270-370, 360-450 e CTA 450-480. La verifica cattura 0-149 mostra testo nitido e prima entrata stabile. La revisione definitiva applicata come ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V2 / ARPHE_COMP_D6DF3D5AB4 usa il kit canonico (ivory, cream, beige, burgundy e dark brown), carrier interno e durata automatica 4-7 secondi per card, più CTA in coda: 900 frame / 30 secondi totali. Il frame finale della CTA è verificato."
+  "notes": "La versione definitiva applicata in Resolve è ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V4 / ARPHE_COMP_D17B59294D. Usa il kit canonico (ivory, cream, beige, burgundy e dark brown), intro di 120 frame con ‘Dicono di noi’ / ‘su MioDottore’, cinque card anonime senza medico né ‘Paziente verificato’, carrier interno e durata automatica 4-7 secondi per card, più CTA in coda. Durata totale: 1020 frame / 34 secondi. Le catture di intro, card centrali e frame finale CTA sono state verificate."
 }

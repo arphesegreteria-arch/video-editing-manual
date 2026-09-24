@@ -77,10 +77,16 @@ def _cta_duration_frames(cta: dict[str, Any]) -> int:
     return max(120, min(180, int(words / 4.5 + 1.999) * 30))
 
 
+def _intro_duration_frames(_intro: dict[str, Any]) -> int:
+    """Keep a concise, recognisable opening card before the reviews."""
+    return 120
+
+
 def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
                            name: str, reviews: list[dict[str, Any]],
                            total_duration_frames: int = 0,
-                           style_role: str = "cream", cta: dict[str, Any] | None = None) -> dict:
+                           style_role: str = "cream", cta: dict[str, Any] | None = None,
+                           intro: dict[str, Any] | None = None) -> dict:
     """Create a gap-free review sequence inside one Fusion composition.
 
     Pass ``0`` (the default) to let the bridge derive every card's time on
@@ -100,6 +106,13 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
             raise ValidationError("cta.headline richiesto")
         if not isinstance(cta.get("text"), str) or not cta["text"].strip():
             raise ValidationError("cta.text richiesto")
+    if intro is not None:
+        if not isinstance(intro, dict):
+            raise ValidationError("intro deve essere un oggetto")
+        if not isinstance(intro.get("headline"), str) or not intro["headline"].strip():
+            raise ValidationError("intro.headline richiesto")
+        if not isinstance(intro.get("text"), str) or not intro["text"].strip():
+            raise ValidationError("intro.text richiesto")
     if (isinstance(total_duration_frames, bool)
             or not isinstance(total_duration_frames, int)
             or not 0 <= total_duration_frames <= MAX_AUTOMATIC_FUSION_FRAMES):
@@ -109,19 +122,25 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
     automatic_duration = total_duration_frames == 0
     if automatic_duration:
         windows, review_duration_frames = _automatic_sequence_windows(reviews)
+        intro_duration_frames = _intro_duration_frames(intro) if intro else 0
+        windows = [(start + intro_duration_frames, end + intro_duration_frames)
+                   for start, end in windows]
         cta_duration_frames = _cta_duration_frames(cta) if cta else 0
-        total_duration_frames = review_duration_frames + cta_duration_frames
+        total_duration_frames = intro_duration_frames + review_duration_frames + cta_duration_frames
     elif total_duration_frames < len(reviews):
         raise ValidationError(
             f"total_duration_frames deve essere almeno il numero di card ({len(reviews)})"
         )
     else:
+        intro_duration_frames = _intro_duration_frames(intro) if intro else 0
         cta_duration_frames = _cta_duration_frames(cta) if cta else 0
-        review_duration_frames = total_duration_frames - cta_duration_frames
+        review_duration_frames = total_duration_frames - intro_duration_frames - cta_duration_frames
         if review_duration_frames < len(reviews):
             raise ValidationError("Durata insufficiente dopo aver riservato la CTA")
         transition_overlap_frames = min(10, max(0, review_duration_frames // len(reviews) - 1))
-        windows = _sequence_windows(len(reviews), review_duration_frames, transition_overlap_frames)
+        windows = [(start + intro_duration_frames, end + intro_duration_frames)
+                   for start, end in _sequence_windows(len(reviews), review_duration_frames,
+                                                       transition_overlap_frames)]
     validate_color_role(style_role)
     timeline_name = str(safe_call(timeline, "GetName") or "")
     if not timeline_name.startswith("ARPHE_"):
@@ -137,6 +156,11 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
         return {"ok": False, "action": "create_review_sequence",
                 "stage": "background", "composition_id": composition_id,
                 "background": background}
+    intro_result = None
+    if intro:
+        intro_result = add_intro_card(project, timeline, config, registry, composition_id,
+                                      intro["headline"], intro["text"], 0,
+                                      intro_duration_frames)
 
     # Windows cover the whole composition.  Automatic mode uses independent
     # reading times; explicit mode preserves the fixed-duration contract.
@@ -145,7 +169,7 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
     for index, review in enumerate(reviews):
         text = review.get("text")
         stars = review.get("stars", 5)
-        label = review.get("small_label", "Recensione")
+        label = review.get("small_label")
         start, end = windows[index]
         card = add_review_card(project, timeline, config, registry, composition_id,
                                text, stars, start, end, style_role,
@@ -159,9 +183,10 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
         # tick so the final exported frame stays branded rather than flashing
         # back to the ivory carrier.
         cta_result = add_end_card(project, timeline, config, registry, composition_id,
-                                  cta["headline"], cta["text"], review_duration_frames,
+                                  cta["headline"], cta["text"], intro_duration_frames + review_duration_frames,
                                   total_duration_frames + 1, cta.get("style_role", "burgundy"))
-        cta_result["timeline_frame_range"] = [review_duration_frames, total_duration_frames]
+        cta_result["timeline_frame_range"] = [intro_duration_frames + review_duration_frames,
+                                                 total_duration_frames]
     return {"ok": True, "action": "create_review_sequence", "timeline": timeline_name,
             "composition_id": composition_id,
             "timeline_item": composition.get("timeline_item"),
@@ -170,6 +195,7 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
             "transition_overlap_frames": transition_overlap_frames,
             "duration_mode": "automatic_reading_time" if automatic_duration else "fixed_total",
             "maximum_automatic_duration_frames": MAX_AUTOMATIC_FUSION_FRAMES,
+            "intro": intro_result,
             "cta": cta_result,
             "status": "PENDING"}
 
@@ -399,6 +425,35 @@ def add_end_card(project: Any, timeline: Any, config: CreativeConfig, registry: 
             "frame_range": [start, end], "timing_applied": timing_applied, "status": "PENDING"}
 
 
+def add_intro_card(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
+                   composition_id: str, headline: str, subheading: str, start_frame: int,
+                   end_frame: int) -> dict:
+    """Add an ARPHÈ ivory opening card using only the canonical kit palette."""
+    start, end = validate_frame_range(start_frame, end_frame)
+    _, comp = find_composition(timeline, registry, composition_id)
+    element_id = _id("INTRO_CARD")
+    background = _new_tool(comp, "Background", f"{element_id}_BG")
+    _set_color(background, _rgb(config.palette["ivory"]))
+    heading = _text(comp, f"{element_id}_HEADLINE", headline, 0.075,
+                    _rgb(config.palette["burgundy"]), 0.55)
+    merged = _merge(comp, background, heading, f"{element_id}_HEADLINE_MERGE")
+    subheading_tool = _text(comp, f"{element_id}_SUBHEADING", subheading, 0.045,
+                            _rgb(config.palette["warm_brown"]), 0.43)
+    merged = _merge(comp, merged, subheading_tool, f"{element_id}_SUBHEADING_MERGE")
+    transform = _new_tool(comp, "Transform", f"{element_id}_TRANSFORM")
+    if not connect_input(transform, "Input", merged):
+        raise RuntimeError("Collegamento intro al Transform fallito")
+    outer_name = f"{element_id}_OUTER_MERGE"
+    outer = add_layer(comp, transform, outer_name)
+    timing_applied = set_visibility_window(comp, outer, start, end)
+    registry.add_element(element_id, {"kind": "intro_card", "composition_id": composition_id,
+                                      "transform_name": f"{element_id}_TRANSFORM",
+                                      "outer_merge_name": outer_name if outer else None,
+                                      "start_frame": start, "end_frame": end})
+    return {"ok": True, "action": "add_intro_card", "element_id": element_id,
+            "frame_range": [start, end], "timing_applied": timing_applied, "status": "PENDING"}
+
+
 def _animate(comp: Any, record: dict, plan: dict, reverse: bool = False) -> bool:
     transform = safe_call(comp, "FindTool", record.get("transform_name"))
     if not transform:
@@ -430,7 +485,18 @@ def _animate(comp: Any, record: dict, plan: dict, reverse: bool = False) -> bool
         if opacity is not None:
             opacity[frame] = key["opacity"]
     if opacity is not None and record.get("end_frame") is not None:
-        opacity[int(record["end_frame"])] = 0.0
+        # Motion and visibility must share one Blend spline.  Replacing the
+        # visibility spline with only the two entry keys makes Fusion ease the
+        # card back towards zero for its whole lifetime.  Explicit zero/hold
+        # keys preserve a crisp card after the entrance through its final
+        # visible frame.
+        start_frame = int(record.get("start_frame") or 0)
+        end_frame = int(record["end_frame"])
+        if start_frame > 0:
+            opacity[0] = 0.0
+            opacity[start_frame - 1] = 0.0
+        opacity[max(start_frame, end_frame - 1)] = 1.0
+        opacity[end_frame] = 0.0
     return True
 
 

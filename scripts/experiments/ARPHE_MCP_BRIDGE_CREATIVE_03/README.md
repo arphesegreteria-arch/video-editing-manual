@@ -70,8 +70,11 @@ richiesta e poi un Fusion Clip sopra di esso. Il canvas ARPHÈ lo copre integral
 è quindi automatica fino a 9.000 frame (5 minuti a 30 fps), senza trim manuale in timeline.
 Per `create_review_sequence_v2`, `total_duration_frames: 0` (il valore predefinito) assegna a
 ciascuna card il proprio tempo di lettura: 4–7 secondi in base al testo e una breve
-sovrapposizione fra le card. L'oggetto opzionale `cta` aggiunge in coda una end-card ARPHÈ
-burgundy di almeno quattro secondi, senza estendere manualmente la timeline.
+sovrapposizione fra le card. Le card non aggiungono un'etichetta se `small_label` viene
+omesso: è il comportamento raccomandato per recensioni anonime, senza medico o dicitura
+“Paziente verificato”. Gli oggetti opzionali `intro` e `cta` aggiungono rispettivamente
+un'apertura (per esempio `Dicono di noi` / `su MioDottore`) e una end-card ARPHÈ burgundy
+di almeno quattro secondi, senza estendere manualmente la timeline.
 
 Pubblicazione UI: **35 AZIONI CONFERMATE** il 2026-09-15, incluse le cinque primitive longform.
 Il runtime reale espone `CAP_LONGFORM=true` ed è stato verificato con `/readyz` HTTP 200, `ping` e

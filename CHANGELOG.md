@@ -35,6 +35,16 @@
   separati, un tunnel e una Runtime API key per workstation.
 - Aggiunti il runbook dell'incidente e il design dei profili multi-workstation.
 
+## 2026-09-24 — Piano E09 recensioni originali e transizioni cartolina
+
+- Selezionate cinque recensioni pubblicate da MioDottore: due di medicina estetica e tre su
+  ambiente, personale e organizzazione.
+- Aggiunto il piano non distruttivo `ARPHE_E09_REVIEWS_CARTOLINE_V1` con CTA, palette ARPHÈ,
+  formato 16:9 e preset `ARPHE_PAPER_STACK`.
+- Documentata la sequenza di verifica frame-by-frame prima di qualsiasi salvataggio/render.
+- Formalizzati nel workflow i parametri numerici dei tre preset di mixaggio long-form come baseline
+  modificabile: passa-alto, denoise, EQ presenza, dynaudnorm, compressore e limiter.
+
 ## 2026-09-18 — Pacchetto portabile per PC personale
 
 - Rimossi i vincoli applicativi che limitavano runtime Windows e Creative Bridge a

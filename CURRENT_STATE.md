@@ -13,6 +13,14 @@ differenti sullo stesso tunnel.
 Fino alla separazione dei tunnel non eseguire write remote. Vedere
 `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md`.
 
+## E09 — prossimo test recensioni
+
+Il piano `plans/ARPHE_E09_REVIEWS_CARTOLINE_V1.json` contiene cinque recensioni originali
+MioDottore e una CTA finale. Il test userà `ARPHE_PAPER_STACK` su una timeline nuova 1920×1080/30;
+non è ancora stato applicato perché il runtime corrente segnala Fusion/Review/Motion non
+tecnicamente disponibili. Audio long-form e standard di mixaggio restano quelli documentati in
+`docs/04_LONGFORM_WORKFLOW.md` e nel Creative Bridge README.
+
 ## Obiettivo del progetto
 
 Automatizzare il montaggio video in DaVinci Resolve Studio con **ChatGPT come interfaccia primaria per la segreteria**.

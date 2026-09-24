@@ -1,0 +1,80 @@
+{
+  "plan_id": "ARPHE_E09_REVIEWS_CARTOLINE_V1",
+  "source": {
+    "url": "https://www.miodottore.it/strutture/arphe-poliambulatorio-3",
+    "retrieved": "2026-09-24",
+    "policy": "testo originale; nessuna recensione inventata o riscritta"
+  },
+  "project_name": "ARPHE_E09_MIODOTTORE_REVIEWS_CARTOLINE_V1",
+  "timeline_name": "ARPHE_E09_REVIEWS_CARTOLINE_16X9_V1",
+  "format": {"width": 1920, "height": 1080, "fps": 30},
+  "design": {
+    "style_role": "cream",
+    "canvas_role": "ivory",
+    "card_role": "cream",
+    "accent_role": "burgundy",
+    "text_role": "dark_brown",
+    "card_width": 0.78,
+    "card_height": 0.34,
+    "transition": "ARPHE_PAPER_STACK",
+    "entry_direction": "left",
+    "exit_direction": "right",
+    "stagger_frames": 12,
+    "card_duration_frames": 90
+  },
+  "reviews": [
+    {
+      "id": "review_lucchini_trattamento_2026_09_01",
+      "category": "medicina_estetica_dottore",
+      "author_display": "Paziente verificato",
+      "doctor": "Dott. Alessandro Lucchini",
+      "date": "2026-09-01",
+      "service": "prima visita di medicina estetica",
+      "stars": 5,
+      "text": "Specialista cordiale e professionale.Spiegazione del trattamento che volevo informazioni ,molto dettagliato"
+    },
+    {
+      "id": "review_saiglia_laser_2026_09_22",
+      "category": "medicina_estetica_dottore",
+      "author_display": "Paziente verificato",
+      "doctor": "Dott. Simone Saiglia",
+      "date": "2026-09-22",
+      "service": "prima visita di medicina estetica",
+      "stars": 5,
+      "text": "Ieri ho fatto il primo trattamento di laser vascolare per capillari gambe con il Dottor Simone Saiglia e mi sono trovata molto bene. Il Dottore è molto professionale, preparato e attento. Mi ha spiegato sia come si sarebbe svolto il trattamento sia tutte le indicazioni da seguire dopo la seduta. Il trattamento non è proprio indolore ma il Dottor Saiglia è una persona molto simpatica e rassicurante e riesce a metterti a tuo agio. Sono soddisfatta di questa prima esperienza e sicuramente continuerò il percorso con Lui. Mi sono sentita davvero in ottime mani e lo consiglio assolutamente ."
+    },
+    {
+      "id": "review_ambiente_staff_2026_06_05",
+      "category": "ambiente_personale",
+      "author_display": "Paziente verificato",
+      "doctor": "Arphè Poliambulatorio",
+      "date": "2026-06-05",
+      "service": "Altro",
+      "stars": 5,
+      "text": "Esperienza positiva dall'inizio alla fine. Staff gentile, tempi rispettati e visita fatta con attenzione. Lo consiglio!"
+    },
+    {
+      "id": "review_ambiente_atmosfera_2026_04_13",
+      "category": "ambiente",
+      "author_display": "Paziente verificato",
+      "doctor": "Arphè Poliambulatorio",
+      "date": "2026-04-13",
+      "service": "Altro",
+      "stars": 5,
+      "text": "Super competenti e cordiali. Ambiente molto curato e ottima atmosfera"
+    },
+    {
+      "id": "review_personale_prenotazione_2026_09_21",
+      "category": "personale_organizzazione",
+      "author_display": "Paziente verificato",
+      "doctor": "Arphè Poliambulatorio",
+      "date": "2026-09-21",
+      "service": "certificato medico sportivo agonistico",
+      "stars": 5,
+      "text": "Tutto perfetto, prenotazione facile di visita medica agonistica, orario di appuntamento rispettato, personale dello Studio gentile che ti mette a proprio agio."
+    }
+  ],
+  "cta": {"headline": "Scopri Arphè", "text": "Prenota la tua visita", "url": "https://www.miodottore.it/strutture/arphe-poliambulatorio-3"},
+  "writes_allowed": false,
+  "notes": "Piano preparatorio, non ancora applicato a Resolve."
+}

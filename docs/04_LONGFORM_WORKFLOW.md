@@ -171,6 +171,25 @@ Il bridge espone tre preset distinti:
 - `ARPHE_DIALOGUE_LEVEL_V2`: livellamento dinamico per differenze moderate;
 - `ARPHE_DIALOGUE_DISTANT_V3`: recupero più deciso con denoise, presenza, livellamento e limiter.
 
+### Parametri standard di mixaggio (baseline 2026-09)
+
+Questi valori sono lo standard operativo attuale, non un vincolo artistico definitivo:
+
+- tutti i preset: passa-alto a `80 Hz`, conversione a PCM `s16`, stereo `48 kHz`;
+- `CLEAN_V1`: `afftdn nr=8`, noise floor `-50 dB`, compressore soglia `0.125`, ratio `3:1`,
+  attack `15 ms`, release `150 ms`, makeup `1.4`, limiter `0.891` (circa `-1 dB`);
+- `LEVEL_V2`: `afftdn nr=8`, `dynaudnorm f=400:g=21:p=0.85:m=4:r=0.12:s=6:t=0.01:o=0.5`,
+  compressore soglia `0.125`, ratio `2:1`, attack `15 ms`, release `150 ms`, makeup `1.1`,
+  limiter `0.891`;
+- `DISTANT_V3`: `afftdn nr=14`, noise floor `-48 dB`, EQ presenza `3.2 kHz`, Q `1.2`, gain `+3 dB`,
+  `dynaudnorm f=300:g=15:p=0.82:m=8:r=0.16:s=8:t=0.008:o=0.5`, compressore soglia `0.10`,
+  ratio `2.5:1`, attack `10 ms`, release `180 ms`, makeup `1.15`, boost `+6 dB`, limiter `0.8`.
+
+La normalizzazione deve essere applicata all'intera sorgente prima dei tagli; il controllo umano
+decide se il recupero V3 solleva troppo ambiente o riverbero. Questi parametri sono centralizzati in
+`scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03/bridge/audio_worker.py` e sono modificabili dopo
+un confronto A/B documentato.
+
 Il confronto in Resolve ha confermato che V3 rende la voce distante più leggibile, ma non ricrea il
 segnale mancante. Un test basato sui singoli turni ha sollevato eccessivamente ambiente e riverbero
 ed è stato scartato. Per registrazioni future servono microfoni separati o un mixer; in postproduzione

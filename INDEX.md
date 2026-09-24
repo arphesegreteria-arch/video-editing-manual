@@ -16,6 +16,7 @@
 | `docs/13_DIAGNOSTICS_AND_BACKUP.md` | **Accesso visuale frame-by-frame e backup verificabile** |
 | `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` | **Installazione completa e sicura sul PC personale** |
 | `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md` | **Regola di isolamento PC, incidente tunnel del 2026-09-21 e recupero** |
+| `docs/15_E09_REVIEWS_CARTOLINE.md` | **Cinque recensioni originali e transizione cartoline** |
 | `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
 | `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 | `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |

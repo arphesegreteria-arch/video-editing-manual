@@ -5,7 +5,7 @@ from typing import Any
 from .config import CreativeConfig
 from .feature_flags import require_capability
 from .fusion_tools import (_id, _new_tool, _rgb, _set, _set_color, add_layer,
-                           add_background, connect_input, create_composition,
+                           MAX_AUTOMATIC_FUSION_FRAMES, add_background, connect_input, create_composition,
                            find_composition, set_visibility_window)
 from .motion_presets import motion_plan, stack_plan
 from .registry import Registry
@@ -43,19 +43,64 @@ def _sequence_windows(card_count: int, total_duration_frames: int,
     ]
 
 
+def _review_reading_frames(review: dict[str, Any]) -> int:
+    """Return a comfortable on-screen duration for one review.
+
+    This is deliberately a conservative reading-time estimate, rather than a
+    fixed card length: six seconds is the floor for a very short review, with
+    a little extra time for an entry and a final pause.  A cap protects the
+    sequence from an accidentally pasted essay.
+    """
+    words = len(str(review.get("text") or "").split())
+    reading_seconds = words / 2.5  # relaxed Italian on-screen reading pace
+    seconds = max(6, min(40, int(reading_seconds + 3.999)))
+    return seconds * 30
+
+
+def _automatic_sequence_windows(reviews: list[dict[str, Any]],
+                                transition_overlap_frames: int = 10) -> tuple[list[tuple[int, int]], int]:
+    """Allocate individual card windows from their actual reading times."""
+    base_durations = [_review_reading_frames(review) for review in reviews]
+    windows: list[tuple[int, int]] = []
+    cursor = 0
+    for index, duration in enumerate(base_durations):
+        end = cursor + duration
+        visible_end = end + (transition_overlap_frames if index < len(reviews) - 1 else 0)
+        windows.append((cursor, visible_end))
+        cursor = end
+    return windows, cursor
+
+
 def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
                            name: str, reviews: list[dict[str, Any]],
-                           total_duration_frames: int = 150,
+                           total_duration_frames: int = 0,
                            style_role: str = "cream") -> dict:
-    """Create a gap-free review sequence inside one Fusion composition."""
+    """Create a gap-free review sequence inside one Fusion composition.
+
+    Pass ``0`` (the default) to let the bridge derive every card's time on
+    screen from its text.  A positive value remains available for a deliberate
+    fixed-duration edit.
+    """
     require_capability("CAP_REVIEW", config, None, project, timeline)
     require_capability("CAP_FUSION", config, None, project, timeline)
     if not isinstance(reviews, list) or not 1 <= len(reviews) <= 8:
         raise ValidationError("reviews deve contenere 1-8 card")
     if (isinstance(total_duration_frames, bool)
             or not isinstance(total_duration_frames, int)
-            or not len(reviews) <= total_duration_frames <= 150):
-        raise ValidationError("total_duration_frames deve essere tra il numero di card e 150")
+            or not 0 <= total_duration_frames <= MAX_AUTOMATIC_FUSION_FRAMES):
+        raise ValidationError(
+            f"total_duration_frames deve essere 0 (automatico) oppure tra il numero di card e {MAX_AUTOMATIC_FUSION_FRAMES}"
+        )
+    automatic_duration = total_duration_frames == 0
+    if automatic_duration:
+        windows, total_duration_frames = _automatic_sequence_windows(reviews)
+    elif total_duration_frames < len(reviews):
+        raise ValidationError(
+            f"total_duration_frames deve essere almeno il numero di card ({len(reviews)})"
+        )
+    else:
+        transition_overlap_frames = min(10, max(0, total_duration_frames // len(reviews) - 1))
+        windows = _sequence_windows(len(reviews), total_duration_frames, transition_overlap_frames)
     validate_color_role(style_role)
     timeline_name = str(safe_call(timeline, "GetName") or "")
     if not timeline_name.startswith("ARPHE_"):
@@ -72,10 +117,9 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
                 "stage": "background", "composition_id": composition_id,
                 "background": background}
 
-    # Integer boundaries cover [0, total_duration_frames) exactly, including
-    # durations that are not divisible by the number of reviews.
+    # Windows cover the whole composition.  Automatic mode uses independent
+    # reading times; explicit mode preserves the fixed-duration contract.
     transition_overlap_frames = min(10, max(0, total_duration_frames // len(reviews) - 1))
-    windows = _sequence_windows(len(reviews), total_duration_frames, transition_overlap_frames)
     results: list[dict[str, Any]] = []
     for index, review in enumerate(reviews):
         if not isinstance(review, dict):
@@ -95,6 +139,8 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
             "cards": results, "total_duration_frames": total_duration_frames,
             "coverage": [0, total_duration_frames], "gap_free": True,
             "transition_overlap_frames": transition_overlap_frames,
+            "duration_mode": "automatic_reading_time" if automatic_duration else "fixed_total",
+            "maximum_automatic_duration_frames": MAX_AUTOMATIC_FUSION_FRAMES,
             "status": "PENDING"}
 
 

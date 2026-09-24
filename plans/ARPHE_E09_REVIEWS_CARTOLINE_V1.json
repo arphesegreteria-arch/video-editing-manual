@@ -24,7 +24,7 @@
     "total_duration_frames": 480,
     "entry_duration_frames": 8,
     "motion_settle": false,
-    "transition_note": "Entrate singole laterali, senza rotazione/overshoot dello stack; la clip Fusion va estesa manualmente a 480 frame in Resolve perché l'API crea la timeline iniziale a 150 frame."
+    "transition_note": "Entrate singole laterali, senza rotazione/overshoot dello stack; oltre 150 frame il bridge crea automaticamente un Fusion Clip su carrier tecnico interno, fino a 9.000 frame. Se la durata è omessa, ogni recensione riceve un tempo di lettura automatico."
   },
   "reviews": [
     {
@@ -80,5 +80,5 @@
   ],
   "cta": {"headline": "Scopri Arphè", "text": "Prenota la tua visita", "url": "https://www.miodottore.it/strutture/arphe-poliambulatorio-3"},
   "writes_allowed": false,
-  "notes": "V3 applicata a Resolve come ARPHE_COMP_EDBE5399C6; cinque card su finestre 0-100, 90-190, 180-280, 270-370, 360-450 e CTA 450-480. La verifica cattura 0-149 mostra testo nitido e prima entrata stabile; resta da estendere manualmente la clip Fusion oltre i 150 frame."
+  "notes": "V3 applicata a Resolve come ARPHE_COMP_EDBE5399C6; cinque card su finestre 0-100, 90-190, 180-280, 270-370, 360-450 e CTA 450-480. La verifica cattura 0-149 mostra testo nitido e prima entrata stabile. Il bridge aggiornato estende automaticamente le nuove sequenze oltre 150 frame tramite carrier tecnico interno e, a durata omessa, calcola finestre individuali dal tempo di lettura."
 }

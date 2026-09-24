@@ -25,6 +25,11 @@ Get-ChildItem -LiteralPath $bridgeSource -File | ForEach-Object {
 New-Item -ItemType Directory -Path $AssetRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $RenderRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+$carrierSource = Join-Path $PSScriptRoot 'assets\arphe_fusion_carrier_5m.mp4'
+if (-not (Test-Path -LiteralPath $carrierSource)) {
+    throw "Asset tecnico di durata non trovato: $carrierSource"
+}
+Copy-Item -LiteralPath $carrierSource -Destination (Join-Path $AssetRoot 'arphe_fusion_carrier_5m.mp4') -Force
 
 if (-not (Test-Path -LiteralPath $configPath)) {
     $config = Get-Content -Raw -LiteralPath $examplePath | ConvertFrom-Json

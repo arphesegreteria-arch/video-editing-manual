@@ -129,8 +129,9 @@ Restano da verificare nel nostro ambiente:
 
 - applicazione di resolution/FPS tramite `Project.SetSetting` prima della creazione della timeline;
 - placement della Fusion composition: l'API inserisce al playhead corrente;
-- `COMPN_RenderStart/End` regola il work range Fusion, ma non è ancora prova del trim del
-  TimelineItem; `retime_creative_duration` lo dichiara esplicitamente;
+- `COMPN_RenderStart/End` regola il work range Fusion. Per durate oltre 150 frame, la creation
+  path usa un carrier tecnico interno e crea un Fusion Clip che eredita la durata richiesta;
+  `retime_creative_duration` su una composizione già esistente resta invece privo di trim API;
 - input RectangleMask, Merge e curve Bezier nel contesto external Python; per Text+ il probe
   Resolve 21 ha distinto `Width`/`Height` canvas da `LayoutWidth`/`LayoutHeight` frame;
 - corrispondenza visiva tra i valori `easing` semantici e l'interpolazione Bezier effettiva;
@@ -286,9 +287,10 @@ card inserita a playhead sfalsati, non è valida: `InsertFusionCompositionIntoTi
 clip predefinite da 150 frame e gli inserimenti interni spezzano/spostano quelle precedenti. Le
 timeline diagnostiche V1-V4 documentano il difetto e non sono baseline.
 
-La versione validata crea invece una sola composition da massimo 150 frame e divide l'intervallo
+La versione validata crea invece una sola composition e divide l'intervallo
 totale in finestre intere consecutive, una per recensione. È esposta dal runtime come
-`create_review_sequence_v2` con `name`, `reviews`, `total_duration_frames` e `style_role`; non
+`create_review_sequence_v2` con `name`, `reviews`, `total_duration_frames` e `style_role`; con
+`total_duration_frames: 0` il bridge usa il tempo di lettura automatico per ogni card; non
 salva recensioni nel codice o nella repository. Il vecchio `create_review_sequence` resta come
 wrapper di compatibilità per le chat che hanno già memorizzato il precedente schema. La
 timeline `ARPHE_E09_16X9_SEQUENCE_V5` ha verificato in immagine i confini 0/36, 37/74, 75/111 e

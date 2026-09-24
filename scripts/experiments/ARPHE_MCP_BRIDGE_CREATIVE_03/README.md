@@ -55,7 +55,7 @@ Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e t
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato
 espone 30 azioni, inclusa `create_review_sequence_v2` e il wrapper compatibile
 `create_review_sequence`; diagnostica grafo/frame è validata. La V2 usa
-una sola composition, divide fino a 150 frame in finestre consecutive e ha superato la verifica visuale sulla timeline
+una sola composition, divide fino a 9.000 frame in finestre consecutive e ha superato la verifica visuale sulla timeline
 `ARPHE_E09_16X9_SEQUENCE_V5`. `CAP_MOTION` è attiva nella config locale del test; la correzione
 BezierSpline è applicata anche alle animazioni. Il retest del 2026-09-14 sulla timeline
 `ARPHE_E09_16X9_GATE_E_RETEST_V2` ha verificato quattro ingressi `ARPHE_SOFT_DROP` tramite
@@ -63,6 +63,14 @@ catture iniziali/intermedie/finali. Il successivo fix usa finestre sovrapposte d
 anima l'opacità sul Transform della sola card, non sul Merge della catena. La timeline
 `ARPHE_E09_16X9_GATE_E_OVERLAP_V2` ha confermato card visibili ai confini 37/75/112 e fino al
 frame finale 149. La transizione sequenziale è PASS; `ARPHE_PAPER_STACK` resta un gate distinto.
+
+Dal 2026-09-24, quando una composizione richiede oltre 150 frame, il bridge usa il carrier
+interno `arphe_fusion_carrier_5m.mp4`: Resolve riceve prima un clip tecnico con la durata
+richiesta e poi un Fusion Clip sopra di esso. Il canvas ARPHÈ lo copre integralmente. La durata
+è quindi automatica fino a 9.000 frame (5 minuti a 30 fps), senza trim manuale in timeline.
+Per `create_review_sequence_v2`, `total_duration_frames: 0` (il valore predefinito) assegna a
+ciascuna card il proprio tempo di lettura: minimo sei secondi, più tempo per un testo più lungo
+e una breve sovrapposizione fra le card.
 
 Pubblicazione UI: **35 AZIONI CONFERMATE** il 2026-09-15, incluse le cinque primitive longform.
 Il runtime reale espone `CAP_LONGFORM=true` ed è stato verificato con `/readyz` HTTP 200, `ping` e

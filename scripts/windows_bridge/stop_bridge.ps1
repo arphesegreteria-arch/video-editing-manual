@@ -1,6 +1,7 @@
 [CmdletBinding()]
-param([ValidateRange(1, 60)][int]$GraceSeconds = 15)
-. (Join-Path $PSScriptRoot 'common.ps1')
+param([ValidateRange(1, 60)][int]$GraceSeconds = 15,
+      [ValidatePattern('^PC_[A-Z0-9_]{2,48}$')][string]$WorkstationId = '')
+. (Join-Path $PSScriptRoot 'common.ps1') -WorkstationId $WorkstationId
 
 New-Item -ItemType Directory -Path $script:ArpheDataDir -Force | Out-Null
 New-Item -ItemType File -Path $script:ArpheStopPath -Force | Out-Null

@@ -1,6 +1,6 @@
 [CmdletBinding()]
-param()
-. (Join-Path $PSScriptRoot 'common.ps1')
+param([ValidatePattern('^PC_[A-Z0-9_]{2,48}$')][string]$WorkstationId = '')
+. (Join-Path $PSScriptRoot 'common.ps1') -WorkstationId $WorkstationId
 
 $task = Get-ArpheTask
 $taskState = if ($task) { [string]$task.State } else { 'NotInstalled' }

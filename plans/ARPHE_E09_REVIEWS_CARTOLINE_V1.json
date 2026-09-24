@@ -19,12 +19,12 @@
     "transition": "ARPHE_ELEGANT_REVEAL",
     "entry_direction": "left",
     "exit_direction": "right",
-    "stagger_frames": 90,
-    "card_duration_frames": 100,
-    "total_duration_frames": 480,
+    "stagger_frames": 10,
+    "card_duration_frames": "automatic_reading_time_4_to_7_seconds",
+    "total_duration_frames": 0,
     "entry_duration_frames": 8,
     "motion_settle": false,
-    "transition_note": "Entrate singole laterali, senza rotazione/overshoot dello stack; oltre 150 frame il bridge crea automaticamente un Fusion Clip su carrier tecnico interno, fino a 9.000 frame. Se la durata è omessa, ogni recensione riceve un tempo di lettura automatico."
+    "transition_note": "Entrate singole laterali, senza rotazione/overshoot dello stack; oltre 150 frame il bridge crea automaticamente un Fusion Clip su carrier tecnico interno, fino a 9.000 frame. Con durata 0, ogni recensione riceve 4-7 secondi in base al testo e la CTA finale almeno 4 secondi."
   },
   "reviews": [
     {
@@ -80,5 +80,5 @@
   ],
   "cta": {"headline": "Scopri Arphè", "text": "Prenota la tua visita", "url": "https://www.miodottore.it/strutture/arphe-poliambulatorio-3"},
   "writes_allowed": false,
-  "notes": "V3 applicata a Resolve come ARPHE_COMP_EDBE5399C6; cinque card su finestre 0-100, 90-190, 180-280, 270-370, 360-450 e CTA 450-480. La verifica cattura 0-149 mostra testo nitido e prima entrata stabile. Il bridge aggiornato estende automaticamente le nuove sequenze oltre 150 frame tramite carrier tecnico interno e, a durata omessa, calcola finestre individuali dal tempo di lettura."
+  "notes": "V3 applicata a Resolve come ARPHE_COMP_EDBE5399C6; cinque card su finestre 0-100, 90-190, 180-280, 270-370, 360-450 e CTA 450-480. La verifica cattura 0-149 mostra testo nitido e prima entrata stabile. La revisione definitiva applicata come ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V2 / ARPHE_COMP_D6DF3D5AB4 usa il kit canonico (ivory, cream, beige, burgundy e dark brown), carrier interno e durata automatica 4-7 secondi per card, più CTA in coda: 900 frame / 30 secondi totali. Il frame finale della CTA è verificato."
 }

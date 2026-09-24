@@ -16,7 +16,7 @@ from bridge.safety import ValidationError  # noqa: E402
 from bridge.timeline_tools import create_timeline  # noqa: E402
 from bridge.creative_tools import (_frame_to_timecode, _sequence_boundaries,
                                    _sequence_windows, _automatic_sequence_windows,
-                                   _review_reading_frames)  # noqa: E402
+                                   _review_reading_frames, _cta_duration_frames)  # noqa: E402
 from bridge.fusion_tools import set_visibility_window  # noqa: E402
 
 
@@ -129,10 +129,11 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
             {"text": "Molto bene."},
             {"text": " ".join(["accogliente"] * 30)},
         ]
-        self.assertEqual(180, _review_reading_frames(reviews[0]))
-        self.assertEqual(450, _review_reading_frames(reviews[1]))
-        self.assertEqual(([(0, 190), (180, 630)], 630),
+        self.assertEqual(120, _review_reading_frames(reviews[0]))
+        self.assertEqual(210, _review_reading_frames(reviews[1]))
+        self.assertEqual(([(0, 130), (120, 330)], 330),
                          _automatic_sequence_windows(reviews))
+        self.assertEqual(120, _cta_duration_frames({"headline": "Scopri Arphè", "text": "Prenota ora"}))
 
     def test_project_collision_stops_before_create(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -440,13 +440,13 @@ def create_review_sequence(name: str, reviews: list[dict[str, Any]],
 @mcp.tool(annotations=SAFE_WRITE)
 def create_review_sequence_v2(name: str, reviews: list[dict[str, Any]],
                               total_duration_frames: int = 0,
-                              style_role: str = "cream") -> dict[str, Any]:
-    """Create 1-8 cards; duration 0 automatically follows each review's reading time."""
+                              style_role: str = "cream", cta: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Create 1-8 cards; duration 0 follows reading time and can append a branded CTA."""
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
         return _call(do_create_review_sequence, project, timeline, config, registry,
-                     name, reviews, total_duration_frames, style_role)
+                     name, reviews, total_duration_frames, style_role, cta)
     except Exception as exc: return _error(exc)
 
 

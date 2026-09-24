@@ -47,13 +47,13 @@ def _review_reading_frames(review: dict[str, Any]) -> int:
     """Return a comfortable on-screen duration for one review.
 
     This is deliberately a conservative reading-time estimate, rather than a
-    fixed card length: six seconds is the floor for a very short review, with
-    a little extra time for an entry and a final pause.  A cap protects the
+    fixed card length: four seconds is the floor for a very short review, with
+    a short extra beat for an entry and a final pause.  A cap protects the
     sequence from an accidentally pasted essay.
     """
     words = len(str(review.get("text") or "").split())
-    reading_seconds = words / 2.5  # relaxed Italian on-screen reading pace
-    seconds = max(6, min(40, int(reading_seconds + 3.999)))
+    reading_seconds = words / 4.5  # concise, still comfortable on-screen pace
+    seconds = max(4, min(7, int(reading_seconds + 1.999)))
     return seconds * 30
 
 
@@ -71,10 +71,16 @@ def _automatic_sequence_windows(reviews: list[dict[str, Any]],
     return windows, cursor
 
 
+def _cta_duration_frames(cta: dict[str, Any]) -> int:
+    """Give the end card a calm but concise fixed reading window."""
+    words = len(f"{cta.get('headline') or ''} {cta.get('text') or ''}".split())
+    return max(120, min(180, int(words / 4.5 + 1.999) * 30))
+
+
 def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
                            name: str, reviews: list[dict[str, Any]],
                            total_duration_frames: int = 0,
-                           style_role: str = "cream") -> dict:
+                           style_role: str = "cream", cta: dict[str, Any] | None = None) -> dict:
     """Create a gap-free review sequence inside one Fusion composition.
 
     Pass ``0`` (the default) to let the bridge derive every card's time on
@@ -85,6 +91,15 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
     require_capability("CAP_FUSION", config, None, project, timeline)
     if not isinstance(reviews, list) or not 1 <= len(reviews) <= 8:
         raise ValidationError("reviews deve contenere 1-8 card")
+    if any(not isinstance(review, dict) for review in reviews):
+        raise ValidationError("Ogni review deve essere un oggetto")
+    if cta is not None:
+        if not isinstance(cta, dict):
+            raise ValidationError("cta deve essere un oggetto")
+        if not isinstance(cta.get("headline"), str) or not cta["headline"].strip():
+            raise ValidationError("cta.headline richiesto")
+        if not isinstance(cta.get("text"), str) or not cta["text"].strip():
+            raise ValidationError("cta.text richiesto")
     if (isinstance(total_duration_frames, bool)
             or not isinstance(total_duration_frames, int)
             or not 0 <= total_duration_frames <= MAX_AUTOMATIC_FUSION_FRAMES):
@@ -93,14 +108,20 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
         )
     automatic_duration = total_duration_frames == 0
     if automatic_duration:
-        windows, total_duration_frames = _automatic_sequence_windows(reviews)
+        windows, review_duration_frames = _automatic_sequence_windows(reviews)
+        cta_duration_frames = _cta_duration_frames(cta) if cta else 0
+        total_duration_frames = review_duration_frames + cta_duration_frames
     elif total_duration_frames < len(reviews):
         raise ValidationError(
             f"total_duration_frames deve essere almeno il numero di card ({len(reviews)})"
         )
     else:
-        transition_overlap_frames = min(10, max(0, total_duration_frames // len(reviews) - 1))
-        windows = _sequence_windows(len(reviews), total_duration_frames, transition_overlap_frames)
+        cta_duration_frames = _cta_duration_frames(cta) if cta else 0
+        review_duration_frames = total_duration_frames - cta_duration_frames
+        if review_duration_frames < len(reviews):
+            raise ValidationError("Durata insufficiente dopo aver riservato la CTA")
+        transition_overlap_frames = min(10, max(0, review_duration_frames // len(reviews) - 1))
+        windows = _sequence_windows(len(reviews), review_duration_frames, transition_overlap_frames)
     validate_color_role(style_role)
     timeline_name = str(safe_call(timeline, "GetName") or "")
     if not timeline_name.startswith("ARPHE_"):
@@ -122,8 +143,6 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
     transition_overlap_frames = min(10, max(0, total_duration_frames // len(reviews) - 1))
     results: list[dict[str, Any]] = []
     for index, review in enumerate(reviews):
-        if not isinstance(review, dict):
-            raise ValidationError("Ogni review deve essere un oggetto")
         text = review.get("text")
         stars = review.get("stars", 5)
         label = review.get("small_label", "Recensione")
@@ -133,6 +152,16 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
                                review.get("highlight_text"), label)
         results.append({"index": index, "card_id": card["card_id"],
                         "frame_range": [start, end]})
+    cta_result = None
+    if cta:
+        # Resolve evaluates the final carrier frame at the composition's end
+        # tick.  Keep the CTA visibility spline alive for that one additional
+        # tick so the final exported frame stays branded rather than flashing
+        # back to the ivory carrier.
+        cta_result = add_end_card(project, timeline, config, registry, composition_id,
+                                  cta["headline"], cta["text"], review_duration_frames,
+                                  total_duration_frames + 1, cta.get("style_role", "burgundy"))
+        cta_result["timeline_frame_range"] = [review_duration_frames, total_duration_frames]
     return {"ok": True, "action": "create_review_sequence", "timeline": timeline_name,
             "composition_id": composition_id,
             "timeline_item": composition.get("timeline_item"),
@@ -141,6 +170,7 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
             "transition_overlap_frames": transition_overlap_frames,
             "duration_mode": "automatic_reading_time" if automatic_duration else "fixed_total",
             "maximum_automatic_duration_frames": MAX_AUTOMATIC_FUSION_FRAMES,
+            "cta": cta_result,
             "status": "PENDING"}
 
 

@@ -102,6 +102,18 @@ Prima verifica reale: `ARPHE_E09_REELS_MIODOTTORE_V7_MASTER.mov`, 27 secondi, 10
 ProRes 422 HQ, circa 104 MB e 30,5 Mb/s. Le prove H.264 precedenti V3/V4/V6 erano
 rispettivamente circa 2,5/0,8/0,8 Mb/s e non sono riferimenti di qualità.
 
+## Copia compatibile per Windows e Instagram
+
+Il master ProRes può comparire in Windows come `APCH` e non essere riproducibile dal player
+predefinito. Non riconvertirlo da Resolve con il preset H.264 automatico: creare invece una copia
+MP4 H.264 direttamente dal master, con `libx264`, CRF 17, `yuv420p`, audio AAC 192 Kb/s e
+`faststart`. Il master non viene modificato.
+
+La prima copia compatibile verificata è `ARPHE_E09_REELS_MIODOTTORE_V8_INSTAGRAM.mp4`: H.264
+High, 1080×1920/30. Nonostante il bitrate medio molto basso, normale per una sequenza quasi
+statica, il confronto con V7 ha dato SSIM 0,9979 e PSNR 57,6 dB; le grafiche sono visivamente
+equivalenti. Il file MP4 è quello da aprire sul Desktop, condividere e caricare.
+
 Dopo ogni render controllare le proprietà del file esportato: devono risultare 1080×1920, 30 fps
 e un bitrate sostanzialmente superiore al preset automatico. Se Resolve rifiuta l'impostazione, fermarsi: non
 pubblicare una variante degradata e registrare l'errore nel log dell'esperimento.

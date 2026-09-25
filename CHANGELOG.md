@@ -24,6 +24,9 @@
 - Verificato l'export reale `ARPHE_E09_REELS_MIODOTTORE_V7_MASTER.mov`: 1080×1920/30,
   27 secondi, circa 104 MB e 30,5 Mb/s. Le prove MP4 V4/V6 (~0,8 Mb/s) restano diagnostiche e
   non costituiscono consegne.
+- Aggiunta e verificata la copia compatibile `ARPHE_E09_REELS_MIODOTTORE_V8_INSTAGRAM.mp4`,
+  ottenuta dal master ProRes con H.264 High/CRF 17. Il confronto frame-per-frame con il master
+  restituisce SSIM 0,9979 e PSNR 57,6 dB; V8 è il file da aprire, condividere e caricare.
 
 - Creata e verificata la timeline nativa Reel `ARPHE_E09_REELS_MIODOTTORE_V2`, 1080×1920/30,
   con cinque recensioni originali, intro Satoshi, card cream, canvas beige e CTA burgundy.

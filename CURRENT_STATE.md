@@ -44,7 +44,9 @@ piano senza contenuti reali è `plans/ARPHE_INSTAGRAM_REVIEW_REEL_TEMPLATE.json`
 manualmente è risultato troppo compresso (~2,5 Mb/s); anche i test MP4 controllati V4/V6 hanno
 prodotto solo ~0,8 Mb/s e non sono consegne valide. Il master V7 QuickTime ProRes 422 HQ è stato
 renderizzato sul Desktop e verificato: 1080×1920/30, 27 secondi, ~30,5 Mb/s (104 MB). Questo è il
-nuovo riferimento di qualità prima della consegna Instagram.
+nuovo riferimento di qualità prima della consegna Instagram. La copia compatibile V8 MP4/H.264
+è stata ricavata dal master, non dal preset H.264 di Resolve, e confrontata frame-per-frame con
+V7: SSIM 0,9979 e PSNR 57,6 dB.
 
 ## Obiettivo del progetto
 

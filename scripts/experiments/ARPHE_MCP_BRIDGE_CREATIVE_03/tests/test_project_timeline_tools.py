@@ -17,7 +17,7 @@ from bridge.timeline_tools import create_timeline  # noqa: E402
 from bridge.creative_tools import (_frame_to_timecode, _sequence_boundaries,
                                    _sequence_windows, _automatic_sequence_windows,
                                    _review_reading_frames, _cta_duration_frames,
-                                   _intro_duration_frames)  # noqa: E402
+                                   _intro_duration_frames, _timeline_is_vertical)  # noqa: E402
 from bridge.fusion_tools import set_visibility_window  # noqa: E402
 
 
@@ -113,6 +113,16 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
     def test_review_sequence_timecode_preserves_resolve_start_hour(self):
         self.assertEqual("01:00:00:00", _frame_to_timecode(108000, 30))
         self.assertEqual("01:00:03:00", _frame_to_timecode(108090, 30))
+
+    def test_review_sequence_detects_portrait_timeline_from_settings(self):
+        class PortraitTimeline:
+            def GetSetting(self, key):
+                return {"timelineResolutionWidth": "1080", "timelineResolutionHeight": "1920"}.get(key)
+
+        self.assertTrue(_timeline_is_vertical(PortraitTimeline()))
+        self.assertFalse(_timeline_is_vertical(FakeTimeline("ARPHE_16X9", {
+            "timelineResolutionWidth": "1920", "timelineResolutionHeight": "1080",
+        })))
 
     def test_review_sequence_boundaries_are_gap_free(self):
         self.assertEqual([0, 37, 75, 112, 150], _sequence_boundaries(4, 150))

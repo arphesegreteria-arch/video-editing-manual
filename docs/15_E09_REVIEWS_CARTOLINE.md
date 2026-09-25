@@ -14,6 +14,12 @@ Le recensioni non mostrano sotto né il nome del medico né la dicitura “Pazie
 
 La sequenza è 16:9, 1920×1080, 30 fps. Una card occupa circa il 78% della larghezza e il 34% dell'altezza. La sequenza automatica usa 3–5 secondi per recensione, in base alla quantità di testo, con 10 frame di sovrapposizione tra card. Per evitare la sfocatura percepita nella prima entrata non usa più lo stack ruotato: applica ingressi singoli `ARPHE_ELEGANT_REVEAL`, da sinistra, di 8 frame, senza overshoot. La CTA finale ARPHÈ usa il fondo burgundy del kit e riceve automaticamente almeno 4 secondi.
 
+## Variante Instagram/Reel
+
+La variante Reel è nativa 9:16, 1080×1920, 30 fps: non è un crop della composizione orizzontale. Il bridge riconosce la timeline verticale, porta la card all'86% della larghezza, aumenta il corpo del testo e allarga il pannello iniziale. Mantiene Satoshi, le durate automatiche 3–5 secondi e la CTA finale; ogni formato resta una timeline ARPHÈ distinta.
+
+La prima prova è `ARPHE_E09_REELS_MIODOTTORE_V1` / `ARPHE_COMP_42633EBBD5`, documentata in `plans/ARPHE_E09_REELS_MIODOTTORE_V1.json`. Contiene le stesse cinque recensioni della sequenza orizzontale, ma un layout nativo per Reel. Intro, due card e CTA sono stati catturati e verificati senza modificare la V6 orizzontale.
+
 Prima applicazione prevista:
 
 1. creare progetto e timeline nuovi;

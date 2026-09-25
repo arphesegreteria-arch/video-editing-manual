@@ -82,6 +82,16 @@ def _intro_duration_frames(_intro: dict[str, Any]) -> int:
     return 90
 
 
+def _timeline_is_vertical(timeline: Any) -> bool:
+    """Return whether the current timeline is portrait, without guessing from its name."""
+    try:
+        width = int(float(safe_call(timeline, "GetSetting", "timelineResolutionWidth") or 0))
+        height = int(float(safe_call(timeline, "GetSetting", "timelineResolutionHeight") or 0))
+    except (TypeError, ValueError):
+        return False
+    return height > width > 0
+
+
 def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
                            name: str, reviews: list[dict[str, Any]],
                            total_duration_frames: int = 0,
@@ -312,10 +322,15 @@ def add_review_card(project: Any, timeline: Any, config: CreativeConfig, registr
         # Text nodes come first: their live schema/read-back is the most fragile part.
         # Any failure below removes every node created by this primitive.
         dark = _rgb(config.palette["dark_brown"])
-        review_size = 0.036 if len(text) <= 180 else 0.031
+        vertical = _timeline_is_vertical(timeline)
+        review_size = (0.041 if len(text) <= 180 else 0.036) if vertical else (0.036 if len(text) <= 180 else 0.031)
+        card_width = 0.86 if vertical else 0.78
+        card_height = 0.40 if vertical else 0.38
+        text_width = 0.72 if vertical else 0.66
+        text_height = 0.20 if vertical else 0.17
         review = _text(comp, f"{card_id}_TEXT", text, review_size, dark, 0.49,
                        font="Satoshi", style="Regular", layout_type=1.0,
-                       frame_width=0.66, frame_height=0.17)
+                       frame_width=text_width, frame_height=text_height)
         stars_tool = _text(comp, f"{card_id}_STARS", " ".join("★" for _ in range(stars)),
                            0.035, _rgb(config.palette["burgundy"]), 0.62,
                            font="Segoe UI Symbol", style="Regular")
@@ -329,8 +344,8 @@ def add_review_card(project: Any, timeline: Any, config: CreativeConfig, registr
         background = _new_tool(comp, "Background", f"{card_id}_BG")
         _set_color(background, _rgb(config.palette[style_role]))
         mask = _new_tool(comp, "RectangleMask", f"{card_id}_MASK")
-        _set(mask, "Width", 0.78)
-        _set(mask, "Height", 0.38)
+        _set(mask, "Width", card_width)
+        _set(mask, "Height", card_height)
         _set(mask, "CornerRadius", 0.055)
         if not connect_input(background, "EffectMask", mask):
             raise RuntimeError("Collegamento maschera card fallito")
@@ -338,8 +353,8 @@ def add_review_card(project: Any, timeline: Any, config: CreativeConfig, registr
         shadow = _new_tool(comp, "Background", f"{card_id}_SHADOW")
         _set_color(shadow, _rgb(config.palette["black"], 0.13))
         shadow_mask = _new_tool(comp, "RectangleMask", f"{card_id}_SHADOW_MASK")
-        _set(shadow_mask, "Width", 0.78)
-        _set(shadow_mask, "Height", 0.38)
+        _set(shadow_mask, "Width", card_width)
+        _set(shadow_mask, "Height", card_height)
         _set(shadow_mask, "CornerRadius", 0.055)
         _set(shadow_mask, "Center", {1: 0.512, 2: 0.485, 3: 0.0})
         if not connect_input(shadow, "EffectMask", shadow_mask):
@@ -375,7 +390,7 @@ def add_review_card(project: Any, timeline: Any, config: CreativeConfig, registr
     return {"ok": True, "action": "add_review_card", "composition_id": composition_id,
             "card_id": card_id, "stars": stars, "frame_range": [start, end],
             "style_role": style_role, "timing_applied": timing_applied,
-            "review_layout": "frame", "review_font": "Open Sans",
+            "review_layout": "portrait_frame" if vertical else "landscape_frame", "review_font": "Satoshi",
             "stars_font": "Segoe UI Symbol", "text_readback_verified": True,
             "status": "PENDING"}
 
@@ -441,25 +456,29 @@ def add_intro_card(project: Any, timeline: Any, config: CreativeConfig, registry
     # lines: cream card and generous ivory negative space.  There is
     # deliberately no vertical rule: beside a large first letter it reads as
     # an accidental glyph rather than an intentional brand element.
+    vertical = _timeline_is_vertical(timeline)
     panel = _new_tool(comp, "Background", f"{element_id}_PANEL")
     _set_color(panel, _rgb(config.palette["cream"]))
     panel_mask = _new_tool(comp, "RectangleMask", f"{element_id}_PANEL_MASK")
-    _set(panel_mask, "Width", 0.58)
-    _set(panel_mask, "Height", 0.46)
+    _set(panel_mask, "Width", 0.84 if vertical else 0.58)
+    _set(panel_mask, "Height", 0.34 if vertical else 0.46)
     _set(panel_mask, "CornerRadius", 0.07)
     if not connect_input(panel, "EffectMask", panel_mask):
         raise RuntimeError("Collegamento pannello intro fallito")
     merged = _merge(comp, background, panel, f"{element_id}_PANEL_MERGE")
-    eyebrow = _text(comp, f"{element_id}_EYEBROW", "ARPHE POLIAMBULATORIO", 0.020,
-                    _rgb(config.palette["warm_brown"]), 0.65, font="Satoshi", style="Medium")
+    eyebrow = _text(comp, f"{element_id}_EYEBROW", "ARPHE POLIAMBULATORIO", 0.020 if vertical else 0.020,
+                    _rgb(config.palette["warm_brown"]), 0.62 if vertical else 0.65,
+                    font="Satoshi", style="Medium")
     merged = _merge(comp, merged, eyebrow, f"{element_id}_EYEBROW_MERGE")
     display_headline = "Dicono\ndi noi" if headline.strip().casefold() == "dicono di noi" else headline
-    heading = _text(comp, f"{element_id}_HEADLINE", display_headline, 0.078,
-                    _rgb(config.palette["burgundy"]), 0.515, font="Satoshi", style="Black",
-                    layout_type=1.0, frame_width=0.44, frame_height=0.20)
+    heading = _text(comp, f"{element_id}_HEADLINE", display_headline, 0.082 if vertical else 0.078,
+                    _rgb(config.palette["burgundy"]), 0.50 if vertical else 0.515, font="Satoshi", style="Black",
+                    layout_type=1.0, frame_width=0.64 if vertical else 0.44,
+                    frame_height=0.18 if vertical else 0.20)
     merged = _merge(comp, merged, heading, f"{element_id}_HEADLINE_MERGE")
-    subheading_tool = _text(comp, f"{element_id}_SUBHEADING", subheading, 0.038,
-                            _rgb(config.palette["warm_brown"]), 0.365, font="Satoshi", style="Regular")
+    subheading_tool = _text(comp, f"{element_id}_SUBHEADING", subheading, 0.035 if vertical else 0.038,
+                            _rgb(config.palette["warm_brown"]), 0.39 if vertical else 0.365,
+                            font="Satoshi", style="Regular")
     merged = _merge(comp, merged, subheading_tool, f"{element_id}_SUBHEADING_MERGE")
     transform = _new_tool(comp, "Transform", f"{element_id}_TRANSFORM")
     if not connect_input(transform, "Input", merged):

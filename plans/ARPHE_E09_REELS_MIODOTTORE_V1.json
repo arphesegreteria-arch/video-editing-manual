@@ -1,0 +1,30 @@
+{
+  "plan_id": "ARPHE_E09_REELS_MIODOTTORE_V1",
+  "source_plan": "plans/ARPHE_E09_REVIEWS_CARTOLINE_V1.json",
+  "project_name": "ARPHE_E09_MIODOTTORE_REVIEWS_CARTOLINE_V1",
+  "timeline_name": "ARPHE_E09_REELS_MIODOTTORE_V1",
+  "timeline_item": "ARPHE_E09_REELS_MIODOTTORE_SATOSHI_V1",
+  "composition_id": "ARPHE_COMP_42633EBBD5",
+  "format": {"width": 1080, "height": 1920, "fps": 30},
+  "platform": "instagram_reel",
+  "design": {
+    "font": "Satoshi",
+    "canvas_role": "ivory",
+    "card_role": "cream",
+    "accent_role": "burgundy",
+    "text_role": "dark_brown",
+    "card_width": 0.86,
+    "card_height": 0.40,
+    "intro": {
+      "headline": "Dicono di noi",
+      "text": "Recensioni su MioDottore",
+      "duration_frames": 90
+    },
+    "review_duration": "automatic_reading_time_3_to_5_seconds",
+    "transition": "ARPHE_ELEGANT_REVEAL",
+    "entry_duration_frames": 8,
+    "cta": {"headline": "Scopri Arphè", "text": "Prenota la tua visita", "duration_frames": 120}
+  },
+  "status": "visual_review_pending",
+  "notes": "Creata come prova nativa 9:16, non come crop della 16:9. Tutte e cinque le card, intro e CTA sono presenti in 810 frame / 27 secondi. Catture ai frame 30, 130, 250 e 809 verificate; playhead ripristinato. Nessun salvataggio o render eseguito."
+}

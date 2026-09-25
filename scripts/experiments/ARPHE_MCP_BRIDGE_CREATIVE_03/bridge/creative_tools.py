@@ -314,7 +314,8 @@ def add_review_card(project: Any, timeline: Any, config: CreativeConfig, registr
         dark = _rgb(config.palette["dark_brown"])
         review_size = 0.036 if len(text) <= 180 else 0.031
         review = _text(comp, f"{card_id}_TEXT", text, review_size, dark, 0.49,
-                       layout_type=1.0, frame_width=0.66, frame_height=0.17)
+                       font="Satoshi", style="Regular", layout_type=1.0,
+                       frame_width=0.66, frame_height=0.17)
         stars_tool = _text(comp, f"{card_id}_STARS", " ".join("★" for _ in range(stars)),
                            0.035, _rgb(config.palette["burgundy"]), 0.62,
                            font="Segoe UI Symbol", style="Regular")
@@ -407,9 +408,11 @@ def add_end_card(project: Any, timeline: Any, config: CreativeConfig, registry: 
     element_id = _id("END_CARD")
     background = _new_tool(comp, "Background", f"{element_id}_BG")
     _set_color(background, _rgb(config.palette[style_role]))
-    heading = _text(comp, f"{element_id}_HEADLINE", headline, 0.07, _rgb(config.palette["white"]), 0.55)
+    heading = _text(comp, f"{element_id}_HEADLINE", headline, 0.07,
+                    _rgb(config.palette["white"]), 0.55, font="Satoshi", style="Bold")
     merged = _merge(comp, background, heading, f"{element_id}_HEADLINE_MERGE")
-    cta_tool = _text(comp, f"{element_id}_CTA", cta, 0.045, _rgb(config.palette["cream"]), 0.43)
+    cta_tool = _text(comp, f"{element_id}_CTA", cta, 0.045,
+                     _rgb(config.palette["cream"]), 0.43, font="Satoshi", style="Regular")
     merged = _merge(comp, merged, cta_tool, f"{element_id}_CTA_MERGE")
     transform = _new_tool(comp, "Transform", f"{element_id}_TRANSFORM")
     if not connect_input(transform, "Input", merged):
@@ -435,7 +438,9 @@ def add_intro_card(project: Any, timeline: Any, config: CreativeConfig, registry
     background = _new_tool(comp, "Background", f"{element_id}_BG")
     _set_color(background, _rgb(config.palette["ivory"]))
     # A restrained editorial panel is more recognisable than a bare pair of
-    # lines: cream card, a slim burgundy rule and generous ivory negative space.
+    # lines: cream card and generous ivory negative space.  There is
+    # deliberately no vertical rule: beside a large first letter it reads as
+    # an accidental glyph rather than an intentional brand element.
     panel = _new_tool(comp, "Background", f"{element_id}_PANEL")
     _set_color(panel, _rgb(config.palette["cream"]))
     panel_mask = _new_tool(comp, "RectangleMask", f"{element_id}_PANEL_MASK")
@@ -445,24 +450,16 @@ def add_intro_card(project: Any, timeline: Any, config: CreativeConfig, registry
     if not connect_input(panel, "EffectMask", panel_mask):
         raise RuntimeError("Collegamento pannello intro fallito")
     merged = _merge(comp, background, panel, f"{element_id}_PANEL_MERGE")
-    rule = _new_tool(comp, "Background", f"{element_id}_RULE")
-    _set_color(rule, _rgb(config.palette["burgundy"]))
-    rule_mask = _new_tool(comp, "RectangleMask", f"{element_id}_RULE_MASK")
-    _set(rule_mask, "Width", 0.008)
-    _set(rule_mask, "Height", 0.24)
-    _set(rule_mask, "Center", {1: 0.345, 2: 0.5, 3: 0.0})
-    if not connect_input(rule, "EffectMask", rule_mask):
-        raise RuntimeError("Collegamento accento intro fallito")
-    merged = _merge(comp, merged, rule, f"{element_id}_RULE_MERGE")
-    eyebrow = _text(comp, f"{element_id}_EYEBROW", "ARPHE  •  RECENSIONI", 0.021,
-                    _rgb(config.palette["warm_brown"]), 0.64, font="Open Sans", style="Bold")
+    eyebrow = _text(comp, f"{element_id}_EYEBROW", "ARPHE POLIAMBULATORIO", 0.020,
+                    _rgb(config.palette["warm_brown"]), 0.65, font="Satoshi", style="Medium")
     merged = _merge(comp, merged, eyebrow, f"{element_id}_EYEBROW_MERGE")
-    heading = _text(comp, f"{element_id}_HEADLINE", headline, 0.085,
-                    _rgb(config.palette["burgundy"]), 0.525, font="Open Sans", style="Bold",
-                    layout_type=1.0, frame_width=0.42, frame_height=0.16)
+    display_headline = "Dicono\ndi noi" if headline.strip().casefold() == "dicono di noi" else headline
+    heading = _text(comp, f"{element_id}_HEADLINE", display_headline, 0.078,
+                    _rgb(config.palette["burgundy"]), 0.515, font="Satoshi", style="Black",
+                    layout_type=1.0, frame_width=0.44, frame_height=0.20)
     merged = _merge(comp, merged, heading, f"{element_id}_HEADLINE_MERGE")
     subheading_tool = _text(comp, f"{element_id}_SUBHEADING", subheading, 0.038,
-                            _rgb(config.palette["warm_brown"]), 0.385, font="Open Sans", style="Regular")
+                            _rgb(config.palette["warm_brown"]), 0.365, font="Satoshi", style="Regular")
     merged = _merge(comp, merged, subheading_tool, f"{element_id}_SUBHEADING_MERGE")
     transform = _new_tool(comp, "Transform", f"{element_id}_TRANSFORM")
     if not connect_input(transform, "Input", merged):

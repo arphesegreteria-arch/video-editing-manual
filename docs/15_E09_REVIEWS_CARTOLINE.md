@@ -8,7 +8,7 @@ Il repository non contiene ancora un export autonomo dei CSS del sito; fino alla
 
 Ogni cartolina deve avere fondo cream, bordo/ombra beige molto leggeri, testo dark brown, stelle e piccoli accenti burgundy. Il testo originale non va corretto: si può andare a capo, ma non cambiare parole, punteggiatura o senso.
 
-Le recensioni non mostrano sotto né il nome del medico né la dicitura “Paziente verificato”: il messaggio resta anonimo e centrato sul contenuto. L'apertura è un piccolo pannello editoriale: canvas ivory, pannello cream dagli angoli morbidi, riga burgundy e micro-etichetta warm brown, con “Dicono di noi” / “su MioDottore”.
+Le recensioni non mostrano sotto né il nome del medico né la dicitura “Paziente verificato”: il messaggio resta anonimo e centrato sul contenuto. L'apertura è un piccolo pannello editoriale: canvas ivory, pannello cream dagli angoli morbidi, micro-etichetta warm brown, titolo Satoshi Black su due righe (“Dicono / di noi”) e sottotitolo “Recensioni su MioDottore”. Non usa una riga verticale accanto alla D, perché visivamente sembrava un segno accidentale.
 
 ## Transizione “cartoline che scorrono”
 
@@ -27,4 +27,4 @@ La V3 è stata applicata alla nuova timeline `ARPHE_E09_REVIEWS_CARTOLINE_16X9_V
 
 ## Prova definitiva — V4
 
-La timeline `ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V4` usa le cinque recensioni originali del piano, l'intro `Dicono di noi / su MioDottore`, le entrate `ARPHE_ELEGANT_REVEAL` da sinistra (8 frame, senza overshoot) e la CTA `Scopri Arphè / Prenota la tua visita`. La variante approvata per la revisione è `ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V5` / `ARPHE_COMP_67E8864064`: pannello editoriale, 3–5 secondi per card, 3 secondi di intro, CTA di 4 secondi e durata totale di 810 frame / 27 secondi. Le catture di intro, due card e CTA sono nitide. Le card restano anonime, senza medico né dicitura “Paziente verificato”.
+La timeline `ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V4` usa le cinque recensioni originali del piano, l'intro `Dicono di noi / su MioDottore`, le entrate `ARPHE_ELEGANT_REVEAL` da sinistra (8 frame, senza overshoot) e la CTA `Scopri Arphè / Prenota la tua visita`. La variante approvata per la revisione è `ARPHE_E09_REVIEWS_CARTOLINE_FINAL_V6` / `ARPHE_COMP_5062AADC95`: pannello editoriale, 3–5 secondi per card, 3 secondi di intro, CTA di 4 secondi e durata totale di 810 frame / 27 secondi. Usa Satoshi (Regular, Medium, Bold e Black), rimuove la riga verticale che appariva attaccata alla D e dispone il titolo su due righe. Le catture di intro, due card e CTA sono nitide. Le card restano anonime, senza medico né dicitura “Paziente verificato”.

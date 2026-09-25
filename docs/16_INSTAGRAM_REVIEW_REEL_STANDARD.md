@@ -84,3 +84,24 @@ momento, ma non devono sostituire il layout, i font e le regole editoriali qui d
 
 La cattura diagnostica JPEG serve a verificare struttura e leggibilità, non a valutare la qualità
 di compressione finale: prima della pubblicazione il render deve avere una verifica dedicata.
+
+## Export master per Instagram
+
+Il file da caricare non deve usare il preset automatico a basso bitrate. Per ogni Reel ARPHÈ il
+Per un master nitido, il bridge usa il profilo `instagram_reel_prores422hq_master`: QuickTime
+ProRes 422 HQ, 1080×1920, 30 fps e audio incluso. Questa è la via affidabile per questa build di
+Resolve, che rifiuta dalla scripting API la regolazione diretta della qualità H.264. Il file è un
+master di consegna: Instagram lo ricomprimerà, perciò non si deve partire da un MOV già compresso
+a circa 2,5 Mb/s.
+
+Il fallback `instagram_reel_youtube_preset_vertical` (MP4/H.264 con preset nativo `YouTube -
+1080p`) resta disponibile per prove rapide, ma non è il master da pubblicare finché non supera la
+verifica di bitrate e nitidezza.
+
+Prima verifica reale: `ARPHE_E09_REELS_MIODOTTORE_V7_MASTER.mov`, 27 secondi, 1080×1920/30,
+ProRes 422 HQ, circa 104 MB e 30,5 Mb/s. Le prove H.264 precedenti V3/V4/V6 erano
+rispettivamente circa 2,5/0,8/0,8 Mb/s e non sono riferimenti di qualità.
+
+Dopo ogni render controllare le proprietà del file esportato: devono risultare 1080×1920, 30 fps
+e un bitrate sostanzialmente superiore al preset automatico. Se Resolve rifiuta l'impostazione, fermarsi: non
+pubblicare una variante degradata e registrare l'errore nel log dell'esperimento.

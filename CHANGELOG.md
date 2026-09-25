@@ -16,6 +16,15 @@
 
 ## 2026-09-25 — Standard Instagram recensioni ARPHÈ
 
+- Corretto il preset di consegna Reel: il bridge esporta un master QuickTime ProRes 422 HQ
+  1080×1920/30 con audio incluso. È stato introdotto dopo aver rilevato che la prima esportazione
+  manuale V3 era a circa 2,5 Mb/s e appariva degradata sul telefono. Le chiavi dirette H.264
+  `DataRate` e `VideoQuality` sono state provate e, rispettivamente, ignorata e rifiutata dalla
+  build, quindi non vengono usate per fingere un bitrate che non sarebbe effettivo.
+- Verificato l'export reale `ARPHE_E09_REELS_MIODOTTORE_V7_MASTER.mov`: 1080×1920/30,
+  27 secondi, circa 104 MB e 30,5 Mb/s. Le prove MP4 V4/V6 (~0,8 Mb/s) restano diagnostiche e
+  non costituiscono consegne.
+
 - Creata e verificata la timeline nativa Reel `ARPHE_E09_REELS_MIODOTTORE_V2`, 1080×1920/30,
   con cinque recensioni originali, intro Satoshi, card cream, canvas beige e CTA burgundy.
 - Formalizzato lo standard riusabile in `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md` e aggiunto

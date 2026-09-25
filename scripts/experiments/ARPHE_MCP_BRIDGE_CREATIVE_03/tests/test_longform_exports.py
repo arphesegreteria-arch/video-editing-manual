@@ -11,7 +11,8 @@ sys.path.insert(0, str(ROOT))
 
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 from bridge.registry import Registry  # noqa: E402
-from bridge.render_tools import queue_longform_exports, start_longform_exports  # noqa: E402
+from bridge.render_tools import (INSTAGRAM_REEL_RENDER_SETTINGS, queue_longform_exports,
+                                 render_preview, start_longform_exports)  # noqa: E402
 
 
 class Api:
@@ -52,6 +53,7 @@ def setup(root: Path):
     project.GetSetting = lambda *_: "30"
     project.SetSetting = lambda *_: True
     project.SetCurrentTimeline = lambda *_: True
+    project.LoadRenderPreset = lambda *_: True
     project.SetCurrentRenderFormatAndCodec = lambda *_: True
     project.SetRenderSettings = lambda *_: True
     queued = []
@@ -65,6 +67,23 @@ def setup(root: Path):
 
 
 class LongformExportTests(unittest.TestCase):
+    def test_preview_uses_mobile_high_quality_settings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cfg, registry, _, project = setup(Path(directory))
+            settings_seen = []
+            project.SetRenderSettings = lambda settings: settings_seen.append(settings) or True
+            project.AddRenderJob = lambda: "job-1"
+            project.StartRendering = lambda job_id: job_id == "job-1"
+            result = render_preview(project, project.GetCurrentTimeline(), cfg, registry, "ARPHE_REEL_TEST")
+            self.assertTrue(result["ok"])
+            self.assertEqual("instagram_reel_youtube_preset_vertical", result["quality_profile"])
+            self.assertEqual(1080, settings_seen[0]["FormatWidth"])
+            self.assertEqual(1920, settings_seen[0]["FormatHeight"])
+            self.assertEqual(30.0, settings_seen[0]["FrameRate"])
+            self.assertTrue(settings_seen[0]["ExportAudio"])
+            self.assertNotIn("EncodingProfile", settings_seen[0])
+            self.assertNotIn("VideoQuality", INSTAGRAM_REEL_RENDER_SETTINGS)
+
     def test_queue_creates_one_job_per_clip_and_does_not_start(self):
         with tempfile.TemporaryDirectory() as directory:
             cfg, registry, manager, project = setup(Path(directory))

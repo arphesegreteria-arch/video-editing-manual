@@ -39,9 +39,12 @@ Fino alla separazione dei tunnel non eseguire write remote. Vedere
 La prova verticale `ARPHE_E09_REELS_MIODOTTORE_V3` è stata creata e verificata sul PC segreteria:
 1080×1920/30, canvas beige, card cream, Satoshi, intro editoriale, cinque recensioni originali,
 CTA burgundy e durata 810 frame / 27 secondi. Le capacità Review, Fusion e Motion sono state
-usate end-to-end; nessun salvataggio o render è stato effettuato. Il procedimento riusabile è
-`docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md`; il piano senza contenuti reali è
-`plans/ARPHE_INSTAGRAM_REVIEW_REEL_TEMPLATE.json`.
+usate end-to-end. Il procedimento riusabile è `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md`; il
+piano senza contenuti reali è `plans/ARPHE_INSTAGRAM_REVIEW_REEL_TEMPLATE.json`. Il MOV esportato
+manualmente è risultato troppo compresso (~2,5 Mb/s); anche i test MP4 controllati V4/V6 hanno
+prodotto solo ~0,8 Mb/s e non sono consegne valide. Il master V7 QuickTime ProRes 422 HQ è stato
+renderizzato sul Desktop e verificato: 1080×1920/30, 27 secondi, ~30,5 Mb/s (104 MB). Questo è il
+nuovo riferimento di qualità prima della consegna Instagram.
 
 ## Obiettivo del progetto
 

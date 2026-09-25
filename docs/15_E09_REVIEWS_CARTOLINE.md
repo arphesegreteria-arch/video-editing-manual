@@ -18,7 +18,7 @@ La sequenza è 16:9, 1920×1080, 30 fps. Una card occupa circa il 78% della larg
 
 La variante Reel è nativa 9:16, 1080×1920, 30 fps: non è un crop della composizione orizzontale. Il bridge riconosce la timeline verticale, porta la card all'86% della larghezza, aumenta il corpo del testo e allarga il pannello iniziale. Mantiene Satoshi, le durate automatiche 3–5 secondi e la CTA finale; ogni formato resta una timeline ARPHÈ distinta.
 
-La variante di riferimento è `ARPHE_E09_REELS_MIODOTTORE_V2` / `ARPHE_COMP_8E3B74BD9D`, documentata in `plans/ARPHE_E09_REELS_MIODOTTORE_V1.json`. Contiene le stesse cinque recensioni della sequenza orizzontale, ma un layout nativo per Reel: canvas beige del kit, card cream, Satoshi e CTA burgundy. Intro, card e CTA sono stati catturati e verificati senza modificare la V6 orizzontale.
+La variante di riferimento è `ARPHE_E09_REELS_MIODOTTORE_V3` / `ARPHE_COMP_5923667C4E`, documentata in `plans/ARPHE_E09_REELS_MIODOTTORE_V1.json`. Contiene le stesse cinque recensioni della sequenza orizzontale, ma un layout nativo per Reel: canvas beige del kit, card cream, Satoshi e CTA burgundy. La scala tipografica è mobile-first: intro, card e CTA sono stati catturati e verificati senza modificare la V6 orizzontale.
 
 Prima applicazione prevista:
 

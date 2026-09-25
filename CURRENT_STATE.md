@@ -36,7 +36,7 @@ Fino alla separazione dei tunnel non eseguire write remote. Vedere
 
 ## E09 — standard recensioni Instagram validato
 
-La prova verticale `ARPHE_E09_REELS_MIODOTTORE_V2` è stata creata e verificata sul PC segreteria:
+La prova verticale `ARPHE_E09_REELS_MIODOTTORE_V3` è stata creata e verificata sul PC segreteria:
 1080×1920/30, canvas beige, card cream, Satoshi, intro editoriale, cinque recensioni originali,
 CTA burgundy e durata 810 frame / 27 secondi. Le capacità Review, Fusion e Motion sono state
 usate end-to-end; nessun salvataggio o render è stato effettuato. Il procedimento riusabile è

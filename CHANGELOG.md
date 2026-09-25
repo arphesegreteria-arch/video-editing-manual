@@ -22,6 +22,8 @@
   il template senza dati reali `plans/ARPHE_INSTAGRAM_REVIEW_REEL_TEMPLATE.json`.
 - Regole canoniche: 3–5 secondi per card, intro di tre secondi, CTA di quattro secondi,
   nessuna attribuzione sotto la recensione e verifica visuale prima di save/render.
+- La V3 mobile-first aumenta card, corpo del testo, intro e CTA per la leggibilità sul telefono;
+  diventa il riferimento al posto della V2 dopo catture ai frame 30, 130, 250 e 809.
 
 ## 2026-09-22 - Tunnel personale operativo e stato runtime per-workstation
 

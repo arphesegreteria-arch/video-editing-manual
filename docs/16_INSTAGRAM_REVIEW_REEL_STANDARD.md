@@ -1,7 +1,7 @@
 # 16 — Standard ARPHÈ: Reel Instagram con recensioni
 
 Questo è il modello operativo per creare una nuova sequenza recensioni per Instagram. È basato
-sulla prova visuale `ARPHE_E09_REELS_MIODOTTORE_V2` e deve essere riusato, non ricostruito da zero.
+sulla prova visuale mobile-first `ARPHE_E09_REELS_MIODOTTORE_V3` e deve essere riusato, non ricostruito da zero.
 
 ## Risultato previsto
 
@@ -42,7 +42,9 @@ POLIAMBULATORIO`, titolo su due righe `Dicono / di noi` e sottotitolo `Recension
 Non aggiungere una barra verticale accanto al titolo: nella prima prova appariva accidentalmente
 attaccata alla lettera “D”.
 
-Le card verticali hanno larghezza relativa 86%, altezza 40% e testo più grande del modello 16:9.
+Le card verticali hanno larghezza relativa 90%, altezza 46% e testo 0,052/0,047/0,042 in base
+alla lunghezza: è una scala scelta per la lettura su telefono, non per il Viewer desktop. Intro e
+CTA usano anch'essi titoli più grandi rispetto alla 16:9.
 Il contenuto resta nell'area centrale: evitare elementi essenziali ai bordi superiore e inferiore,
 dove l'interfaccia Instagram può sovrapporsi.
 
@@ -70,8 +72,8 @@ dove l'interfaccia Instagram può sovrapporsi.
 | Piano | `plans/ARPHE_<SERIE>_REELS_V<n>.json` |
 | Catture | intro, card breve, card lunga, CTA |
 
-La prova di riferimento è `ARPHE_E09_REELS_MIODOTTORE_V2`, composition
-`ARPHE_COMP_8E3B74BD9D`, durata 810 frame / 27 secondi. Non costituisce un template di contenuto:
+La prova di riferimento è `ARPHE_E09_REELS_MIODOTTORE_V3`, composition
+`ARPHE_COMP_5923667C4E`, durata 810 frame / 27 secondi. Non costituisce un template di contenuto:
 le prossime recensioni devono essere nuovamente selezionate e approvate.
 
 ## Limiti e miglioramenti futuri

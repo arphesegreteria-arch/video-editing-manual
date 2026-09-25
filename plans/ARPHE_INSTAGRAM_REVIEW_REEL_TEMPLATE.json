@@ -1,0 +1,15 @@
+{
+  "schema": "ARPHE_INSTAGRAM_REVIEW_REEL_V1",
+  "project_name": "ARPHE_<SERIE>",
+  "timeline_name": "ARPHE_<SERIE>_REELS_V1",
+  "format": {"width": 1080, "height": 1920, "fps": 30},
+  "style_role": "cream",
+  "total_duration_frames": 0,
+  "intro": {"headline": "Dicono di noi", "text": "Recensioni su MioDottore"},
+  "cta": {"headline": "Scopri Arphè", "text": "Prenota la tua visita", "style_role": "burgundy"},
+  "reviews": [
+    {"id": "review_01", "stars": 5, "text": "TESTO ORIGINALE APPROVATO: sostituire prima dell'uso."}
+  ],
+  "motion": {"preset": "ARPHE_ELEGANT_REVEAL", "direction": "left", "duration_frames": 8, "easing": "ease_out", "settle": false},
+  "write_policy": "Creare nuove timeline; non salvare o renderizzare senza autorizzazione esplicita."
+}

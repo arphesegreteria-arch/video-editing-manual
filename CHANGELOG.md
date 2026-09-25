@@ -14,6 +14,15 @@
 - Aggiunto `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`; capability caption marcata `PARTIAL`
   e render esterno `SUPPORTED`.
 
+## 2026-09-25 — Standard Instagram recensioni ARPHÈ
+
+- Creata e verificata la timeline nativa Reel `ARPHE_E09_REELS_MIODOTTORE_V2`, 1080×1920/30,
+  con cinque recensioni originali, intro Satoshi, card cream, canvas beige e CTA burgundy.
+- Formalizzato lo standard riusabile in `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md` e aggiunto
+  il template senza dati reali `plans/ARPHE_INSTAGRAM_REVIEW_REEL_TEMPLATE.json`.
+- Regole canoniche: 3–5 secondi per card, intro di tre secondi, CTA di quattro secondi,
+  nessuna attribuzione sotto la recensione e verifica visuale prima di save/render.
+
 ## 2026-09-22 - Tunnel personale operativo e stato runtime per-workstation
 
 - Creata e connessa nell'area Business l'app `ARPHE Resolve Personale`, associata esclusivamente

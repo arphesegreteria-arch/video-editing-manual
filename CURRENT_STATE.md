@@ -34,13 +34,14 @@ differenti sullo stesso tunnel.
 Fino alla separazione dei tunnel non eseguire write remote. Vedere
 `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md`.
 
-## E09 — prossimo test recensioni
+## E09 — standard recensioni Instagram validato
 
-Il piano `plans/ARPHE_E09_REVIEWS_CARTOLINE_V1.json` contiene cinque recensioni originali
-MioDottore e una CTA finale. Il test userà `ARPHE_PAPER_STACK` su una timeline nuova 1920×1080/30;
-non è ancora stato applicato perché il runtime corrente segnala Fusion/Review/Motion non
-tecnicamente disponibili. Audio long-form e standard di mixaggio restano quelli documentati in
-`docs/04_LONGFORM_WORKFLOW.md` e nel Creative Bridge README.
+La prova verticale `ARPHE_E09_REELS_MIODOTTORE_V2` è stata creata e verificata sul PC segreteria:
+1080×1920/30, canvas beige, card cream, Satoshi, intro editoriale, cinque recensioni originali,
+CTA burgundy e durata 810 frame / 27 secondi. Le capacità Review, Fusion e Motion sono state
+usate end-to-end; nessun salvataggio o render è stato effettuato. Il procedimento riusabile è
+`docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md`; il piano senza contenuti reali è
+`plans/ARPHE_INSTAGRAM_REVIEW_REEL_TEMPLATE.json`.
 
 ## Obiettivo del progetto
 

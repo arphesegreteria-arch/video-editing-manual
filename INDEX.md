@@ -18,6 +18,7 @@
 | `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md` | **Regola di isolamento PC, incidente tunnel del 2026-09-21 e recupero** |
 | `docs/15_E09_REVIEWS_CARTOLINE.md` | **Cinque recensioni originali e transizione cartoline** |
 | `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md` | **Sottotitoli mobile: API nativa, fallback Fusion Text+ e gate di validazione** |
+| `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md` | **Standard riusabile per Reel Instagram con recensioni** |
 | `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
 | `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 | `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |

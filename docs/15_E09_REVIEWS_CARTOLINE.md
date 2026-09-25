@@ -4,11 +4,11 @@ Il nuovo piano è `plans/ARPHE_E09_REVIEWS_CARTOLINE_V1.json`. Contiene cinque r
 
 ## Kit grafico applicato
 
-Il repository non contiene ancora un export autonomo dei CSS del sito; fino alla consegna del kit ufficiale usiamo la palette già canonizzata nel Creative Bridge: ivory `#F7F2E8`, cream `#EFE3CF`, beige `#D7C2A6`, burgundy `#6C2438`, warm brown `#8A6248`, dark brown `#3A2923`. Il modulo grafico resta quindi parametrico e sostituibile senza cambiare le recensioni.
+Il repository non contiene ancora un export autonomo dei CSS del sito; fino alla consegna del kit ufficiale usiamo la palette già canonizzata nel Creative Bridge: ivory `#F7F2E8`, cream `#EFE3CF`, beige `#D7C2A6`, burgundy `#6C2438`, warm brown `#8A6248`, dark brown `#3A2923`. Il canvas delle sequenze recensioni usa beige, così lo sfondo non appare bianco e le card cream restano ben separate. Il modulo grafico resta quindi parametrico e sostituibile senza cambiare le recensioni.
 
 Ogni cartolina deve avere fondo cream, bordo/ombra beige molto leggeri, testo dark brown, stelle e piccoli accenti burgundy. Il testo originale non va corretto: si può andare a capo, ma non cambiare parole, punteggiatura o senso.
 
-Le recensioni non mostrano sotto né il nome del medico né la dicitura “Paziente verificato”: il messaggio resta anonimo e centrato sul contenuto. L'apertura è un piccolo pannello editoriale: canvas ivory, pannello cream dagli angoli morbidi, micro-etichetta warm brown, titolo Satoshi Black su due righe (“Dicono / di noi”) e sottotitolo “Recensioni su MioDottore”. Non usa una riga verticale accanto alla D, perché visivamente sembrava un segno accidentale.
+Le recensioni non mostrano sotto né il nome del medico né la dicitura “Paziente verificato”: il messaggio resta anonimo e centrato sul contenuto. L'apertura è un piccolo pannello editoriale: canvas beige, pannello cream dagli angoli morbidi, micro-etichetta warm brown, titolo Satoshi Black su due righe (“Dicono / di noi”) e sottotitolo “Recensioni su MioDottore”. Non usa una riga verticale accanto alla D, perché visivamente sembrava un segno accidentale.
 
 ## Transizione “cartoline che scorrono”
 
@@ -18,7 +18,7 @@ La sequenza è 16:9, 1920×1080, 30 fps. Una card occupa circa il 78% della larg
 
 La variante Reel è nativa 9:16, 1080×1920, 30 fps: non è un crop della composizione orizzontale. Il bridge riconosce la timeline verticale, porta la card all'86% della larghezza, aumenta il corpo del testo e allarga il pannello iniziale. Mantiene Satoshi, le durate automatiche 3–5 secondi e la CTA finale; ogni formato resta una timeline ARPHÈ distinta.
 
-La prima prova è `ARPHE_E09_REELS_MIODOTTORE_V1` / `ARPHE_COMP_42633EBBD5`, documentata in `plans/ARPHE_E09_REELS_MIODOTTORE_V1.json`. Contiene le stesse cinque recensioni della sequenza orizzontale, ma un layout nativo per Reel. Intro, due card e CTA sono stati catturati e verificati senza modificare la V6 orizzontale.
+La variante di riferimento è `ARPHE_E09_REELS_MIODOTTORE_V2` / `ARPHE_COMP_8E3B74BD9D`, documentata in `plans/ARPHE_E09_REELS_MIODOTTORE_V1.json`. Contiene le stesse cinque recensioni della sequenza orizzontale, ma un layout nativo per Reel: canvas beige del kit, card cream, Satoshi e CTA burgundy. Intro, card e CTA sono stati catturati e verificati senza modificare la V6 orizzontale.
 
 Prima applicazione prevista:
 

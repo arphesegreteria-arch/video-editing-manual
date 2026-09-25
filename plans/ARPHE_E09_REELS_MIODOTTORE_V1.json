@@ -2,14 +2,14 @@
   "plan_id": "ARPHE_E09_REELS_MIODOTTORE_V1",
   "source_plan": "plans/ARPHE_E09_REVIEWS_CARTOLINE_V1.json",
   "project_name": "ARPHE_E09_MIODOTTORE_REVIEWS_CARTOLINE_V1",
-  "timeline_name": "ARPHE_E09_REELS_MIODOTTORE_V1",
-  "timeline_item": "ARPHE_E09_REELS_MIODOTTORE_SATOSHI_V1",
-  "composition_id": "ARPHE_COMP_42633EBBD5",
+  "timeline_name": "ARPHE_E09_REELS_MIODOTTORE_V2",
+  "timeline_item": "ARPHE_E09_REELS_MIODOTTORE_BEIGE_V2",
+  "composition_id": "ARPHE_COMP_8E3B74BD9D",
   "format": {"width": 1080, "height": 1920, "fps": 30},
   "platform": "instagram_reel",
   "design": {
     "font": "Satoshi",
-    "canvas_role": "ivory",
+    "canvas_role": "beige",
     "card_role": "cream",
     "accent_role": "burgundy",
     "text_role": "dark_brown",
@@ -26,5 +26,5 @@
     "cta": {"headline": "Scopri Arphè", "text": "Prenota la tua visita", "duration_frames": 120}
   },
   "status": "visual_review_pending",
-  "notes": "Creata come prova nativa 9:16, non come crop della 16:9. Tutte e cinque le card, intro e CTA sono presenti in 810 frame / 27 secondi. Catture ai frame 30, 130, 250 e 809 verificate; playhead ripristinato. Nessun salvataggio o render eseguito."
+  "notes": "Creata come prova nativa 9:16, non come crop della 16:9. La V2 sostituisce la V1 solo come variante di riferimento: usa canvas beige e card cream. Tutte e cinque le card, intro e CTA sono presenti in 810 frame / 27 secondi. Catture ai frame 30, 130 e 809 verificate; playhead ripristinato. Nessun salvataggio o render eseguito."
 }

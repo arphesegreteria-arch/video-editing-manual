@@ -161,7 +161,9 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
         return {"ok": False, "action": "create_review_sequence",
                 "stage": "composition", "composition": composition}
     composition_id = composition["composition_id"]
-    background = add_background(project, timeline, config, registry, composition_id, "ivory")
+    # Beige gives the sequence a warmer ARPHÈ canvas while retaining enough
+    # contrast for the cream review cards to read as distinct objects.
+    background = add_background(project, timeline, config, registry, composition_id, "beige")
     if not background.get("ok"):
         return {"ok": False, "action": "create_review_sequence",
                 "stage": "background", "composition_id": composition_id,
@@ -451,7 +453,7 @@ def add_intro_card(project: Any, timeline: Any, config: CreativeConfig, registry
     _, comp = find_composition(timeline, registry, composition_id)
     element_id = _id("INTRO_CARD")
     background = _new_tool(comp, "Background", f"{element_id}_BG")
-    _set_color(background, _rgb(config.palette["ivory"]))
+    _set_color(background, _rgb(config.palette["beige"]))
     # A restrained editorial panel is more recognisable than a bare pair of
     # lines: cream card and generous ivory negative space.  There is
     # deliberately no vertical rule: beside a large first letter it reads as

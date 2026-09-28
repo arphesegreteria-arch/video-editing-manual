@@ -21,6 +21,7 @@ from .creative_tools import (add_end_card as do_add_end_card,
                              set_review_highlight as do_set_review_highlight)
 from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_frames,
                                inspect_fusion_graph as do_inspect_fusion_graph)
+from .playback_diagnostics import collect_playback_diagnostics as do_collect_playback_diagnostics
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
 from .feature_flags import report as feature_report
 from .fusion_tools import (add_background, add_text, create_composition,
@@ -125,6 +126,21 @@ def resolve_status() -> dict[str, Any]:
                 result["v1_clip_count"] = len(safe_call(timeline, "GetItemListInTrack", "video", 1) or [])
                 result["a1_clip_count"] = len(safe_call(timeline, "GetItemListInTrack", "audio", 1) or [])
             return result
+        except Exception as exc:
+            return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_playback_diagnostics() -> dict[str, Any]:
+    """Read portable playback diagnostics without changing Resolve or disclosing media paths."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            resolve, _, project, timeline, config, _, error = _runtime()
+            if error:
+                return {**error, "workstation_id": config.workstation_id}
+            return do_collect_playback_diagnostics(
+                resolve, project, timeline, config.workstation_id
+            )
         except Exception as exc:
             return _error(exc)
 

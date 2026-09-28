@@ -6,6 +6,7 @@ import ctypes
 from ctypes import wintypes
 import json
 import os
+import re
 import time
 from typing import Any, Callable
 
@@ -117,73 +118,6 @@ def _nvidia_diagnostics(
     }
 
 
-def _sample_media(timeline: Any, limit: int = 8) -> list[dict[str, Any]]:
-    samples: list[dict[str, Any]] = []
-    video_tracks = _call(timeline, "GetTrackCount", "video") or 0
-    try:
-        track_count = max(0, int(video_tracks))
-    except (TypeError, ValueError):
-        track_count = 0
-    for track_index in range(1, track_count + 1):
-        items = _call(timeline, "GetItemListInTrack", "video", track_index) or []
-        for item in items:
-            media_pool_item = _call(item, "GetMediaPoolItem")
-            properties = _call(media_pool_item, "GetClipProperty")
-            filtered = _filtered_mapping(properties, CLIP_PROPERTIES)
-            if filtered and filtered not in samples:
-                samples.append(filtered)
-            if len(samples) >= limit:
-                return samples
-    return samples
-
-
-def collect_playback_diagnostics(
-    resolve: Any,
-    project: Any,
-    timeline: Any,
-    workstation_id: str,
-    *,
-    executable_finder: Callable[[str], str | None] = shutil.which,
-    command_runner: Callable[[list[str], float], str] = _run_fixed_command,
-) -> dict[str, Any]:
-    project_settings = _filtered_mapping(_call(project, "GetSetting"), PROJECT_SETTINGS)
-    timeline_settings = _filtered_mapping(_call(timeline, "GetSetting"), PROJECT_SETTINGS)
-    return {
-        "ok": True,
-        "action": "get_playback_diagnostics",
-        "workstation_id": workstation_id,
-        "resolve": {
-            "product_name": _call(resolve, "GetProductName"),
-            "version": _call(resolve, "GetVersionString") or _call(resolve, "GetVersion"),
-            "current_page": _call(resolve, "GetCurrentPage"),
-        },
-        "project": {
-            "name": _call(project, "GetName"),
-            "settings": project_settings,
-        },
-        "timeline": {
-            "name": _call(timeline, "GetName"),
-            "settings": timeline_settings,
-            "video_track_count": _call(timeline, "GetTrackCount", "video"),
-            "audio_track_count": _call(timeline, "GetTrackCount", "audio"),
-        },
-        "media_samples": _sample_media(timeline),
-        "system": {
-            "nvidia_smi": _nvidia_diagnostics(executable_finder, command_runner),
-            "windows_audio": collect_windows_audio_diagnostics(
-                executable_finder=executable_finder,
-                command_runner=command_runner,
-            ),
-        },
-        "not_exposed_by_resolve_api": dict(NOT_EXPOSED_BY_RESOLVE_API),
-        "privacy": {
-            "file_paths_disclosed": False,
-            "media_content_read": False,
-        },
-        "writes_performed": False,
-    }
-
-
 def collect_windows_audio_diagnostics(
     *,
     executable_finder: Callable[[str], str | None] = shutil.which,
@@ -216,11 +150,15 @@ def collect_windows_audio_diagnostics(
         ], 5.0)
         payload = json.loads(raw)
     except Exception as exc:
+        devices = _windows_audio_registry_inventory()
         return {
-            "available": False,
-            "reason": "probe_failed",
+            "available": bool(devices),
+            "reason": "cim_access_denied_registry_fallback" if devices else "probe_failed",
             "error_type": type(exc).__name__,
-            "devices": [],
+            "devices": devices,
+            "dpc_percent_snapshot": None,
+            "default_device_known": False,
+            "sample_rate_known": False,
             "resolve_audio_preferences_available": False,
         }
     devices_raw = payload.get("audio_devices", []) if isinstance(payload, dict) else []
@@ -244,6 +182,46 @@ def collect_windows_audio_diagnostics(
         "sample_rate_known": False,
         "resolve_audio_preferences_available": False,
     }
+
+
+def _windows_audio_registry_inventory() -> list[dict[str, Any]]:
+    if os.name != "nt":
+        return []
+    try:
+        import winreg
+        root = r"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio"
+        devices: list[dict[str, Any]] = []
+        states = {1: "active", 2: "disabled", 4: "not_present", 8: "unplugged"}
+        for endpoint_type in ("Render", "Capture"):
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, root + "\\" + endpoint_type) as group:
+                for index in range(winreg.QueryInfoKey(group)[0]):
+                    endpoint_id = winreg.EnumKey(group, index)
+                    with winreg.OpenKey(group, endpoint_id) as endpoint:
+                        try:
+                            state = winreg.QueryValueEx(endpoint, "DeviceState")[0]
+                        except OSError:
+                            state = None
+                        try:
+                            with winreg.OpenKey(endpoint, "Properties") as properties:
+                                name = winreg.QueryValueEx(
+                                    properties,
+                                    "{a45c254e-df1c-4efd-8020-67d146a850e0},2",
+                                )[0]
+                        except OSError:
+                            name = None
+                    if name and state == 1:
+                        devices.append({
+                            "name": str(name),
+                            "status": states.get(state, "unknown"),
+                            "endpoint_type": endpoint_type.lower(),
+                        })
+        unique: list[dict[str, Any]] = []
+        for device in devices:
+            if device not in unique:
+                unique.append(device)
+        return unique
+    except Exception:
+        return []
 
 
 def _windows_cpu_reader() -> Callable[[], float | None]:
@@ -329,6 +307,30 @@ def _aggregate(values: list[float]) -> dict[str, float | None]:
     }
 
 
+def _performance_findings(
+    cpu: dict[str, float | None], memory: dict[str, float | None],
+    decoder: dict[str, float | None]
+) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    cpu_max = cpu.get("maximum")
+    memory_max = memory.get("maximum")
+    decoder_max = decoder.get("maximum")
+    if isinstance(cpu_max, (int, float)) and cpu_max >= 90:
+        findings.append({"code": "CPU_SATURATION", "severity": "high",
+                         "evidence": {"cpu_max_percent": cpu_max}})
+    if isinstance(memory_max, (int, float)) and memory_max >= 90:
+        findings.append({"code": "MEMORY_PRESSURE", "severity": "high",
+                         "evidence": {"memory_max_percent": memory_max}})
+    if (isinstance(cpu_max, (int, float)) and cpu_max >= 75
+            and isinstance(decoder_max, (int, float)) and decoder_max == 0):
+        findings.append({
+            "code": "POSSIBLE_SOFTWARE_DECODE_PRESSURE",
+            "severity": "medium",
+            "evidence": {"cpu_max_percent": cpu_max, "decoder_max_percent": decoder_max},
+        })
+    return findings
+
+
 def sample_playback_performance(
     resolve: Any,
     workstation_id: str,
@@ -380,6 +382,10 @@ def sample_playback_performance(
         if elapsed >= duration_seconds:
             break
         sleeper(min(interval_seconds, duration_seconds - elapsed))
+    cpu_summary = _aggregate(cpu_values)
+    memory_summary = _aggregate(memory_values)
+    gpu_summary = _aggregate(gpu_values)
+    decoder_summary = _aggregate(decoder_values)
     return {
         "ok": True,
         "action": "sample_playback_performance",
@@ -387,10 +393,130 @@ def sample_playback_performance(
         "scenario": expected_page,
         "duration_seconds": float(duration_seconds),
         "sample_count": sample_count,
-        "cpu_percent": _aggregate(cpu_values),
-        "memory_percent": _aggregate(memory_values),
-        "nvidia_gpu_percent": _aggregate(gpu_values),
-        "nvidia_decoder_percent": _aggregate(decoder_values),
+        "cpu_percent": cpu_summary,
+        "memory_percent": memory_summary,
+        "nvidia_gpu_percent": gpu_summary,
+        "nvidia_decoder_percent": decoder_summary,
+        "findings": _performance_findings(cpu_summary, memory_summary, decoder_summary),
         "instructions": "Avviare la riproduzione prima della chiamata e lasciarla attiva fino al risultato.",
         "writes_performed": False,
     }
+
+
+def _sample_media(timeline: Any, limit: int = 8) -> list[dict[str, Any]]:
+    samples: list[dict[str, Any]] = []
+    video_tracks = _call(timeline, "GetTrackCount", "video") or 0
+    try:
+        track_count = max(0, int(video_tracks))
+    except (TypeError, ValueError):
+        track_count = 0
+    for track_index in range(1, track_count + 1):
+        items = _call(timeline, "GetItemListInTrack", "video", track_index) or []
+        for item in items:
+            media_pool_item = _call(item, "GetMediaPoolItem")
+            properties = _call(media_pool_item, "GetClipProperty")
+            filtered = _filtered_mapping(properties, CLIP_PROPERTIES)
+            if filtered and filtered not in samples:
+                samples.append(filtered)
+            if len(samples) >= limit:
+                return samples
+    return samples
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    matches = re.findall(r"\d+(?:\.\d+)?", str(value or ""))
+    return float(matches[-1]) if matches else None
+
+
+def _playback_findings(
+    timeline_settings: dict[str, Any], media_samples: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    timeline_rate = _number(timeline_settings.get("timelineFrameRate"))
+    playback_rate = _number(timeline_settings.get("timelinePlaybackFrameRate"))
+    monitor_rate = _number(timeline_settings.get("videoMonitorFormat"))
+    if timeline_rate and playback_rate and abs(timeline_rate - playback_rate) > 0.01:
+        findings.append({
+            "code": "TIMELINE_PLAYBACK_RATE_MISMATCH",
+            "severity": "high",
+            "likely_playback_cause": True,
+            "evidence": {"timeline_fps": timeline_rate, "playback_fps": playback_rate},
+            "safe_next_step": (
+                "Provare su una copia della timeline con playback frame rate uguale al frame rate timeline."
+            ),
+        })
+    if timeline_rate and monitor_rate and abs(timeline_rate - monitor_rate) > 0.01:
+        findings.append({
+            "code": "VIDEO_MONITOR_RATE_MISMATCH",
+            "severity": "medium",
+            "likely_playback_cause": True,
+            "evidence": {"timeline_fps": timeline_rate, "monitor_fps": monitor_rate},
+            "safe_next_step": "Allineare il formato monitor in una configurazione di prova.",
+        })
+    clip_rates = sorted({rate for item in media_samples
+                         if (rate := _number(item.get("FPS"))) is not None})
+    mismatched = [rate for rate in clip_rates
+                  if timeline_rate and abs(rate - timeline_rate) > 0.01]
+    if mismatched:
+        findings.append({
+            "code": "SOURCE_TIMELINE_RATE_MISMATCH",
+            "severity": "medium",
+            "likely_playback_cause": False,
+            "evidence": {"timeline_fps": timeline_rate, "source_fps": mismatched},
+            "safe_next_step": "Verificare il comportamento su una timeline di prova al frame rate sorgente.",
+        })
+    return findings
+
+
+def collect_playback_diagnostics(
+    resolve: Any,
+    project: Any,
+    timeline: Any,
+    workstation_id: str,
+    *,
+    executable_finder: Callable[[str], str | None] = shutil.which,
+    command_runner: Callable[[list[str], float], str] = _run_fixed_command,
+) -> dict[str, Any]:
+    project_settings = _filtered_mapping(_call(project, "GetSetting"), PROJECT_SETTINGS)
+    timeline_settings = _filtered_mapping(_call(timeline, "GetSetting"), PROJECT_SETTINGS)
+    media_samples = _sample_media(timeline)
+    findings = _playback_findings(timeline_settings, media_samples)
+    return {
+        "ok": True,
+        "action": "get_playback_diagnostics",
+        "workstation_id": workstation_id,
+        "resolve": {
+            "product_name": _call(resolve, "GetProductName"),
+            "version": _call(resolve, "GetVersionString") or _call(resolve, "GetVersion"),
+            "current_page": _call(resolve, "GetCurrentPage"),
+        },
+        "project": {
+            "name": _call(project, "GetName"),
+            "settings": project_settings,
+        },
+        "timeline": {
+            "name": _call(timeline, "GetName"),
+            "settings": timeline_settings,
+            "video_track_count": _call(timeline, "GetTrackCount", "video"),
+            "audio_track_count": _call(timeline, "GetTrackCount", "audio"),
+        },
+        "media_samples": media_samples,
+        "findings": findings,
+        "likely_cause_found": any(item["likely_playback_cause"] for item in findings),
+        "system": {
+            "nvidia_smi": _nvidia_diagnostics(executable_finder, command_runner),
+            "windows_audio": collect_windows_audio_diagnostics(
+                executable_finder=executable_finder,
+                command_runner=command_runner,
+            ),
+        },
+        "not_exposed_by_resolve_api": dict(NOT_EXPOSED_BY_RESOLVE_API),
+        "privacy": {
+            "file_paths_disclosed": False,
+            "media_content_read": False,
+        },
+        "writes_performed": False,
+    }
+

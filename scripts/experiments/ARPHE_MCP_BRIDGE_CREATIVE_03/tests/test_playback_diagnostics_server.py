@@ -47,5 +47,31 @@ class PlaybackDiagnosticServerTests(unittest.TestCase):
         self.assertEqual(error["error"], result["error"])
 
 
+    def test_sampler_tool_uses_current_workstation_and_requested_page(self):
+        resolve = object()
+        config = types.SimpleNamespace(workstation_id="PC_PERSONALE")
+        runtime = (resolve, object(), object(), object(), config, object(), None)
+        expected = {
+            "ok": True,
+            "action": "sample_playback_performance",
+            "workstation_id": "PC_PERSONALE",
+            "scenario": "edit",
+            "writes_performed": False,
+        }
+
+        with patch.object(server, "_runtime", return_value=runtime), patch.object(
+            server, "do_sample_playback_performance", return_value=expected
+        ) as sample:
+            result = server.sample_playback_performance("edit", 5.0)
+
+        self.assertEqual(expected, result)
+        sample.assert_called_once_with(
+            resolve,
+            "PC_PERSONALE",
+            expected_page="edit",
+            duration_seconds=5.0,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

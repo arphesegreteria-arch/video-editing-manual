@@ -39,9 +39,10 @@ class FakeTimeline:
     def GetSetting(self):
         return {
             "timelineFrameRate": "30",
-            "timelinePlaybackFrameRate": "30",
+            "timelinePlaybackFrameRate": "24",
             "timelineResolutionWidth": "1920",
             "timelineResolutionHeight": "1080",
+            "videoMonitorFormat": "HD 1080p 24",
             "unrelatedSecret": "must-not-leak",
         }
 
@@ -92,16 +93,24 @@ class FakeResolve:
 
 
 class PlaybackDiagnosticTests(unittest.TestCase):
+    def test_default_windows_cpu_reader_can_be_constructed(self):
+        reader = _windows_cpu_reader()
+        self.assertTrue(callable(reader))
+        self.assertIsNone(reader())
+
     def test_collects_portable_resolve_and_clip_diagnostics_without_paths(self):
         result = collect_playback_diagnostics(
             FakeResolve(), FakeProject(), FakeTimeline(), "PC_PERSONALE",
             executable_finder=lambda _name: None,
         )
 
-        self.assertTrue(result["ok"])
+        self.assertTrue(result.get("ok"))
         self.assertEqual("PC_PERSONALE", result["workstation_id"])
         self.assertEqual("DaVinci Resolve Studio", result["resolve"]["product_name"])
-        self.assertEqual("30", result["timeline"]["settings"]["timelinePlaybackFrameRate"])
+        self.assertEqual("24", result["timeline"]["settings"]["timelinePlaybackFrameRate"])
+        self.assertTrue(result["likely_cause_found"])
+        self.assertEqual("TIMELINE_PLAYBACK_RATE_MISMATCH", result["findings"][0]["code"])
+        self.assertEqual(24.0, result["findings"][1]["evidence"]["monitor_fps"])
         self.assertEqual("H.264 High L4.1", result["media_samples"][0]["Video Codec"])
         self.assertNotIn("File Path", result["media_samples"][0])
         self.assertNotIn("privateMetadata", result["media_samples"][0])
@@ -112,6 +121,7 @@ class PlaybackDiagnosticTests(unittest.TestCase):
             FakeResolve(), FakeProject(), FakeTimeline(), "PC_SEGRETERIA",
             executable_finder=lambda _name: None,
         )
+        self.assertIn("system", missing)
         self.assertFalse(missing["system"]["nvidia_smi"]["available"])
         self.assertEqual("executable_not_found", missing["system"]["nvidia_smi"]["reason"])
 
@@ -126,14 +136,8 @@ class PlaybackDiagnosticTests(unittest.TestCase):
             command_runner=runner,
         )
         self.assertTrue(present["system"]["nvidia_smi"]["available"])
-        self.assertEqual(
-            "NVIDIA GeForce RTX 3060 Ti",
-            present["system"]["nvidia_smi"]["gpus"][0]["name"],
-        )
-        self.assertEqual(
-            "581.29",
-            present["system"]["nvidia_smi"]["gpus"][0]["driver_version"],
-        )
+        self.assertEqual("NVIDIA GeForce RTX 3060 Ti", present["system"]["nvidia_smi"]["gpus"][0]["name"])
+        self.assertEqual("581.29", present["system"]["nvidia_smi"]["gpus"][0]["driver_version"])
 
     def test_declares_preferences_that_resolve_scripting_cannot_read(self):
         result = collect_playback_diagnostics(
@@ -141,17 +145,12 @@ class PlaybackDiagnosticTests(unittest.TestCase):
             executable_finder=lambda _name: None,
         )
 
+        self.assertIn("not_exposed_by_resolve_api", result)
         unavailable = result["not_exposed_by_resolve_api"]
         self.assertIn("gpu_processing_mode", unavailable)
         self.assertIn("decode_h264_h265_hardware_acceleration", unavailable)
         self.assertIn("audio_output_device_and_buffer", unavailable)
         self.assertFalse(result["writes_performed"])
-
-
-    def test_default_windows_cpu_reader_can_be_constructed(self):
-        reader = _windows_cpu_reader()
-        self.assertTrue(callable(reader))
-        self.assertIsNone(reader())
 
     def test_samples_edit_playback_and_returns_compact_aggregates(self):
         now = [0.0]
@@ -182,12 +181,13 @@ class PlaybackDiagnosticTests(unittest.TestCase):
             gpu_reader=lambda: next(gpu_values),
         )
 
-        self.assertTrue(result["ok"])
+        self.assertTrue(result.get("ok"))
         self.assertEqual("edit", result["scenario"])
         self.assertEqual(3, result["sample_count"])
         self.assertEqual(20.0, result["cpu_percent"]["average"])
         self.assertEqual(30.0, result["cpu_percent"]["maximum"])
         self.assertEqual(45.0, result["nvidia_decoder_percent"]["maximum"])
+        self.assertEqual([], result["findings"])
         self.assertNotIn("samples", result)
         self.assertFalse(result["writes_performed"])
 
@@ -222,7 +222,7 @@ class PlaybackDiagnosticTests(unittest.TestCase):
             command_runner=runner,
         )
 
-        self.assertTrue(result["available"])
+        self.assertTrue(result.get("available"))
         self.assertEqual("Realtek Audio", result["devices"][0]["name"])
         self.assertEqual(2, result["dpc_percent_snapshot"])
         self.assertFalse(result["resolve_audio_preferences_available"])
@@ -231,3 +231,4 @@ class PlaybackDiagnosticTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

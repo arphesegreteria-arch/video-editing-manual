@@ -1,6 +1,24 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-09-21.
+Ultimo aggiornamento: sessione 2026-10-02.
+
+## Shortform caption mobile — PARTIAL / render verificato
+
+Sul `PC_PERSONALE` è stato completato un probe reale sulla timeline verticale
+`ARPHE_SHORTFORM_MASTER_V4`: creazione subtitle nativa, conversione logica in un unico layer
+Fusion con 12 Text+ temporizzati, stile Satoshi Bold bianco su bordeaux, render 1080×1920/30 e
+controllo visivo di caption, frasi lunghe e gap.
+
+Risultati principali:
+- `CreateSubtitlesFromAudio` funziona dopo `resolve.OpenPage("edit")`;
+- la API pubblica osservata non offre lo styling nativo necessario;
+- `SetName` sul caption item non corregge il testo;
+- Background alpha zero + espressione sul Blend dei Merge produce overlay trasparente e timing
+  corretto;
+- render/export da Python esterno è stato completato e verificato.
+
+Stato: `PARTIAL`, non ancora primitiva MCP validata. Dettagli e gate:
+`docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`.
 
 ## Avviso operativo - isolamento workstation
 
@@ -163,10 +181,10 @@ Restano da provare singolarmente via bridge esterno/MCP:
 - import media;
 - rebuild/cut da edit plan;
 - TimelineItem transforms;
-- Fusion create/read/write oltre le primitive Creative 03 validate;
+- Fusion create/read/write oltre le primitive Creative 03 validate e il probe caption singolo;
 - tracking Studio / IntelliTrack;
-- captions/subtitles;
-- render/export.
+- captions/subtitles tramite tool MCP parametrica e ripetibile;
+- render/export tramite Creative 03/MCP (il percorso Python esterno diretto è invece SUPPORTED).
 
 Un'operazione non diventa `SUPPORTED` solo perché esiste nella documentazione API: deve essere testata nel nostro ambiente.
 

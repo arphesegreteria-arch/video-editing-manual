@@ -61,7 +61,7 @@ Useful for:
 
 URL: https://github.com/velvaiss/auto-subs-davinci-resolve  
 Interesting path: `Resolve-Integration/davinci-resolve-fusion/SKILL.md`  
-**Status:** `UNVERIFIED`
+**Status:** `TESTED` come pattern architetturale; codice esterno non importato
 **Priority:** HIGH
 
 Why it is interesting:
@@ -150,7 +150,14 @@ Potential ARPHE value:
 - keyword emphasis;
 - ARPHE typography presets.
 
-**Caution:** first test whether Resolve Studio 21 native/AI subtitle features already solve our requirement more simply. Do not build a Text+ workaround for a problem Studio already solves reliably.
+Esito ARPHE 2026-10-02: i sottotitoli nativi sono stati creati correttamente e restano utili
+come sorgente di timing/testo, ma la API pubblica osservata non espone lo styling necessario.
+È stato quindi verificato in modo indipendente un overlay Text+ Fusion equivalente, con render
+verticale controllato. Procedura definitiva provvisoria in
+`docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`.
+
+**Caution:** il repository esterno non è stato importato e non è ancora una dipendenza ARPHE. Il
+nostro risultato resta `PARTIAL` finché non esiste una tool MCP parametrica e ripetibile.
 
 ---
 

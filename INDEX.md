@@ -17,6 +17,7 @@
 | `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` | **Installazione completa e sicura sul PC personale** |
 | `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md` | **Regola di isolamento PC, incidente tunnel del 2026-09-21 e recupero** |
 | `docs/15_E09_REVIEWS_CARTOLINE.md` | **Cinque recensioni originali e transizione cartoline** |
+| `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md` | **Sottotitoli mobile: API nativa, fallback Fusion Text+ e gate di validazione** |
 | `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
 | `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 | `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |
@@ -63,6 +64,8 @@ Il piano `docs/superpowers/plans/2026-08-28-resolve-studio-capability-audit.md` 
 - ChatGPT -> Secure MCP Tunnel -> Resolve SAFE WRITE: **VALIDATED** per `create_safe_working_timeline`.
 - Autostart persistente sul PC segreteria: **AUTOSTART + READ VALIDATED**.
 - `ARPHE_MCP_BRIDGE_CREATIVE_03`: **GATE A/B PASS / GATE C STATIC PASS**; diagnostica visuale validata.
+- Caption Engine shortform: **PARTIAL / TESTED**; subtitle nativi per timing + overlay Fusion Text+
+  verificato tramite render verticale, ancora da trasformare in tool MCP parametrica.
 
 ## Benchmark / strumenti di valutazione
 

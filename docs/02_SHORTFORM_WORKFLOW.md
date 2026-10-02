@@ -25,6 +25,25 @@ Animare `Transform.Size` con `BezierSpline`.
 4. Python legge `TrackedCenter1`.
 5. Python applica lo yoyo.
 
+### CAPTION MOBILE — PARTIAL
+
+Il probe reale del 2026-10-02 ha confermato che `CreateSubtitlesFromAudio` crea la traccia
+nativa, ma lo styling completo Track Style/Inspector non è esposto in modo affidabile dalla API
+pubblica osservata. Per ADV verticali con stile ARPHÈ usare, finché il bridge non offre una
+primitiva dedicata, il fallback verificato:
+
+`traccia subtitle nativa → timing/testo → Text+ Fusion → render burn-in`
+
+La composizione deve partire da un Background con alpha zero; ogni caption usa un Merge con
+`Blend.SetExpression("iif(time >= start and time < end, 1, 0)")`. Non affidarsi a un
+`BezierSpline` assegnato direttamente a Blend: nel test non è rimasto attivo.
+
+Preset mobile testato: Satoshi Bold, bianco, fondo bordeaux `#680C09`, Text+ size `0.043`,
+1080×1920/30. La traccia nativa resta conservata ma disabilitata; `ExportSubtitle` deve essere
+false per evitare doppioni, perché il Text+ è già impresso nel video.
+
+Procedura, limiti e gate di promozione: `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`.
+
 ## Regola estetica
 
 Il punto migliore da tracciare può non essere il punto migliore da mettere al centro.

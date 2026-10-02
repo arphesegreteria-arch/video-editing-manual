@@ -1,5 +1,41 @@
 # EXPERIMENT LOG
 
+## 2026-10-02 — E10 Caption Engine shortform mobile
+
+### Ambiente e sorgente
+
+- workstation: `PC_PERSONALE`;
+- Resolve Studio `21.0.4.5`;
+- progetto `ARPHE_SHORTFORM_PROVA_EDITING_V1`;
+- timeline `ARPHE_SHORTFORM_MASTER_V4`, 1080×1920/30;
+- 12 caption, render completo di 27,5 secondi.
+
+### Ipotesi
+
+Usare la traccia subtitle nativa come sorgente temporale e un'unica composition Fusion Text+ come
+motore grafico può produrre sottotitoli ADV brandizzati senza PNG e senza editing manuale di ogni
+caption.
+
+### Risultato
+
+- `CreateSubtitlesFromAudio`: PASS dopo apertura esplicita della pagina Edit;
+- styling caption nativo via API: non disponibile nella superficie osservata;
+- correzione testo con `TimelineItem.SetName`: FAIL (`False`);
+- overlay Fusion Text+: PASS;
+- trasparenza: PASS dopo sostituzione del MediaIn base con Background RGBA zero;
+- timing: PASS usando espressioni `iif` sul Blend; BezierSpline diretto non affidabile;
+- stile finale: Satoshi Bold, size 0.043, bianco su `#680C09`;
+- render esterno: PASS, MP4/H.264 1080×1920/30;
+- verifica visiva: PASS su caption iniziale, frase lunga, gap, B-roll e caption finale.
+
+### Decisione
+
+`PARTIAL / TESTED`. Procedura documentata, ma non promossa in `scripts/validated/` perché è ancora
+legata a un progetto. Prossimo passo: tool MCP semantica con rollback, wrapping/safe-area e test su
+un secondo shortform.
+
+Dettagli: `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`.
+
 ## 2026-09-18 — Preparazione replica PC_PERSONALE
 
 ### Risultato

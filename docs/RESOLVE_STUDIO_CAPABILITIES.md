@@ -35,10 +35,10 @@ Stati ammessi:
 | Import media da Python esterno | PENDING | Da testare |
 | Ricostruire timeline con cut da bridge esterno | PENDING | Primitiva validata internamente, non ancora rieseguita via bridge esterno Studio/MCP |
 | TimelineItem transforms esterni | PENDING | Da testare |
-| Fusion composition create/read/write da Python esterno | PENDING | Da testare |
+| Fusion composition create/read/write da Python esterno | PARTIAL | Probe caption 2026-10-02: una composition con 12 Text+, 12 Merge, Background trasparente ed espressioni Blend è stata creata, letta, salvata e verificata via render; manca una primitiva parametrica ripetibile |
 | Tracking automatico Studio / IntelliTrack | PENDING | Rivalutare in Studio; vecchio trigger FusionScript Free non affidabile |
-| Captions/subtitles automation | PENDING | Da auditare |
-| Render queue/export esterno | PENDING | Da auditare |
+| Captions/subtitles automation | PARTIAL | `CreateSubtitlesFromAudio` funziona dopo `OpenPage("edit")`; styling nativo non esposto in modo sufficiente e `SetName` sul caption item fallisce. Fallback Text+ Fusion verificato su 12 caption verticali |
+| Render queue/export esterno | SUPPORTED | Render completo avviato e monitorato da Python esterno; output 1080x1920/30 verificato visivamente, inclusi caption e gap |
 | Creative 03: create progetto ARPHE | SUPPORTED | Gate A V2: creato/selezionato progetto nuovo, nessun overwrite |
 | Creative 03: create timeline 1080x1920/30 + status | SUPPORTED | Gate A V2: settings pre-creazione, match API e conferma visiva Resolve |
 | Creative 03: create timeline 1920x1080/30 + status | SUPPORTED | Master E09 16:9 creato e verificato via read-back, nessun overwrite |

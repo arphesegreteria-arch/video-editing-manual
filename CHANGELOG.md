@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-10-02 — Caption Engine mobile e render verticale
+
+- Verificata `CreateSubtitlesFromAudio` in Resolve Studio dopo apertura esplicita della pagina Edit.
+- Documentato il limite della API pubblica per Track Style/Inspector e la mancata modifica testo
+  tramite `TimelineItem.SetName`.
+- Verificato un fallback non-PNG con una composition Fusion, 12 Text+, Merge temporizzati tramite
+  espressioni Blend e Background trasparente.
+- Definito il preset mobile osservato: Satoshi Bold, bianco su bordeaux `#680C09`, size `0.043`.
+- Completato e controllato il render MP4/H.264 1080×1920/30, inclusi i gap senza caption.
+- Aggiunto `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`; capability caption marcata `PARTIAL`
+  e render esterno `SUPPORTED`.
+
 ## 2026-09-22 - Tunnel personale operativo e stato runtime per-workstation
 
 - Creata e connessa nell'area Business l'app `ARPHE Resolve Personale`, associata esclusivamente

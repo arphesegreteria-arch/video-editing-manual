@@ -7,7 +7,9 @@
   tramite `TimelineItem.SetName`.
 - Verificato un fallback non-PNG con una composition Fusion, 12 Text+, Merge temporizzati tramite
   espressioni Blend e Background trasparente.
-- Definito il preset mobile osservato: Satoshi Bold, bianco su bordeaux `#680C09`, size `0.043`.
+- Definito il preset mobile osservato: Satoshi Bold, bianco su bordeaux `#680C09`, size `0.050`.
+- Aggiunta una safe area 9:16: fascia bassa 68–82% come default, fascia alta 8–20% come fallback,
+  almeno 15% libero in basso e divieto assoluto di sovrapposizione ai volti.
 - Completato e controllato il render MP4/H.264 1080×1920/30, inclusi i gap senza caption.
 - Aggiunto `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`; capability caption marcata `PARTIAL`
   e render esterno `SUPPORTED`.

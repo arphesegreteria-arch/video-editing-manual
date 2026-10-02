@@ -6,8 +6,9 @@ Ultimo aggiornamento: sessione 2026-10-02.
 
 Sul `PC_PERSONALE` è stato completato un probe reale sulla timeline verticale
 `ARPHE_SHORTFORM_MASTER_V4`: creazione subtitle nativa, conversione logica in un unico layer
-Fusion con 12 Text+ temporizzati, stile Satoshi Bold bianco su bordeaux, render 1080×1920/30 e
-controllo visivo di caption, frasi lunghe e gap.
+Fusion con 12 Text+ temporizzati, stile Satoshi Bold bianco su bordeaux, size 0.050, fascia bassa
+68–82% con centro al 76%, render 1080×1920/30 e controllo visivo di caption, volti, frasi lunghe
+e gap.
 
 Risultati principali:
 - `CreateSubtitlesFromAudio` funziona dopo `resolve.OpenPage("edit")`;
@@ -15,6 +16,8 @@ Risultati principali:
 - `SetName` sul caption item non corregge il testo;
 - Background alpha zero + espressione sul Blend dei Merge produce overlay trasparente e timing
   corretto;
+- la regola di posizionamento vieta qualsiasi sovrapposizione al volto e conserva almeno il 15%
+  inferiore per l'interfaccia social;
 - render/export da Python esterno è stato completato e verificato.
 
 Stato: `PARTIAL`, non ancora primitiva MCP validata. Dettagli e gate:

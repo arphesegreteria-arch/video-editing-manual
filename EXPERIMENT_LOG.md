@@ -24,7 +24,10 @@ caption.
 - overlay Fusion Text+: PASS;
 - trasparenza: PASS dopo sostituzione del MediaIn base con Background RGBA zero;
 - timing: PASS usando espressioni `iif` sul Blend; BezierSpline diretto non affidabile;
-- stile finale: Satoshi Bold, size 0.043, bianco su `#680C09`;
+- stile finale: Satoshi Bold, size 0.050, bianco su `#680C09`;
+- prima posizione alta scartata perché troppo vicina alla testa;
+- safe area finale: fascia bassa 68–82%, centro 76%, ultimo 15% libero per la UI social;
+- verifica volto: PASS sui frame parlati campionati; nessuna sovrapposizione;
 - render esterno: PASS, MP4/H.264 1080×1920/30;
 - verifica visiva: PASS su caption iniziale, frase lunga, gap, B-roll e caption finale.
 

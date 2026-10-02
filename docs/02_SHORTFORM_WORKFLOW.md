@@ -38,9 +38,14 @@ La composizione deve partire da un Background con alpha zero; ogni caption usa u
 `Blend.SetExpression("iif(time >= start and time < end, 1, 0)")`. Non affidarsi a un
 `BezierSpline` assegnato direttamente a Blend: nel test non è rimasto attivo.
 
-Preset mobile testato: Satoshi Bold, bianco, fondo bordeaux `#680C09`, Text+ size `0.043`,
-1080×1920/30. La traccia nativa resta conservata ma disabilitata; `ExportSubtitle` deve essere
-false per evitare doppioni, perché il Text+ è già impresso nel video.
+Preset mobile testato: Satoshi Bold, bianco, fondo bordeaux `#680C09`, Text+ size `0.050`,
+1080×1920/30. La fascia bassa è il default: box entro il 68–82% dell'altezza, centro al 76%
+(`Center.Y = 0.24` in Fusion), con almeno il 15% libero in basso. Se collide con un volto o con
+un elemento essenziale usare la fascia alta 8–20%; mai sovrapporre testo, padding o fondo a un
+volto. Mantenere la stessa fascia per una scena, evitando salti a ogni battuta.
+
+La traccia nativa resta conservata ma disabilitata; `ExportSubtitle` deve essere false per evitare
+doppioni, perché il Text+ è già impresso nel video.
 
 Procedura, limiti e gate di promozione: `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`.
 

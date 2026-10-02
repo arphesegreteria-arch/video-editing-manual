@@ -7,3 +7,5 @@ __pycache__/
 **/runtime_state.json
 **/audit.jsonl
 scripts/windows_bridge/profiles/*.local.json
+.worktrees/
+.superpowers/sdd/

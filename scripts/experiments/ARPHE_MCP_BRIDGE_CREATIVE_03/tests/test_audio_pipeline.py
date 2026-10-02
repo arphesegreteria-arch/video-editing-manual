@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bridge.audio_tools import allowed_audio, audio_job  # noqa: E402
-from bridge.audio_worker import DISTANT_PRESET, LEVEL_PRESET, process_audio  # noqa: E402
+from bridge.audio_worker import DISTANT_PRESET, LEVEL_PRESET, NATURAL_PRESET, process_audio  # noqa: E402
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 
@@ -114,6 +114,25 @@ class AudioPipelineTests(unittest.TestCase):
                     self.assertLessEqual(max(abs(value) for value in values), int(32768 * 0.81))
 
             self.assertGreater(quiet_rms[DISTANT_PRESET], quiet_rms[LEVEL_PRESET] * 1.15)
+
+    def test_natural_preset_preserves_sync_without_hard_limiting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output, job = root / "source.wav", root / "output.wav", root / "job.json"
+            with wave.open(str(source), "wb") as handle:
+                handle.setnchannels(2)
+                handle.setsampwidth(2)
+                handle.setframerate(48000)
+                samples = []
+                for index in range(48000 * 2):
+                    value = int(9000 * math.sin(2 * math.pi * 440 * index / 48000))
+                    samples.append(struct.pack("<hh", value, value))
+                handle.writeframes(b"".join(samples))
+            job.write_text(json.dumps({"status": "QUEUED"}), encoding="utf-8")
+            process_audio(source, output, job, NATURAL_PRESET)
+            state = json.loads(job.read_text(encoding="utf-8"))
+            self.assertEqual("COMPLETED", state["status"])
+            self.assertAlmostEqual(2.0, state["output_duration_seconds"], places=2)
 
     def test_audio_and_job_paths_are_allowlisted(self):
         with tempfile.TemporaryDirectory() as directory:

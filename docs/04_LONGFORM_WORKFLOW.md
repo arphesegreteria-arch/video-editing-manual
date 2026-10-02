@@ -170,6 +170,8 @@ Il bridge espone tre preset distinti:
 - `ARPHE_DIALOGUE_CLEAN_V1`: pulizia conservativa per materiale già bilanciato;
 - `ARPHE_DIALOGUE_LEVEL_V2`: livellamento dinamico per differenze moderate;
 - `ARPHE_DIALOGUE_DISTANT_V3`: recupero più deciso con denoise, presenza, livellamento e limiter.
+- `ARPHE_DIALOGUE_NATURAL_V4`: finitura naturale per sorgenti già comprensibili che con `LEVEL_V2`
+  diventano metalliche o gracchianti; è la prima scelta per il parlato registrato correttamente.
 
 ### Parametri standard di mixaggio (baseline 2026-09)
 
@@ -184,6 +186,10 @@ Questi valori sono lo standard operativo attuale, non un vincolo artistico defin
 - `DISTANT_V3`: `afftdn nr=14`, noise floor `-48 dB`, EQ presenza `3.2 kHz`, Q `1.2`, gain `+3 dB`,
   `dynaudnorm f=300:g=15:p=0.82:m=8:r=0.16:s=8:t=0.008:o=0.5`, compressore soglia `0.10`,
   ratio `2.5:1`, attack `10 ms`, release `180 ms`, makeup `1.15`, boost `+6 dB`, limiter `0.8`.
+- `NATURAL_V4`: passa-alto a `70 Hz`, `afftdn nr=4` con noise floor `-55 dB`, attenuazione
+  morbida a `3.8 kHz` (`-1.5 dB`, Q `1.1`), compressore soglia `0.18`, ratio `1.6:1`,
+  attack `25 ms`, release `220 ms`, makeup `1.05`, gain `+1.5 dB` e limiter `0.891`
+  con auto-livellamento disattivato. Non usa `dynaudnorm`.
 
 La normalizzazione deve essere applicata all'intera sorgente prima dei tagli; il controllo umano
 decide se il recupero V3 solleva troppo ambiente o riverbero. Questi parametri sono centralizzati in
@@ -212,3 +218,31 @@ Il pacchetto pubblicabile dell'episodio 1 è stato creato e salvato il 2026-09-1
 master `ARPHE_EP1_CUTS_MASTER_V1` e 12 timeline individuali. Longform e cut usano il WAV V3 e il
 preset edge fade; nessun render è stato accodato. Il manifest operativo è
 `plans/ARPHE_EP1_PUBLISH_PACKAGE_V1.json`.
+
+## Calibrazione editoriale short-form E10 — 2026-10-02
+
+Il confronto tra la prima proposta automatica e la revisione umana di
+`10 cose che non sai sulla medicina estetica e la clinica.mp4` produce le seguenti regole
+**candidate**. Diventano canoniche dopo il gate audiovisivo della V2:
+
+1. I tre minuti sono un limite massimo, non un obiettivo. Per un Reel parlato privilegiare una
+   singola tesi completa in circa `35–100 s`.
+2. Il confine semantico viene prima della durata: conservare premessa minima, spiegazione e frase
+   conclusiva; eliminare la conversazione che riparte su un secondo argomento.
+3. Quando una risposta breve (`esatto`, `sì`) chiude davvero il ragionamento, includerla nel taglio;
+   non troncare subito prima della conferma dell'interlocutore.
+4. Una frase indicata dall'operatore è il vincolo editoriale autorevole. Localizzarla sui timestamp
+   parola-per-parola, poi rifinire su audio e frame lasciando il respiro necessario.
+5. Battute o riferimenti sensibili, incluso il doping, possono restare soltanto se necessari alla
+   coerenza causa-effetto e se il contenuto non li presenta come prescrizione o incoraggiamento.
+6. Nei contenuti clinici fermarsi quando la tesi promessa è stata dimostrata. Prezzi improvvisati,
+   digressioni operative e nuovi sottotemi vanno esclusi anche se divertenti.
+7. La CTA vive in una coda separata di circa cinque secondi. Il passaggio deve essere progressivo:
+   base cream del kit e dissolvenza borgogna `ARPHE_CTA_FADE` in `24` frame. La dissolvenza anima
+   soltanto l'opacità: non applica traiettorie ai testi e mantiene l'intera CTA stabile fino alla fine.
+8. Ogni taglio resta soggetto a due gate umani distinti: ritmo audiovisivo e correttezza clinica.
+
+Nel test E10 la revisione ha ridotto sei estratti da `18.818` a `10.534` frame complessivi a 30 fps
+senza eliminare alcun tema. La lezione è che il primo piano sovrastimava il contesto necessario:
+per i prossimi Reel la proposta automatica deve partire dalla frase che introduce la tesi e chiudere
+alla prima conclusione autosufficiente, non alla fine della conversazione sul tema.

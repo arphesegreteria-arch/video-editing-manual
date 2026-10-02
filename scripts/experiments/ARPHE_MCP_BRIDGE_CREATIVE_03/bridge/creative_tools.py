@@ -511,16 +511,23 @@ def _animate(comp: Any, record: dict, plan: dict, reverse: bool = False) -> bool
         return False
     outer = safe_call(comp, "FindTool", record.get("outer_merge_name"))
     keys = list(reversed(plan["keys"])) if reverse else plan["keys"]
+    static_transform = all(
+        float(key["x"]) == 0.0 and float(key["y"]) == 0.0
+        and float(key["scale"]) == 1.0 and float(key["rotation"]) == 0.0
+        for key in keys
+    )
     # Attach modifiers before populating them; Resolve 21 otherwise creates the
     # spline nodes but continues evaluating the inputs at their defaults.
     # Center is a 2D point, so Resolve evaluates it through a Path modifier.
     # BezierSpline silently accepts the assignment but leaves Center static.
-    transform.Center = comp.Path()
-    transform.Size = comp.BezierSpline()
-    transform.Angle = comp.BezierSpline()
-    center = transform.Center
-    size = transform.Size
-    angle = transform.Angle
+    center = size = angle = None
+    if not static_transform:
+        transform.Center = comp.Path()
+        transform.Size = comp.BezierSpline()
+        transform.Angle = comp.BezierSpline()
+        center = transform.Center
+        size = transform.Size
+        angle = transform.Angle
     opacity = None
     if outer:
         outer.Blend = comp.BezierSpline()
@@ -530,11 +537,26 @@ def _animate(comp: Any, record: dict, plan: dict, reverse: bool = False) -> bool
     transform.Blend = 1.0
     for index, key in enumerate(keys):
         frame = key["frame"]
-        center[frame] = {1: 0.5 + key["x"], 2: 0.5 + key["y"], 3: 0.0}
-        size[frame] = key["scale"]
-        angle[frame] = key["rotation"]
+        if center is not None:
+            center[frame] = {1: 0.5 + key["x"], 2: 0.5 + key["y"], 3: 0.0}
+            size[frame] = key["scale"]
+            angle[frame] = key["rotation"]
         if opacity is not None:
             opacity[frame] = key["opacity"]
+    if opacity is not None and static_transform and len(keys) >= 2:
+        # Fusion's Bezier spline can sag between distant opacity keys even
+        # when both endpoints are 1.  CTA fades are short, so write their
+        # eased opacity explicitly frame by frame and remove that ambiguity.
+        ordered = sorted(keys, key=lambda item: int(item["frame"]))
+        for first, second in zip(ordered, ordered[1:]):
+            first_frame, second_frame = int(first["frame"]), int(second["frame"])
+            span = max(1, second_frame - first_frame)
+            for frame in range(first_frame, second_frame + 1):
+                progress = (frame - first_frame) / span
+                eased = progress * progress * (3.0 - 2.0 * progress)
+                opacity[frame] = float(first["opacity"]) + (
+                    float(second["opacity"]) - float(first["opacity"])
+                ) * eased
     if opacity is not None and record.get("end_frame") is not None:
         # Motion and visibility must share one Blend spline.  Replacing the
         # visibility spline with only the two entry keys makes Fusion ease the
@@ -546,7 +568,21 @@ def _animate(comp: Any, record: dict, plan: dict, reverse: bool = False) -> bool
         if start_frame > 0:
             opacity[0] = 0.0
             opacity[start_frame - 1] = 0.0
-        opacity[max(start_frame, end_frame - 1)] = 1.0
+        hold_frame = max(start_frame, end_frame - 1)
+        if static_transform:
+            last_motion_frame = max(int(key["frame"]) for key in keys)
+            for frame in range(last_motion_frame, hold_frame + 1):
+                opacity[frame] = 1.0
+        else:
+            opacity[hold_frame] = 1.0
+        # Resolve can extrapolate Path/Bezier values beyond the last motion
+        # keyframe. Pin every transform channel through the visibility hold,
+        # otherwise CTA text may drift out of frame while its full-screen
+        # background still appears correct.
+        if center is not None:
+            center[hold_frame] = {1: 0.5, 2: 0.5, 3: 0.0}
+            size[hold_frame] = 1.0
+            angle[hold_frame] = 0.0
         opacity[end_frame] = 0.0
     return True
 

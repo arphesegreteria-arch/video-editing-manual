@@ -12,7 +12,8 @@ import traceback
 PRESET = "ARPHE_DIALOGUE_CLEAN_V1"
 LEVEL_PRESET = "ARPHE_DIALOGUE_LEVEL_V2"
 DISTANT_PRESET = "ARPHE_DIALOGUE_DISTANT_V3"
-PRESETS = frozenset({PRESET, LEVEL_PRESET, DISTANT_PRESET})
+NATURAL_PRESET = "ARPHE_DIALOGUE_NATURAL_V4"
+PRESETS = frozenset({PRESET, LEVEL_PRESET, DISTANT_PRESET, NATURAL_PRESET})
 
 
 def _save(path: Path, payload: dict) -> None:
@@ -65,10 +66,14 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                     f"time_base={frame.time_base}:sample_rate={frame.sample_rate}:"
                     f"sample_fmt={frame.format.name}:channel_layout={frame.layout.name}"
                 ))
-                highpass = graph.add("highpass", "f=80")
+                highpass = graph.add("highpass", "f=70" if preset == NATURAL_PRESET else "f=80")
                 denoise = graph.add(
                     "afftdn",
-                    "nr=14:nf=-48:tn=1" if preset == DISTANT_PRESET else "nr=8:nf=-50:tn=1",
+                    (
+                        "nr=14:nf=-48:tn=1" if preset == DISTANT_PRESET
+                        else "nr=4:nf=-55:tn=1" if preset == NATURAL_PRESET
+                        else "nr=8:nf=-50:tn=1"
+                    ),
                 )
                 if preset in {LEVEL_PRESET, DISTANT_PRESET}:
                     if preset == DISTANT_PRESET:
@@ -89,6 +94,18 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                         "acompressor",
                         compressor_options,
                     )
+                elif preset == NATURAL_PRESET:
+                    # Fairlight-inspired natural dialogue chain: preserve the room and
+                    # transients, soften the harsh upper-mid band and avoid automatic
+                    # limiter gain.  This is intended for already intelligible sources
+                    # where LEVEL_V2 can expose metallic/raspy denoise artefacts.
+                    presence = graph.add("equalizer", "f=3800:t=q:w=1.1:g=-1.5")
+                    booster = graph.add("volume", "volume=1.5dB")
+                    leveler = None
+                    compressor = graph.add(
+                        "acompressor",
+                        "threshold=0.18:ratio=1.6:attack=25:release=220:makeup=1.05",
+                    )
                 else:
                     presence = None
                     booster = None
@@ -100,6 +117,8 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                 limiter_options = (
                     "limit=0.8:attack=5:release=50:level=false"
                     if preset == DISTANT_PRESET
+                    else "limit=0.891:attack=8:release=80:level=false"
+                    if preset == NATURAL_PRESET
                     else "limit=0.891:attack=5:release=50"
                 )
                 limiter = graph.add("alimiter", limiter_options)
@@ -114,7 +133,11 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                         denoise.link_to(leveler)
                     leveler.link_to(compressor)
                 else:
-                    denoise.link_to(compressor)
+                    if presence is not None:
+                        denoise.link_to(presence)
+                        presence.link_to(compressor)
+                    else:
+                        denoise.link_to(compressor)
                 if booster is not None:
                     compressor.link_to(booster)
                     booster.link_to(limiter)

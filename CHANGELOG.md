@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-10-02 — E10 Reel V2, confini umani e audio naturale
+
+- Ricostruito il piano E10 in sei Reel usando frasi di ingresso/uscita indicate dall'operatore e
+  timestamp parola-per-parola; durata complessiva ridotta da 18.818 a 10.534 frame.
+- Aggiunto `ARPHE_DIALOGUE_NATURAL_V4`, preset conservativo ispirato al flusso Fairlight per
+  sorgenti già intelligibili che con `LEVEL_V2` risultano metalliche o gracchianti.
+- Documentate otto regole editoriali candidate: una tesi per Reel, tre minuti come limite e non
+  target, conferme brevi preservate, frasi umane autorevoli, sensibilità contestuale e doppio gate.
+- Aggiunto `ARPHE_CTA_FADE`: dissolvenza CTA di sola opacità, campionata frame per frame e mantenuta
+  fino alla fine per evitare movimenti o scomparsa tardiva dei testi in Fusion.
+- Versionato il piano in `plans/ARPHE_E10_MEDICINA_ESTETICA_REELS_V2.json`.
+
 ## 2026-10-02 — Caption Engine mobile e render verticale
 
 - Verificata `CreateSubtitlesFromAudio` in Resolve Studio dopo apertura esplicita della pagina Edit.

@@ -132,6 +132,20 @@ def _require_project(manager: Any, project: Any, project_name: str, config: Crea
         raise ValidationError("Progetto protetto da un render batch attivo")
 
 
+def _project_last_modified(manager: Any, project_name: str) -> int | str:
+    value = safe_call(manager, "GetProjectLastModifiedTime", project_name)
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    attributes = safe_call(manager, "GetProjectAttributesInCurrentFolder")
+    if isinstance(attributes, dict):
+        project_attributes = attributes.get(project_name)
+        if isinstance(project_attributes, dict):
+            fallback = project_attributes.get("lastModifiedDate")
+            if isinstance(fallback, str) and fallback.strip():
+                return fallback.strip()
+    raise RuntimeError("Last-modified progetto non leggibile")
+
+
 def _archive_path(config: CreativeConfig, project_name: str, retirement_id: str,
                   now: datetime) -> Path:
     safe_project = re.sub(r"[^A-Za-z0-9_-]+", "_", project_name)[:64]
@@ -187,9 +201,7 @@ def prepare_retirement(manager: Any, project: Any, config: CreativeConfig, regis
         raise RuntimeError("ExportProject fallito")
     if not archive.is_file() or archive.stat().st_size <= 0:
         raise RuntimeError("Archivio .drp assente o vuoto")
-    modified = safe_call(manager, "GetProjectLastModifiedTime", project_name)
-    if not isinstance(modified, int) or isinstance(modified, bool) or modified <= 0:
-        raise RuntimeError("Last-modified progetto non leggibile")
+    modified = _project_last_modified(manager, project_name)
     record = {
         "retirement_id": retirement_id,
         "workstation_id": config.workstation_id,
@@ -281,7 +293,7 @@ def execute_retirement(manager: Any, project: Any, config: CreativeConfig, regis
         current = safe_call(project, "GetCurrentTimeline")
         if current is target or str(safe_call(current, "GetName") or "") == record["timeline_name"]:
             raise ValidationError("Selezionare un'altra timeline prima del retirement")
-    modified = safe_call(manager, "GetProjectLastModifiedTime", record["project_name"])
+    modified = _project_last_modified(manager, record["project_name"])
     if modified != record["project_last_modified"]:
         raise ValidationError("Progetto modificato dopo l'archivio; preparare una nuova proposta")
     if record["status"] == "APPROVED":

@@ -163,6 +163,19 @@ class ResolveRetirementTests(unittest.TestCase):
             self.assertGreater(record["archive_size_bytes"], 0)
             self.assertEqual(64, len(record["archive_sha256"]))
 
+    def test_prepare_uses_project_attributes_when_direct_last_modified_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config, registry, project, manager, store = setup(Path(directory))
+            manager.GetProjectLastModifiedTime = lambda _name: None
+            manager.GetProjectAttributesInCurrentFolder = lambda: {
+                project.name: {"lastModifiedDate": "2026-10-08T10:00:00+02:00"}
+            }
+            result = prepare_retirement(manager, project, config, registry, store,
+                                        "timeline", project.name, "ARPHE_RETIRE", NOW)
+            self.assertEqual("PREPARED", result["status"])
+            self.assertEqual("2026-10-08T10:00:00+02:00",
+                             store.get(result["retirement_id"])["project_last_modified"])
+
     def test_prepare_rejects_current_timeline_and_active_render_lock(self):
         with tempfile.TemporaryDirectory() as directory:
             config, registry, project, manager, store = setup(Path(directory))

@@ -121,6 +121,7 @@ class FakeRenderProject:
     def GetTimelineCount(self): return 1
     def GetTimelineByIndex(self, _index): return self.timeline
     def GetRenderJobList(self): return [dict(job) for job in self.jobs]
+    def GetRenderJobStatus(self, job_id): return {"JobId": job_id, "JobStatus": "Complete"}
     def SetCurrentRenderFormatAndCodec(self, container, codec): self.settings.update(container=container, codec=codec); return True
     def SetRenderSettings(self, settings): self.settings.update(settings); return True
     def AddRenderJob(self):
@@ -218,6 +219,13 @@ def approved_batch(root: Path, project: FakeRenderProject):
 
 
 class RenderBatchExecutionTests(unittest.TestCase):
+    def test_status_uses_job_status_api_when_queue_list_omits_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); project = FakeRenderProject(); registry = Registry(root / "state.json")
+            batch = stored_batch(registry); prepared = prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            result = get_render_batch_status(project, registry, batch.batch_id)
+            self.assertEqual("Complete", result["jobs"][prepared["created_job_ids"][0]])
+
     def test_start_passes_only_approved_created_ids_and_never_old_ids(self):
         with tempfile.TemporaryDirectory() as directory:
             project = FakeRenderProject(); registry, batch = approved_batch(Path(directory), project)

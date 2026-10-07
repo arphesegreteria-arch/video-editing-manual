@@ -97,7 +97,10 @@ ha restituito `PLAYBACK_FPS_ACTION_REQUIRED` (attuale 24, richiesto 30) senza cr
 Il playback è stato poi impostato a 30 tramite Project Settings da controllo remoto; il retry ha
 creato la timeline disposable con read-back conforme. Durante il passaggio al render è stato
 individuato e corretto l'installer che ometteva i registri workflow/render. Nessun test è stato
-eseguito sul progetto di lavoro della segreteria.
+eseguito sul progetto di lavoro della segreteria. Il gate ha inoltre confermato che
+`GetRenderJobList()` non espone `JobStatus` in Resolve 21.1.1: lo stato viene ora letto con
+`GetRenderJobStatus(job_id)`. Il render selettivo ha creato il file staging lasciando fermo il
+job preesistente; verifica e promozione restano da completare dopo il redeploy della correzione.
 
 ### PC_SEGRETERIA — PENDING
 

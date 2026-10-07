@@ -18,6 +18,7 @@ CAPABILITY_STATUS = {
     "CAP_LONGFORM": "PENDING",
     "CAP_CLEANUP": "PENDING",
     "CAP_ARTIFACT_MAINTENANCE": "PENDING",
+    "CAP_RESOLVE_RETIREMENT": "PENDING",
 }
 
 
@@ -47,6 +48,12 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
     render_ok = project is not None and all(_method(project, name) for name in (
         "SetCurrentRenderFormatAndCodec", "SetRenderSettings", "AddRenderJob", "StartRendering",
     ))
+    retirement_ok = manager is not None and project is not None and pool is not None and all(
+        _method(manager, name) for name in (
+            "SaveProject", "ExportProject", "GetProjectLastModifiedTime",
+            "GetProjectListInCurrentFolder", "CloseProject", "DeleteProject", "ImportProject",
+        )
+    ) and _method(pool, "DeleteTimelines")
     return {
         "CAP_PROJECT": project_ok,
         "CAP_TIMELINE": timeline_ok,
@@ -58,6 +65,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_LONGFORM": project_ok and assets_ok,
         "CAP_CLEANUP": False,
         "CAP_ARTIFACT_MAINTENANCE": True,
+        "CAP_RESOLVE_RETIREMENT": retirement_ok,
     }
 
 

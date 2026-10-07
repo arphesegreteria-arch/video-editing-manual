@@ -14,6 +14,8 @@
   "artifact_policy_path": "artifact_retention.json",
   "artifact_registry_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/artifact_registry.json",
   "runtime_log_root": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/PC_SEGRETERIA",
+  "resolve_archive_root": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/resolve-retirement-archives",
+  "resolve_retirement_registry_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/resolve_retirement_registry.json",
   "allowed_projects": [],
   "allowed_timelines": [],
   "feature_flags": {
@@ -26,7 +28,8 @@
     "CAP_RENDER": false,
     "CAP_LONGFORM": false,
     "CAP_CLEANUP": false,
-    "CAP_ARTIFACT_MAINTENANCE": false
+    "CAP_ARTIFACT_MAINTENANCE": false,
+    "CAP_RESOLVE_RETIREMENT": false
   },
   "palette": {
     "ivory": "#F7F2E8",

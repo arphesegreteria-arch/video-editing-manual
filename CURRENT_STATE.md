@@ -2,6 +2,18 @@
 
 Ultimo aggiornamento: sessione 2026-10-08.
 
+## Ritiro Resolve archive-first — CODICE VALIDATO / ROLLOUT PENDING
+
+Timeline e progetti ARPHÈ possono essere ritirati soltanto dopo salvataggio, export `.drp`
+verificato, fingerprint e approvazione tecnica esplicita. L'esecuzione ricontrolla hash,
+last-modified, render lock e target esatto; il recovery importa un progetto `ARPHE_RECOVERY_...`
+senza overwrite. Retention archivi: tutti per 30 giorni e comunque gli ultimi 3 per progetto;
+nessun archivio viene eliminato automaticamente.
+
+Validazione automatica: Creative `165 PASS / 1 SKIP` ambientale; Windows `48 PASS / 1 SKIP`
+DPAPI ambientale. Rollout e prova distruttiva disposable `PC_PERSONALE`: `PENDING`.
+`PC_SEGRETERIA`: **NON TOCCATO**. Procedura: `docs/20_RESOLVE_RETIREMENT_AND_RECOVERY.md`.
+
 ## Igiene artefatti — CODICE VALIDATO / ROLLOUT PERSONALE IN OSSERVAZIONE
 
 Il bridge registra catture diagnostiche, staging render e log ruotati; applica retention fissa,
@@ -9,8 +21,8 @@ quarantena recuperabile di sette giorni e purge soltanto su artefatti tecnici co
 sconosciuti, sorgenti, master, pubblicabili e oggetti Resolve non vengono rimossi. Il vecchio
 cleanup generico di progetti/timeline/path non è più esposto.
 
-Validazione automatica: Creative `153 PASS / 1 SKIP` ambientale symlink; Windows
-`45 PASS / 1 SKIP` DPAPI ambientale. Sul `PC_PERSONALE` installazione, riavvio, readiness,
+Validazione automatica complessiva aggiornata: Creative `165 PASS / 1 SKIP` ambientale symlink;
+Windows `48 PASS / 1 SKIP` DPAPI ambientale. Sul `PC_PERSONALE` installazione, riavvio, readiness,
 inventario e manutenzione a vuoto sono PASS. I 68 elementi storici (`37.092.166` byte) restano
 `UNCLASSIFIED` e intatti. La sonda registrata `290944e3-f62f-4a44-bc93-fa1bc43e756e` è
 correttamente `ACTIVE` fino al 2026-10-08 22:43:07 UTC; quarantena/restore e purge restano

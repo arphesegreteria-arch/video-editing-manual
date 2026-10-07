@@ -53,6 +53,14 @@ from .render_tools import (queue_longform_exports as do_queue_longform_exports,
                            start_render_batch as do_start_render_batch,
                            get_render_batch_status as do_get_render_batch_status,
                            cancel_render_batch as do_cancel_render_batch)
+from .resolve_retirement import (
+    approve_retirement as do_approve_resolve_retirement,
+    execute_retirement as do_execute_resolve_retirement,
+    inspect_retirements as do_inspect_resolve_retirements,
+    prepare_retirement as do_prepare_resolve_retirement,
+    recover_retirement as do_recover_resolve_retirement,
+    retirement_store_for,
+)
 from .media_verification import verify_and_promote_batch as do_verify_render_batch
 from .maintenance_scheduler import start_lazy_maintenance
 from .resolve_connection import RESOLVE_ACCESS_LOCK, context, safe_call
@@ -716,6 +724,11 @@ def _require_artifact_mutation(config: Any) -> None:
         raise RuntimeError("CAP_ARTIFACT_MAINTENANCE non attiva")
 
 
+def _require_resolve_retirement(config: Any) -> None:
+    if not config.flags.get("CAP_RESOLVE_RETIREMENT", False):
+        raise RuntimeError("CAP_RESOLVE_RETIREMENT non attiva")
+
+
 @mcp.tool(annotations=READ_ONLY)
 def inspect_artifact_hygiene() -> dict[str, Any]:
     """Inspect only bridge-owned artifacts; accepts no filesystem path."""
@@ -747,6 +760,82 @@ def restore_quarantined_artifact(artifact_id: str) -> dict[str, Any]:
         _require_artifact_mutation(config)
         store, _, policy = _artifact_components(config)
         return _call(do_restore_artifact, config, store, artifact_id, policy, datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_resolve_retirements() -> dict[str, Any]:
+    """Inspect archive-first Resolve retirements; returns no absolute filesystem path."""
+    try:
+        config = load_config()
+        return _call(do_inspect_resolve_retirements, config, retirement_store_for(config),
+                     datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_resolve_retirement(kind: str, project_name: str,
+                               timeline_name: str | None = None) -> dict[str, Any]:
+    """Export and verify a DRP proposal; never removes a Resolve object."""
+    try:
+        selected = load_config()
+        _require_resolve_retirement(selected)
+        with RESOLVE_ACCESS_LOCK:
+            _, manager, project, _, config, registry, error = _runtime()
+            if error:
+                return error
+            _require_resolve_retirement(config)
+            return _call(do_prepare_resolve_retirement, manager, project, config, registry,
+                         retirement_store_for(config), kind, project_name, timeline_name,
+                         datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_resolve_retirement(retirement_id: str, operator_role: str) -> dict[str, Any]:
+    """Approve the immutable fingerprint of one prepared Resolve retirement."""
+    try:
+        config = load_config()
+        _require_resolve_retirement(config)
+        return _call(do_approve_resolve_retirement, retirement_store_for(config), retirement_id,
+                     operator_role, datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
+def execute_resolve_retirement(retirement_id: str) -> dict[str, Any]:
+    """Remove exactly one approved target after revalidating its verified DRP archive."""
+    try:
+        selected = load_config()
+        _require_resolve_retirement(selected)
+        with RESOLVE_ACCESS_LOCK:
+            _, manager, project, _, config, registry, error = _runtime()
+            if error:
+                return error
+            _require_resolve_retirement(config)
+            return _call(do_execute_resolve_retirement, manager, project, config, registry,
+                         retirement_store_for(config), retirement_id, datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def recover_resolve_retirement(retirement_id: str) -> dict[str, Any]:
+    """Import a verified DRP as a new ARPHE_RECOVERY project without overwriting."""
+    try:
+        selected = load_config()
+        _require_resolve_retirement(selected)
+        with RESOLVE_ACCESS_LOCK:
+            _, manager, _, _, config, _, error = _runtime()
+            if error:
+                return error
+            _require_resolve_retirement(config)
+            return _call(do_recover_resolve_retirement, manager, config,
+                         retirement_store_for(config), retirement_id, datetime.now(timezone.utc))
     except Exception as exc:
         return _error(exc)
 

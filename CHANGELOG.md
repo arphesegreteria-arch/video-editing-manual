@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-10-08 — Ritiro Resolve archive-first e recovery senza overwrite
+
+- Aggiunti prepare, approvazione tecnica, execute idempotente, inspection e recovery per timeline
+  e progetti ARPHÈ.
+- Ogni proposta salva ed esporta un `.drp` verificato con SHA-256 prima di qualunque rimozione;
+  modifiche successive al progetto o all'archivio bloccano l'execute.
+- Timeline corrente e progetti con render lock sono protetti; `DeleteProject` avviene solo dopo
+  `CloseProject` e verifica API. Un crash in `EXECUTING` viene riconciliato senza doppio delete.
+- Recovery via import in un nuovo `ARPHE_RECOVERY_...`, senza overwrite. Gli archivi restano tutti
+  per 30 giorni e comunque gli ultimi 3 per progetto; nessuna cancellazione automatica.
+- Nuovo gate e registry per-workstation `CAP_RESOLVE_RETIREMENT=false` di default. Un config o
+  registry dell'altro PC blocca l'installer prima delle scritture.
+- Suite: Creative `165 PASS / 1 SKIP`; Windows `48 PASS / 1 SKIP`. Rollout live PENDING;
+  `PC_SEGRETERIA` non toccato.
+
 ## 2026-10-08 — Quarantena tecnica recuperabile e runtime separati
 
 - Aggiunti registry artefatti per workstation, policy di retention fissa, inventario read-only,

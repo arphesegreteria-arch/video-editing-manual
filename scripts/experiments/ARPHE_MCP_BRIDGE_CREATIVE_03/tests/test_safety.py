@@ -180,6 +180,10 @@ class SafetyTests(unittest.TestCase):
             config = load_config(path)
             self.assertEqual(path.resolve(), config.path)
             self.assertEqual("PC_PERSONALE", config.workstation_id)
+            self.assertEqual(path.parent / "resolve-archives", config.resolve_archive_root)
+            self.assertEqual(path.parent / "resolve-retirements.json",
+                             config.resolve_retirement_registry_path)
+            self.assertFalse(config.flags["CAP_RESOLVE_RETIREMENT"])
 
     def test_config_rejects_unallowlisted_render_codec(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -291,23 +295,36 @@ class MotionTests(unittest.TestCase):
 
 
 class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_tools_are_closed_world_and_only_maintenance_is_destructive(self):
+    async def test_tools_are_closed_world_and_destructive_tools_are_explicit(self):
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         self.assertEqual(set(EXPOSED_TOOL_NAMES), set(tools))
         for tool in tools.values():
-            self.assertEqual(tool.name == "run_artifact_maintenance",
+            self.assertEqual(tool.name in {"run_artifact_maintenance", "execute_resolve_retirement"},
                              tool.annotations.destructive_hint, tool.name)
             self.assertFalse(tool.annotations.open_world_hint, tool.name)
         self.assertTrue(tools["run_artifact_maintenance"].annotations.idempotent_hint)
         self.assertTrue(tools["inspect_artifact_hygiene"].annotations.read_only_hint)
         self.assertFalse(tools["restore_quarantined_artifact"].annotations.read_only_hint)
         self.assertFalse(tools["restore_quarantined_artifact"].annotations.destructive_hint)
+        self.assertTrue(tools["execute_resolve_retirement"].annotations.idempotent_hint)
+        self.assertTrue(tools["inspect_resolve_retirements"].annotations.read_only_hint)
 
     def test_artifact_tools_accept_no_arbitrary_path(self):
         self.assertEqual([], list(inspect.signature(server.inspect_artifact_hygiene).parameters))
         self.assertEqual([], list(inspect.signature(server.run_artifact_maintenance).parameters))
         self.assertEqual(["artifact_id"],
                          list(inspect.signature(server.restore_quarantined_artifact).parameters))
+
+    def test_resolve_retirement_tools_accept_ids_and_names_but_no_path(self):
+        self.assertEqual([], list(inspect.signature(server.inspect_resolve_retirements).parameters))
+        self.assertEqual(["kind", "project_name", "timeline_name"],
+                         list(inspect.signature(server.prepare_resolve_retirement).parameters))
+        self.assertEqual(["retirement_id", "operator_role"],
+                         list(inspect.signature(server.approve_resolve_retirement).parameters))
+        self.assertEqual(["retirement_id"],
+                         list(inspect.signature(server.execute_resolve_retirement).parameters))
+        self.assertEqual(["retirement_id"],
+                         list(inspect.signature(server.recover_resolve_retirement).parameters))
 
     async def test_prepare_and_approve_are_safe_writes_start_and_cancel_are_explicit_writes(self):
         tools = {tool.name: tool for tool in await mcp.list_tools()}

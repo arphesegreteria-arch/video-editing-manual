@@ -51,6 +51,9 @@ Il vecchio cleanup generico di progetti, timeline e percorsi non è più esposto
 artefatti usa soltanto il registry locale del profilo e una policy fissa: l'ispezione è read-only,
 la quarantena richiede `CAP_ARTIFACT_MAINTENANCE=true` e il ripristino accetta soltanto un ID opaco.
 `CAP_CLEANUP` resta leggibile nelle config storiche ma non abilita alcun comando pubblico.
+Il ritiro di timeline/progetti è un modulo separato: prima esporta e verifica un `.drp`, poi
+richiede approvazione tecnica e ricontrolla target e last-modified. È disabilitato per default da
+`CAP_RESOLVE_RETIREMENT`; il recovery importa sempre un nuovo progetto `ARPHE_RECOVERY_...`.
 
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato

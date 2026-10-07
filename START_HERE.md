@@ -32,6 +32,7 @@ Non costruire una GUI desktop ARPHE separata come interfaccia primaria salvo nuo
 15. `docs/15_E09_REVIEWS_CARTOLINE.md` — piano E09 con recensioni originali e cartoline.
 16. `docs/18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md` — scelta linea, formato e render sicuro.
 17. `docs/19_ARTIFACT_HYGIENE_AND_QUARANTINE.md` — file tecnici, quarantena e ripristino.
+18. `docs/20_RESOLVE_RETIREMENT_AND_RECOVERY.md` — ritiro archive-first e recovery Resolve.
 
 ## Regola per ChatGPT
 

@@ -21,6 +21,7 @@
 | `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md` | **Standard riusabile per Reel Instagram con recensioni** |
 | `docs/18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md` | **Linee editoriali, contratti formato e render batch** |
 | `docs/19_ARTIFACT_HYGIENE_AND_QUARANTINE.md` | **Retention, quarantena recuperabile e gate separati per PC** |
+| `docs/20_RESOLVE_RETIREMENT_AND_RECOVERY.md` | **Archivio `.drp`, approvazione, ritiro e recovery timeline/progetti** |
 | `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
 | `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 | `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |

@@ -17,6 +17,8 @@ EXPOSED_TOOL_NAMES = (
     "approve_render_batch", "start_render_batch", "get_render_batch_status",
     "verify_render_batch", "cancel_render_batch",
     "inspect_artifact_hygiene", "run_artifact_maintenance", "restore_quarantined_artifact",
+    "inspect_resolve_retirements", "prepare_resolve_retirement",
+    "approve_resolve_retirement", "execute_resolve_retirement", "recover_resolve_retirement",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {

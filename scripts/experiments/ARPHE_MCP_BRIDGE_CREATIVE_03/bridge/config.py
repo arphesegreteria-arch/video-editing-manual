@@ -12,6 +12,7 @@ CAPABILITY_NAMES = (
     "CAP_PROJECT", "CAP_TIMELINE", "CAP_FUSION", "CAP_REVIEW",
     "CAP_MOTION", "CAP_ASSETS", "CAP_RENDER", "CAP_LONGFORM", "CAP_CLEANUP",
     "CAP_ARTIFACT_MAINTENANCE",
+    "CAP_RESOLVE_RETIREMENT",
 )
 
 DEFAULT_PALETTE = {
@@ -36,6 +37,7 @@ DEFAULT_FLAGS = {
     "CAP_LONGFORM": False,
     "CAP_CLEANUP": False,
     "CAP_ARTIFACT_MAINTENANCE": False,
+    "CAP_RESOLVE_RETIREMENT": False,
 }
 
 ALLOWED_RENDER_PAIRS = {("mp4", "H264"), ("mov", "ProRes422HQ")}
@@ -71,6 +73,8 @@ class CreativeConfig:
     artifact_policy_path: Path = Path("artifact_retention.json")
     artifact_registry_path: Path = Path("artifact_registry.json")
     runtime_log_root: Path = Path("runtime-logs")
+    resolve_archive_root: Path = Path("resolve-archives")
+    resolve_retirement_registry_path: Path = Path("resolve-retirements.json")
 
 
 def _path(value: str, base: Path) -> Path:
@@ -142,4 +146,8 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         artifact_policy_path=_registry_path(raw.get("artifact_policy_path"), package_root / "artifact_retention.json"),
         artifact_registry_path=_path(str(raw.get("artifact_registry_path", "")), base / "artifact_registry.json"),
         runtime_log_root=_path(str(raw.get("runtime_log_root", "")), base / "runtime-logs"),
+        resolve_archive_root=_path(str(raw.get("resolve_archive_root", "")), base / "resolve-archives"),
+        resolve_retirement_registry_path=_path(
+            str(raw.get("resolve_retirement_registry_path", "")), base / "resolve-retirements.json"
+        ),
     )

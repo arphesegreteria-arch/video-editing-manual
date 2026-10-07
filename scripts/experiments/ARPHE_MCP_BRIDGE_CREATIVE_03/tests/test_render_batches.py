@@ -20,7 +20,8 @@ from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa
 from bridge.render_batches import (  # noqa: E402
     approve_render_batch, batch_fingerprint, create_render_batch, transition_batch,
 )
-from bridge.render_tools import prepare_render_batch  # noqa: E402
+from bridge.render_tools import (cancel_render_batch, get_render_batch_status,
+                                 prepare_render_batch, start_render_batch)  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 
 
@@ -183,6 +184,54 @@ class RenderBatchPreparationTests(unittest.TestCase):
             prepared = registry.render_batch(batch.batch_id)
             self.assertEqual((configured(root).render_root / "staging" / batch.batch_id).resolve(),
                              Path(prepared.staging_directory).resolve())
+
+
+def approved_batch(root: Path, project: FakeRenderProject):
+    registry = Registry(root / "state.json"); batch = stored_batch(registry)
+    prepare_render_batch(project, configured(root), registry, batch.batch_id)
+    approved = approve_render_batch(registry, batch.batch_id, "SEGRETERIA")
+    return registry, approved
+
+
+class RenderBatchExecutionTests(unittest.TestCase):
+    def test_start_passes_only_approved_created_ids_and_never_old_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = FakeRenderProject(); registry, batch = approved_batch(Path(directory), project)
+            result = start_render_batch(project, registry, batch.batch_id, batch.approval_token)
+            self.assertTrue(result["ok"])
+            self.assertEqual([((list(batch.created_job_ids)), False)], project.started)
+            self.assertNotIn("old-job", project.started[0][0])
+
+    def test_queue_change_after_approval_is_rejected_as_stale(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = FakeRenderProject(); registry, batch = approved_batch(Path(directory), project)
+            project.jobs.append({"JobId": "foreign-job"})
+            with self.assertRaisesRegex(ValidationError, "coda"):
+                start_render_batch(project, registry, batch.batch_id, batch.approval_token)
+            self.assertEqual([], project.started)
+
+    def test_unavailable_selective_start_fails_without_start_all_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = FakeRenderProject(); registry, batch = approved_batch(Path(directory), project)
+            project.StartRendering = lambda *_args: False
+            result = start_render_batch(project, registry, batch.batch_id, batch.approval_token)
+            self.assertFalse(result["ok"])
+
+    def test_active_foreign_render_blocks_start_and_cancel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = FakeRenderProject(); registry, batch = approved_batch(Path(directory), project)
+            project.IsRenderingInProgress = lambda: True
+            with self.assertRaisesRegex(ValidationError, "attivo"):
+                start_render_batch(project, registry, batch.batch_id, batch.approval_token)
+
+    def test_cancel_prepared_deletes_only_batch_jobs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); project = FakeRenderProject(); registry = Registry(root / "state.json")
+            batch = stored_batch(registry); prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            result = cancel_render_batch(project, registry, batch.batch_id, "TECNICO")
+            self.assertTrue(result["ok"])
+            self.assertEqual(["new-job-1"], project.deleted)
+            self.assertEqual("old-job", project.jobs[0]["JobId"])
 
 
 if __name__ == "__main__":

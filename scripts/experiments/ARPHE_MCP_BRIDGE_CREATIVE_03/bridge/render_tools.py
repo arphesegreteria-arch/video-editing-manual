@@ -8,7 +8,7 @@ from .feature_flags import require_capability
 from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name, ensure_no_collision, require_arphe_name
-from .render_batches import transition_batch
+from .render_batches import batch_fingerprint, transition_batch
 
 
 INSTAGRAM_REEL_RENDER_SETTINGS = {
@@ -93,6 +93,67 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
     return {"ok": True, "action": "prepare_render_batch", "batch_id": batch_id,
             "created_job_ids": list(prepared.created_job_ids), "render_started": False,
             "next_action": "approve_render_batch"}
+
+
+def start_render_batch(project: Any, registry: Registry, batch_id: str,
+                       approval_token: str) -> dict[str, Any]:
+    batch = registry.render_batch(batch_id)
+    if batch is None or batch.status != "APPROVED":
+        raise ValidationError("Serve un render batch APPROVED")
+    if not approval_token or approval_token != batch.approval_token or approval_token != batch_fingerprint(batch):
+        raise ValidationError("Approvazione batch non valida o obsoleta")
+    if safe_call(project, "IsRenderingInProgress"):
+        raise ValidationError("Resolve ha già un render attivo")
+    current = _job_map(project)
+    expected_ids = set(batch.queue_before) | set(batch.created_job_ids)
+    if set(current) != expected_ids:
+        raise ValidationError("La coda Resolve è cambiata dopo l'approvazione")
+    snapshots = (batch.evidence or {}).get("job_snapshots", {})
+    if any(current.get(job_id) != snapshots.get(job_id) for job_id in batch.created_job_ids):
+        raise ValidationError("Le impostazioni della coda sono cambiate dopo l'approvazione")
+    registry.acquire_render_lock(batch.project_name, batch.batch_id)
+    started = bool(safe_call(project, "StartRendering", list(batch.created_job_ids), False))
+    if not started:
+        registry.release_render_lock(batch.project_name, batch.batch_id)
+        return {"ok": False, "action": "start_render_batch", "batch_id": batch_id, "status": "APPROVED"}
+    transition_batch(registry, batch_id, "APPROVED", "RENDERING", {"selective_start": True})
+    return {"ok": True, "action": "start_render_batch", "batch_id": batch_id,
+            "job_ids": list(batch.created_job_ids), "status": "RENDERING"}
+
+
+def get_render_batch_status(project: Any, registry: Registry, batch_id: str) -> dict[str, Any]:
+    batch = registry.render_batch(batch_id)
+    if batch is None:
+        raise ValidationError("Render batch non trovato")
+    jobs = _job_map(project)
+    return {"ok": True, "action": "get_render_batch_status", "batch_id": batch_id,
+            "status": batch.status,
+            "jobs": {job_id: jobs.get(job_id, {}).get("JobStatus", "unknown")
+                     for job_id in batch.created_job_ids}}
+
+
+def cancel_render_batch(project: Any, registry: Registry, batch_id: str,
+                        operator_role: str) -> dict[str, Any]:
+    if operator_role not in {"TECNICO", "ALESSIO"}:
+        raise ValidationError("La cancellazione richiede un ruolo tecnico")
+    batch = registry.render_batch(batch_id)
+    if batch is None or batch.status not in {"PREPARED", "APPROVED", "RENDERING"}:
+        raise ValidationError("Batch non cancellabile")
+    if batch.status == "RENDERING":
+        lock = registry.render_lock(batch.project_name)
+        if not lock or lock.get("batch_id") != batch.batch_id:
+            raise ValidationError("Render attivo non posseduto dal bridge")
+        if not safe_call(project, "StopRendering"):
+            return {"ok": False, "action": "cancel_render_batch", "status": "RENDERING"}
+    else:
+        current = set(_render_job_ids(project))
+        for job_id in batch.created_job_ids:
+            if job_id in current:
+                safe_call(project, "DeleteRenderJob", job_id)
+    cancelled = transition_batch(registry, batch_id, batch.status, "CANCELLED", {"cancelled_by": operator_role})
+    registry.release_render_lock(batch.project_name, batch.batch_id)
+    return {"ok": True, "action": "cancel_render_batch", "batch_id": batch_id,
+            "status": cancelled.status}
 
 
 def render_preview(project: Any, timeline: Any, config: CreativeConfig, registry: Registry, output_name: str) -> dict:

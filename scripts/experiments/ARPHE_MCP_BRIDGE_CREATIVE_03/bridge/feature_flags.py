@@ -16,6 +16,7 @@ CAPABILITY_STATUS = {
     "CAP_RENDER": "PENDING",
     "CAP_LONGFORM": "PENDING",
     "CAP_CLEANUP": "PENDING",
+    "CAP_ARTIFACT_MAINTENANCE": "PENDING",
 }
 
 
@@ -56,6 +57,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_LONGFORM": project_ok and assets_ok,
         "CAP_CLEANUP": project_ok and _method(manager, "DeleteProject") and
         pool is not None and _method(pool, "DeleteTimelines"),
+        "CAP_ARTIFACT_MAINTENANCE": True,
     }
 
 

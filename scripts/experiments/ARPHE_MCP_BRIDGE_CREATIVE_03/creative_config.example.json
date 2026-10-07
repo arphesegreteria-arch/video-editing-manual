@@ -11,6 +11,9 @@
   "audit_log_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/audit.jsonl",
   "workflow_registry_path": "editorial_workflows.json",
   "render_profile_registry_path": "render_profiles.json",
+  "artifact_policy_path": "artifact_retention.json",
+  "artifact_registry_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/artifact_registry.json",
+  "runtime_log_root": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/PC_SEGRETERIA",
   "allowed_projects": [],
   "allowed_timelines": [],
   "feature_flags": {
@@ -22,7 +25,8 @@
     "CAP_ASSETS": false,
     "CAP_RENDER": false,
     "CAP_LONGFORM": false,
-    "CAP_CLEANUP": false
+    "CAP_CLEANUP": false,
+    "CAP_ARTIFACT_MAINTENANCE": false
   },
   "palette": {
     "ivory": "#F7F2E8",

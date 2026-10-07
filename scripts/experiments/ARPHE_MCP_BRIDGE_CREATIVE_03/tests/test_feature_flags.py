@@ -40,6 +40,8 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertTrue(capabilities["CAP_FUSION"]["technically_available"])
         self.assertEqual("SUPPORTED", capabilities["CAP_FUSION"]["status"])
         self.assertTrue(capabilities["CAP_FUSION"]["validated"])
+        self.assertFalse(capabilities["CAP_ARTIFACT_MAINTENANCE"]["active"])
+        self.assertTrue(capabilities["CAP_ARTIFACT_MAINTENANCE"]["technically_available"])
 
 
 if __name__ == "__main__":

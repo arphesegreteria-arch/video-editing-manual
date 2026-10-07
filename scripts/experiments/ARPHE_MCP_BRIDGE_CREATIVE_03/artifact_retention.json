@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "policy_version": "ARPHE_ARTIFACT_RETENTION_V1",
+  "quarantine_seconds": 604800,
+  "rules": {
+    "DIAGNOSTIC_CAPTURE": {
+      "active_seconds": 86400,
+      "terminal_batch_states": []
+    },
+    "TEMP_REPORT": {
+      "active_seconds": 86400,
+      "terminal_batch_states": []
+    },
+    "TECHNICAL_PREVIEW": {
+      "active_seconds": 604800,
+      "terminal_batch_states": []
+    },
+    "RENDER_STAGING": {
+      "active_seconds": 86400,
+      "terminal_batch_states": ["VERIFIED", "CANCELLED", "FAILED_PREPARE"]
+    },
+    "FAILED_RENDER_STAGING": {
+      "active_seconds": 604800,
+      "terminal_batch_states": ["FAILED_RENDER", "FAILED_VERIFY"]
+    },
+    "ROTATED_LOG": {
+      "active_seconds": 604800,
+      "terminal_batch_states": []
+    }
+  }
+}

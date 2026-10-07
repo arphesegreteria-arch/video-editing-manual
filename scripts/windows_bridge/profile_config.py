@@ -20,6 +20,7 @@ REQUIRED_FIELDS = {
     "log_dir",
     "creative_destination",
     "mcp_entrypoint",
+    "safe_write_entrypoint",
     "requirements_path",
     "venv_root",
     "feature_flags",
@@ -33,6 +34,7 @@ PATH_FIELDS = {
     "log_dir",
     "creative_destination",
     "mcp_entrypoint",
+    "safe_write_entrypoint",
     "requirements_path",
     "venv_root",
 }
@@ -112,6 +114,32 @@ def load_profile(path: Path | str, *, allow_placeholder_tunnel: bool = False) ->
     profile_path = Path(path)
     raw = json.loads(profile_path.read_text(encoding="utf-8-sig"))
     return validate_profile(raw, allow_placeholder_tunnel=allow_placeholder_tunnel)
+
+
+def runtime_paths(profile: dict[str, Any]) -> dict[str, str]:
+    normalized = validate_profile(profile, allow_placeholder_tunnel=True)
+    profile_root = f"{normalized['install_root']}/runtime-configs/{normalized['workstation_id']}"
+    return {
+        "profile_root": profile_root,
+        "runtime_config": f"{profile_root}/bridge_config.json",
+        "creative_config": f"{profile_root}/creative_config.json",
+        "backup_dir": f"{profile_root}/backups",
+        "log_dir": f"{normalized['log_dir']}/{normalized['workstation_id']}",
+        "venv_python": f"{normalized['venv_root']}/Scripts/python.exe",
+    }
+
+
+def runtime_command(profile: dict[str, Any]) -> str:
+    return runtime_commands(profile)["Creative03"]
+
+
+def runtime_commands(profile: dict[str, Any]) -> dict[str, str]:
+    normalized = validate_profile(profile, allow_placeholder_tunnel=True)
+    python = runtime_paths(normalized)["venv_python"]
+    return {
+        "Creative03": f'"{python}" "{normalized["mcp_entrypoint"]}"',
+        "SafeWrite02": f'"{python}" "{normalized["safe_write_entrypoint"]}"',
+    }
 
 
 def main() -> int:

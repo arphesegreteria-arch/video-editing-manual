@@ -32,6 +32,11 @@ $profile = $normalizedJson | ConvertFrom-Json
 $pythonw = (Resolve-Path -LiteralPath ([string]$profile.pythonw_path) -ErrorAction Stop).Path
 $tunnelClient = (Resolve-Path -LiteralPath ([string]$profile.tunnel_client_path) -ErrorAction Stop).Path
 $requirements = (Resolve-Path -LiteralPath ([string]$profile.requirements_path) -ErrorAction Stop).Path
+try {
+    $safeWriteEntrypoint = (Resolve-Path -LiteralPath ([string]$profile.safe_write_entrypoint) -ErrorAction Stop).Path
+} catch {
+    throw "Safe-write rollback entrypoint not found: $($profile.safe_write_entrypoint)"
+}
 $actualPythonVersion = (& $profilePython -c 'import platform; print(platform.python_version())').Trim()
 if ($LASTEXITCODE -ne 0 -or $actualPythonVersion -ne [string]$profile.python_version) {
     throw "Python version mismatch: profile requires $($profile.python_version), executable reports $actualPythonVersion."
@@ -39,6 +44,7 @@ if ($LASTEXITCODE -ne 0 -or $actualPythonVersion -ne [string]$profile.python_ver
 
 $runtimeBaseDir = Join-Path $env:LOCALAPPDATA 'ARPHE\WindowsBridgeRuntimeV1'
 $runtimeConfigPath = Join-Path (Join-Path (Join-Path ([string]$profile.install_root) 'runtime-configs') ([string]$profile.workstation_id)) 'bridge_config.json'
+$creativeConfigPath = Join-Path (Split-Path -Parent $runtimeConfigPath) 'creative_config.json'
 $virtualizedRuntimeConfigPath = Join-Path (Join-Path $runtimeBaseDir ([string]$profile.workstation_id)) 'bridge_config.json'
 $legacyRuntimeConfigPath = Join-Path $runtimeBaseDir 'bridge_config.json'
 foreach ($existingConfigPath in @($runtimeConfigPath, $virtualizedRuntimeConfigPath, $legacyRuntimeConfigPath)) {
@@ -49,6 +55,15 @@ foreach ($existingConfigPath in @($runtimeConfigPath, $virtualizedRuntimeConfigP
         }
         if ([string]$existing.tunnel_id -ne [string]$profile.tunnel_id -and -not $AllowTunnelChange) {
             throw 'Existing runtime uses a different tunnel. Re-run with -AllowTunnelChange only after verifying the new workstation-specific tunnel.'
+        }
+    }
+}
+$legacyCreativeConfigPath = Join-Path $env:LOCALAPPDATA 'ARPHE\CreativeBridge03\creative_config.json'
+foreach ($existingCreativePath in @($creativeConfigPath, $legacyCreativeConfigPath)) {
+    if (Test-Path -LiteralPath $existingCreativePath -PathType Leaf) {
+        $existingCreative = Get-Content -Raw -LiteralPath $existingCreativePath | ConvertFrom-Json
+        if ([string]$existingCreative.workstation_id -ne [string]$profile.workstation_id) {
+            throw "Existing Creative config belongs to $($existingCreative.workstation_id), not $($profile.workstation_id): $existingCreativePath"
         }
     }
 }
@@ -83,9 +98,8 @@ $venvPythonw = (Resolve-Path -LiteralPath (Join-Path $venvRoot 'Scripts\pythonw.
 if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed with exit code $LASTEXITCODE." }
 
 $creativeInstaller = Join-Path $PSScriptRoot 'experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\install_on_segreteria.ps1'
-& $creativeInstaller -WorkstationId ([string]$profile.workstation_id) -Destination ([string]$profile.creative_destination)
+& $creativeInstaller -WorkstationId ([string]$profile.workstation_id) -Destination ([string]$profile.creative_destination) -ConfigPath $creativeConfigPath
 
-$creativeConfigPath = Join-Path $env:LOCALAPPDATA 'ARPHE\CreativeBridge03\creative_config.json'
 $creativeConfig = Get-Content -Raw -LiteralPath $creativeConfigPath | ConvertFrom-Json
 foreach ($flag in $profile.feature_flags.PSObject.Properties) {
     if ($null -eq $creativeConfig.feature_flags.PSObject.Properties[$flag.Name]) {
@@ -97,12 +111,15 @@ foreach ($flag in $profile.feature_flags.PSObject.Properties) {
 [IO.File]::WriteAllText($creativeConfigPath, ($creativeConfig | ConvertTo-Json -Depth 16), [Text.UTF8Encoding]::new($false))
 
 $mcpCommand = '"{0}" "{1}"' -f $venvPython.Replace('\', '/'), ([string]$profile.mcp_entrypoint).Replace('\', '/')
+$safeWriteMcpCommand = '"{0}" "{1}"' -f $venvPython.Replace('\', '/'), $safeWriteEntrypoint.Replace('\', '/')
 $runtimeInstaller = Join-Path $PSScriptRoot 'windows_bridge\install_autostart.ps1'
 $runtimeArgs = @{
     WorkstationId = [string]$profile.workstation_id
     TunnelId = [string]$profile.tunnel_id
     TunnelClientPath = $tunnelClient
     McpCommand = $mcpCommand
+    McpMode = 'Creative03'
+    SafeWriteMcpCommand = $safeWriteMcpCommand
     CreativeConfigPath = $creativeConfigPath
     RuntimeConfigPath = $runtimeConfigPath
     InstallRoot = [string]$profile.install_root

@@ -175,14 +175,14 @@ C:\ARPHE\MCP\ARPHE_MCP_BRIDGE_CREATIVE_03\
 e crea, solo se assente, la config locale:
 
 ```text
-%LOCALAPPDATA%\ARPHE\CreativeBridge03\creative_config.json
+C:\ARPHE\MCP\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1\runtime-configs\<WORKSTATION_ID>\creative_config.json
 ```
 
 Non modifica `MCP_COMMAND`. Verificare prima lo switch:
 
 ```powershell
 Test-Path 'C:\ARPHE\MCP\ARPHE_MCP_BRIDGE_CREATIVE_03\ARPHE_MCP_BRIDGE_CREATIVE_03.py'
-Get-Content "$env:LOCALAPPDATA\ARPHE\CreativeBridge03\creative_config.json"
+Get-Content 'C:\ARPHE\MCP\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1\runtime-configs\PC_SEGRETERIA\creative_config.json'
 ```
 
 ## Switch runtime al Creative 03
@@ -190,9 +190,13 @@ Get-Content "$env:LOCALAPPDATA\ARPHE\CreativeBridge03\creative_config.json"
 Questo comando ferma e riavvia soltanto il runtime ARPHE, preservando tunnel ID e key DPAPI:
 
 ```powershell
-.\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\switch_runtime_bridge.ps1 -Mode Creative03
+.\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\switch_runtime_bridge.ps1 `
+  -Mode Creative03 -WorkstationId PC_SEGRETERIA `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json
 Start-Sleep -Seconds 30
-.\scripts\windows_bridge\status_bridge.ps1
+.\scripts\windows_bridge\status_bridge.ps1 `
+  -WorkstationId PC_SEGRETERIA `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json
 ```
 
 Atteso: `TaskState: Running`, `SupervisorRunning: True`, `Readyz: True`.
@@ -202,9 +206,13 @@ In ChatGPT aggiornare/ricollegare la app DEV se il catalogo tool è rimasto in c
 
 ```powershell
 cd C:\ARPHE\video-editing-manual
-.\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\switch_runtime_bridge.ps1 -Mode SafeWrite02
+.\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\switch_runtime_bridge.ps1 `
+  -Mode SafeWrite02 -WorkstationId PC_SEGRETERIA `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json
 Start-Sleep -Seconds 30
-.\scripts\windows_bridge\status_bridge.ps1
+.\scripts\windows_bridge\status_bridge.ps1 `
+  -WorkstationId PC_SEGRETERIA `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json
 ```
 
 Poi da ChatGPT chiamare `ping`: deve rispondere
@@ -246,8 +254,12 @@ Abilitazione locale controllata:
 
 ```powershell
 .\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\set_feature_flag.ps1 `
+  -WorkstationId PC_SEGRETERIA `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json `
   -Name CAP_MOTION -Enabled $true
-.\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\switch_runtime_bridge.ps1 -Mode Creative03
+.\scripts\experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\switch_runtime_bridge.ps1 `
+  -Mode Creative03 -WorkstationId PC_SEGRETERIA `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json
 ```
 
 PASS soltanto se:

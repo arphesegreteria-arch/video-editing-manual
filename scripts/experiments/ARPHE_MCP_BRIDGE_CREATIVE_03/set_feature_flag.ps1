@@ -1,6 +1,13 @@
 [CmdletBinding(SupportsShouldProcess)]
 param(
     [Parameter(Mandatory)]
+    [ValidatePattern('^PC_[A-Z0-9_]{2,48}$')]
+    [string]$WorkstationId,
+
+    [Parameter(Mandatory)]
+    [string]$ProfilePath,
+
+    [Parameter(Mandatory)]
     [ValidateSet('CAP_PROJECT', 'CAP_TIMELINE', 'CAP_FUSION', 'CAP_REVIEW',
                  'CAP_MOTION', 'CAP_ASSETS', 'CAP_RENDER', 'CAP_LONGFORM', 'CAP_CLEANUP')]
     [string]$Name,
@@ -12,11 +19,20 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$creativeRoot = Join-Path $env:LOCALAPPDATA 'ARPHE\CreativeBridge03'
-$creativeConfigPath = Join-Path $creativeRoot 'creative_config.json'
+$lifecycleRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\windows_bridge')).Path
+. (Join-Path $lifecycleRoot 'common.ps1') -WorkstationId $WorkstationId -ProfilePath $ProfilePath
+if (-not (Test-Path -LiteralPath $script:ArpheConfigPath -PathType Leaf)) {
+    throw "Runtime config non trovata per ${WorkstationId}: $script:ArpheConfigPath"
+}
+$runtimeConfig = Get-Content -Raw -LiteralPath $script:ArpheConfigPath | ConvertFrom-Json
+if ([string]$runtimeConfig.workstation_id -ne $WorkstationId) {
+    throw "Runtime config appartiene a $($runtimeConfig.workstation_id), non a $WorkstationId."
+}
+$creativeConfigPath = [string]$runtimeConfig.creative_config_path
 if (-not (Test-Path -LiteralPath $creativeConfigPath -PathType Leaf)) {
     throw "Config Creative03 non trovata: $creativeConfigPath"
 }
+Write-Host "Creative config: $creativeConfigPath"
 
 $creativeConfig = Get-Content -Raw -LiteralPath $creativeConfigPath | ConvertFrom-Json
 if (-not $creativeConfig.feature_flags) {
@@ -39,7 +55,7 @@ if (-not $PSCmdlet.ShouldProcess($creativeConfigPath, "Set $Name=$Enabled")) {
 }
 
 $flagProperty.Value = $Enabled
-$temporaryPath = Join-Path $creativeRoot 'creative_config.json.tmp'
+$temporaryPath = $creativeConfigPath + '.tmp'
 $json = $creativeConfig | ConvertTo-Json -Depth 16
 try {
     [IO.File]::WriteAllText($temporaryPath, $json, [Text.UTF8Encoding]::new($false))

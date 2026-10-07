@@ -49,6 +49,10 @@ isolato e chiede la Runtime API key in un campo mascherato. Per aggiornamenti us
 `-KeepExistingSecret`. Un cambio tunnel richiede `-AllowTunnelChange` e una verifica esplicita
 del nuovo tunnel dedicato.
 
+I profili `.local.json` creati prima del 2026-10-07 devono essere riallineati con l'esempio:
+aggiungere `safe_write_entrypoint` con il percorso assoluto del bridge SafeWrite02. Il preflight
+rifiuta il profilo se il file non esiste, perché senza quel target il rollback non sarebbe reale.
+
 ## Installer basso livello (solo diagnostica)
 
 Aprire PowerShell come lo stesso utente Windows che usa Resolve. Dalla root di questa repository:
@@ -56,9 +60,13 @@ Aprire PowerShell come lo stesso utente Windows che usa Resolve. Dalla root di q
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\windows_bridge\install_autostart.ps1 `
+  -WorkstationId 'PC_SEGRETERIA' `
   -TunnelId 'tunnel_SOSTITUIRE_CON_ID_SEGRETERIA' `
   -TunnelClientPath 'C:\ARPHE\MCP\tunnel client\tunnel-client-runtime-cloudflared.exe' `
-  -McpCommand 'py -3 C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py'
+  -McpMode 'SafeWrite02' `
+  -McpCommand '"C:/PERCORSO/ASSOLUTO/python.exe" "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py"' `
+  -PythonPath 'C:\PERCORSO\ASSOLUTO\python.exe' `
+  -PythonwPath 'C:\PERCORSO\ASSOLUTO\pythonw.exe'
 ```
 
 L'installer mostra due prompt mascherati per la Runtime API key. La key non va aggiunta al comando. Per ispezionare anticipatamente le modifiche senza applicarle, aggiungere `-WhatIf`.
@@ -101,7 +109,9 @@ questa particolarità non si presenta.
 
 ```powershell
 .\scripts\windows_bridge\start_bridge.ps1
-.\scripts\windows_bridge\status_bridge.ps1
+.\scripts\windows_bridge\status_bridge.ps1 `
+  -WorkstationId PC_SEGRETERIA `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json
 .\scripts\windows_bridge\stop_bridge.ps1
 ```
 
@@ -127,7 +137,9 @@ Log redatti: `C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1\runtime.log`.
    $s = Get-Content "$env:LOCALAPPDATA\ARPHE\WindowsBridgeRuntimeV1\$workstation\runtime_state.json" -Raw | ConvertFrom-Json
    Stop-Process -Id $s.tunnel_pid
    Start-Sleep -Seconds 5
-   .\scripts\windows_bridge\status_bridge.ps1
+   .\scripts\windows_bridge\status_bridge.ps1 `
+     -WorkstationId PC_SEGRETERIA `
+     -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json
    ```
 
 6. Fare logout/login (o riavviare Windows), senza aprire PowerShell, poi verificare `/readyz` e i gate ChatGPT.

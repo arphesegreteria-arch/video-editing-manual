@@ -56,12 +56,17 @@ Con Resolve aperto sul progetto ARPHE corrente:
 
 ```powershell
 cd C:\ARPHE\video-editing-manual
-.\scripts\backup\backup_arphe.ps1 -DestinationRoot 'E:\ARPHE_BACKUPS' -IncludeCurrentResolveProject
+.\scripts\backup\backup_arphe.ps1 `
+  -DestinationRoot 'E:\ARPHE_BACKUPS' `
+  -WorkstationId PC_SEGRETERIA `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_segreteria.local.json `
+  -IncludeCurrentResolveProject
 ```
 
 Sostituire `E:` con la lettera verificata del disco esterno. Lo script rifiuta il disco di sistema
 per default e richiede una repository pulita. Produce:
 
+- directory `ARPHE_BACKUP_<WORKSTATION_ID>_<timestamp>`, distinta per PC;
 - Git bundle completo con tutta la cronologia;
 - ZIP dello stato `HEAD`;
 - config Creative redatta, stato e audit Creative;

@@ -31,15 +31,18 @@ Root locale corrente:
 
 Il tunnel usato durante il test è stato chiamato `ARPHE-RESOLVE-HOME`. Il nome è fuorviante perché il runtime è in realtà sul PC segreteria. Quando possibile, rinominarlo in `ARPHE-RESOLVE-SEGRETERIA`; se il rename non è pratico, mantenere il nome legacy ma documentare esplicitamente il mapping.
 
-### PC_PERSONALE — PENDING REPLICA
+### PC_PERSONALE — REPLICA E TUNNEL DEDICATO COMPLETATI; NUOVO PROFILO PENDING
 
-Il PC personale deve ricevere una installazione separata dello stesso stack, ma NON deve condividere alla cieca segreti o identità runtime con il PC segreteria.
+Il PC personale dispone di una installazione separata e del tunnel dedicato
+`ARPHE-RESOLVE-PERSONALE`; i dettagli storici sono in
+`docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md`. Non deve condividere segreti o
+identità runtime con il PC segreteria.
 
 Obiettivo:
 
 `ChatGPT -> app/tunnel PC_PERSONALE -> bridge locale personale -> Resolve Studio personale`
 
-Stato: **NON ANCORA CONFIGURATO / NON ANCORA VALIDATO**.
+Stato del profilo introdotto il 2026-10-07: **CODICE PRONTO / ROLLOUT E RETEST PENDING**.
 
 ## Regola multi-workstation
 
@@ -144,7 +147,10 @@ Esempio concettuale NON segreto:
   "workstation_id": "PC_SEGRETERIA",
   "tunnel_id": "tunnel_...",
   "tunnel_client_path": "C:/ARPHE/MCP/tunnel client/tunnel-client-runtime-cloudflared.exe",
-  "mcp_command": "py -3 C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py",
+  "mcp_command": "\"C:/PERCORSO/ASSOLUTO/python.exe\" \"C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py\"",
+  "bridge_commands": {
+    "SafeWrite02": "\"C:/PERCORSO/ASSOLUTO/python.exe\" \"C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py\""
+  },
   "ready_url": "http://127.0.0.1:8080/readyz",
   "log_dir": "C:/ARPHE/MCP/logs"
 }

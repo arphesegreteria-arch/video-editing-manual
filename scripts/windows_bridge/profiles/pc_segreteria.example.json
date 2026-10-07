@@ -11,6 +11,7 @@
   "log_dir": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
   "creative_destination": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_CREATIVE_03",
   "mcp_entrypoint": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_CREATIVE_03/ARPHE_MCP_BRIDGE_CREATIVE_03.py",
+  "safe_write_entrypoint": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py",
   "requirements_path": "C:/ARPHE/video-editing-manual/scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03/requirements.txt",
   "venv_root": "C:/ARPHE/MCP/runtimes/PC_SEGRETERIA/venv",
   "feature_flags": {

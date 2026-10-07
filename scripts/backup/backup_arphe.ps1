@@ -2,15 +2,43 @@
 param(
     [Parameter(Mandatory)]
     [string]$DestinationRoot,
+    [Parameter(Mandatory)][ValidatePattern('^PC_[A-Z0-9_]{2,48}$')][string]$WorkstationId,
+    [Parameter(Mandatory)][string]$ProfilePath,
     [switch]$IncludeCurrentResolveProject,
     [switch]$AllowSystemDrive,
-    [string]$PythonPath = 'C:\Users\auras\AppData\Local\Python\pythoncore-3.14-64\python.exe'
+    [switch]$PreflightOnly,
+    [string]$PythonPath = ''
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
+$windowsBridgeRoot = Join-Path $repoRoot 'scripts\windows_bridge'
+. (Join-Path $windowsBridgeRoot 'common.ps1') -WorkstationId $WorkstationId -ProfilePath $ProfilePath
+$runtimeConfig = $script:ArpheConfigPath
+if (-not (Test-Path -LiteralPath $runtimeConfig -PathType Leaf)) {
+    throw "Runtime config non trovata per ${WorkstationId}: $runtimeConfig"
+}
+$runtime = Get-Content -Raw -LiteralPath $runtimeConfig | ConvertFrom-Json
+if ([string]$runtime.workstation_id -ne $WorkstationId) {
+    throw "Runtime config appartiene a $($runtime.workstation_id), non a $WorkstationId."
+}
+$creativeConfig = [string]$runtime.creative_config_path
+if ([string]::IsNullOrWhiteSpace($creativeConfig) -or -not (Test-Path -LiteralPath $creativeConfig -PathType Leaf)) {
+    throw "Creative config non trovata per ${WorkstationId}: $creativeConfig"
+}
+$creative = Get-Content -Raw -LiteralPath $creativeConfig | ConvertFrom-Json
+if (-not $PythonPath) { $PythonPath = [string]$runtime.python_path }
+Write-Host "Workstation    : $WorkstationId"
+Write-Host "Runtime config : $runtimeConfig"
+Write-Host "Creative config: $creativeConfig"
+Write-Host "Python         : $PythonPath"
+if ($PreflightOnly) {
+    Write-Host 'Backup preflight PASS. No files were created.'
+    return
+}
+
 $destinationFull = [IO.Path]::GetFullPath($DestinationRoot)
 $destinationDrive = [IO.Path]::GetPathRoot($destinationFull)
 $systemDrive = [IO.Path]::GetPathRoot($env:SystemRoot)
@@ -28,7 +56,7 @@ if ($dirty.Count -gt 0) {
 }
 
 $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$backupDir = Join-Path $destinationFull "ARPHE_BACKUP_$stamp"
+$backupDir = Join-Path $destinationFull "ARPHE_BACKUP_${WorkstationId}_$stamp"
 if (-not $PSCmdlet.ShouldProcess($backupDir, 'Create verified ARPHE backup')) { return }
 New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
 
@@ -41,17 +69,14 @@ if ($LASTEXITCODE -ne 0) { throw 'Creazione snapshot Git fallita.' }
 
 $stateDir = Join-Path $backupDir 'creative-state'
 New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
-$creativeDir = Join-Path $env:LOCALAPPDATA 'ARPHE\CreativeBridge03'
-foreach ($name in @('creative_state.json', 'audit.jsonl')) {
-    $source = Join-Path $creativeDir $name
+$creativeSources = @([string]$creative.state_path, [string]$creative.audit_log_path)
+foreach ($source in $creativeSources) {
     if (Test-Path -LiteralPath $source -PathType Leaf) {
         Copy-Item -LiteralPath $source -Destination $stateDir
     }
 }
 
-$creativeConfig = Join-Path $creativeDir 'creative_config.json'
 if (Test-Path -LiteralPath $creativeConfig -PathType Leaf) {
-    $creative = Get-Content -Raw -LiteralPath $creativeConfig | ConvertFrom-Json
     $safeCreative = [ordered]@{}
     foreach ($property in $creative.PSObject.Properties) {
         if ($property.Name -notmatch '(?i)secret|token|key|auth|credential') {
@@ -65,9 +90,7 @@ if (Test-Path -LiteralPath $creativeConfig -PathType Leaf) {
     )
 }
 
-$runtimeConfig = Join-Path $env:LOCALAPPDATA 'ARPHE\WindowsBridgeRuntimeV1\bridge_config.json'
 if (Test-Path -LiteralPath $runtimeConfig -PathType Leaf) {
-    $runtime = Get-Content -Raw -LiteralPath $runtimeConfig | ConvertFrom-Json
     $safeRuntime = [ordered]@{}
     foreach ($property in $runtime.PSObject.Properties) {
         if ($property.Name -notmatch '(?i)secret|token|key|auth|credential') {

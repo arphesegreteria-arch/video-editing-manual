@@ -1,4 +1,7 @@
-param([ValidatePattern('^PC_[A-Z0-9_]{2,48}$')][string]$WorkstationId = '')
+param(
+    [ValidatePattern('^PC_[A-Z0-9_]{2,48}$')][string]$WorkstationId = '',
+    [string]$ProfilePath = ''
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -7,6 +10,23 @@ $script:ArpheRuntimeId = 'ARPHE_WINDOWS_BRIDGE_RUNTIME_V1'
 $script:ArpheBaseDataDir = Join-Path $env:LOCALAPPDATA 'ARPHE\WindowsBridgeRuntimeV1'
 $script:ArpheLegacyConfigPath = Join-Path $script:ArpheBaseDataDir 'bridge_config.json'
 $script:ArpheLegacySecretPath = Join-Path $script:ArpheBaseDataDir 'runtime_api_key.dpapi'
+$workstationExplicit = -not [string]::IsNullOrWhiteSpace($WorkstationId)
+$profileRuntimeConfigPath = ''
+if ($ProfilePath) {
+    $profilePathResolved = (Resolve-Path -LiteralPath $ProfilePath -ErrorAction Stop).Path
+    $rawProfile = Get-Content -Raw -LiteralPath $profilePathResolved | ConvertFrom-Json
+    $profilePython = (Resolve-Path -LiteralPath ([string]$rawProfile.python_path) -ErrorAction Stop).Path
+    $validator = Join-Path $PSScriptRoot 'profile_config.py'
+    $normalizedJson = & $profilePython $validator validate --profile $profilePathResolved --emit-json
+    if ($LASTEXITCODE -ne 0) { throw "Profile validation failed with exit code $LASTEXITCODE." }
+    $resolvedProfile = $normalizedJson | ConvertFrom-Json
+    if ($WorkstationId -and [string]$resolvedProfile.workstation_id -ne $WorkstationId) {
+        throw "Profile belongs to $($resolvedProfile.workstation_id), not $WorkstationId."
+    }
+    $WorkstationId = [string]$resolvedProfile.workstation_id
+    $workstationExplicit = $true
+    $profileRuntimeConfigPath = Join-Path (Join-Path (Join-Path ([string]$resolvedProfile.install_root) 'runtime-configs') $WorkstationId) 'bridge_config.json'
+}
 $detectedWorkstation = $WorkstationId
 if (-not $detectedWorkstation -and (Test-Path -LiteralPath $script:ArpheLegacyConfigPath -PathType Leaf)) {
     try { $detectedWorkstation = [string](Get-Content -Raw -LiteralPath $script:ArpheLegacyConfigPath | ConvertFrom-Json).workstation_id } catch {}
@@ -24,11 +44,13 @@ $profileDataDir = Join-Path $script:ArpheBaseDataDir $script:ArpheWorkstationId
 # WindowsBridgeRuntimeV1. Reuse that profile only when its identity matches; new
 # workstation profiles continue to use the isolated directory.
 $script:ArpheDataDir = $profileDataDir
-if (-not (Test-Path -LiteralPath (Join-Path $profileDataDir 'bridge_config.json') -PathType Leaf) -and
+if (-not $workstationExplicit -and
+    -not (Test-Path -LiteralPath (Join-Path $profileDataDir 'bridge_config.json') -PathType Leaf) -and
     (Test-Path -LiteralPath $script:ArpheLegacyConfigPath -PathType Leaf)) {
     $script:ArpheDataDir = $script:ArpheBaseDataDir
 }
 $script:ArpheConfigPath = Join-Path $script:ArpheDataDir 'bridge_config.json'
+if ($profileRuntimeConfigPath) { $script:ArpheConfigPath = $profileRuntimeConfigPath }
 $script:ArpheTaskName = "ARPHE Resolve Bridge Runtime V1 - $detectedWorkstation"
 $script:ArpheTaskPath = '\'
 $script:ArpheStatePath = Join-Path $script:ArpheDataDir 'runtime_state.json'

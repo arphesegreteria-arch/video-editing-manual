@@ -11,7 +11,11 @@
 - Corretto l'installer profilo: log, config e registry sono workstation-specifici; il gate nuovo
   resta spento per default e un registry dell'altro PC blocca prima delle scritture.
 - Evidenza codice: Creative `153 PASS / 1 SKIP` symlink ambientale; Windows
-  `44 PASS / 1 SKIP` DPAPI ambientale. Rollout `PC_PERSONALE` PENDING; `PC_SEGRETERIA` non toccato.
+  `45 PASS / 1 SKIP` DPAPI ambientale.
+- Rollout `PC_PERSONALE`: runtime `Running` e `/readyz` PASS; gate attivo; manutenzione esplicita
+  PASS con zero quarantene/purge. I 68 file storici (~37 MB) restano `UNCLASSIFIED` e intatti.
+  Registrata una sonda disposable reale, `ACTIVE` per le prime 24 ore; i gate temporali di
+  quarantena/restore e purge restano PENDING senza retrodatazioni. `PC_SEGRETERIA` non toccato.
 - Rollback: spegnere `CAP_ARTIFACT_MAINTENANCE`; l'ispezione resta disponibile e gli elementi già
   in quarantena non vengono eliminati finché il gate resta spento.
 

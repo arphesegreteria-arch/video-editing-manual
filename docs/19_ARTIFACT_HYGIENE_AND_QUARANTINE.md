@@ -1,7 +1,7 @@
 # 19 — Igiene artefatti e quarantena
 
 Stato codice: implementato e verificato automaticamente. Rollout live:
-`PC_PERSONALE PENDING`; `PC_SEGRETERIA NON TOCCATO / PENDING`.
+`PC_PERSONALE IN OSSERVAZIONE`; `PC_SEGRETERIA NON TOCCATO / PENDING`.
 
 ## Perimetro
 
@@ -62,9 +62,14 @@ archive-first, con export `.drp` verificato e approvazione esplicita.
 ## Evidenza al 2026-10-08
 
 - Creative: 154 test eseguiti, 153 PASS, 1 SKIP ambientale per privilegio symlink Windows.
-- Windows: 45 test eseguiti, 44 PASS, 1 SKIP DPAPI per profilo CurrentUser non disponibile nel
+- Windows: 46 test eseguiti, 45 PASS, 1 SKIP DPAPI per profilo CurrentUser non disponibile nel
   token di test.
-- `PC_PERSONALE`: rollout e gate con file disposable ancora PENDING.
+- `PC_PERSONALE`: installazione e migrazione config PASS; task `Running`, `/readyz` PASS e gate
+  `CAP_ARTIFACT_MAINTENANCE=true`. L'inventario installato vede 68 elementi storici
+  `UNCLASSIFIED` (`37.092.166` byte), tutti lasciati intatti. La manutenzione esplicita ha restituito
+  zero quarantene e zero purge. La sonda disposable `290944e3-f62f-4a44-bc93-fa1bc43e756e`
+  (`TEMP_REPORT`, 55 byte) è `ACTIVE`, con prima eleggibilità il 2026-10-08 22:43:07 UTC.
+  Quarantena/restore e purge sono correttamente PENDING fino al decorso del tempo reale.
 - `PC_SEGRETERIA`: nessun file, task, tunnel, config o progetto modificato; gate PENDING.
 
 ## Gate live personale

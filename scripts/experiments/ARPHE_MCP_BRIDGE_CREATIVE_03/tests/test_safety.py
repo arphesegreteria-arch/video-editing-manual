@@ -291,13 +291,23 @@ class MotionTests(unittest.TestCase):
 
 
 class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_tools_are_closed_world_and_only_cleanup_is_destructive(self):
+    async def test_tools_are_closed_world_and_only_maintenance_is_destructive(self):
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         self.assertEqual(set(EXPOSED_TOOL_NAMES), set(tools))
         for tool in tools.values():
-            self.assertEqual(tool.name == "apply_publish_cleanup",
+            self.assertEqual(tool.name == "run_artifact_maintenance",
                              tool.annotations.destructive_hint, tool.name)
             self.assertFalse(tool.annotations.open_world_hint, tool.name)
+        self.assertTrue(tools["run_artifact_maintenance"].annotations.idempotent_hint)
+        self.assertTrue(tools["inspect_artifact_hygiene"].annotations.read_only_hint)
+        self.assertFalse(tools["restore_quarantined_artifact"].annotations.read_only_hint)
+        self.assertFalse(tools["restore_quarantined_artifact"].annotations.destructive_hint)
+
+    def test_artifact_tools_accept_no_arbitrary_path(self):
+        self.assertEqual([], list(inspect.signature(server.inspect_artifact_hygiene).parameters))
+        self.assertEqual([], list(inspect.signature(server.run_artifact_maintenance).parameters))
+        self.assertEqual(["artifact_id"],
+                         list(inspect.signature(server.restore_quarantined_artifact).parameters))
 
     async def test_prepare_and_approve_are_safe_writes_start_and_cancel_are_explicit_writes(self):
         tools = {tool.name: tool for tool in await mcp.list_tools()}

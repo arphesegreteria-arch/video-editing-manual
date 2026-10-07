@@ -6,6 +6,7 @@ from .config import CAPABILITY_NAMES, CreativeConfig
 
 
 IMPLEMENTED = {name: True for name in CAPABILITY_NAMES}
+IMPLEMENTED["CAP_CLEANUP"] = False
 CAPABILITY_STATUS = {
     "CAP_PROJECT": "PARTIAL",
     "CAP_TIMELINE": "PARTIAL",
@@ -55,8 +56,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_ASSETS": assets_ok,
         "CAP_RENDER": render_ok,
         "CAP_LONGFORM": project_ok and assets_ok,
-        "CAP_CLEANUP": project_ok and _method(manager, "DeleteProject") and
-        pool is not None and _method(pool, "DeleteTimelines"),
+        "CAP_CLEANUP": False,
         "CAP_ARTIFACT_MAINTENANCE": True,
     }
 

@@ -331,8 +331,12 @@ def recover_retirement(manager: Any, config: CreativeConfig, store: ResolveRetir
         raise ValidationError("Recovery consentito solo dopo un retirement eseguito")
     archive = _validate_archive(config, record)
     suffix = retirement_id.replace("-", "")[:8]
-    original = re.sub(r"[^A-Za-z0-9_-]+", "_", record["project_name"])[6:42]
-    recovery_name = f"ARPHE_RECOVERY_{original}_{_utc(now).strftime('%Y%m%dT%H%M%SZ')}_{suffix}"[:64]
+    timestamp = _utc(now).strftime("%Y%m%dT%H%M%SZ")
+    prefix = "ARPHE_RECOVERY_"
+    fixed_length = len(prefix) + 1 + len(timestamp) + 1 + len(suffix)
+    original = re.sub(r"[^A-Za-z0-9_-]+", "_", record["project_name"])[6:]
+    original = original[:64 - fixed_length]
+    recovery_name = f"{prefix}{original}_{timestamp}_{suffix}"
     if recovery_name in list(safe_call(manager, "GetProjectListInCurrentFolder") or []):
         raise ValidationError("Nome progetto recovery già esistente")
     if not safe_call(manager, "ImportProject", str(archive), recovery_name):

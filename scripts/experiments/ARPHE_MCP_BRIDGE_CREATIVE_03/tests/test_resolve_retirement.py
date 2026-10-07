@@ -275,6 +275,10 @@ class ResolveRetirementTests(unittest.TestCase):
             recovered = recover_retirement(manager, config, store,
                                            prepared["retirement_id"], NOW)
             self.assertTrue(recovered["recovery_project"].startswith("ARPHE_RECOVERY_"))
+            self.assertTrue(recovered["recovery_project"].endswith(
+                prepared["retirement_id"].replace("-", "")[:8]
+            ))
+            self.assertLessEqual(len(recovered["recovery_project"]), 64)
             self.assertNotEqual(project.name, recovered["recovery_project"])
             self.assertEqual("RECOVERED", store.get(prepared["retirement_id"])["status"])
 

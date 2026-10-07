@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
 from .config import CreativeConfig
 from .feature_flags import require_capability
+from .format_contract import ResolvedFormat, apply_project_format, verify_timeline_format
 from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name, ensure_no_collision
@@ -123,14 +125,13 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
     if not project:
         return {"ok": False, "action": "apply_longform_edit_plan", "stage": "create_project"}
     registry.add_project(project_name)
-    setting_results = {
-        "timelineResolutionWidth": bool(safe_call(project, "SetSetting", "timelineResolutionWidth", "1920")),
-        "timelineResolutionHeight": bool(safe_call(project, "SetSetting", "timelineResolutionHeight", "1080")),
-        "timelineFrameRate": bool(safe_call(project, "SetSetting", "timelineFrameRate", str(rate := float(fps)))),
-    }
-    if not all(setting_results.values()):
+    rate = float(fps)
+    format_contract = ResolvedFormat(1920, 1080, Fraction(str(fps)), Fraction(str(fps)))
+    try:
+        applied_format = apply_project_format(project, format_contract)
+    except ValidationError as exc:
         return {"ok": False, "action": "apply_longform_edit_plan", "stage": "project_settings",
-                "project": project_name, "setting_results": setting_results}
+                "project": project_name, "error": str(exc)}
     pool = safe_call(project, "GetMediaPool")
     media_storage = safe_call(resolve, "GetMediaStorage")
     imported = safe_call(media_storage, "AddItemListToMediaPool", str(media)) if media_storage else None
@@ -168,6 +169,7 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
         full = safe_call(pool, "CreateEmptyTimeline", full_name)
         if not full:
             return {"ok": False, "action": "apply_longform_edit_plan", "stage": "create_full_timeline"}
+        verify_timeline_format(project, full, format_contract)
         registry.add_timeline(project_name, full_name)
         if not safe_call(project, "SetCurrentTimeline", full):
             return {"ok": False, "action": "apply_longform_edit_plan", "stage": "select_full_timeline"}
@@ -186,6 +188,7 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
     master = safe_call(pool, "CreateEmptyTimeline", master_name)
     if not master:
         return {"ok": False, "action": "apply_longform_edit_plan", "stage": "create_master"}
+    verify_timeline_format(project, master, format_contract)
     registry.add_timeline(project_name, master_name)
     record = int(safe_call(master, "GetStartFrame") or 0)
     created_timelines: list[str] = []
@@ -206,6 +209,7 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
         if not individual:
             return {"ok": False, "action": "apply_longform_edit_plan", "stage": "create_clip_timeline",
                     "failed_clip": clip["clip_id"]}
+        verify_timeline_format(project, individual, format_contract)
         registry.add_timeline(project_name, timeline_name)
         individual_start = int(safe_call(individual, "GetStartFrame") or 0)
         if not safe_call(project, "SetCurrentTimeline", individual):
@@ -225,6 +229,7 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
             "master_timeline": master_name, "clip_timelines": created_timelines,
             "clip_count": len(plan), "total_frames": sum(v["duration_frames"] for v in plan),
             "fps": rate, "resolution": {"width": 1920, "height": 1080},
+            "playback_fps": applied_format["timelinePlaybackFrameRate"],
             "source_preserved": True, "overwrite": False, "saved": False,
             "enhanced_audio_used": audio_item is not None,
             "full_timeline": created_full_timeline,

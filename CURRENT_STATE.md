@@ -11,7 +11,10 @@ senza overwrite. Retention archivi: tutti per 30 giorni e comunque gli ultimi 3 
 nessun archivio viene eliminato automaticamente.
 
 Validazione automatica: Creative `165 PASS / 1 SKIP` ambientale; Windows `48 PASS / 1 SKIP`
-DPAPI ambientale. Rollout e prova distruttiva disposable `PC_PERSONALE`: `PENDING`.
+DPAPI ambientale. `PC_PERSONALE`: installazione, catalogo, runtime ready e inspection read-only
+PASS; gate ancora spento. Il progetto disposable `ARPHE_RETIREMENT_PROBE_20261008_0053` è pronto
+con due timeline e il progetto precedente è stato ricaricato. Prova distruttiva: `PENDING`
+approvazione esplicita.
 `PC_SEGRETERIA`: **NON TOCCATO**. Procedura: `docs/20_RESOLVE_RETIREMENT_AND_RECOVERY.md`.
 
 ## Igiene artefatti — CODICE VALIDATO / ROLLOUT PERSONALE IN OSSERVAZIONE

@@ -46,7 +46,12 @@ giorni di quarantena: il backup che rende reversibile il ritiro non entra nel cl
 - Test coperti: export verificato senza delete, timeline corrente, render lock, ruolo tecnico,
   progetto mutato, archivio alterato, delete esatto/idempotente, crash-reconciliation, close/delete
   progetto, recovery senza overwrite, retention 30 giorni + ultimi 3 e isolamento installer.
-- `PC_PERSONALE`: installazione e inspection read-only PENDING.
+- `PC_PERSONALE`: installazione PASS, runtime `ready`, cinque tool presenti e inspection read-only
+  PASS con registry inizialmente vuoto. Il gate è rimasto `false` e il tentativo di prepare è stato
+  bloccato prima del collegamento a Resolve. Creato e salvato il progetto disposable
+  `ARPHE_RETIREMENT_PROBE_20261008_0053` con timeline `ARPHE_RETIREMENT_DROP` e
+  `ARPHE_RETIREMENT_KEEP`; il progetto precedente è stato ricaricato. L'attivazione del gate e il
+  ritiro live restano PENDING fino ad approvazione esplicita della capacità distruttiva.
 - `PC_SEGRETERIA`: non toccato; progetto aperto non coinvolto.
 
 Il test live distruttivo va eseguito soltanto su un progetto e una timeline disposable dedicati.

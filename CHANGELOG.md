@@ -12,7 +12,10 @@
   per 30 giorni e comunque gli ultimi 3 per progetto; nessuna cancellazione automatica.
 - Nuovo gate e registry per-workstation `CAP_RESOLVE_RETIREMENT=false` di default. Un config o
   registry dell'altro PC blocca l'installer prima delle scritture.
-- Suite: Creative `165 PASS / 1 SKIP`; Windows `48 PASS / 1 SKIP`. Rollout live PENDING;
+- Suite: Creative `165 PASS / 1 SKIP`; Windows `48 PASS / 1 SKIP`.
+- Rollout `PC_PERSONALE`: installazione, cinque tool, runtime ready, gate-off e inspection read-only
+  PASS. Preparato e salvato un progetto disposable con due timeline; ripristinato il progetto
+  precedentemente aperto. Gate distruttivo e ritiro live PENDING approvazione esplicita.
   `PC_SEGRETERIA` non toccato.
 
 ## 2026-10-08 — Quarantena tecnica recuperabile e runtime separati

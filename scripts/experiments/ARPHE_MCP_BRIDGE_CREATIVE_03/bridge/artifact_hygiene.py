@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -159,6 +160,91 @@ def _unclassified(config: CreativeConfig, known_paths: set[Path]) -> list[dict[s
     return result
 
 
+def _rotated_log_metadata(config: CreativeConfig, producer: Path) -> tuple[datetime, int, str]:
+    root = config.runtime_log_root.resolve()
+    selected = validate_managed_path(producer, root, allow_directory=True)
+    if selected.parent != (root / "rotated").resolve() or not selected.name.startswith("runtime."):
+        raise ValueError("Cartella produttore log fuori dalla radice esatta")
+    if {item.name for item in selected.iterdir()} != {"runtime.log", "artifact.json"}:
+        raise ValueError("Unità log incompleta o con contenuti inattesi")
+    log = validate_managed_path(selected / "runtime.log", root)
+    metadata_path = validate_managed_path(selected / "artifact.json", root)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8-sig"))
+    expected_keys = {
+        "schema_version", "workstation_id", "category", "log_file",
+        "created_at", "size_bytes", "sha256",
+    }
+    if not isinstance(metadata, dict) or set(metadata) != expected_keys:
+        raise ValueError("Metadata log non valida")
+    if (metadata.get("schema_version") != 1 or
+            metadata.get("workstation_id") != config.workstation_id or
+            metadata.get("category") != "ROTATED_LOG" or
+            metadata.get("log_file") != "runtime.log"):
+        raise ValueError("Identità metadata log non valida")
+    created = datetime.fromisoformat(str(metadata["created_at"]))
+    created = _utc(created)
+    size = log.stat().st_size
+    digest = sha256_file(log)
+    if metadata.get("size_bytes") != size or metadata.get("sha256") != digest:
+        raise ValueError("Integrità log non valida")
+    return created, size, digest
+
+
+def _rotated_log_findings(config: CreativeConfig, known_paths: set[Path]) -> list[dict[str, Any]]:
+    rotated = config.runtime_log_root / "rotated"
+    if not rotated.is_dir():
+        return []
+    findings: list[dict[str, Any]] = []
+    for producer in sorted(rotated.iterdir(), key=lambda item: item.name.casefold()):
+        resolved = producer.resolve(strict=False)
+        if resolved in known_paths:
+            continue
+        item = {
+            "artifact_id": None,
+            "category": "ROTATED_LOG",
+            "state": "PENDING_IMPORT",
+            "display_path": f"runtime_log_root:rotated/{producer.name}",
+            "bytes": 0,
+            "eligible_at": None,
+            "purge_after": None,
+        }
+        try:
+            _, size, _ = _rotated_log_metadata(config, producer)
+            item["bytes"] = size
+        except (OSError, ValueError, json.JSONDecodeError):
+            item["state"] = "ERROR"
+            item["error_code"] = "INVALID_ROTATED_LOG_METADATA"
+        findings.append(item)
+    return findings
+
+
+def _import_rotated_logs(config: CreativeConfig, store: ArtifactStore,
+                         policy: ArtifactPolicy) -> None:
+    rotated = config.runtime_log_root / "rotated"
+    if not rotated.is_dir():
+        return
+    known = {Path(record.path).resolve(strict=False) for record in store.records() if record.state != "PURGED"}
+    for producer in sorted(rotated.iterdir(), key=lambda item: item.name.casefold()):
+        if producer.resolve(strict=False) in known:
+            continue
+        try:
+            created, _, _ = _rotated_log_metadata(config, producer)
+        except (OSError, ValueError, json.JSONDecodeError):
+            continue
+        record = store.register_path(
+            producer,
+            kind="directory",
+            category="ROTATED_LOG",
+            producer="windows_runtime_log_rotation",
+            managed_root_id="runtime_log_root",
+            created_at=created,
+            policy_version=policy.policy_version,
+        )
+        size, digest, _ = _directory_signature(producer)
+        store.replace(replace(record, size_bytes=size, sha256=digest))
+        known.add(producer.resolve())
+
+
 def inspect_artifacts(config: CreativeConfig, artifact_store: ArtifactStore, project_registry: Any,
                       policy: ArtifactPolicy, now_utc: datetime) -> dict[str, Any]:
     now = _utc(now_utc)
@@ -166,6 +252,7 @@ def inspect_artifacts(config: CreativeConfig, artifact_store: ArtifactStore, pro
     items = [_record_item(record, config, project_registry, policy, now) for record in records]
     known_paths = {Path(record.path).resolve(strict=False) for record in records if record.state != "PURGED"}
     items.extend(_unclassified(config, known_paths))
+    items.extend(_rotated_log_findings(config, known_paths))
     summary: dict[str, dict[str, int]] = {}
     for item in items:
         bucket = summary.setdefault(item["state"], {"count": 0, "bytes": 0})
@@ -389,6 +476,7 @@ def run_maintenance(config: CreativeConfig, artifact_store: ArtifactStore, proje
     purged: list[str] = []
     try:
         _reconcile_pending(artifact_store)
+        _import_rotated_logs(config, artifact_store, policy)
         for original in artifact_store.records():
             record = original
             if record.state == "ERROR" or record.state == "PURGED":

@@ -25,6 +25,25 @@ from tests.test_artifact_records import POLICY_PATH, config_for  # noqa: E402
 UTC = timezone.utc
 
 
+def rotated_log_producer(config, name: str, created: datetime, *, workstation: str | None = None,
+                         complete: bool = True) -> Path:
+    producer = config.runtime_log_root / "rotated" / name
+    producer.mkdir(parents=True)
+    log = producer / "runtime.log"
+    log.write_bytes(b"safe runtime log")
+    if complete:
+        (producer / "artifact.json").write_text(json.dumps({
+            "schema_version": 1,
+            "workstation_id": workstation or config.workstation_id,
+            "category": "ROTATED_LOG",
+            "log_file": "runtime.log",
+            "created_at": created.isoformat(),
+            "size_bytes": log.stat().st_size,
+            "sha256": __import__("hashlib").sha256(log.read_bytes()).hexdigest(),
+        }), encoding="utf-8")
+    return producer
+
+
 class Batch:
     def __init__(self, status: str, expected_outputs: tuple[str, ...] = ()):
         self.status = status
@@ -56,6 +75,22 @@ def report_for(root: Path, now: datetime, statuses: dict[str, str] | None = None
 
 
 class ArtifactInventoryTests(unittest.TestCase):
+    def test_incomplete_or_forged_rotated_log_is_reported_as_error_without_adoption(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = config_for(root)
+            now = datetime(2026, 10, 8, tzinfo=UTC)
+            rotated_log_producer(config, "runtime.incomplete", now, complete=False)
+            rotated_log_producer(config, "runtime.forged", now, workstation="PC_SEGRETERIA")
+
+            report = report_for(root, now)
+
+            errors = [item for item in report["items"] if item["state"] == "ERROR"]
+            self.assertEqual(2, len(errors))
+            self.assertEqual({"INVALID_ROTATED_LOG_METADATA"}, {item["error_code"] for item in errors})
+            self.assertEqual([], ArtifactStore(config.artifact_registry_path, config.workstation_id).records())
+            self.assertNotIn(str(root), json.dumps(report))
+
     def test_registered_diagnostic_becomes_eligible_after_24_hours(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -222,6 +257,29 @@ class ArtifactInventoryTests(unittest.TestCase):
 
 
 class ArtifactLifecycleTests(unittest.TestCase):
+    def test_maintenance_imports_only_exact_valid_rotated_log_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = config_for(root)
+            created = datetime(2026, 9, 30, tzinfo=UTC)
+            valid = rotated_log_producer(config, "runtime.valid", created)
+            outside = config.runtime_log_root / "not-rotated" / "runtime.outside"
+            outside.mkdir(parents=True)
+            (outside / "runtime.log").write_bytes(b"outside")
+            store = ArtifactStore(config.artifact_registry_path, config.workstation_id)
+
+            result = self._run(config, store, datetime(2026, 10, 8, tzinfo=UTC))
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(1, len(store.records()))
+            record = store.records()[0]
+            self.assertEqual("ROTATED_LOG", record.category)
+            self.assertEqual("runtime_log_root", record.managed_root_id)
+            self.assertEqual(created, record.created_at)
+            self.assertEqual("QUARANTINED", record.state)
+            self.assertFalse(valid.exists())
+            self.assertTrue(outside.exists())
+
     def _diagnostic(self, root: Path, created: datetime):
         config = config_for(root)
         path = config.render_root / "diagnostics" / "frame.jpg"

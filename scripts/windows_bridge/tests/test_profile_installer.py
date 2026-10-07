@@ -13,6 +13,7 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INSTALLER = REPO_ROOT / "scripts" / "install_workstation_profile.ps1"
 COMMON = REPO_ROOT / "scripts" / "windows_bridge" / "common.ps1"
+CREATIVE_INSTALLER = REPO_ROOT / "scripts" / "experiments" / "ARPHE_MCP_BRIDGE_CREATIVE_03" / "install_on_segreteria.ps1"
 POWERSHELL = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
 
 
@@ -109,6 +110,16 @@ class ProfileInstallerTests(unittest.TestCase):
             check=False,
         )
 
+    def run_creative_dry_run(self, config_path: Path):
+        return subprocess.run(
+            [
+                str(POWERSHELL), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                str(CREATIVE_INSTALLER), "-WorkstationId", "PC_PERSONALE",
+                "-Destination", str(self.root / "creative"),
+                "-ConfigPath", str(config_path), "-WhatIf",
+            ], capture_output=True, text=True, check=False,
+        )
+
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_common_uses_workstation_specific_data_directory(self):
         result = self.run_common()
@@ -157,6 +168,13 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertIn("belongs to PC_SEGRETERIA", result.stderr)
         saved = json.loads(self.local_config_path.read_text(encoding="utf-8"))
         self.assertEqual("PC_SEGRETERIA", saved["workstation_id"])
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_dry_run_reports_explicit_profile_config_path(self):
+        config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
+        result = self.run_creative_dry_run(config_path)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn(str(config_path), result.stdout)
 
 
 if __name__ == "__main__":

@@ -82,10 +82,10 @@ $venvPythonw = (Resolve-Path -LiteralPath (Join-Path $venvRoot 'Scripts\pythonw.
 & $venvPython -m pip install --disable-pip-version-check -r $requirements
 if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed with exit code $LASTEXITCODE." }
 
+$creativeConfigPath = Join-Path (Join-Path (Join-Path ([string]$profile.install_root) 'runtime-configs') ([string]$profile.workstation_id)) 'creative_config.json'
 $creativeInstaller = Join-Path $PSScriptRoot 'experiments\ARPHE_MCP_BRIDGE_CREATIVE_03\install_on_segreteria.ps1'
-& $creativeInstaller -WorkstationId ([string]$profile.workstation_id) -Destination ([string]$profile.creative_destination)
+& $creativeInstaller -WorkstationId ([string]$profile.workstation_id) -Destination ([string]$profile.creative_destination) -ConfigPath $creativeConfigPath
 
-$creativeConfigPath = Join-Path $env:LOCALAPPDATA 'ARPHE\CreativeBridge03\creative_config.json'
 $creativeConfig = Get-Content -Raw -LiteralPath $creativeConfigPath | ConvertFrom-Json
 foreach ($flag in $profile.feature_flags.PSObject.Properties) {
     if ($null -eq $creativeConfig.feature_flags.PSObject.Properties[$flag.Name]) {

@@ -3,14 +3,22 @@ param(
     [ValidatePattern('^PC_[A-Z0-9_]{2,48}$')][string]$WorkstationId = 'PC_SEGRETERIA',
     [string]$Destination = 'C:\ARPHE\MCP\ARPHE_MCP_BRIDGE_CREATIVE_03',
     [string]$AssetRoot = 'C:\ARPHE\MCP\assets\creative',
-    [string]$RenderRoot = 'C:\ARPHE\MCP\renders\creative'
+    [string]$RenderRoot = 'C:\ARPHE\MCP\renders\creative',
+    [string]$ConfigPath = ''
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$configDir = Join-Path $env:LOCALAPPDATA 'ARPHE\CreativeBridge03'
-$configPath = Join-Path $configDir 'creative_config.json'
+if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+    $configDir = Join-Path $env:LOCALAPPDATA 'ARPHE\CreativeBridge03'
+    $configPath = Join-Path $configDir 'creative_config.json'
+} else {
+    $configPath = [IO.Path]::GetFullPath($ConfigPath)
+    $configDir = Split-Path -Parent $configPath
+}
 $examplePath = Join-Path $PSScriptRoot 'creative_config.example.json'
+
+Write-Host "Creative config: $configPath"
 
 if (-not $PSCmdlet.ShouldProcess($Destination, 'Install creative bridge beside validated bridges')) { return }
 

@@ -43,6 +43,13 @@ New-Item -ItemType Directory -Path $bridgeDestination -Force | Out-Null
 Get-ChildItem -LiteralPath $bridgeSource -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $bridgeDestination -Force
 }
+foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json')) {
+    $registrySource = Join-Path $PSScriptRoot $registryName
+    if (-not (Test-Path -LiteralPath $registrySource -PathType Leaf)) {
+        throw "Creative registry not found: $registrySource"
+    }
+    Copy-Item -LiteralPath $registrySource -Destination (Join-Path $Destination $registryName) -Force
+}
 New-Item -ItemType Directory -Path $AssetRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $RenderRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $configDir -Force | Out-Null

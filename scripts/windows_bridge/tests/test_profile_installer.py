@@ -356,6 +356,18 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertEqual(config_path.parent / "audit.jsonl", Path(config["audit_log_path"]))
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_install_copies_workflow_and_render_registries(self):
+        config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
+        result = self.run_creative_install(config_path)
+        self.assertEqual(0, result.returncode, result.stderr)
+        destination = self.root / "creative-install"
+        for name in ("editorial_workflows.json", "render_profiles.json"):
+            self.assertEqual(
+                (CREATIVE_INSTALLER.parent / name).read_bytes(),
+                (destination / name).read_bytes(),
+            )
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_migrates_matching_legacy_config_without_deleting_source(self):
         legacy_state = self.legacy_creative_config_path.with_name("creative_state.json")
         legacy_audit = self.legacy_creative_config_path.with_name("audit.jsonl")

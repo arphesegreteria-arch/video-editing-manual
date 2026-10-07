@@ -78,10 +78,10 @@ Un riavvio rilegge batch e lock dal registry. Non ricrea automaticamente i job.
 
 Usare un progetto/timeline di prova e un job innocuo creato appositamente; non usare lavori reali.
 
-### PC_PERSONALE — BLOCKED (playback FPS)
+### PC_PERSONALE — IN PROGRESS
 
 - [x] identità, task e percorsi del profilo verificati (`PC_PERSONALE`);
-- [ ] read-back formato e playback FPS: rilevati timeline/progetto 30 FPS ma playback 24 FPS;
+- [x] read-back progetto/timeline/playback 1080×1920/30 dopo correzione UI sul progetto disposable;
 - [ ] job innocuo preesistente lasciato intatto;
 - [ ] prepare senza start;
 - [ ] approvazione e avvio selettivo;
@@ -94,8 +94,10 @@ SafeWrite02. Dopo la correzione, Creative03 è stato reinstallato sul solo `PC_P
 `Running`, `/readyz=ready` e codice installato identico al commit verificato. Una chiamata reale
 del tool pubblico sul nuovo progetto disposable `ARPHE_ROLLOUT_PLAYBACK_FLAG_PROJECT_20261007`
 ha restituito `PLAYBACK_FPS_ACTION_REQUIRED` (attuale 24, richiesto 30) senza creare la timeline.
-Il gate render riparte dopo la modifica manuale del playback FPS e un nuovo read-back. Nessun
-test è stato eseguito sul progetto di lavoro della segreteria.
+Il playback è stato poi impostato a 30 tramite Project Settings da controllo remoto; il retry ha
+creato la timeline disposable con read-back conforme. Durante il passaggio al render è stato
+individuato e corretto l'installer che ometteva i registri workflow/render. Nessun test è stato
+eseguito sul progetto di lavoro della segreteria.
 
 ### PC_SEGRETERIA — PENDING
 

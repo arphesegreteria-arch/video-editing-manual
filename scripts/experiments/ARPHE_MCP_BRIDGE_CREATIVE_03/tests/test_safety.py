@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import ast
+import inspect
+from types import SimpleNamespace
 from pathlib import Path
 import sys
 import tempfile
@@ -24,6 +26,7 @@ from bridge.safety import (ValidationError, allowed_asset, arphe_name,
                            validate_review, validate_timeline_settings)  # noqa: E402
 from bridge.tool_catalog import EXPOSED_TOOL_NAMES, FORBIDDEN_GENERIC_TOOLS  # noqa: E402
 from bridge.server import mcp  # noqa: E402
+import bridge.server as server  # noqa: E402
 
 
 class SafetyTests(unittest.TestCase):
@@ -89,6 +92,26 @@ class SafetyTests(unittest.TestCase):
                     and item.func.attr == "tool" for item in node.decorator_list)
         }
         self.assertEqual(set(EXPOSED_TOOL_NAMES), decorated)
+
+    def test_render_tools_expose_closed_prepare_approve_start_verify_surface(self):
+        required = {"list_editorial_workflows", "validate_editorial_brief", "prepare_render_batch",
+                    "approve_render_batch", "start_render_batch", "get_render_batch_status",
+                    "verify_render_batch", "cancel_render_batch"}
+        self.assertTrue(required.issubset(EXPOSED_TOOL_NAMES))
+
+    def test_no_tool_has_start_render_default_or_arbitrary_render_settings(self):
+        self.assertNotIn("start_render", inspect.signature(server.queue_publish_package_exports).parameters)
+        self.assertNotIn("render_settings", inspect.signature(server.prepare_render_batch).parameters)
+
+    def test_workflow_listing_contains_no_local_brief_or_media_content(self):
+        config = SimpleNamespace(workflow_registry_path=ROOT / "editorial_workflows.json")
+        with patch("bridge.server.load_config", return_value=config):
+            result = server.list_editorial_workflows()
+        raw = json.dumps(result)
+        self.assertTrue(result["ok"])
+        self.assertNotIn("primary_source", raw)
+        self.assertNotIn("media_path", raw)
+        self.assertNotIn("review_text", raw)
 
     def test_default_flags_gate_advanced_writes(self):
         self.assertTrue(DEFAULT_FLAGS["CAP_PROJECT"])
@@ -231,6 +254,13 @@ class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(tool.name == "apply_publish_cleanup",
                              tool.annotations.destructive_hint, tool.name)
             self.assertFalse(tool.annotations.open_world_hint, tool.name)
+
+    async def test_prepare_and_approve_are_safe_writes_start_and_cancel_are_explicit_writes(self):
+        tools = {tool.name: tool for tool in await mcp.list_tools()}
+        for name in ("prepare_render_batch", "approve_render_batch", "start_render_batch", "cancel_render_batch"):
+            self.assertFalse(tools[name].annotations.read_only_hint, name)
+        for name in ("list_editorial_workflows", "get_render_batch_status"):
+            self.assertTrue(tools[name].annotations.read_only_hint, name)
 
     async def test_diagnostic_reads_and_capture_are_classified_explicitly(self):
         tools = {tool.name: tool for tool in await mcp.list_tools()}

@@ -27,6 +27,23 @@ class AuditTests(unittest.TestCase):
             self.assertNotIn("C:/", raw)
             self.assertNotIn("SENSITIVE_MARKER", raw)
 
+    def test_batch_audit_records_role_transition_fingerprint_and_job_ids_but_no_paths_or_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "audit.jsonl"
+            write_audit(path, "approve_render_batch", {
+                "ok": True, "batch_id": "batch-1", "actor_role": "SEGRETERIA",
+                "transition": "PREPARED->APPROVED", "fingerprint": "abc123",
+                "job_ids": ["job-1"], "approval_token": "secret-token",
+                "path": "C:/patients/private", "brief_text": "private review",
+            })
+            raw = path.read_text(encoding="utf-8")
+            record = json.loads(raw)
+            self.assertEqual(["job-1"], record["job_ids"])
+            self.assertEqual("PREPARED->APPROVED", record["transition"])
+            self.assertNotIn("secret-token", raw)
+            self.assertNotIn("patients", raw)
+            self.assertNotIn("private review", raw)
+
 
 if __name__ == "__main__":
     unittest.main()

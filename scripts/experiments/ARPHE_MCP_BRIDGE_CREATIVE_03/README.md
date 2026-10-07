@@ -95,3 +95,10 @@ in **Attivate**, il salvataggio
 aggiorna direttamente la versione attiva: in questo flusso non compare un secondo pulsante
 **Pubblica**. La pagina amministrativa può richiedere circa 30 secondi o più a causa del numero
 di app/azioni; non ricaricarla durante l'attesa.
+# Render batch sicuri
+
+I render nuovi seguono il percorso chiuso `validate_editorial_brief` →
+`prepare_render_batch` → `approve_render_batch` → `start_render_batch` →
+`verify_render_batch`. `render_preview`, `start_longform_exports` e il vecchio
+pacchetto pubblicabile non avviano più render direttamente. Dopo l'aggiornamento
+del bridge occorre aggiornare lo schema strumenti nell'app prima dei test live.

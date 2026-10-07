@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-07 — Registri runtime inclusi nel rollout Creative03
+
+- L'installer Creative03 copia ora anche `editorial_workflows.json` e `render_profiles.json`;
+  prima del fix il codice veniva installato senza i registri necessari ai render batch.
+- Aggiunto test di installazione reale in directory temporanea.
+- Suite: Creative `115/115` PASS; Windows `36` PASS e `1` SKIP DPAPI noto.
+- `PC_PERSONALE`: playback del progetto disposable impostato via UI a 30 FPS; read-back e
+  creazione timeline 1080×1920/30 completati. `PC_SEGRETERIA` non toccato.
+
 ## 2026-10-07 — Gate playback FPS visibile in chat
 
 - Corretto il contratto formato per Resolve Studio 21.1.1: `timelinePlaybackFrameRate` è trattato

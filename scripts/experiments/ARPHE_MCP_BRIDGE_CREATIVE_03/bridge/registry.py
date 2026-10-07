@@ -6,6 +6,8 @@ from pathlib import Path
 import tempfile
 from typing import Any
 
+from .safety import ValidationError
+
 
 class Registry:
     def __init__(self, path: Path):
@@ -13,12 +15,16 @@ class Registry:
 
     def _load(self) -> dict[str, Any]:
         if not self.path.is_file():
-            return {"schema_version": 1, "projects": {}, "elements": {}}
+            return {"schema_version": 1, "projects": {}, "elements": {},
+                    "briefs": {}, "render_batches": {}, "render_locks": {}}
         data = json.loads(self.path.read_text(encoding="utf-8-sig"))
         if data.get("schema_version") != 1:
             raise ValueError("Versione registry non supportata")
         data.setdefault("projects", {})
         data.setdefault("elements", {})
+        data.setdefault("briefs", {})
+        data.setdefault("render_batches", {})
+        data.setdefault("render_locks", {})
         return data
 
     def _save(self, data: dict[str, Any]) -> None:
@@ -80,3 +86,51 @@ class Registry:
 
     def longform_batch(self, project: str) -> dict[str, Any] | None:
         return self._load()["projects"].get(project, {}).get("longform_batch")
+
+    def save_brief(self, brief: Any) -> None:
+        from dataclasses import asdict
+        data = self._load()
+        payload = asdict(brief)
+        for key in ("requested_outputs", "unresolved_questions"):
+            payload[key] = list(payload[key])
+        data["briefs"][brief.brief_id] = payload
+        self._save(data)
+
+    def brief(self, brief_id: str) -> dict[str, Any] | None:
+        return self._load()["briefs"].get(brief_id)
+
+    def save_render_batch(self, batch: Any) -> None:
+        from dataclasses import asdict
+        data = self._load()
+        payload = asdict(batch)
+        for key in ("timeline_names", "output_names", "queue_before", "created_job_ids", "expected_outputs"):
+            payload[key] = list(payload[key])
+        data["render_batches"][batch.batch_id] = payload
+        self._save(data)
+
+    def render_batch(self, batch_id: str) -> Any | None:
+        from .render_batches import render_batch_from_dict
+        raw = self._load()["render_batches"].get(batch_id)
+        return None if raw is None else render_batch_from_dict(raw)
+
+    def list_render_batches(self) -> list[Any]:
+        from .render_batches import render_batch_from_dict
+        return [render_batch_from_dict(raw) for raw in self._load()["render_batches"].values()]
+
+    def acquire_render_lock(self, project: str, batch_id: str) -> None:
+        data = self._load()
+        existing = data["render_locks"].get(project)
+        if existing and existing.get("batch_id") != batch_id:
+            raise ValidationError("Progetto già bloccato da un altro render batch")
+        data["render_locks"][project] = {"batch_id": batch_id}
+        self._save(data)
+
+    def render_lock(self, project: str) -> dict[str, Any] | None:
+        return self._load()["render_locks"].get(project)
+
+    def release_render_lock(self, project: str, batch_id: str) -> None:
+        data = self._load()
+        existing = data["render_locks"].get(project)
+        if existing and existing.get("batch_id") == batch_id:
+            data["render_locks"].pop(project, None)
+            self._save(data)

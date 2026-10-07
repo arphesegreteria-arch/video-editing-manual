@@ -16,9 +16,11 @@ from bridge.editorial_workflows import (  # noqa: E402
 )
 from bridge.format_contract import ResolvedFormat  # noqa: E402
 from bridge.registry import Registry  # noqa: E402
+from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 from bridge.render_batches import (  # noqa: E402
     approve_render_batch, batch_fingerprint, create_render_batch, transition_batch,
 )
+from bridge.render_tools import prepare_render_batch  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 
 
@@ -98,6 +100,89 @@ class RenderBatchStateTests(unittest.TestCase):
             self.assertEqual(batch.batch_id, restarted.render_lock("ARPHE_PROJECT")["batch_id"])
             with self.assertRaises(ValidationError):
                 restarted.acquire_render_lock("ARPHE_PROJECT", "another")
+
+
+class FakeRenderProject:
+    def __init__(self):
+        self.jobs = [{"JobId": "old-job", "TargetDir": "old", "CustomName": "old"}]
+        self.started = []
+        self.deleted = []
+        self.settings = {}
+        self.timeline = type("Timeline", (), {"GetName": lambda self: "ARPHE_MAIN"})()
+
+    def GetName(self): return "ARPHE_PROJECT"
+    def GetCurrentTimeline(self): return self.timeline
+    def SetCurrentTimeline(self, timeline): self.timeline = timeline; return True
+    def GetTimelineCount(self): return 1
+    def GetTimelineByIndex(self, _index): return self.timeline
+    def GetRenderJobList(self): return [dict(job) for job in self.jobs]
+    def SetCurrentRenderFormatAndCodec(self, container, codec): self.settings.update(container=container, codec=codec); return True
+    def SetRenderSettings(self, settings): self.settings.update(settings); return True
+    def AddRenderJob(self):
+        job_id = f"new-job-{len(self.jobs)}"
+        self.jobs.append({"JobId": job_id, **self.settings})
+        return job_id
+    def DeleteRenderJob(self, job_id): self.deleted.append(job_id); self.jobs = [j for j in self.jobs if j["JobId"] != job_id]; return True
+    def StartRendering(self, *args): self.started.append(args); return True
+
+
+def configured(root: Path):
+    return CreativeConfig(root / "config", root / "assets", root / "renders", root / "state.json",
+                          root / "audit.jsonl", dict(DEFAULT_PALETTE), dict(DEFAULT_FLAGS),
+                          frozenset(), frozenset(), "mp4", "H264", workstation_id="PC_PERSONALE")
+
+
+def stored_batch(registry: Registry):
+    batch = create_render_batch(*fixtures(), "ARPHE_PROJECT", ("ARPHE_MAIN",),
+                                ("ARPHE_OUTPUT",), "PC_PERSONALE")
+    registry.save_render_batch(batch)
+    return batch
+
+
+class RenderBatchPreparationTests(unittest.TestCase):
+    def test_prepare_never_calls_start_rendering(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)
+            project = FakeRenderProject()
+            result = prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            self.assertTrue(result["ok"])
+            self.assertEqual([], project.started)
+
+    def test_existing_jobs_remain_untouched_and_outside_created_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)
+            project = FakeRenderProject()
+            result = prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            self.assertEqual(["new-job-1"], result["created_job_ids"])
+            self.assertEqual("old-job", project.jobs[0]["JobId"])
+            self.assertNotIn("old-job", result["created_job_ids"])
+
+    def test_duplicate_or_missing_new_job_id_rolls_back_created_jobs_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)
+            project = FakeRenderProject()
+            project.AddRenderJob = lambda: "old-job"
+            with self.assertRaises(ValidationError):
+                prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            self.assertEqual([], project.deleted)
+
+    def test_partial_settings_failure_restores_original_timeline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)
+            project = FakeRenderProject(); original = project.timeline
+            project.SetRenderSettings = lambda _settings: False
+            with self.assertRaises(ValidationError):
+                prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            self.assertIs(original, project.timeline)
+
+    def test_prepare_uses_batch_staging_not_delivery_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)
+            project = FakeRenderProject()
+            prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            prepared = registry.render_batch(batch.batch_id)
+            self.assertEqual((configured(root).render_root / "staging" / batch.batch_id).resolve(),
+                             Path(prepared.staging_directory).resolve())
 
 
 if __name__ == "__main__":

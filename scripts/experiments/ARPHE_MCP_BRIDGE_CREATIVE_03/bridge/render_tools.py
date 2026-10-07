@@ -8,6 +8,7 @@ from .feature_flags import require_capability
 from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name, ensure_no_collision, require_arphe_name
+from .render_batches import transition_batch
 
 
 INSTAGRAM_REEL_RENDER_SETTINGS = {
@@ -20,6 +21,78 @@ INSTAGRAM_REEL_RENDER_SETTINGS = {
     "ExportVideo": True,
     "ExportAudio": True,
 }
+
+
+def _render_job_ids(project: Any) -> tuple[str, ...]:
+    jobs = safe_call(project, "GetRenderJobList") or []
+    ids = tuple(str(job.get("JobId") or job.get("JobID") or "") for job in jobs if isinstance(job, dict))
+    if any(not value for value in ids) or len(ids) != len(set(ids)):
+        raise ValidationError("La coda Resolve contiene job senza ID o duplicati")
+    return ids
+
+
+def _job_map(project: Any) -> dict[str, dict[str, Any]]:
+    jobs = safe_call(project, "GetRenderJobList") or []
+    return {str(job.get("JobId") or job.get("JobID")): dict(job) for job in jobs if isinstance(job, dict)}
+
+
+def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registry, batch_id: str) -> dict[str, Any]:
+    batch = registry.render_batch(batch_id)
+    if batch is None or batch.status != "CONFIRMED":
+        raise ValidationError("Serve un render batch CONFIRMED")
+    if str(safe_call(project, "GetName") or "") != batch.project_name:
+        raise ValidationError("Il progetto corrente non corrisponde al batch")
+    before = _render_job_ids(project)
+    timelines = _timeline_map(project)
+    original = safe_call(project, "GetCurrentTimeline")
+    staging = (config.render_root / "staging" / batch.batch_id).resolve()
+    staging.mkdir(parents=True, exist_ok=False)
+    created: list[str] = []
+    expected: list[str] = []
+    try:
+        for timeline_name, output_name in zip(batch.timeline_names, batch.output_names, strict=True):
+            timeline = timelines.get(timeline_name)
+            if timeline is None or not safe_call(project, "SetCurrentTimeline", timeline):
+                raise ValidationError(f"Timeline non disponibile: {timeline_name}")
+            if not safe_call(project, "SetCurrentRenderFormatAndCodec", batch.container, batch.video_codec):
+                raise ValidationError("Formato/codec render rifiutati")
+            numerator, denominator = (int(v) for v in batch.frame_rate.split("/"))
+            settings = {"TargetDir": str(staging), "CustomName": output_name, "SelectAllFrames": True,
+                        "FormatWidth": batch.width, "FormatHeight": batch.height,
+                        "FrameRate": numerator / denominator, "ExportVideo": True,
+                        "ExportAudio": batch.audio_required}
+            if batch.audio_codec:
+                settings["AudioCodec"] = batch.audio_codec
+            if batch.audio_sample_rate:
+                settings["AudioSampleRate"] = batch.audio_sample_rate
+            if not safe_call(project, "SetRenderSettings", settings):
+                raise ValidationError("Impostazioni render rifiutate")
+            returned = safe_call(project, "AddRenderJob")
+            after = _render_job_ids(project)
+            new_ids = [value for value in after if value not in before and value not in created]
+            if len(new_ids) != 1 or str(returned) != new_ids[0]:
+                raise ValidationError("Impossibile identificare in modo univoco il nuovo job")
+            created.append(new_ids[0])
+            expected.append(f"{output_name}.{batch.container}")
+    except Exception as exc:
+        current = set(_render_job_ids(project))
+        for job_id in created:
+            if job_id in current:
+                safe_call(project, "DeleteRenderJob", job_id)
+        transition_batch(registry, batch.batch_id, "CONFIRMED", "FAILED_PREPARE",
+                         {"error": str(exc), "orphaned_job_ids": [j for j in created if j in set(_render_job_ids(project))]})
+        raise
+    finally:
+        if original is not None:
+            safe_call(project, "SetCurrentTimeline", original)
+    snapshots = {job_id: _job_map(project)[job_id] for job_id in created}
+    prepared = transition_batch(registry, batch.batch_id, "CONFIRMED", "PREPARED",
+                                {"queue_before": list(before), "created_job_ids": created,
+                                 "job_snapshots": snapshots, "expected_outputs": expected,
+                                 "staging_directory": str(staging)})
+    return {"ok": True, "action": "prepare_render_batch", "batch_id": batch_id,
+            "created_job_ids": list(prepared.created_job_ids), "render_started": False,
+            "next_action": "approve_render_batch"}
 
 
 def render_preview(project: Any, timeline: Any, config: CreativeConfig, registry: Registry, output_name: str) -> dict:

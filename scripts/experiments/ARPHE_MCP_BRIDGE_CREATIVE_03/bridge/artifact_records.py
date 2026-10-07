@@ -251,6 +251,24 @@ class ArtifactStore:
         data["maintenance"] = {"last_attempt_at": _text(selected), "last_result": str(last_result)}
         self._save(data)
 
+    def pending_operation(self) -> dict[str, Any] | None:
+        value = self._load().get("pending_operation")
+        if value is not None and not isinstance(value, dict):
+            raise ValueError("Operazione artefatto pendente non valida")
+        return value
+
+    def set_pending_operation(self, operation: dict[str, Any]) -> None:
+        data = self._load()
+        if data.get("pending_operation") is not None:
+            raise RuntimeError("Esiste già un'operazione artefatto pendente")
+        data["pending_operation"] = dict(operation)
+        self._save(data)
+
+    def clear_pending_operation(self) -> None:
+        data = self._load()
+        data["pending_operation"] = None
+        self._save(data)
+
 
 def artifact_store_for(config: CreativeConfig) -> ArtifactStore:
     return ArtifactStore(config.artifact_registry_path, config.workstation_id)

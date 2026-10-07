@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from pathlib import Path
 
+from .artifact_records import artifact_store_for
 from .config import CreativeConfig
 from .feature_flags import require_capability
 from .format_contract import require_project_playback
@@ -44,6 +45,17 @@ def render_job_status(project: Any, job_id: str) -> str:
     if isinstance(value, dict) and value.get("JobStatus"):
         return str(value["JobStatus"])
     return str(_job_map(project).get(job_id, {}).get("JobStatus") or "unknown")
+
+
+def _register_render_staging(config: CreativeConfig, staging: Path, batch_id: str) -> None:
+    artifact_store_for(config).register_path(
+        staging,
+        kind="directory",
+        category="RENDER_STAGING",
+        producer="prepare_render_batch",
+        managed_root_id="render_root",
+        batch_id=batch_id,
+    )
 
 
 def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registry, batch_id: str) -> dict[str, Any]:
@@ -102,7 +114,10 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
             if job_id in current:
                 safe_call(project, "DeleteRenderJob", job_id)
         transition_batch(registry, batch.batch_id, "CONFIRMED", "FAILED_PREPARE",
-                         {"error": str(exc), "orphaned_job_ids": [j for j in created if j in set(_render_job_ids(project))]})
+                         {"error": str(exc), "orphaned_job_ids": [j for j in created if j in set(_render_job_ids(project))],
+                          "expected_outputs": expected, "expected_durations": expected_durations,
+                          "staging_directory": str(staging)})
+        _register_render_staging(config, staging, batch.batch_id)
         raise
     finally:
         if original is not None:
@@ -113,6 +128,17 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
                                  "job_snapshots": snapshots, "expected_outputs": expected,
                                  "expected_durations": expected_durations,
                                  "staging_directory": str(staging)})
+    try:
+        _register_render_staging(config, staging, batch.batch_id)
+    except Exception as exc:
+        current = set(_render_job_ids(project))
+        for job_id in created:
+            if job_id in current:
+                safe_call(project, "DeleteRenderJob", job_id)
+        transition_batch(registry, batch.batch_id, "PREPARED", "FAILED_PREPARE",
+                         {"artifact_registration_error": str(exc),
+                          "orphaned_job_ids": [j for j in created if j in set(_render_job_ids(project))]})
+        raise
     return {"ok": True, "action": "prepare_render_batch", "batch_id": batch_id,
             "created_job_ids": list(prepared.created_job_ids), "render_started": False,
             "next_action": "approve_render_batch"}

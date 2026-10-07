@@ -12,7 +12,7 @@
   "python_path": "C:/ARPHE/MCP/runtimes/PC_SEGRETERIA/venv/Scripts/python.exe",
   "creative_config_path": "C:/ARPHE/MCP/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/runtime-configs/PC_SEGRETERIA/creative_config.json",
   "ready_url": "http://127.0.0.1:8080/readyz",
-  "log_dir": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
+  "log_dir": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/PC_SEGRETERIA",
   "secret_path": "%LOCALAPPDATA%/ARPHE/WindowsBridgeRuntimeV1/PC_SEGRETERIA/runtime_api_key.dpapi",
   "state_path": "%LOCALAPPDATA%/ARPHE/WindowsBridgeRuntimeV1/PC_SEGRETERIA/runtime_state.json",
   "stop_request_path": "%LOCALAPPDATA%/ARPHE/WindowsBridgeRuntimeV1/PC_SEGRETERIA/stop.requested",

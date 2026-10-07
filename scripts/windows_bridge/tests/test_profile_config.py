@@ -113,6 +113,16 @@ class ProfileConfigTests(unittest.TestCase):
             personal["creative_config"],
         )
         self.assertNotEqual(personal["creative_config"], office["creative_config"])
+        for key in ("artifact_registry", "quarantine_root", "log_dir"):
+            self.assertNotEqual(personal[key], office[key])
+        self.assertEqual(
+            "C:/ARPHE/MCP/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/runtime-configs/PC_PERSONALE/artifact_registry.json",
+            personal["artifact_registry"],
+        )
+        self.assertEqual(
+            "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/PC_PERSONALE",
+            personal["log_dir"],
+        )
 
     def test_runtime_command_uses_absolute_profile_venv_python(self):
         module = load_profile_module()

@@ -123,8 +123,11 @@ def runtime_paths(profile: dict[str, Any]) -> dict[str, str]:
         "profile_root": profile_root,
         "runtime_config": f"{profile_root}/bridge_config.json",
         "creative_config": f"{profile_root}/creative_config.json",
+        "artifact_registry": f"{profile_root}/artifact_registry.json",
+        "artifact_policy": f"{normalized['creative_destination']}/artifact_retention.json",
         "backup_dir": f"{profile_root}/backups",
         "log_dir": f"{normalized['log_dir']}/{normalized['workstation_id']}",
+        "quarantine_root": f"{normalized['log_dir']}/{normalized['workstation_id']}/.arphe-quarantine",
         "venv_python": f"{normalized['venv_root']}/Scripts/python.exe",
     }
 

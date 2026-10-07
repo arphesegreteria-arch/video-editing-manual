@@ -13,7 +13,7 @@ from unittest.mock import patch
 MODULE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(MODULE_DIR))
 
-from arphe_bridge_runtime import SecretRedactor, build_child_environment, load_config  # noqa: E402
+from arphe_bridge_runtime import SecretRedactor, build_child_environment, configure_logging, load_config  # noqa: E402
 from health import check_ready  # noqa: E402
 from secret_store import delete_secret, load_secret, store_secret  # noqa: E402
 
@@ -34,6 +34,11 @@ class FakeResponse:
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_configure_logging_requires_explicit_workstation_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(TypeError):
+                configure_logging(Path(directory), "secret")
+
     def test_runtime_starts_when_python_omits_the_script_directory(self):
         result = subprocess.run(
             [sys.executable, "-I", str(MODULE_DIR / "arphe_bridge_runtime.py"), "--help"],

@@ -17,6 +17,7 @@ from bridge.editorial_workflows import (  # noqa: E402
 from bridge.format_contract import ResolvedFormat  # noqa: E402
 from bridge.registry import Registry  # noqa: E402
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
+from bridge.artifact_records import ArtifactStore  # noqa: E402
 from bridge.render_batches import (  # noqa: E402
     approve_render_batch, batch_fingerprint, create_render_batch, transition_batch,
 )
@@ -136,7 +137,8 @@ def configured(root: Path):
     flags = dict(DEFAULT_FLAGS); flags["CAP_RENDER"] = True
     return CreativeConfig(root / "config", root / "assets", root / "renders", root / "state.json",
                           root / "audit.jsonl", dict(DEFAULT_PALETTE), flags,
-                          frozenset(), frozenset(), "mp4", "H264", workstation_id="PC_PERSONALE")
+                          frozenset(), frozenset(), "mp4", "H264", workstation_id="PC_PERSONALE",
+                          artifact_registry_path=root / "artifact_registry.json")
 
 
 def stored_batch(registry: Registry):
@@ -201,6 +203,38 @@ class RenderBatchPreparationTests(unittest.TestCase):
             prepared = registry.render_batch(batch.batch_id)
             self.assertEqual((configured(root).render_root / "staging" / batch.batch_id).resolve(),
                              Path(prepared.staging_directory).resolve())
+            records = ArtifactStore(configured(root).artifact_registry_path, "PC_PERSONALE").records()
+            self.assertEqual(1, len(records))
+            self.assertEqual("RENDER_STAGING", records[0].category)
+            self.assertEqual(batch.batch_id, records[0].batch_id)
+            self.assertEqual(Path(prepared.staging_directory).resolve(), Path(records[0].path))
+
+    def test_failed_prepare_persists_and_registers_its_staging_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)
+            project = FakeRenderProject(); project.SetRenderSettings = lambda _settings: False
+            with self.assertRaises(ValidationError):
+                prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            failed = registry.render_batch(batch.batch_id)
+            self.assertEqual("FAILED_PREPARE", failed.status)
+            self.assertTrue(Path(failed.staging_directory).is_dir())
+            records = ArtifactStore(configured(root).artifact_registry_path, "PC_PERSONALE").records()
+            self.assertEqual([(batch.batch_id, "RENDER_STAGING")],
+                             [(record.batch_id, record.category) for record in records])
+
+    def test_registration_failure_rolls_back_only_new_jobs_and_fails_batch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)
+            project = FakeRenderProject()
+            failing_store = type("FailingStore", (), {
+                "register_path": lambda self, *args, **kwargs: (_ for _ in ()).throw(OSError("registry locked"))
+            })()
+            from unittest.mock import patch
+            with patch("bridge.render_tools.artifact_store_for", return_value=failing_store):
+                with self.assertRaisesRegex(OSError, "registry locked"):
+                    prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            self.assertEqual(["old-job"], [job["JobId"] for job in project.jobs])
+            self.assertEqual("FAILED_PREPARE", registry.render_batch(batch.batch_id).status)
 
     def test_prepare_records_duration_and_h264_high_profile(self):
         with tempfile.TemporaryDirectory() as directory:

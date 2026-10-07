@@ -1,5 +1,46 @@
 # CHANGELOG
 
+## 2026-10-08 — Ritiro Resolve archive-first e recovery senza overwrite
+
+- Aggiunti prepare, approvazione tecnica, execute idempotente, inspection e recovery per timeline
+  e progetti ARPHÈ.
+- Ogni proposta salva ed esporta un `.drp` verificato con SHA-256 prima di qualunque rimozione;
+  modifiche successive al progetto o all'archivio bloccano l'execute.
+- Timeline corrente e progetti con render lock sono protetti; `DeleteProject` avviene solo dopo
+  `CloseProject` e verifica API. Un crash in `EXECUTING` viene riconciliato senza doppio delete.
+- Recovery via import in un nuovo `ARPHE_RECOVERY_...`, senza overwrite. Gli archivi restano tutti
+  per 30 giorni e comunque gli ultimi 3 per progetto; nessuna cancellazione automatica.
+- Nuovo gate e registry per-workstation `CAP_RESOLVE_RETIREMENT=false` di default. Un config o
+  registry dell'altro PC blocca l'installer prima delle scritture.
+- Suite finale: Creative `166 PASS / 1 SKIP`; Windows `48 PASS / 1 SKIP`.
+- Rollout `PC_PERSONALE` PASS: timeline disposable ritirata, progetto ritirato, recovery importato
+  senza overwrite e recovery disposable ritirato. Tre archivi registrati preservati, nessun probe
+  rimasto in Resolve, progetto originario ripristinato e runtime `ready`.
+- Resolve 21.1.1 non valorizza `GetProjectLastModifiedTime`; aggiunto fallback verificato a
+  `GetProjectAttributesInCurrentFolder().lastModifiedDate`. Il nome recovery conserva sempre gli
+  8 caratteri del suffisso UUID anche con nomi originali lunghi.
+- Rimosso soltanto il `.drp` orfano non registrato del primo prepare fallito (22.738 byte,
+  non recuperabile); tutti gli archivi registrati sono rimasti intatti. `PC_SEGRETERIA` non toccato.
+
+## 2026-10-08 — Quarantena tecnica recuperabile e runtime separati
+
+- Aggiunti registry artefatti per workstation, policy di retention fissa, inventario read-only,
+  quarantena di 7 giorni, restore con collision check e purge verificato con hash.
+- Catture diagnostiche e staging render vengono registrati; output pubblicabili, sorgenti e
+  oggetti Resolve restano fuori dal perimetro.
+- I log ruotati non si sovrascrivono più: ogni unità ha directory, sidecar, hash e identità PC.
+- Rimossi i tool pubblici di cleanup generico; i nuovi tool non accettano percorsi arbitrari.
+- Corretto l'installer profilo: log, config e registry sono workstation-specifici; il gate nuovo
+  resta spento per default e un registry dell'altro PC blocca prima delle scritture.
+- Evidenza codice: Creative `153 PASS / 1 SKIP` symlink ambientale; Windows
+  `45 PASS / 1 SKIP` DPAPI ambientale.
+- Rollout `PC_PERSONALE`: runtime `Running` e `/readyz` PASS; gate attivo; manutenzione esplicita
+  PASS con zero quarantene/purge. I 68 file storici (~37 MB) restano `UNCLASSIFIED` e intatti.
+  Registrata una sonda disposable reale, `ACTIVE` per le prime 24 ore; i gate temporali di
+  quarantena/restore e purge restano PENDING senza retrodatazioni. `PC_SEGRETERIA` non toccato.
+- Rollback: spegnere `CAP_ARTIFACT_MAINTENANCE`; l'ispezione resta disponibile e gli elementi già
+  in quarantena non vengono eliminati finché il gate resta spento.
+
 ## 2026-10-07 — Stato render letto dall'API dedicata
 
 - `get_render_batch_status` e la verifica finale usano `Project.GetRenderJobStatus(job_id)`;

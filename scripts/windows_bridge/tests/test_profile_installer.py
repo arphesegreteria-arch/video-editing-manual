@@ -179,29 +179,31 @@ class ProfileInstallerTests(unittest.TestCase):
             "-ProfilePath", str(self.profile_path), "-AllowSystemDrive", "-PreflightOnly",
         ], capture_output=True, text=True, check=False, env=env)
 
-    def run_feature_flag_dry_run(self):
+    def run_feature_flag_dry_run(self, name="CAP_MOTION"):
         env = os.environ.copy()
         env["LOCALAPPDATA"] = str(self.local_app_data)
         script = str(SET_FEATURE_FLAG).replace("'", "''")
         profile = str(self.profile_path).replace("'", "''")
         command = (
             f"& '{script}' -WorkstationId PC_PERSONALE -ProfilePath '{profile}' "
-            "-Name CAP_MOTION -Enabled $true -WhatIf"
+            f"-Name {name} -Enabled $true -WhatIf"
         )
         return subprocess.run([
             str(POWERSHELL), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command,
         ], capture_output=True, text=True, check=False, env=env)
 
-    def run_creative_install(self, config_path: Path):
+    def run_creative_install(self, config_path: Path, *, runtime_log_root: Path | None = None):
         env = os.environ.copy()
         env["LOCALAPPDATA"] = str(self.local_app_data)
-        return subprocess.run([
+        command = [
             str(POWERSHELL), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
             str(CREATIVE_INSTALLER), "-WorkstationId", "PC_PERSONALE",
             "-Destination", str(self.root / "creative-install"),
             "-AssetRoot", str(self.root / "assets"), "-RenderRoot", str(self.root / "renders"),
             "-ConfigPath", str(config_path),
-        ], capture_output=True, text=True, check=False, env=env)
+        ]
+        command.extend(["-RuntimeLogRoot", str(runtime_log_root or (self.root / "logs" / "PC_PERSONALE"))])
+        return subprocess.run(command, capture_output=True, text=True, check=False, env=env)
 
     def run_runtime_installer_what_if(self, mcp_command: str):
         env = os.environ.copy()
@@ -347,6 +349,26 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertIn(str(creative_config), result.stdout)
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_feature_flag_accepts_artifact_maintenance_gate(self):
+        creative_config, _command = self.write_profile_runtime_config()
+        config = json.loads(creative_config.read_text(encoding="utf-8"))
+        config["feature_flags"]["CAP_ARTIFACT_MAINTENANCE"] = False
+        creative_config.write_text(json.dumps(config), encoding="utf-8")
+        result = self.run_feature_flag_dry_run("CAP_ARTIFACT_MAINTENANCE")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("CAP_ARTIFACT_MAINTENANCE", result.stdout)
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_feature_flag_accepts_resolve_retirement_gate(self):
+        creative_config, _command = self.write_profile_runtime_config()
+        config = json.loads(creative_config.read_text(encoding="utf-8"))
+        config["feature_flags"]["CAP_RESOLVE_RETIREMENT"] = False
+        creative_config.write_text(json.dumps(config), encoding="utf-8")
+        result = self.run_feature_flag_dry_run("CAP_RESOLVE_RETIREMENT")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("CAP_RESOLVE_RETIREMENT", result.stdout)
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_keeps_state_and_audit_inside_profile_directory(self):
         config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
         result = self.run_creative_install(config_path)
@@ -361,11 +383,83 @@ class ProfileInstallerTests(unittest.TestCase):
         result = self.run_creative_install(config_path)
         self.assertEqual(0, result.returncode, result.stderr)
         destination = self.root / "creative-install"
-        for name in ("editorial_workflows.json", "render_profiles.json"):
+        for name in ("editorial_workflows.json", "render_profiles.json", "artifact_retention.json"):
             self.assertEqual(
                 (CREATIVE_INSTALLER.parent / name).read_bytes(),
                 (destination / name).read_bytes(),
             )
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_install_adds_profile_owned_artifact_paths_with_gate_off(self):
+        config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
+        runtime_log_root = self.root / "logs" / "PC_PERSONALE"
+        result = self.run_creative_install(config_path, runtime_log_root=runtime_log_root)
+        self.assertEqual(0, result.returncode, result.stderr)
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertEqual(config_path.parent / "artifact_registry.json", Path(config["artifact_registry_path"]))
+        self.assertEqual(runtime_log_root, Path(config["runtime_log_root"]))
+        self.assertEqual(self.root / "creative-install" / "artifact_retention.json",
+                         Path(config["artifact_policy_path"]))
+        self.assertFalse(config["feature_flags"]["CAP_ARTIFACT_MAINTENANCE"])
+        self.assertEqual(config_path.parent / "resolve-retirement-archives",
+                         Path(config["resolve_archive_root"]))
+        self.assertEqual(config_path.parent / "resolve_retirement_registry.json",
+                         Path(config["resolve_retirement_registry_path"]))
+        self.assertFalse(config["feature_flags"]["CAP_RESOLVE_RETIREMENT"])
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_upgrade_preserves_explicit_artifact_gate(self):
+        config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(json.dumps({
+            "workstation_id": "PC_PERSONALE",
+            "state_path": str(config_path.parent / "creative_state.json"),
+            "audit_log_path": str(config_path.parent / "audit.jsonl"),
+            "feature_flags": {"CAP_ARTIFACT_MAINTENANCE": True},
+        }), encoding="utf-8")
+        result = self.run_creative_install(config_path)
+        self.assertEqual(0, result.returncode, result.stderr)
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertTrue(config["feature_flags"]["CAP_ARTIFACT_MAINTENANCE"])
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_install_rejects_foreign_artifact_registry_before_writes(self):
+        config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
+        config_path.parent.mkdir(parents=True)
+        registry = config_path.parent / "artifact_registry.json"
+        registry.write_text(json.dumps({"schema_version": 1, "workstation_id": "PC_SEGRETERIA",
+                                        "artifacts": {}, "maintenance": {}, "pending_operation": None}),
+                            encoding="utf-8")
+        result = self.run_creative_install(config_path)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("PC_SEGRETERIA", result.stderr)
+        self.assertFalse((self.root / "creative-install").exists())
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_install_rejects_foreign_resolve_retirement_registry_before_writes(self):
+        config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
+        config_path.parent.mkdir(parents=True)
+        registry = config_path.parent / "resolve_retirement_registry.json"
+        registry.write_text(json.dumps({"schema_version": 1, "workstation_id": "PC_SEGRETERIA",
+                                        "retirements": {}}), encoding="utf-8")
+        result = self.run_creative_install(config_path)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("PC_SEGRETERIA", result.stderr)
+        self.assertFalse((self.root / "creative-install").exists())
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_install_rejects_foreign_existing_config_before_writes(self):
+        config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(json.dumps({"workstation_id": "PC_SEGRETERIA"}), encoding="utf-8")
+        result = self.run_creative_install(config_path)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("PC_SEGRETERIA", result.stderr)
+        self.assertFalse((self.root / "creative-install").exists())
+
+    def test_runtime_installer_payload_includes_artifact_log_handler(self):
+        source = RUNTIME_INSTALLER.read_text(encoding="utf-8-sig")
+        self.assertIn("artifact_log_handler.py", source)
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_migrates_matching_legacy_config_without_deleting_source(self):

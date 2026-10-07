@@ -7,7 +7,6 @@ import ctypes
 from ctypes import wintypes
 import json
 import logging
-from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 import re
@@ -25,6 +24,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from health import check_ready
 from secret_store import load_secret
+from artifact_log_handler import ArtifactRotatingFileHandler
 
 
 RUNTIME_ID = "ARPHE_WINDOWS_BRIDGE_RUNTIME_V1"
@@ -106,12 +106,15 @@ class SecretRedactor(logging.Filter):
         return True
 
 
-def configure_logging(log_dir: Path, secret: str) -> tuple[logging.Logger, SecretRedactor]:
+def configure_logging(log_dir: Path, secret: str,
+                      workstation_id: str) -> tuple[logging.Logger, SecretRedactor]:
     log_dir.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(RUNTIME_ID)
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
-    handler = RotatingFileHandler(log_dir / "runtime.log", maxBytes=2_000_000, backupCount=5, encoding="utf-8")
+    handler = ArtifactRotatingFileHandler(
+        log_dir / "runtime.log", workstation_id, max_bytes=2_000_000, encoding="utf-8"
+    )
     redactor = SecretRedactor(secret)
     handler.addFilter(redactor)
     handler.setFormatter(logging.Formatter("%(asctime)sZ %(levelname)s %(message)s", "%Y-%m-%dT%H:%M:%S"))
@@ -236,7 +239,7 @@ def run(config: dict[str, Any]) -> int:
     workstation_id = str(config["workstation_id"])
     secret_path = Path(config["secret_path"])
     secret = load_secret(secret_path, workstation_id)
-    logger, redactor = configure_logging(Path(config["log_dir"]), secret)
+    logger, redactor = configure_logging(Path(config["log_dir"]), secret, workstation_id)
     state_path = Path(config["state_path"])
     stop_path = Path(config["stop_request_path"])
     stop_event = threading.Event()

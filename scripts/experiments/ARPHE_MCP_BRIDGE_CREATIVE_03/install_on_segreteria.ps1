@@ -4,6 +4,7 @@ param(
     [string]$Destination = 'C:\ARPHE\MCP\ARPHE_MCP_BRIDGE_CREATIVE_03',
     [string]$AssetRoot = 'C:\ARPHE\MCP\assets\creative',
     [string]$RenderRoot = 'C:\ARPHE\MCP\renders\creative',
+    [string]$RuntimeLogRoot = '',
     [Parameter(Mandatory)][string]$ConfigPath
 )
 
@@ -11,6 +12,13 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $configPath = [IO.Path]::GetFullPath($ConfigPath)
 $configDir = Split-Path -Parent $configPath
+$artifactRegistryPath = Join-Path $configDir 'artifact_registry.json'
+$resolveArchiveRoot = Join-Path $configDir 'resolve-retirement-archives'
+$resolveRetirementRegistryPath = Join-Path $configDir 'resolve_retirement_registry.json'
+if (-not $RuntimeLogRoot) {
+    $RuntimeLogRoot = Join-Path 'C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1' $WorkstationId
+}
+$RuntimeLogRoot = [IO.Path]::GetFullPath($RuntimeLogRoot)
 $examplePath = Join-Path $PSScriptRoot 'creative_config.example.json'
 $legacyConfigPath = Join-Path $env:LOCALAPPDATA 'ARPHE\CreativeBridge03\creative_config.json'
 $legacyConfig = $null
@@ -32,6 +40,25 @@ function Set-ConfigProperty {
         $Config.$Name = $Value
     }
 }
+if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+    $existingConfigIdentity = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
+    if ([string]$existingConfigIdentity.workstation_id -ne $WorkstationId) {
+        throw "La config esistente appartiene a '$($existingConfigIdentity.workstation_id)', non a '$WorkstationId'. Installazione rifiutata senza modifiche."
+    }
+}
+
+if (Test-Path -LiteralPath $artifactRegistryPath -PathType Leaf) {
+    $existingArtifactRegistry = Get-Content -Raw -LiteralPath $artifactRegistryPath | ConvertFrom-Json
+    if ([string]$existingArtifactRegistry.workstation_id -ne $WorkstationId) {
+        throw "Il registry artefatti appartiene a '$($existingArtifactRegistry.workstation_id)', non a '$WorkstationId'. Installazione rifiutata senza modifiche."
+    }
+}
+if (Test-Path -LiteralPath $resolveRetirementRegistryPath -PathType Leaf) {
+    $existingResolveRegistry = Get-Content -Raw -LiteralPath $resolveRetirementRegistryPath | ConvertFrom-Json
+    if ([string]$existingResolveRegistry.workstation_id -ne $WorkstationId) {
+        throw "Il registry retirement Resolve appartiene a '$($existingResolveRegistry.workstation_id)', non a '$WorkstationId'. Installazione rifiutata senza modifiche."
+    }
+}
 
 if (-not $PSCmdlet.ShouldProcess($Destination, 'Install creative bridge beside validated bridges')) { return }
 
@@ -43,7 +70,7 @@ New-Item -ItemType Directory -Path $bridgeDestination -Force | Out-Null
 Get-ChildItem -LiteralPath $bridgeSource -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $bridgeDestination -Force
 }
-foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json')) {
+foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json', 'artifact_retention.json')) {
     $registrySource = Join-Path $PSScriptRoot $registryName
     if (-not (Test-Path -LiteralPath $registrySource -PathType Leaf)) {
         throw "Creative registry not found: $registrySource"
@@ -52,7 +79,9 @@ foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json'))
 }
 New-Item -ItemType Directory -Path $AssetRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $RenderRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $RuntimeLogRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+New-Item -ItemType Directory -Path $resolveArchiveRoot -Force | Out-Null
 $carrierSource = Join-Path $PSScriptRoot 'assets\arphe_fusion_carrier_5m.mp4'
 if (-not (Test-Path -LiteralPath $carrierSource)) {
     throw "Asset tecnico di durata non trovato: $carrierSource"
@@ -68,6 +97,17 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     Set-ConfigProperty -Config $config -Name render_root -Value $RenderRoot.Replace('\', '/')
     Set-ConfigProperty -Config $config -Name state_path -Value (Join-Path $configDir 'creative_state.json').Replace('\', '/')
     Set-ConfigProperty -Config $config -Name audit_log_path -Value (Join-Path $configDir 'audit.jsonl').Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name artifact_policy_path -Value (Join-Path $Destination 'artifact_retention.json').Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name artifact_registry_path -Value $artifactRegistryPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name runtime_log_root -Value $RuntimeLogRoot.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name resolve_archive_root -Value $resolveArchiveRoot.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name resolve_retirement_registry_path -Value $resolveRetirementRegistryPath.Replace('\', '/')
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_ARTIFACT_MAINTENANCE']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_ARTIFACT_MAINTENANCE -NotePropertyValue $false
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_RESOLVE_RETIREMENT']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_RESOLVE_RETIREMENT -NotePropertyValue $false
+    }
     if ($null -ne $legacyConfig) {
         foreach ($migration in @(
             @{ Source = $legacyStatePath; Destination = [string]$config.state_path },
@@ -94,6 +134,11 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     $changed = $false
     $profileStatePath = (Join-Path $configDir 'creative_state.json').Replace('\', '/')
     $profileAuditPath = (Join-Path $configDir 'audit.jsonl').Replace('\', '/')
+    $profileArtifactPolicyPath = (Join-Path $Destination 'artifact_retention.json').Replace('\', '/')
+    $profileArtifactRegistryPath = $artifactRegistryPath.Replace('\', '/')
+    $profileRuntimeLogRoot = $RuntimeLogRoot.Replace('\', '/')
+    $profileResolveArchiveRoot = $resolveArchiveRoot.Replace('\', '/')
+    $profileResolveRetirementRegistryPath = $resolveRetirementRegistryPath.Replace('\', '/')
     if ([string]$config.state_path -ne $profileStatePath) {
         $config.state_path = $profileStatePath
         $changed = $true
@@ -101,6 +146,21 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     if ([string]$config.audit_log_path -ne $profileAuditPath) {
         $config.audit_log_path = $profileAuditPath
         $changed = $true
+    }
+    foreach ($pathField in @(
+        @{ Name = 'artifact_policy_path'; Value = $profileArtifactPolicyPath },
+        @{ Name = 'artifact_registry_path'; Value = $profileArtifactRegistryPath },
+        @{ Name = 'runtime_log_root'; Value = $profileRuntimeLogRoot },
+        @{ Name = 'resolve_archive_root'; Value = $profileResolveArchiveRoot },
+        @{ Name = 'resolve_retirement_registry_path'; Value = $profileResolveRetirementRegistryPath }
+    )) {
+        if ($null -eq $config.PSObject.Properties[$pathField.Name]) {
+            $config | Add-Member -NotePropertyName $pathField.Name -NotePropertyValue $pathField.Value
+            $changed = $true
+        } elseif ([string]$config.($pathField.Name) -ne $pathField.Value) {
+            $config.($pathField.Name) = $pathField.Value
+            $changed = $true
+        }
     }
     if ($null -eq $config.PSObject.Properties['media_roots']) {
         $config | Add-Member -NotePropertyName media_roots -NotePropertyValue @((Join-Path $env:USERPROFILE 'Downloads').Replace('\', '/'))
@@ -124,6 +184,14 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_CLEANUP']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_CLEANUP -NotePropertyValue $false
+        $changed = $true
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_ARTIFACT_MAINTENANCE']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_ARTIFACT_MAINTENANCE -NotePropertyValue $false
+        $changed = $true
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_RESOLVE_RETIREMENT']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_RESOLVE_RETIREMENT -NotePropertyValue $false
         $changed = $true
     }
     if ($changed) {

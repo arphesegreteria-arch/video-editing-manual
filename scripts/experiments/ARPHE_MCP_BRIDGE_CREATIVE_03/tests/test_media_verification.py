@@ -19,6 +19,7 @@ from bridge.registry import Registry  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 from tests.test_render_batches import configured, fixtures  # noqa: E402
 from bridge.render_batches import create_render_batch  # noqa: E402
+from bridge.artifact_records import ArtifactStore  # noqa: E402
 
 
 CARRIER = ROOT / "assets" / "arphe_fusion_carrier_5m.mp4"
@@ -83,6 +84,8 @@ class MediaVerificationTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertTrue((root / "renders" / "publishable" / "ARPHE_OUTPUT.mp4").is_file())
             self.assertEqual("VERIFIED", registry.render_batch(batch.batch_id).status)
+            store = ArtifactStore(configured(root).artifact_registry_path, "PC_PERSONALE")
+            self.assertFalse(any("publishable" in Path(record.path).parts for record in store.records()))
             registry2, batch2, project2 = self._rendering_batch(root)
             with patch("bridge.media_verification.probe_media", return_value=good):
                 with self.assertRaisesRegex(ValidationError, "Collisione"):

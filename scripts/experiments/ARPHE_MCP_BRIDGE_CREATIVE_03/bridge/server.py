@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+from datetime import datetime, timezone
 from fractions import Fraction
 from typing import Any, Callable
 
@@ -12,9 +13,11 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from .audit import write_audit
 from .asset_tools import add_asset
 from .audio_tools import audio_job as do_audio_job, start_audio_job as do_start_audio_job
+from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
+                               restore_artifact as do_restore_artifact,
+                               run_maintenance as do_run_maintenance)
+from .artifact_records import artifact_store_for, load_artifact_policy
 from .config import load_config
-from .cleanup_tools import (apply_publish_cleanup as do_apply_publish_cleanup,
-                            preview_publish_cleanup as do_preview_publish_cleanup)
 from .creative_tools import (add_end_card as do_add_end_card,
                              add_review_card as do_add_review_card,
                              animate_element, animate_stack,
@@ -50,7 +53,16 @@ from .render_tools import (queue_longform_exports as do_queue_longform_exports,
                            start_render_batch as do_start_render_batch,
                            get_render_batch_status as do_get_render_batch_status,
                            cancel_render_batch as do_cancel_render_batch)
+from .resolve_retirement import (
+    approve_retirement as do_approve_resolve_retirement,
+    execute_retirement as do_execute_resolve_retirement,
+    inspect_retirements as do_inspect_resolve_retirements,
+    prepare_retirement as do_prepare_resolve_retirement,
+    recover_retirement as do_recover_resolve_retirement,
+    retirement_store_for,
+)
 from .media_verification import verify_and_promote_batch as do_verify_render_batch
+from .maintenance_scheduler import start_lazy_maintenance
 from .resolve_connection import RESOLVE_ACCESS_LOCK, context, safe_call
 from .safety import PlaybackFpsActionRequired, ValidationError
 from .timeline_tools import (create_safe_working_timeline as do_safe_timeline,
@@ -77,8 +89,8 @@ SAFE_WRITE = ToolAnnotations(
 IDEMPOTENT_WRITE = ToolAnnotations(
     readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False
 )
-DESTRUCTIVE_WRITE = ToolAnnotations(
-    readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False
+DESTRUCTIVE_IDEMPOTENT_WRITE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False
 )
 
 
@@ -702,31 +714,135 @@ def queue_publish_package_exports(full_timeline_name: str, clip_timeline_names: 
             "render_started": False, "next_action": "prepare_render_batch"}
 
 
+def _artifact_components(config: Any) -> tuple[Any, Registry, Any]:
+    return (artifact_store_for(config), Registry(config.state_path),
+            load_artifact_policy(config.artifact_policy_path))
+
+
+def _require_artifact_mutation(config: Any) -> None:
+    if not config.flags.get("CAP_ARTIFACT_MAINTENANCE", False):
+        raise RuntimeError("CAP_ARTIFACT_MAINTENANCE non attiva")
+
+
+def _require_resolve_retirement(config: Any) -> None:
+    if not config.flags.get("CAP_RESOLVE_RETIREMENT", False):
+        raise RuntimeError("CAP_RESOLVE_RETIREMENT non attiva")
+
+
 @mcp.tool(annotations=READ_ONLY)
-def preview_publish_cleanup(keep_timeline_names: list[str], candidate_timeline_names: list[str],
-                            candidate_project_names: list[str], candidate_file_paths: list[str]) -> dict[str, Any]:
-    """Preview an explicit cleanup plan and return the token required to apply it."""
+def inspect_artifact_hygiene() -> dict[str, Any]:
+    """Inspect only bridge-owned artifacts; accepts no filesystem path."""
     try:
-        _, manager, project, _, config, registry, error = _runtime()
-        if error: return error
-        return _call(do_preview_publish_cleanup, manager, project, config, registry, keep_timeline_names,
-                     candidate_timeline_names, candidate_project_names, candidate_file_paths)
-    except Exception as exc: return _error(exc)
+        config = load_config()
+        store, registry, policy = _artifact_components(config)
+        return _call(do_inspect_artifacts, config, store, registry, policy, datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
 
 
-@mcp.tool(annotations=DESTRUCTIVE_WRITE)
-def apply_publish_cleanup(keep_timeline_names: list[str], candidate_timeline_names: list[str],
-                          candidate_project_names: list[str], candidate_file_paths: list[str],
-                          confirmation_token: str) -> dict[str, Any]:
-    """Remove the exact previewed timelines and recycle the exact previewed files."""
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
+def run_artifact_maintenance() -> dict[str, Any]:
+    """Apply the fixed retention policy to registered artifacts only."""
     try:
-        _, manager, project, _, config, registry, error = _runtime()
-        if error: return error
-        return _call(do_apply_publish_cleanup, manager, project, config, registry,
-                     keep_timeline_names, candidate_timeline_names, candidate_project_names,
-                     candidate_file_paths, confirmation_token)
-    except Exception as exc: return _error(exc)
+        config = load_config()
+        _require_artifact_mutation(config)
+        store, registry, policy = _artifact_components(config)
+        return _call(do_run_maintenance, config, store, registry, policy, datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def restore_quarantined_artifact(artifact_id: str) -> dict[str, Any]:
+    """Restore one quarantined artifact by opaque ID; accepts no path."""
+    try:
+        config = load_config()
+        _require_artifact_mutation(config)
+        store, _, policy = _artifact_components(config)
+        return _call(do_restore_artifact, config, store, artifact_id, policy, datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_resolve_retirements() -> dict[str, Any]:
+    """Inspect archive-first Resolve retirements; returns no absolute filesystem path."""
+    try:
+        config = load_config()
+        return _call(do_inspect_resolve_retirements, config, retirement_store_for(config),
+                     datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_resolve_retirement(kind: str, project_name: str,
+                               timeline_name: str | None = None) -> dict[str, Any]:
+    """Export and verify a DRP proposal; never removes a Resolve object."""
+    try:
+        selected = load_config()
+        _require_resolve_retirement(selected)
+        with RESOLVE_ACCESS_LOCK:
+            _, manager, project, _, config, registry, error = _runtime()
+            if error:
+                return error
+            _require_resolve_retirement(config)
+            return _call(do_prepare_resolve_retirement, manager, project, config, registry,
+                         retirement_store_for(config), kind, project_name, timeline_name,
+                         datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_resolve_retirement(retirement_id: str, operator_role: str) -> dict[str, Any]:
+    """Approve the immutable fingerprint of one prepared Resolve retirement."""
+    try:
+        config = load_config()
+        _require_resolve_retirement(config)
+        return _call(do_approve_resolve_retirement, retirement_store_for(config), retirement_id,
+                     operator_role, datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
+def execute_resolve_retirement(retirement_id: str) -> dict[str, Any]:
+    """Remove exactly one approved target after revalidating its verified DRP archive."""
+    try:
+        selected = load_config()
+        _require_resolve_retirement(selected)
+        with RESOLVE_ACCESS_LOCK:
+            _, manager, project, _, config, registry, error = _runtime()
+            if error:
+                return error
+            _require_resolve_retirement(config)
+            return _call(do_execute_resolve_retirement, manager, project, config, registry,
+                         retirement_store_for(config), retirement_id, datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def recover_resolve_retirement(retirement_id: str) -> dict[str, Any]:
+    """Import a verified DRP as a new ARPHE_RECOVERY project without overwriting."""
+    try:
+        selected = load_config()
+        _require_resolve_retirement(selected)
+        with RESOLVE_ACCESS_LOCK:
+            _, manager, _, _, config, _, error = _runtime()
+            if error:
+                return error
+            _require_resolve_retirement(config)
+            return _call(do_recover_resolve_retirement, manager, config,
+                         retirement_store_for(config), retirement_id, datetime.now(timezone.utc))
+    except Exception as exc:
+        return _error(exc)
 
 
 def run() -> None:
+    try:
+        start_lazy_maintenance(load_config)
+    except Exception:
+        pass
     mcp.run()

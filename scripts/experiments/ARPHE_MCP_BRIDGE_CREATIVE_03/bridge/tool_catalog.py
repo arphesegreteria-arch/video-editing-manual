@@ -16,7 +16,9 @@ EXPOSED_TOOL_NAMES = (
     "list_editorial_workflows", "validate_editorial_brief", "prepare_render_batch",
     "approve_render_batch", "start_render_batch", "get_render_batch_status",
     "verify_render_batch", "cancel_render_batch",
-    "preview_publish_cleanup", "apply_publish_cleanup",
+    "inspect_artifact_hygiene", "run_artifact_maintenance", "restore_quarantined_artifact",
+    "inspect_resolve_retirements", "prepare_resolve_retirement",
+    "approve_resolve_retirement", "execute_resolve_retirement", "recover_resolve_retirement",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {

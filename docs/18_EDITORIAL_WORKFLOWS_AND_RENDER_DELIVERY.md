@@ -88,11 +88,14 @@ Usare un progetto/timeline di prova e un job innocuo creato appositamente; non u
 - [ ] verifica media e promozione;
 - [ ] prova recovery/rollback circoscritta.
 
-Evidenza 2026-10-07: il rollout Creative03 è stato interrotto sul progetto disposable
-`ARPHE_ROLLOUT_PC_PERSONALE_20261007` prima del gate render. Il runtime è stato riportato a
-SafeWrite02 e `/readyz` è tornato `ready`. Il problema è ora coperto dal flag chat fail-closed;
-il gate riparte dopo la modifica manuale del playback FPS e un nuovo read-back. Nessun test è
-stato eseguito sul progetto di lavoro della segreteria.
+Evidenza 2026-10-07: il primo rollout Creative03 è stato interrotto sul progetto disposable
+`ARPHE_ROLLOUT_PC_PERSONALE_20261007` prima del gate render e riportato temporaneamente a
+SafeWrite02. Dopo la correzione, Creative03 è stato reinstallato sul solo `PC_PERSONALE`: task
+`Running`, `/readyz=ready` e codice installato identico al commit verificato. Una chiamata reale
+del tool pubblico sul nuovo progetto disposable `ARPHE_ROLLOUT_PLAYBACK_FLAG_PROJECT_20261007`
+ha restituito `PLAYBACK_FPS_ACTION_REQUIRED` (attuale 24, richiesto 30) senza creare la timeline.
+Il gate render riparte dopo la modifica manuale del playback FPS e un nuovo read-back. Nessun
+test è stato eseguito sul progetto di lavoro della segreteria.
 
 ### PC_SEGRETERIA — PENDING
 

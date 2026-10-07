@@ -16,7 +16,10 @@ ALLOWED_FPS = {24.0, 25.0, 30.0}
 COLOR_ROLES = {"ivory", "cream", "beige", "burgundy", "warm_brown", "dark_brown", "black", "white"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mxf"}
-PRESET_NAMES = {"ARPHE_SOFT_DROP", "ARPHE_PAPER_STACK", "ARPHE_ELEGANT_REVEAL", "ARPHE_CTA_SETTLE"}
+PRESET_NAMES = {
+    "ARPHE_SOFT_DROP", "ARPHE_PAPER_STACK", "ARPHE_ELEGANT_REVEAL",
+    "ARPHE_CTA_SETTLE", "ARPHE_CTA_FADE",
+}
 
 
 class ValidationError(ValueError):

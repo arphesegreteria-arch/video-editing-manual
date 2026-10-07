@@ -36,7 +36,7 @@ DEFAULT_FLAGS = {
     "CAP_CLEANUP": False,
 }
 
-ALLOWED_RENDER_PAIRS = {("mp4", "H264")}
+ALLOWED_RENDER_PAIRS = {("mp4", "H264"), ("mov", "ProRes422HQ")}
 
 
 def _default_config_path() -> Path:

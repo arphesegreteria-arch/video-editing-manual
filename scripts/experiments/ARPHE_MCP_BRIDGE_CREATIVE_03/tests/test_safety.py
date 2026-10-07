@@ -180,6 +180,47 @@ class MotionTests(unittest.TestCase):
         self.assertEqual(1.0, transform.Blend)
         self.assertEqual(0.0, merge.Blend[10])
         self.assertEqual(1.0, merge.Blend[20])
+        self.assertEqual({1: 0.5, 2: 0.5, 3: 0.0}, transform.Center[29])
+        self.assertEqual(1.0, transform.Size[29])
+        self.assertEqual(0.0, transform.Angle[29])
+        self.assertEqual(1.0, merge.Blend[29])
+
+    def test_cta_fade_animates_only_opacity_and_holds_until_end(self):
+        class FakeTool:
+            Center = 0.5
+            Size = 1.0
+            Angle = 0.0
+            Blend = 1.0
+
+        transform = FakeTool()
+        merge = FakeTool()
+
+        class FakeComp:
+            def BezierSpline(self):
+                return {}
+
+            def Path(self):
+                raise AssertionError("La dissolvenza CTA non deve creare un Path")
+
+            def FindTool(self, name):
+                return {"CTA_TRANSFORM": transform, "CTA_OUTER": merge}.get(name)
+
+        plan = motion_plan("ARPHE_CTA_FADE", 10, 24)
+        self.assertTrue(all(key["x"] == key["y"] == key["rotation"] == 0.0
+                            and key["scale"] == 1.0 for key in plan["keys"]))
+        record = {"transform_name": "CTA_TRANSFORM", "outer_merge_name": "CTA_OUTER",
+                  "start_frame": 10, "end_frame": 80}
+        self.assertTrue(_animate(FakeComp(), record, plan))
+        self.assertEqual(0.5, transform.Center)
+        self.assertEqual(1.0, transform.Size)
+        self.assertEqual(0.0, transform.Angle)
+        self.assertEqual(0.0, merge.Blend[10])
+        self.assertGreater(merge.Blend[22], 0.0)
+        self.assertLess(merge.Blend[22], 1.0)
+        self.assertEqual(1.0, merge.Blend[34])
+        self.assertTrue(all(merge.Blend[frame] == 1.0 for frame in range(34, 80)))
+        self.assertEqual(1.0, merge.Blend[79])
+        self.assertEqual(0.0, merge.Blend[80])
 
 
 class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):

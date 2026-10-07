@@ -8,7 +8,8 @@ La repository usa ora profili espliciti per separare config runtime e Creative, 
 Python, tunnel, log e backup di `PC_PERSONALE` e `PC_SEGRETERIA`. Il codice condiviso resta su
 un'unica linea; i dati operativi non vengono condivisi tra le macchine.
 
-Validazione automatica del 2026-10-07: Creative `62/62` PASS; Windows `35` PASS e `1` SKIP DPAPI
+Validazione automatica del 2026-10-07 dopo integrazione di `origin/main`: Creative `67/67` PASS;
+Windows `35` PASS e `1` SKIP DPAPI
 per indisponibilità del profilo CurrentUser nel token di test. Nessun task, tunnel, segreto o
 Resolve reale è stato modificato durante questa migrazione. Preflight, installazione, READ e SAFE
 WRITE restano `PENDING` separatamente su ciascun PC.
@@ -47,13 +48,19 @@ del 2026-10-07 resta però valida una regola analoga: non eseguire write remote 
 workstation non ha superato il proprio preflight, rollout e gate READ. Vedere
 `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md`.
 
-## E09 — prossimo test recensioni
+## E09 — standard recensioni Instagram validato
 
-Il piano `plans/ARPHE_E09_REVIEWS_CARTOLINE_V1.json` contiene cinque recensioni originali
-MioDottore e una CTA finale. Il test userà `ARPHE_PAPER_STACK` su una timeline nuova 1920×1080/30;
-non è ancora stato applicato perché il runtime corrente segnala Fusion/Review/Motion non
-tecnicamente disponibili. Audio long-form e standard di mixaggio restano quelli documentati in
-`docs/04_LONGFORM_WORKFLOW.md` e nel Creative Bridge README.
+La prova verticale `ARPHE_E09_REELS_MIODOTTORE_V3` è stata creata e verificata sul PC segreteria:
+1080×1920/30, canvas beige, card cream, Satoshi, intro editoriale, cinque recensioni originali,
+CTA burgundy e durata 810 frame / 27 secondi. Le capacità Review, Fusion e Motion sono state
+usate end-to-end. Il procedimento riusabile è `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md`; il
+piano senza contenuti reali è `plans/ARPHE_INSTAGRAM_REVIEW_REEL_TEMPLATE.json`. Il MOV esportato
+manualmente è risultato troppo compresso (~2,5 Mb/s); anche i test MP4 controllati V4/V6 hanno
+prodotto solo ~0,8 Mb/s e non sono consegne valide. Il master V7 QuickTime ProRes 422 HQ è stato
+renderizzato sul Desktop e verificato: 1080×1920/30, 27 secondi, ~30,5 Mb/s (104 MB). Questo è il
+nuovo riferimento di qualità prima della consegna Instagram. La copia compatibile V8 MP4/H.264
+è stata ricavata dal master, non dal preset H.264 di Resolve, e confrontata frame-per-frame con
+V7: SSIM 0,9979 e PSNR 57,6 dB.
 
 ## Obiettivo del progetto
 

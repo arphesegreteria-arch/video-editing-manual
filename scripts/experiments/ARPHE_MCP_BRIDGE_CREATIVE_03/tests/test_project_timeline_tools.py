@@ -15,7 +15,9 @@ from bridge.registry import Registry  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 from bridge.timeline_tools import create_timeline  # noqa: E402
 from bridge.creative_tools import (_frame_to_timecode, _sequence_boundaries,
-                                   _sequence_windows)  # noqa: E402
+                                   _sequence_windows, _automatic_sequence_windows,
+                                   _review_reading_frames, _cta_duration_frames,
+                                   _intro_duration_frames, _timeline_is_vertical)  # noqa: E402
 from bridge.fusion_tools import set_visibility_window  # noqa: E402
 
 
@@ -112,6 +114,16 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
         self.assertEqual("01:00:00:00", _frame_to_timecode(108000, 30))
         self.assertEqual("01:00:03:00", _frame_to_timecode(108090, 30))
 
+    def test_review_sequence_detects_portrait_timeline_from_settings(self):
+        class PortraitTimeline:
+            def GetSetting(self, key):
+                return {"timelineResolutionWidth": "1080", "timelineResolutionHeight": "1920"}.get(key)
+
+        self.assertTrue(_timeline_is_vertical(PortraitTimeline()))
+        self.assertFalse(_timeline_is_vertical(FakeTimeline("ARPHE_16X9", {
+            "timelineResolutionWidth": "1920", "timelineResolutionHeight": "1080",
+        })))
+
     def test_review_sequence_boundaries_are_gap_free(self):
         self.assertEqual([0, 37, 75, 112, 150], _sequence_boundaries(4, 150))
 
@@ -122,6 +134,18 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
     def test_review_sequence_windows_never_exceed_composition(self):
         self.assertEqual([(0, 1), (1, 2), (2, 3), (3, 4)],
                          _sequence_windows(4, 4, 10))
+
+    def test_automatic_review_windows_follow_each_text_reading_time(self):
+        reviews = [
+            {"text": "Molto bene."},
+            {"text": " ".join(["accogliente"] * 30)},
+        ]
+        self.assertEqual(90, _review_reading_frames(reviews[0]))
+        self.assertEqual(150, _review_reading_frames(reviews[1]))
+        self.assertEqual(([(0, 100), (90, 240)], 240),
+                         _automatic_sequence_windows(reviews))
+        self.assertEqual(120, _cta_duration_frames({"headline": "Scopri Arphè", "text": "Prenota ora"}))
+        self.assertEqual(90, _intro_duration_frames({"headline": "Dicono di noi", "text": "su MioDottore"}))
 
     def test_project_collision_stops_before_create(self):
         with tempfile.TemporaryDirectory() as directory:

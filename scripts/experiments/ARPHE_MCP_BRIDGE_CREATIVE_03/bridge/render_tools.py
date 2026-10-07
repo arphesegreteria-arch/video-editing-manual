@@ -10,6 +10,18 @@ from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name, ensure_no_collision, require_arphe_name
 
 
+INSTAGRAM_REEL_RENDER_SETTINGS = {
+    # Keep the master at a materially higher bitrate than the previous manual MOV
+    # (about 2.5 Mb/s). Instagram will recompress the upload, so this leaves it a
+    # clean source instead of asking a second encoder to recover thin typography.
+    "FormatWidth": 1080,
+    "FormatHeight": 1920,
+    "FrameRate": 30.0,
+    "ExportVideo": True,
+    "ExportAudio": True,
+}
+
+
 def render_preview(project: Any, timeline: Any, config: CreativeConfig, registry: Registry, output_name: str) -> dict:
     require_capability("CAP_RENDER", config, None, project, timeline)
     project_name = str(safe_call(project, "GetName") or "")
@@ -22,16 +34,27 @@ def render_preview(project: Any, timeline: Any, config: CreativeConfig, registry
     name = arphe_name(output_name, "PREVIEW")
     existing_outputs = [item.stem for item in config.render_root.iterdir() if item.is_file()]
     ensure_no_collision(name, existing_outputs, "Output render")
+    # The H.264 quality controls are not accepted by Resolve 21 on this
+    # workstation. H.264 keeps the native YouTube preset; the lossless-ish
+    # delivery master uses ProRes 422 HQ and therefore needs no H.264 preset.
+    preset_ok = (bool(safe_call(project, "LoadRenderPreset", "YouTube - 1080p"))
+                 if config.render_format == "mp4" else True)
     format_ok = bool(safe_call(project, "SetCurrentRenderFormatAndCodec", config.render_format, config.render_codec))
-    settings_ok = bool(safe_call(project, "SetRenderSettings", {
+    settings = {
         "TargetDir": str(config.render_root), "CustomName": name, "SelectAllFrames": True,
-    }))
-    if not (format_ok and settings_ok):
+        **INSTAGRAM_REEL_RENDER_SETTINGS,
+    }
+    settings_ok = bool(safe_call(project, "SetRenderSettings", settings))
+    if not (preset_ok and format_ok and settings_ok):
         return {"ok": False, "action": "render_preview", "stage": "settings", "status": "PENDING"}
     job_id = safe_call(project, "AddRenderJob")
     started = bool(safe_call(project, "StartRendering", job_id)) if job_id else False
     return {"ok": bool(job_id and started), "action": "render_preview", "job_id": job_id,
-            "output_name": name, "output_directory_disclosed": False, "status": "PENDING"}
+            "output_name": name, "output_directory_disclosed": False,
+            "quality_profile": ("instagram_reel_youtube_preset_vertical"
+                                if config.render_format == "mp4"
+                                else "instagram_reel_prores422hq_master"),
+            "status": "PENDING"}
 
 
 def _timeline_map(project: Any) -> dict[str, Any]:

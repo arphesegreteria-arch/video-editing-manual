@@ -35,6 +35,19 @@ def motion_plan(
     scale = finite_float(scale_start, "scale_start", 0.1, 2.0)
     opacity = finite_float(opacity_start, "opacity_start", 0.0, 1.0)
     angle = finite_float(rotation, "rotation", -15.0, 15.0)
+    if preset == "ARPHE_CTA_FADE":
+        end = int(start_frame) + int(duration_frames)
+        return {
+            "preset": preset,
+            "easing": easing,
+            "settle": False,
+            "keys": [
+                {"frame": int(start_frame), "x": 0.0, "y": 0.0, "scale": 1.0,
+                 "opacity": 0.0, "rotation": 0.0},
+                {"frame": end, "x": 0.0, "y": 0.0, "scale": 1.0,
+                 "opacity": 1.0, "rotation": 0.0},
+            ],
+        }
     dx, dy = 0.0, 0.0
     if direction == "top": dy = -y
     elif direction == "bottom": dy = y

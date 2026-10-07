@@ -16,11 +16,23 @@
 - Una config Creative legacy viene copiata nel percorso del profilo soltanto se dichiara la
   stessa workstation; stato e audit esistenti vengono copiati senza eliminare gli originali.
   Una config appartenente all'altro PC blocca l'installazione prima delle scritture.
-- Validazione automatica in worktree: suite Creative `62/62` PASS; suite Windows `35` PASS e
+- Validazione automatica dopo integrazione di `origin/main`: suite Creative `67/67` PASS; suite
+  Windows `35` PASS e
   `1` SKIP DPAPI perché il token sandbox non dispone del profilo CurrentUser.
 - Stato workstation reale: **NON ANCORA VALIDATO**. Nessun installer, task, tunnel o Resolve dei
   due PC è stato modificato da questo cambiamento; READ/SAFE WRITE vanno ripetuti per PC dopo il
   rollout esplicito.
+## 2026-10-02 — E10 Reel V2, confini umani e audio naturale
+
+- Ricostruito il piano E10 in sei Reel usando frasi di ingresso/uscita indicate dall'operatore e
+  timestamp parola-per-parola; durata complessiva ridotta da 18.818 a 10.534 frame.
+- Aggiunto `ARPHE_DIALOGUE_NATURAL_V4`, preset conservativo ispirato al flusso Fairlight per
+  sorgenti già intelligibili che con `LEVEL_V2` risultano metalliche o gracchianti.
+- Documentate otto regole editoriali candidate: una tesi per Reel, tre minuti come limite e non
+  target, conferme brevi preservate, frasi umane autorevoli, sensibilità contestuale e doppio gate.
+- Aggiunto `ARPHE_CTA_FADE`: dissolvenza CTA di sola opacità, campionata frame per frame e mantenuta
+  fino alla fine per evitare movimenti o scomparsa tardiva dei testi in Fusion.
+- Versionato il piano in `plans/ARPHE_E10_MEDICINA_ESTETICA_REELS_V2.json`.
 
 ## 2026-10-02 — Caption Engine mobile e render verticale
 
@@ -35,6 +47,29 @@
 - Completato e controllato il render MP4/H.264 1080×1920/30, inclusi i gap senza caption.
 - Aggiunto `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`; capability caption marcata `PARTIAL`
   e render esterno `SUPPORTED`.
+
+## 2026-09-25 — Standard Instagram recensioni ARPHÈ
+
+- Corretto il preset di consegna Reel: il bridge esporta un master QuickTime ProRes 422 HQ
+  1080×1920/30 con audio incluso. È stato introdotto dopo aver rilevato che la prima esportazione
+  manuale V3 era a circa 2,5 Mb/s e appariva degradata sul telefono. Le chiavi dirette H.264
+  `DataRate` e `VideoQuality` sono state provate e, rispettivamente, ignorata e rifiutata dalla
+  build, quindi non vengono usate per fingere un bitrate che non sarebbe effettivo.
+- Verificato l'export reale `ARPHE_E09_REELS_MIODOTTORE_V7_MASTER.mov`: 1080×1920/30,
+  27 secondi, circa 104 MB e 30,5 Mb/s. Le prove MP4 V4/V6 (~0,8 Mb/s) restano diagnostiche e
+  non costituiscono consegne.
+- Aggiunta e verificata la copia compatibile `ARPHE_E09_REELS_MIODOTTORE_V8_INSTAGRAM.mp4`,
+  ottenuta dal master ProRes con H.264 High/CRF 17. Il confronto frame-per-frame con il master
+  restituisce SSIM 0,9979 e PSNR 57,6 dB; V8 è il file da aprire, condividere e caricare.
+
+- Creata e verificata la timeline nativa Reel `ARPHE_E09_REELS_MIODOTTORE_V2`, 1080×1920/30,
+  con cinque recensioni originali, intro Satoshi, card cream, canvas beige e CTA burgundy.
+- Formalizzato lo standard riusabile in `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md` e aggiunto
+  il template senza dati reali `plans/ARPHE_INSTAGRAM_REVIEW_REEL_TEMPLATE.json`.
+- Regole canoniche: 3–5 secondi per card, intro di tre secondi, CTA di quattro secondi,
+  nessuna attribuzione sotto la recensione e verifica visuale prima di save/render.
+- La V3 mobile-first aumenta card, corpo del testo, intro e CTA per la leggibilità sul telefono;
+  diventa il riferimento al posto della V2 dopo catture ai frame 30, 130, 250 e 809.
 
 ## 2026-09-22 - Tunnel personale operativo e stato runtime per-workstation
 

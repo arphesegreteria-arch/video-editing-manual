@@ -23,8 +23,8 @@ from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_fr
                                inspect_fusion_graph as do_inspect_fusion_graph)
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
 from .feature_flags import report as feature_report
-from .fusion_tools import (add_background, add_text, create_composition,
-                           retime)
+from .fusion_tools import (MAX_AUTOMATIC_FUSION_FRAMES, add_background, add_text,
+                           create_composition, retime)
 from .longform_tools import (apply_plan as do_apply_longform_plan,
                              list_media as do_list_longform_media,
                              transcript_chunk as do_transcript_chunk,
@@ -420,14 +420,14 @@ def add_review_card(composition_id: str, text: str, stars: int, start_frame: int
 
 @mcp.tool(annotations=SAFE_WRITE)
 def create_review_sequence(name: str, reviews: list[dict[str, Any]],
-                           duration_frames: int = 90, stagger_frames: int = 24,
+                           duration_frames: int = 0, stagger_frames: int = 24,
                            style_role: str = "cream") -> dict[str, Any]:
     """Compatibility wrapper; create one gap-free sequence for older clients."""
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
         requested = duration_frames + max(0, len(reviews) - 1) * stagger_frames
-        total = max(len(reviews), min(150, requested))
+        total = 0 if duration_frames == 0 else max(len(reviews), min(MAX_AUTOMATIC_FUSION_FRAMES, requested))
         result = _call(do_create_review_sequence, project, timeline, config, registry,
                        name, reviews, total, style_role)
         if isinstance(result, dict):
@@ -439,14 +439,15 @@ def create_review_sequence(name: str, reviews: list[dict[str, Any]],
 
 @mcp.tool(annotations=SAFE_WRITE)
 def create_review_sequence_v2(name: str, reviews: list[dict[str, Any]],
-                              total_duration_frames: int = 150,
-                              style_role: str = "cream") -> dict[str, Any]:
-    """Create 1-8 controlled review cards as one gap-free Fusion sequence."""
+                              total_duration_frames: int = 0,
+                              style_role: str = "cream", cta: dict[str, Any] | None = None,
+                              intro: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Create 1-8 cards, with optional kit-based intro and branded CTA."""
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
         return _call(do_create_review_sequence, project, timeline, config, registry,
-                     name, reviews, total_duration_frames, style_role)
+                     name, reviews, total_duration_frames, style_role, cta, intro)
     except Exception as exc: return _error(exc)
 
 

@@ -10,7 +10,7 @@ import sys
 import uuid
 from typing import Any
 
-from .audio_worker import DISTANT_PRESET, LEVEL_PRESET, PRESET, PRESETS
+from .audio_worker import DISTANT_PRESET, LEVEL_PRESET, NATURAL_PRESET, PRESET, PRESETS
 from .config import CreativeConfig
 from .longform_tools import allowed_media
 from .safety import ValidationError, arphe_name
@@ -34,7 +34,12 @@ def start_audio_job(config: CreativeConfig, media_path: str, preset: str = PRESE
     config.audio_jobs_root.mkdir(parents=True, exist_ok=True)
     job_id = "audio_" + uuid.uuid4().hex[:16]
     source_name = arphe_name(source.stem, "LONGFORM").removeprefix("ARPHE_")
-    label = "DISTANT" if preset == DISTANT_PRESET else ("LEVEL" if preset == LEVEL_PRESET else "CLEAN")
+    label = (
+        "DISTANT" if preset == DISTANT_PRESET
+        else "LEVEL" if preset == LEVEL_PRESET
+        else "NATURAL" if preset == NATURAL_PRESET
+        else "CLEAN"
+    )
     output = config.audio_root / f"ARPHE_{label}_{source_name}_{job_id[-8:]}.wav"
     job_path = config.audio_jobs_root / f"{job_id}.json"
     payload = {"schema": "ARPHE_AUDIO_JOB_V1", "job_id": job_id, "status": "QUEUED",

@@ -1,0 +1,69 @@
+{
+  "schema": "ARPHE_LONGFORM_EDIT_PLAN_V1",
+  "source_file": "10 cose che non sai sulla medicina estetica e la clinica.mp4",
+  "project_name": "ARPHE_E10_MEDICINA_ESTETICA_REELS_V2",
+  "master_timeline_name": "ARPHE_E10_REELS_MASTER_V2",
+  "fps": 30,
+  "audio_preset": "ARPHE_DIALOGUE_NATURAL_V4",
+  "cta": {
+    "duration_frames": 151,
+    "base_color_role": "cream",
+    "style_role": "burgundy",
+    "headline": "Scopri ARPHÈ",
+    "text": "Prenota la tua visita",
+    "transition": "ARPHE_CTA_FADE",
+    "transition_frames": 24
+  },
+  "clips": [
+    {
+      "clip_id": "ARPHE_E10_MED_ESTETICA_CLINICA_V2",
+      "title": "Medicina estetica: oltre l'estetica",
+      "start_second": 128.66,
+      "end_second": 167.94,
+      "end_phrase": "una vera e propria patologia"
+    },
+    {
+      "clip_id": "ARPHE_E10_IPERIDROSI_V2",
+      "title": "Sudorazione localizzata e qualità di vita",
+      "start_second": 892.78,
+      "end_second": 944.94,
+      "start_phrase": "fa sì che si riduca la sudorazione",
+      "end_phrase": "il miglioramento della qualità della vita"
+    },
+    {
+      "clip_id": "ARPHE_E10_LASER_PATOLOGIE_V2",
+      "title": "Epilazione laser: non solo estetica",
+      "start_second": 1283.90,
+      "end_second": 1332.96,
+      "start_phrase": "il pelo è un annesso",
+      "end_phrase": "non è una soluzione, è un palliativo"
+    },
+    {
+      "clip_id": "ARPHE_E10_BODYBUILDER_BRESCIA_V2",
+      "title": "Bodybuilder di Brescia: depilazione e pelle",
+      "start_second": 1394.22,
+      "end_second": 1493.16,
+      "end_phrase": "evitate di far la brasiliana sul petto",
+      "content_note": "I riferimenti al doping restano per coerenza interna; richiedono revisione clinica e di tono."
+    },
+    {
+      "clip_id": "ARPHE_E10_CICATRICI_ACNE_V2",
+      "title": "Cicatrici d'acne: il ruolo dell'acido ialuronico",
+      "start_second": 1536.00,
+      "end_second": 1573.46,
+      "editorial_note": "Versione condensata sulla sola tesi: sostegno del piano dermico e integrazione con il laser."
+    },
+    {
+      "clip_id": "ARPHE_E10_FOLLICOLITE_BARBA_V2",
+      "title": "Follicolite della barba: partire dalla causa",
+      "start_second": 2374.76,
+      "end_second": 2449.00,
+      "end_phrase": "esatto"
+    }
+  ],
+  "validation": {
+    "plan_sha256": "af629dfb686ed059b895193c209d99d2d80ed3cce0c80c7c3321a563091cd1b8",
+    "total_frames": 10534,
+    "status": "NEEDS_AUDIOVISUAL_AND_CLINICAL_REVIEW"
+  }
+}

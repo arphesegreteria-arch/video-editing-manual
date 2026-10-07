@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 import uuid
 
@@ -8,6 +9,17 @@ from .feature_flags import require_capability
 from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name, require_arphe_name, validate_color_role, validate_frame_range
+
+
+# Resolve inserts a bare Fusion Composition at the user's standard generator
+# duration (five seconds on the ARPHE workstations).  A short, bridge-owned
+# carrier clip lets a Fusion Clip inherit a requested duration instead.
+DEFAULT_FUSION_ITEM_FRAMES = 150
+# Five minutes gives a review sequence enough room to respect reading time
+# without asking an operator to extend clips in Resolve.  The carrier itself
+# is a tiny, bridge-owned technical asset; it never contains user media.
+MAX_AUTOMATIC_FUSION_FRAMES = 9_000  # 5 minutes at the supported 30 fps.
+CARRIER_ASSET_NAME = "arphe_fusion_carrier_5m.mp4"
 
 
 def _id(kind: str) -> str:
@@ -32,6 +44,51 @@ def _all_items(timeline: Any) -> list[Any]:
 
 def _item_id(item: Any) -> str:
     return str(safe_call(item, "GetUniqueId") or safe_call(item, "GetName") or "")
+
+
+def _duration_carrier(project: Any, timeline: Any, config: CreativeConfig,
+                      duration_frames: int) -> tuple[Any | None, Any | None, str | None]:
+    """Create a Fusion Clip with a real, controlled timeline duration.
+
+    Resolve's public API has no setter for TimelineItem duration.  Instead of
+    asking an operator to trim a default five-second Fusion Composition, append
+    a bridge-owned carrier video of the requested source length, turn that item
+    into a Fusion Clip, then attach a composition to it.  The carrier never
+    exposes user media and is replaced by the ARPHE canvas in the composition.
+    """
+    if duration_frames > MAX_AUTOMATIC_FUSION_FRAMES:
+        return None, None, (f"Durata automatica oltre {MAX_AUTOMATIC_FUSION_FRAMES} frame; "
+                            "dividere la sequenza oppure usare una timeline video.")
+    carrier = (Path(config.asset_root) / CARRIER_ASSET_NAME).resolve()
+    if not carrier.is_file():
+        return None, None, "Asset tecnico di durata non installato"
+    pool = safe_call(project, "GetMediaPool")
+    imported = safe_call(pool, "ImportMedia", [str(carrier)]) if pool else None
+    if not imported:
+        return None, None, "Import dell'asset tecnico di durata fallito"
+    media_item = imported[0]
+    appended = safe_call(pool, "AppendToTimeline", [{
+        "mediaPoolItem": media_item,
+        "startFrame": 0,
+        "endFrame": int(duration_frames),
+        "mediaType": 1,
+        "trackIndex": 1,
+    }])
+    carrier_item = appended[0] if appended else None
+    if carrier_item is None:
+        return None, None, "Inserimento dell'asset tecnico di durata fallito"
+    fusion_item = safe_call(timeline, "CreateFusionClip", [carrier_item])
+    if not fusion_item:
+        return None, None, "Creazione del Fusion Clip a durata controllata fallita"
+    comp = safe_call(fusion_item, "AddFusionComp")
+    if not comp:
+        comp = safe_call(fusion_item, "GetFusionCompByIndex", 1)
+    if not comp:
+        return None, None, "Composizione Fusion del carrier non disponibile"
+    actual_duration = safe_call(fusion_item, "GetDuration", False)
+    if int(actual_duration or 0) != int(duration_frames):
+        return None, None, "Resolve non ha mantenuto la durata richiesta del carrier"
+    return fusion_item, comp, None
 
 
 def find_composition(timeline: Any, registry: Registry, composition_id: str) -> tuple[Any, Any]:
@@ -170,15 +227,24 @@ def create_composition(project: Any, timeline: Any, config: CreativeConfig, regi
     _timeline_allowed(project, timeline, config, registry)
     start, end = validate_frame_range(start_frame, end_frame)
     item_name = arphe_name(name, "FUSION_COMP")
-    # Resolve inserts at the current playhead. Gate B must visually verify placement;
-    # no destructive reposition fallback is attempted.
-    item = safe_call(timeline, "InsertFusionCompositionIntoTimeline")
-    if not item:
-        return {"ok": False, "action": "create_fusion_composition", "stage": "insert"}
+    duration = end - start
+    strategy = "resolve_default_fusion_item"
+    if duration > DEFAULT_FUSION_ITEM_FRAMES:
+        item, comp, error = _duration_carrier(project, timeline, config, duration)
+        if error:
+            return {"ok": False, "action": "create_fusion_composition", "stage": "duration_carrier",
+                    "requested_frame_range": [start, end], "error": error}
+        strategy = "carrier_fusion_clip"
+    else:
+        # Resolve inserts at the current playhead. Gate B must visually verify placement;
+        # no destructive reposition fallback is attempted.
+        item = safe_call(timeline, "InsertFusionCompositionIntoTimeline")
+        if not item:
+            return {"ok": False, "action": "create_fusion_composition", "stage": "insert"}
+        comp = safe_call(item, "GetFusionCompByIndex", 1)
+        if not comp:
+            return {"ok": False, "action": "create_fusion_composition", "stage": "get_comp", "timeline_item": item_name}
     safe_call(item, "SetName", item_name)
-    comp = safe_call(item, "GetFusionCompByIndex", 1)
-    if not comp:
-        return {"ok": False, "action": "create_fusion_composition", "stage": "get_comp", "timeline_item": item_name}
     safe_call(comp, "SetAttrs", {"COMPN_RenderStart": start, "COMPN_RenderEnd": end})
     canvas = _new_tool(comp, "Background", "ARPHE_CANVAS")
     _set_color(canvas, _rgb(config.palette["ivory"], 0.0))
@@ -190,7 +256,10 @@ def create_composition(project: Any, timeline: Any, config: CreativeConfig, regi
                                           "start_frame": start, "end_frame": end})
     return {"ok": connected, "action": "create_fusion_composition", "composition_id": composition_id,
             "timeline_item": safe_call(item, "GetName"), "requested_frame_range": [start, end],
-            "placement_note": "Insert at current Resolve playhead; verify manually in Gate B.", "status": "PENDING"}
+            "duration_strategy": strategy,
+            "timeline_item_duration_frames": safe_call(item, "GetDuration", False),
+            "placement_note": "Carrier sequences append safely at the end of the current timeline; verify visually in Gate B.",
+            "status": "PENDING"}
 
 
 def add_background(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,

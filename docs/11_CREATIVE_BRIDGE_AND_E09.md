@@ -1,5 +1,8 @@
 # 11 — Creative Bridge 03 + E09 MioDottore Reviews
 
+> Il render immediato documentato nelle sezioni storiche è obsoleto. La superficie corrente usa
+> workflow espliciti e render batch; vedere `18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md`.
+
 Data: 2026-09-04
 
 ## Stato

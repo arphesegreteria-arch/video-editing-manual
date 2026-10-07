@@ -5,9 +5,11 @@ from pathlib import Path
 
 from .config import CreativeConfig
 from .feature_flags import require_capability
+from fractions import Fraction
 from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name, ensure_no_collision, require_arphe_name
+from .render_batches import batch_fingerprint, transition_batch
 
 
 INSTAGRAM_REEL_RENDER_SETTINGS = {
@@ -20,6 +22,151 @@ INSTAGRAM_REEL_RENDER_SETTINGS = {
     "ExportVideo": True,
     "ExportAudio": True,
 }
+
+
+def _render_job_ids(project: Any) -> tuple[str, ...]:
+    jobs = safe_call(project, "GetRenderJobList") or []
+    ids = tuple(str(job.get("JobId") or job.get("JobID") or "") for job in jobs if isinstance(job, dict))
+    if any(not value for value in ids) or len(ids) != len(set(ids)):
+        raise ValidationError("La coda Resolve contiene job senza ID o duplicati")
+    return ids
+
+
+def _job_map(project: Any) -> dict[str, dict[str, Any]]:
+    jobs = safe_call(project, "GetRenderJobList") or []
+    return {str(job.get("JobId") or job.get("JobID")): dict(job) for job in jobs if isinstance(job, dict)}
+
+
+def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registry, batch_id: str) -> dict[str, Any]:
+    batch = registry.render_batch(batch_id)
+    if batch is None or batch.status != "CONFIRMED":
+        raise ValidationError("Serve un render batch CONFIRMED")
+    if str(safe_call(project, "GetName") or "") != batch.project_name:
+        raise ValidationError("Il progetto corrente non corrisponde al batch")
+    require_capability("CAP_RENDER", config, None, project, safe_call(project, "GetCurrentTimeline"))
+    before = _render_job_ids(project)
+    timelines = _timeline_map(project)
+    original = safe_call(project, "GetCurrentTimeline")
+    staging = (config.render_root / "staging" / batch.batch_id).resolve()
+    staging.mkdir(parents=True, exist_ok=False)
+    created: list[str] = []
+    expected: list[str] = []
+    expected_durations: dict[str, str] = {}
+    try:
+        for timeline_name, output_name in zip(batch.timeline_names, batch.output_names, strict=True):
+            timeline = timelines.get(timeline_name)
+            if timeline is None or not safe_call(project, "SetCurrentTimeline", timeline):
+                raise ValidationError(f"Timeline non disponibile: {timeline_name}")
+            if not safe_call(project, "SetCurrentRenderFormatAndCodec", batch.container, batch.video_codec):
+                raise ValidationError("Formato/codec render rifiutati")
+            numerator, denominator = (int(v) for v in batch.frame_rate.split("/"))
+            settings = {"TargetDir": str(staging), "CustomName": output_name, "SelectAllFrames": True,
+                        "FormatWidth": batch.width, "FormatHeight": batch.height,
+                        "FrameRate": numerator / denominator, "ExportVideo": True,
+                        "ExportAudio": batch.audio_required}
+            if batch.audio_codec:
+                settings["AudioCodec"] = batch.audio_codec
+            if batch.audio_sample_rate:
+                settings["AudioSampleRate"] = batch.audio_sample_rate
+            if batch.video_profile:
+                settings["EncodingProfile"] = batch.video_profile
+            if not safe_call(project, "SetRenderSettings", settings):
+                raise ValidationError("Impostazioni render rifiutate")
+            returned = safe_call(project, "AddRenderJob")
+            after = _render_job_ids(project)
+            new_ids = [value for value in after if value not in before and value not in created]
+            if len(new_ids) != 1 or str(returned) != new_ids[0]:
+                raise ValidationError("Impossibile identificare in modo univoco il nuovo job")
+            created.append(new_ids[0])
+            filename = f"{output_name}.{batch.container}"
+            expected.append(filename)
+            start = safe_call(timeline, "GetStartFrame")
+            end = safe_call(timeline, "GetEndFrame")
+            if not isinstance(start, int) or not isinstance(end, int) or end <= start:
+                raise ValidationError("Durata timeline non leggibile")
+            duration = Fraction(end - start, 1) / Fraction(batch.frame_rate)
+            expected_durations[filename] = f"{duration.numerator}/{duration.denominator}"
+    except Exception as exc:
+        current = set(_render_job_ids(project))
+        for job_id in created:
+            if job_id in current:
+                safe_call(project, "DeleteRenderJob", job_id)
+        transition_batch(registry, batch.batch_id, "CONFIRMED", "FAILED_PREPARE",
+                         {"error": str(exc), "orphaned_job_ids": [j for j in created if j in set(_render_job_ids(project))]})
+        raise
+    finally:
+        if original is not None:
+            safe_call(project, "SetCurrentTimeline", original)
+    snapshots = {job_id: _job_map(project)[job_id] for job_id in created}
+    prepared = transition_batch(registry, batch.batch_id, "CONFIRMED", "PREPARED",
+                                {"queue_before": list(before), "created_job_ids": created,
+                                 "job_snapshots": snapshots, "expected_outputs": expected,
+                                 "expected_durations": expected_durations,
+                                 "staging_directory": str(staging)})
+    return {"ok": True, "action": "prepare_render_batch", "batch_id": batch_id,
+            "created_job_ids": list(prepared.created_job_ids), "render_started": False,
+            "next_action": "approve_render_batch"}
+
+
+def start_render_batch(project: Any, registry: Registry, batch_id: str,
+                       approval_token: str) -> dict[str, Any]:
+    batch = registry.render_batch(batch_id)
+    if batch is None or batch.status != "APPROVED":
+        raise ValidationError("Serve un render batch APPROVED")
+    if not approval_token or approval_token != batch.approval_token or approval_token != batch_fingerprint(batch):
+        raise ValidationError("Approvazione batch non valida o obsoleta")
+    if safe_call(project, "IsRenderingInProgress"):
+        raise ValidationError("Resolve ha già un render attivo")
+    current = _job_map(project)
+    expected_ids = set(batch.queue_before) | set(batch.created_job_ids)
+    if set(current) != expected_ids:
+        raise ValidationError("La coda Resolve è cambiata dopo l'approvazione")
+    snapshots = (batch.evidence or {}).get("job_snapshots", {})
+    if any(current.get(job_id) != snapshots.get(job_id) for job_id in batch.created_job_ids):
+        raise ValidationError("Le impostazioni della coda sono cambiate dopo l'approvazione")
+    registry.acquire_render_lock(batch.project_name, batch.batch_id)
+    started = bool(safe_call(project, "StartRendering", list(batch.created_job_ids), False))
+    if not started:
+        registry.release_render_lock(batch.project_name, batch.batch_id)
+        return {"ok": False, "action": "start_render_batch", "batch_id": batch_id, "status": "APPROVED"}
+    transition_batch(registry, batch_id, "APPROVED", "RENDERING", {"selective_start": True})
+    return {"ok": True, "action": "start_render_batch", "batch_id": batch_id,
+            "job_ids": list(batch.created_job_ids), "status": "RENDERING"}
+
+
+def get_render_batch_status(project: Any, registry: Registry, batch_id: str) -> dict[str, Any]:
+    batch = registry.render_batch(batch_id)
+    if batch is None:
+        raise ValidationError("Render batch non trovato")
+    jobs = _job_map(project)
+    return {"ok": True, "action": "get_render_batch_status", "batch_id": batch_id,
+            "status": batch.status,
+            "jobs": {job_id: jobs.get(job_id, {}).get("JobStatus", "unknown")
+                     for job_id in batch.created_job_ids}}
+
+
+def cancel_render_batch(project: Any, registry: Registry, batch_id: str,
+                        operator_role: str) -> dict[str, Any]:
+    if operator_role not in {"TECNICO", "ALESSIO"}:
+        raise ValidationError("La cancellazione richiede un ruolo tecnico")
+    batch = registry.render_batch(batch_id)
+    if batch is None or batch.status not in {"PREPARED", "APPROVED", "RENDERING"}:
+        raise ValidationError("Batch non cancellabile")
+    if batch.status == "RENDERING":
+        lock = registry.render_lock(batch.project_name)
+        if not lock or lock.get("batch_id") != batch.batch_id:
+            raise ValidationError("Render attivo non posseduto dal bridge")
+        if not safe_call(project, "StopRendering"):
+            return {"ok": False, "action": "cancel_render_batch", "status": "RENDERING"}
+    else:
+        current = set(_render_job_ids(project))
+        for job_id in batch.created_job_ids:
+            if job_id in current:
+                safe_call(project, "DeleteRenderJob", job_id)
+    cancelled = transition_batch(registry, batch_id, batch.status, "CANCELLED", {"cancelled_by": operator_role})
+    registry.release_render_lock(batch.project_name, batch.batch_id)
+    return {"ok": True, "action": "cancel_render_batch", "batch_id": batch_id,
+            "status": cancelled.status}
 
 
 def render_preview(project: Any, timeline: Any, config: CreativeConfig, registry: Registry, output_name: str) -> dict:

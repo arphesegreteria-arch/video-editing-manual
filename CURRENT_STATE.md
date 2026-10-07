@@ -2,6 +2,19 @@
 
 Ultimo aggiornamento: sessione 2026-10-07.
 
+## Workflow editoriali e render batch — CODICE VALIDATO / ROLLOUT PENDING
+
+Quattro linee editoriali esplicite sostituiscono i default impliciti. Il bridge imposta e legge
+project/timeline/playback FPS, prepara job isolati, richiede approvazione, avvia solo gli ID del
+batch, verifica i media in staging e promuove soltanto output conformi. I vecchi entry point MCP
+di avvio immediato restituiscono ora una risposta di migrazione.
+
+Validazione automatica finale: Creative `112/112` PASS; Windows `35` PASS e `1` SKIP DPAPI noto. Le prove live
+`PC_PERSONALE` e `PC_SEGRETERIA` sono `PENDING` e separate. Nessun Resolve, task o tunnel è stato
+modificato; il lavoro attualmente aperto sul PC segreteria non è stato toccato.
+
+Procedura: `docs/18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md`.
+
 ## Isolamento workstation — CODICE MIGRATO / ROLLOUT PENDING
 
 La repository usa ora profili espliciti per separare config runtime e Creative, stato, audit,

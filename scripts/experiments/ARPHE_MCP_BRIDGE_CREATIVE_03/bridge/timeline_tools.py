@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from fractions import Fraction
 from typing import Any
 
 from .config import CreativeConfig
 from .feature_flags import require_capability
+from .format_contract import ResolvedFormat, apply_project_format, verify_timeline_format
 from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name, ensure_no_collision, require_arphe_name, validate_timeline_settings
@@ -36,31 +38,14 @@ def create_timeline(project: Any, config: CreativeConfig, registry: Registry,
     target = arphe_name(name, "CREATIVE_TIMELINE")
     width, height, fps = validate_timeline_settings(width, height, fps)
     ensure_no_collision(target, timeline_names(project), "Timeline")
-    requested_project_settings = {
-        "timelineResolutionWidth": str(width),
-        "timelineResolutionHeight": str(height),
-        "timelineFrameRate": str(int(fps) if fps.is_integer() else fps),
-    }
-    previous_project_settings = {
-        key: safe_call(project, "GetSetting", key) for key in requested_project_settings
-    }
-    project_setting_results = {
-        key: bool(safe_call(project, "SetSetting", key, value))
-        for key, value in requested_project_settings.items()
-    }
-    if not all(project_setting_results.values()):
-        restore_results = {}
-        for key, changed in project_setting_results.items():
-            previous = previous_project_settings[key]
-            restore_results[key] = (
-                bool(safe_call(project, "SetSetting", key, str(previous)))
-                if changed and previous is not None else not changed
-            )
+    contract = ResolvedFormat(width, height, Fraction(str(fps)), Fraction(str(fps)))
+    try:
+        applied = apply_project_format(project, contract)
+    except ValidationError as exc:
         return {
             "ok": False, "action": "create_timeline", "stage": "project_settings",
             "project": project_name, "requested_timeline": target,
-            "project_setting_results": project_setting_results,
-            "restore_results": restore_results, "timeline_created": False,
+            "error": str(exc), "timeline_created": False,
         }
     pool = safe_call(project, "GetMediaPool")
     created = safe_call(pool, "CreateEmptyTimeline", target)
@@ -71,22 +56,20 @@ def create_timeline(project: Any, config: CreativeConfig, registry: Registry,
         "width": safe_call(created, "GetSetting", "timelineResolutionWidth"),
         "height": safe_call(created, "GetSetting", "timelineResolutionHeight"),
         "fps": safe_call(created, "GetSetting", "timelineFrameRate"),
+        "playback_fps": applied["timelinePlaybackFrameRate"],
     }
     created_name = safe_call(created, "GetName")
     try:
-        settings_match = (
-            str(actual["width"]) == str(width)
-            and str(actual["height"]) == str(height)
-            and float(actual["fps"]) == fps
-        )
-    except (TypeError, ValueError):
+        verify_timeline_format(project, created, contract)
+        settings_match = True
+    except ValidationError:
         settings_match = False
-    ok = created_name == target and all(project_setting_results.values()) and settings_match and current_set
+    ok = created_name == target and settings_match and current_set
     if created_name == target:
         registry.add_timeline(str(project_name), target)
     return {"ok": ok, "action": "create_timeline", "project": project_name, "created_timeline": created_name,
             "requested_settings": {"width": width, "height": height, "fps": fps}, "actual_settings": actual,
-            "project_setting_results": project_setting_results, "settings_match": settings_match,
+            "project_setting_results": {key: True for key in applied}, "settings_match": settings_match,
             "current_timeline_set": current_set, "overwrite": False}
 
 

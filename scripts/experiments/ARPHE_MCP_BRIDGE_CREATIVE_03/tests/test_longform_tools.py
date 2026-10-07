@@ -50,14 +50,15 @@ class LongformTests(unittest.TestCase):
             audio.write_bytes(b"audio")
 
             class Timeline:
-                def __init__(self, name): self.name, self.entries = name, []
+                def __init__(self, name, settings): self.name, self.entries, self.settings = name, [], dict(settings)
                 def GetName(self): return self.name
                 def GetStartFrame(self): return 108000
+                def GetSetting(self, key): return self.settings.get(key)
 
             class Pool:
                 def __init__(self, project): self.project = project
                 def CreateEmptyTimeline(self, name):
-                    item = Timeline(name)
+                    item = Timeline(name, self.project.settings)
                     self.project.timelines.append(item)
                     self.project.current = item
                     return item
@@ -70,11 +71,18 @@ class LongformTests(unittest.TestCase):
                 def __init__(self):
                     self.timelines, self.current = [], None
                     self.pool = Pool(self)
+                    self.settings = {
+                        "timelineResolutionWidth": "1920",
+                        "timelineResolutionHeight": "1080",
+                        "timelineFrameRate": "24",
+                        "timelinePlaybackFrameRate": "24",
+                    }
+                    self.setting_calls = []
                 def GetMediaPool(self): return self.pool
                 def GetCurrentTimeline(self): return self.current
                 def SetCurrentTimeline(self, timeline): self.current = timeline; return True
-                def SetSetting(self, *_): return True
-                def GetSetting(self, *_): return "30"
+                def SetSetting(self, key, value): self.setting_calls.append((key, value)); self.settings[key] = value; return True
+                def GetSetting(self, key): return self.settings.get(key)
                 def GetTimelineCount(self): return len(self.timelines)
                 def GetTimelineByIndex(self, index): return self.timelines[index - 1]
 
@@ -100,6 +108,7 @@ class LongformTests(unittest.TestCase):
             self.assertEqual(4, len(by_name["ARPHE_TEST_MASTER"].entries))
             self.assertEqual(2, len(by_name["ARPHE_CLIP_01"].entries))
             self.assertEqual(2, len(by_name["ARPHE_CLIP_02"].entries))
+            self.assertIn(("timelinePlaybackFrameRate", "30"), created.setting_calls)
 
     def test_longform_is_technically_available_from_current_project(self):
         class Api:

@@ -1,5 +1,9 @@
 # 16 — Standard ARPHÈ: Reel Instagram con recensioni
 
+> La timeline resta 1080×1920/30 e anche il playback FPS deve essere 30. Master ProRes e derivato
+> social H.264 sono consegne separate, preparate e approvate tramite render batch. Le recensioni
+> sono reali, approvate e anonimizzate.
+
 Questo è il modello operativo per creare una nuova sequenza recensioni per Instagram. È basato
 sulla prova visuale mobile-first `ARPHE_E09_REELS_MIODOTTORE_V3` e deve essere riusato, non ricostruito da zero.
 

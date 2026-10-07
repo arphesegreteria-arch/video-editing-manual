@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+from fractions import Fraction
 from typing import Any, Callable
 
 from mcp.server import MCPServer
@@ -22,6 +23,11 @@ from .creative_tools import (add_end_card as do_add_end_card,
 from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_frames,
                                inspect_fusion_graph as do_inspect_fusion_graph)
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
+from .editorial_workflows import (EditorialBrief, load_render_profile_registry,
+                                  load_workflow_registry,
+                                  resolve_delivery_profile,
+                                  validate_editorial_brief as do_validate_editorial_brief)
+from .format_contract import ResolvedFormat
 from .feature_flags import report as feature_report
 from .fusion_tools import (MAX_AUTOMATIC_FUSION_FRAMES, add_background, add_text,
                            create_composition, retime)
@@ -34,10 +40,17 @@ from .project_tools import (create_project as do_create_project,
                             save_project as do_save_project,
                             set_current_project as do_set_current_project)
 from .registry import Registry
+from .render_batches import (approve_render_batch as do_approve_render_batch,
+                             create_render_batch)
 from .render_tools import (queue_longform_exports as do_queue_longform_exports,
                            queue_publish_package_exports as do_queue_publish_package_exports,
                            render_preview as do_render_preview,
-                           start_longform_exports as do_start_longform_exports)
+                           start_longform_exports as do_start_longform_exports,
+                           prepare_render_batch as do_prepare_render_batch,
+                           start_render_batch as do_start_render_batch,
+                           get_render_batch_status as do_get_render_batch_status,
+                           cancel_render_batch as do_cancel_render_batch)
+from .media_verification import verify_and_promote_batch as do_verify_render_batch
 from .resolve_connection import RESOLVE_ACCESS_LOCK, context, safe_call
 from .safety import ValidationError
 from .timeline_tools import (create_safe_working_timeline as do_safe_timeline,
@@ -91,6 +104,118 @@ def _call(operation: Callable[..., dict], *args: Any, **kwargs: Any) -> dict:
     except Exception:
         pass
     return result
+
+
+@mcp.tool(annotations=READ_ONLY)
+def list_editorial_workflows() -> dict[str, Any]:
+    """List versioned workflow metadata without local briefs, paths or media content."""
+    try:
+        config = load_config()
+        registry = load_workflow_registry(config.workflow_registry_path)
+        return {"ok": True, "workflows": [
+            {"workflow_id": item.workflow_id, "version": item.version, "label": item.label,
+             "purpose": item.purpose, "automation_level": item.automation_level,
+             "allowed_profiles": list(item.allowed_profiles), "questions": list(item.questions)}
+            for item in registry.workflows.values()]}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def validate_editorial_brief(brief: dict[str, Any]) -> dict[str, Any]:
+    """Validate and store a local structured brief; performs no Resolve write."""
+    try:
+        config = load_config(); registry = Registry(config.state_path)
+        value = do_validate_editorial_brief(brief, load_workflow_registry(config.workflow_registry_path))
+        registry.save_brief(value)
+        return {"ok": not value.unresolved_questions, "action": "validate_editorial_brief",
+                "brief_id": value.brief_id, "workflow_id": value.workflow_id,
+                "unresolved_questions": list(value.unresolved_questions)}
+    except Exception as exc: return _error(exc)
+
+
+def _stored_brief(registry: Registry, brief_id: str) -> EditorialBrief:
+    raw = registry.brief(brief_id)
+    if raw is None: raise ValidationError("Brief non trovato")
+    return EditorialBrief(raw["brief_id"], raw["workflow_id"], raw["workflow_version"],
+                          raw["operator_role"], raw.get("primary_source"),
+                          tuple(raw.get("requested_outputs", [])), raw.get("format_request", {}),
+                          raw.get("answers", {}), tuple(raw.get("unresolved_questions", [])))
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_render_batch(brief_id: str, profile_id: str, project_name: str,
+                         timeline_names: list[str], output_names: list[str],
+                         width: int, height: int, frame_rate: str) -> dict[str, Any]:
+    """Create and prepare an isolated batch; never starts rendering."""
+    try:
+        _, _, project, _, config, registry, error = _runtime()
+        if error: return error
+        brief = _stored_brief(registry, brief_id)
+        profile = resolve_delivery_profile(
+            brief, profile_id, load_render_profile_registry(config.render_profile_registry_path)
+        )
+        rate = Fraction(frame_rate)
+        if profile.resolution_mode == "fixed" and profile.resolution != (width, height):
+            raise ValidationError("Risoluzione incompatibile con il render profile")
+        if profile.frame_rate_mode == "fixed" and Fraction(profile.frame_rate or "0") != rate:
+            raise ValidationError("Frame rate incompatibile con il render profile")
+        batch = create_render_batch(brief, profile, ResolvedFormat(width, height, rate, rate),
+                                    project_name, tuple(timeline_names), tuple(output_names), config.workstation_id)
+        registry.save_render_batch(batch)
+        return _call(do_prepare_render_batch, project, config, registry, batch.batch_id)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_render_batch(batch_id: str, operator_role: str) -> dict[str, Any]:
+    """Approve one prepared batch fingerprint."""
+    try:
+        config = load_config(); batch = do_approve_render_batch(Registry(config.state_path), batch_id, operator_role)
+        return {"ok": True, "action": "approve_render_batch", "batch_id": batch_id,
+                "actor_role": operator_role, "transition": "PREPARED->APPROVED",
+                "fingerprint": batch.approval_token, "approval_token": batch.approval_token,
+                "job_ids": list(batch.created_job_ids)}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def start_render_batch(batch_id: str, approval_token: str) -> dict[str, Any]:
+    """Start only job IDs bound to one approved batch."""
+    try:
+        _, _, project, _, _, registry, error = _runtime()
+        if error: return error
+        return _call(do_start_render_batch, project, registry, batch_id, approval_token)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_render_batch_status(batch_id: str) -> dict[str, Any]:
+    """Read persisted batch and owned Resolve job status."""
+    try:
+        _, _, project, _, _, registry, error = _runtime()
+        if error: return error
+        return _call(do_get_render_batch_status, project, registry, batch_id)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def verify_render_batch(batch_id: str) -> dict[str, Any]:
+    """Verify staged media and promote only conforming outputs."""
+    try:
+        _, _, project, _, config, registry, error = _runtime()
+        if error: return error
+        return _call(do_verify_render_batch, project, config, registry, batch_id)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def cancel_render_batch(batch_id: str, operator_role: str) -> dict[str, Any]:
+    """Cancel only jobs owned by the named batch; technical role required."""
+    try:
+        _, _, project, _, _, registry, error = _runtime()
+        if error: return error
+        return _call(do_cancel_render_batch, project, registry, batch_id, operator_role)
+    except Exception as exc: return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -547,46 +672,31 @@ def save_project() -> dict[str, Any]:
 
 @mcp.tool(annotations=SAFE_WRITE)
 def render_preview(output_name: str = "ARPHE_PREVIEW") -> dict[str, Any]:
-    """Queue/start a preview only when CAP_RENDER is explicitly enabled; default is false."""
-    try:
-        _, _, project, timeline, config, registry, error = _runtime()
-        if error: return error
-        return _call(do_render_preview, project, timeline, config, registry, output_name)
-    except Exception as exc: return _error(exc)
+    """Deprecated compatibility response; use prepare_render_batch."""
+    return {"ok": False, "action": "render_preview", "deprecated": True,
+            "render_started": False, "next_action": "prepare_render_batch"}
 
 
 @mcp.tool(annotations=SAFE_WRITE)
 def queue_longform_exports() -> dict[str, Any]:
-    """Create one Deliver job per registered long-form clip timeline without starting render."""
-    try:
-        _, manager, project, _, config, registry, error = _runtime()
-        if error: return error
-        if not project: return {"ok": False, "stage": "preflight", "error": "Serve un progetto aperto."}
-        return _call(do_queue_longform_exports, manager, project, config, registry)
-    except Exception as exc: return _error(exc)
+    """Deprecated compatibility response; use prepare_render_batch."""
+    return {"ok": False, "action": "queue_longform_exports", "deprecated": True,
+            "render_started": False, "next_action": "prepare_render_batch"}
 
 
 @mcp.tool(annotations=SAFE_WRITE)
 def start_longform_exports() -> dict[str, Any]:
-    """Start only the separately queued long-form export jobs."""
-    try:
-        _, _, project, _, config, registry, error = _runtime()
-        if error: return error
-        if not project: return {"ok": False, "stage": "preflight", "error": "Serve un progetto aperto."}
-        return _call(do_start_longform_exports, project, config, registry)
-    except Exception as exc: return _error(exc)
+    """Deprecated compatibility response; approved batch start is required."""
+    return {"ok": False, "action": "start_longform_exports", "deprecated": True,
+            "render_started": False, "next_action": "prepare_render_batch"}
 
 
 @mcp.tool(annotations=SAFE_WRITE)
 def queue_publish_package_exports(full_timeline_name: str, clip_timeline_names: list[str],
-                                  output_directory: str, start_render: bool = True) -> dict[str, Any]:
-    """Queue and optionally start a YouTube 1080p/AAC publish package on the user's Desktop."""
-    try:
-        _, manager, project, _, config, registry, error = _runtime()
-        if error: return error
-        return _call(do_queue_publish_package_exports, manager, project, config, registry,
-                     full_timeline_name, clip_timeline_names, output_directory, start_render)
-    except Exception as exc: return _error(exc)
+                                  output_directory: str) -> dict[str, Any]:
+    """Compatibility queue-only wrapper; never starts rendering."""
+    return {"ok": False, "action": "queue_publish_package_exports", "deprecated": True,
+            "render_started": False, "next_action": "prepare_render_batch"}
 
 
 @mcp.tool(annotations=READ_ONLY)

@@ -17,5 +17,9 @@ def write_audit(path: Path, action: str, result: dict[str, Any]) -> None:
         "stage": result.get("stage"),
         "error_type": result.get("error_type"),
     }
+    for key in ("batch_id", "actor_role", "transition", "fingerprint", "job_ids"):
+        value = result.get(key)
+        if value is not None:
+            record[key] = value
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=True, separators=(",", ":")) + "\n")

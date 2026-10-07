@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-10-07 — Workflow editoriali e render batch sicuri
+
+- Aggiunti quattro workflow versionati e profili review/master/pubblicabile.
+- Resi espliciti risoluzione, project/timeline FPS e playback FPS con read-back prima dell'editing.
+- Introdotti manifest persistenti, approvazione legata all'impronta e lock per progetto.
+- La preparazione non avvia render; l'avvio usa solo gli ID nuovi approvati e rifiuta code mutate.
+- Gli output restano in staging finché contenitore, codec, dimensioni, FPS, durata e audio non
+  superano la verifica PyAV.
+- I vecchi entry point pubblici non avviano più render immediati.
+- Suite finali: Creative `112/112` PASS; Windows `35` PASS e `1` SKIP DPAPI noto. Gate reali di
+  entrambe le workstation ancora `PENDING`; nessun lavoro Resolve esistente è stato toccato.
+
 ## 2026-10-07 — Isolamento completo dei percorsi workstation (codice)
 
 - Config Creative, stato, audit, runtime e backup sono risolti dal profilo esplicito

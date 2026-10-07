@@ -78,6 +78,7 @@ class FakeProject:
             "timelineResolutionWidth": "1920",
             "timelineResolutionHeight": "1080",
             "timelineFrameRate": "24",
+            "timelinePlaybackFrameRate": "24",
         }
         self.pool = FakePool(self)
         self.current = None
@@ -175,7 +176,7 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
                                      "ARPHE_VERTICAL_V2", 1080, 1920, 30)
             self.assertTrue(result["ok"])
             self.assertTrue(result["settings_match"])
-            self.assertEqual({"width": "1080", "height": "1920", "fps": "30"}, result["actual_settings"])
+            self.assertEqual({"width": "1080", "height": "1920", "fps": "30", "playback_fps": "30"}, result["actual_settings"])
             self.assertEqual(1, project.pool.create_calls)
 
     def test_visibility_window_has_hold_and_closed_boundaries(self):

@@ -9,6 +9,8 @@
   "audio_jobs_root": "%LOCALAPPDATA%/ARPHE/Longform04/audio_jobs",
   "state_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/creative_state.json",
   "audit_log_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/audit.jsonl",
+  "workflow_registry_path": "editorial_workflows.json",
+  "render_profile_registry_path": "render_profiles.json",
   "allowed_projects": [],
   "allowed_timelines": [],
   "feature_flags": {

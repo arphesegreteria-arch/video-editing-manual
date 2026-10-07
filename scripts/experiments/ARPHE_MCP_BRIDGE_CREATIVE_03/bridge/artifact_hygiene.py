@@ -335,6 +335,15 @@ def _reconcile_pending(store: ArtifactStore) -> None:
     source = Path(str(operation["source"]))
     destination = Path(str(operation["destination"]))
     action = operation.get("type")
+    if action == "MOVE_TO_QUARANTINE" and source.exists() and not destination.exists():
+        container = destination.parent
+        if container.exists():
+            try:
+                container.rmdir()
+            except OSError as exc:
+                raise RuntimeError("Contenitore quarantena incompleto non vuoto") from exc
+        store.clear_pending_operation()
+        return
     if action == "MOVE_TO_QUARANTINE" and not source.exists() and destination.exists():
         size, digest, _ = _signature(destination, record.kind)
         if size != record.size_bytes or digest != record.sha256:
@@ -350,6 +359,9 @@ def _reconcile_pending(store: ArtifactStore) -> None:
         ))
         store.clear_pending_operation()
         return
+    if action == "RESTORE" and not source.exists() and destination.exists():
+        store.clear_pending_operation()
+        return
     if action == "RESTORE" and source.exists() and not destination.exists():
         store.replace(replace(
             record,
@@ -362,6 +374,9 @@ def _reconcile_pending(store: ArtifactStore) -> None:
             eligible_at=datetime.fromisoformat(str(operation["eligible_at"])),
             last_error=None,
         ))
+        store.clear_pending_operation()
+        return
+    if action == "PURGE" and source.exists():
         store.clear_pending_operation()
         return
     if action == "PURGE" and not source.exists():
@@ -418,7 +433,6 @@ def _quarantine(config: CreativeConfig, store: ArtifactStore, record: ArtifactRe
         return
     container = root / ".arphe-quarantine" / record.artifact_id
     destination = container / "payload"
-    container.mkdir(parents=True, exist_ok=False)
     purge_after = now + timedelta(seconds=policy.quarantine_seconds)
     store.set_pending_operation({
         "type": "MOVE_TO_QUARANTINE",
@@ -428,6 +442,7 @@ def _quarantine(config: CreativeConfig, store: ArtifactStore, record: ArtifactRe
         "at": now.isoformat(),
         "purge_after": purge_after.isoformat(),
     })
+    container.mkdir(parents=True, exist_ok=False)
     os.replace(source, destination)
     store.replace(replace(
         record,

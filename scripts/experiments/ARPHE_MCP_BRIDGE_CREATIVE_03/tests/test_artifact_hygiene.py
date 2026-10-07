@@ -479,6 +479,57 @@ class ArtifactLifecycleTests(unittest.TestCase):
             self.assertEqual(record.artifact_id, current.artifact_id)
             self.assertEqual("QUARANTINED", current.state)
 
+    def test_pending_operations_before_filesystem_mutation_are_safely_retried(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            created = datetime(2026, 10, 1, tzinfo=UTC)
+            config, store, record, original = self._diagnostic(root, created)
+            quarantine = config.render_root / ".arphe-quarantine" / record.artifact_id / "payload"
+            store.set_pending_operation({
+                "type": "MOVE_TO_QUARANTINE", "artifact_id": record.artifact_id,
+                "source": str(original), "destination": str(quarantine),
+                "at": (created + timedelta(days=1)).isoformat(),
+                "purge_after": (created + timedelta(days=8)).isoformat(),
+            })
+
+            result = self._run(config, store, created + timedelta(days=1))
+
+            self.assertTrue(result["ok"])
+            self.assertFalse(original.exists())
+            self.assertEqual("QUARANTINED", store.records()[0].state)
+
+            quarantined = store.records()[0]
+            destination = Path(quarantined.original_path or "")
+            source = Path(quarantined.quarantine_path or "")
+            store.set_pending_operation({
+                "type": "RESTORE", "artifact_id": record.artifact_id,
+                "source": str(destination), "destination": str(source),
+                "eligible_at": (created + timedelta(days=2)).isoformat(),
+            })
+            restored = restore_artifact(config, store, record.artifact_id,
+                                        load_artifact_policy(POLICY_PATH), created + timedelta(days=2))
+            self.assertTrue(restored["ok"])
+            self.assertTrue(destination.exists())
+
+    def test_pending_purge_before_delete_is_safely_retried(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            created = datetime(2026, 10, 1, tzinfo=UTC)
+            config, store, record, _ = self._diagnostic(root, created)
+            self._run(config, store, created + timedelta(days=1))
+            quarantined = store.records()[0]
+            payload = Path(quarantined.quarantine_path or "")
+            store.set_pending_operation({
+                "type": "PURGE", "artifact_id": record.artifact_id,
+                "source": str(payload), "destination": "",
+            })
+
+            result = self._run(config, store, created + timedelta(days=8))
+
+            self.assertTrue(result["ok"])
+            self.assertFalse(payload.exists())
+            self.assertEqual("PURGED", store.records()[0].state)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-10-08 — Quarantena tecnica recuperabile e runtime separati
+
+- Aggiunti registry artefatti per workstation, policy di retention fissa, inventario read-only,
+  quarantena di 7 giorni, restore con collision check e purge verificato con hash.
+- Catture diagnostiche e staging render vengono registrati; output pubblicabili, sorgenti e
+  oggetti Resolve restano fuori dal perimetro.
+- I log ruotati non si sovrascrivono più: ogni unità ha directory, sidecar, hash e identità PC.
+- Rimossi i tool pubblici di cleanup generico; i nuovi tool non accettano percorsi arbitrari.
+- Corretto l'installer profilo: log, config e registry sono workstation-specifici; il gate nuovo
+  resta spento per default e un registry dell'altro PC blocca prima delle scritture.
+- Evidenza codice: Creative `153 PASS / 1 SKIP` symlink ambientale; Windows
+  `44 PASS / 1 SKIP` DPAPI ambientale. Rollout `PC_PERSONALE` PENDING; `PC_SEGRETERIA` non toccato.
+- Rollback: spegnere `CAP_ARTIFACT_MAINTENANCE`; l'ispezione resta disponibile e gli elementi già
+  in quarantena non vengono eliminati finché il gate resta spento.
+
 ## 2026-10-07 — Stato render letto dall'API dedicata
 
 - `get_render_batch_status` e la verifica finale usano `Project.GetRenderJobStatus(job_id)`;

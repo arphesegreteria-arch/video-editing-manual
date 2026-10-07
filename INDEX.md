@@ -19,6 +19,8 @@
 | `docs/15_E09_REVIEWS_CARTOLINE.md` | **Cinque recensioni originali e transizione cartoline** |
 | `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md` | **Sottotitoli mobile: API nativa, fallback Fusion Text+ e gate di validazione** |
 | `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md` | **Standard riusabile per Reel Instagram con recensioni** |
+| `docs/18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md` | **Linee editoriali, contratti formato e render batch** |
+| `docs/19_ARTIFACT_HYGIENE_AND_QUARANTINE.md` | **Retention, quarantena recuperabile e gate separati per PC** |
 | `docs/RESOLVE_STUDIO_CAPABILITIES.md` | Matrice delle capacità Studio effettivamente testate |
 | `docs/07_EDITORIAL_BENCHMARK.md` | Benchmark umano, profilo editoriale e protocollo anti-leakage |
 | `docs/01_SETUP_RESOLVE_PYTHON.md` | Setup Resolve/Python, Studio external scripting e fallback legacy |

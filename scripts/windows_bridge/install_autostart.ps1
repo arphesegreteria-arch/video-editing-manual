@@ -61,7 +61,7 @@ if ($SafeWriteMcpCommand) {
     Assert-AbsoluteMcpCommand -Command $SafeWriteMcpCommand -Label 'SafeWriteMcpCommand'
 }
 
-$sourceFiles = @('arphe_bridge_runtime.py', 'health.py', 'secret_store.py')
+$sourceFiles = @('arphe_bridge_runtime.py', 'artifact_log_handler.py', 'health.py', 'secret_store.py')
 foreach ($file in $sourceFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot $file) -PathType Leaf)) {
         throw "Installation payload is incomplete: $file"

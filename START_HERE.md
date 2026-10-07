@@ -30,6 +30,8 @@ Non costruire una GUI desktop ARPHE separata come interfaccia primaria salvo nuo
 14. `docs/15_E09_REVIEWS_CARTOLINE.md` — piano E09 con recensioni originali e cartoline.
 14. `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` — replica sicura sul PC personale.
 15. `docs/15_E09_REVIEWS_CARTOLINE.md` — piano E09 con recensioni originali e cartoline.
+16. `docs/18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md` — scelta linea, formato e render sicuro.
+17. `docs/19_ARTIFACT_HYGIENE_AND_QUARANTINE.md` — file tecnici, quarantena e ripristino.
 
 ## Regola per ChatGPT
 

@@ -1,6 +1,19 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-10-07.
+Ultimo aggiornamento: sessione 2026-10-08.
+
+## Igiene artefatti — CODICE VALIDATO / ROLLOUT PERSONALE PENDING
+
+Il bridge registra catture diagnostiche, staging render e log ruotati; applica retention fissa,
+quarantena recuperabile di sette giorni e purge soltanto su artefatti tecnici conosciuti. File
+sconosciuti, sorgenti, master, pubblicabili e oggetti Resolve non vengono rimossi. Il vecchio
+cleanup generico di progetti/timeline/path non è più esposto.
+
+Validazione automatica: Creative `153 PASS / 1 SKIP` ambientale symlink; Windows
+`44 PASS / 1 SKIP` DPAPI ambientale. Rollout live `PC_PERSONALE`: `PENDING`.
+`PC_SEGRETERIA`: **NON TOCCATO**, gate separato `PENDING`.
+
+Procedura: `docs/19_ARTIFACT_HYGIENE_AND_QUARANTINE.md`.
 
 ## Workflow editoriali e render batch — CODICE VALIDATO / ROLLOUT PENDING
 

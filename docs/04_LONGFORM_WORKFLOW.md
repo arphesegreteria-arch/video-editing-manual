@@ -1,5 +1,10 @@
 # 04 — Longform Workflow
 
+> Aggiornamento 2026-10-07: i passi legacy `queue_longform_exports` +
+> `start_longform_exports` sono superati. Per nuovi render usare il batch approvato descritto in
+> `18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md`; preparazione, approvazione, avvio selettivo e
+> verifica sono fasi distinte.
+
 ## Obiettivo
 
 Usare il contenuto parlato per creare un primo rough cut automatico, mantenendo separati:

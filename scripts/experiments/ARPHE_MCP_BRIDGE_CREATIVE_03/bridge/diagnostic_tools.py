@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from mcp.server.mcpserver import Image
 
+from .artifact_records import artifact_store_for
 from .config import CreativeConfig
 from .fusion_tools import find_composition
 from .registry import Registry
@@ -15,7 +16,6 @@ from .safety import ValidationError, require_arphe_name
 
 
 MAX_FRAME_BATCH = 8
-MAX_DIAGNOSTIC_FILES = 64
 SAFE_INPUTS = (
     "Size", "Center", "LayoutType", "LayoutWidth", "LayoutHeight",
     "Width", "Height", "CornerRadius", "Blend", "Font", "Style",
@@ -111,19 +111,7 @@ def _diagnostic_root(config: CreativeConfig) -> Path:
     if root.parent != render_root:
         raise RuntimeError("Cartella diagnostica non valida")
     root.mkdir(parents=True, exist_ok=True)
-    _prune_diagnostics(root)
     return root
-
-
-def _prune_diagnostics(root: Path) -> None:
-    files = sorted((item for item in root.glob("ARPHE_FRAME_*")
-                    if item.is_file() and item.suffix.lower() in {".jpg", ".png"}),
-                   key=lambda item: item.stat().st_mtime, reverse=True)
-    for old in files[MAX_DIAGNOSTIC_FILES:]:
-        try:
-            old.unlink()
-        except OSError:
-            pass
 
 
 def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: CreativeConfig,
@@ -159,6 +147,15 @@ def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: C
             if not safe_call(project, "ExportCurrentFrameAsStill", str(path)) or not path.is_file():
                 raise RuntimeError(f"Esportazione frame {offset} fallita")
             captures.append((offset, timecode, path))
+        store = artifact_store_for(config)
+        for _, _, path in captures:
+            store.register_path(
+                path,
+                kind="file",
+                category="DIAGNOSTIC_CAPTURE",
+                producer="capture_timeline_frames",
+                managed_root_id="render_root",
+            )
     except Exception:
         for path in attempted_paths:
             try:
@@ -171,8 +168,6 @@ def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: C
             playhead_restored = bool(safe_call(timeline, "SetCurrentTimecode", previous_timecode))
         if isinstance(previous_page, str) and previous_page:
             safe_call(resolve, "OpenPage", previous_page)
-
-    _prune_diagnostics(output_root)
 
     result: list[Any] = [{
         "ok": True,

@@ -9,8 +9,9 @@
 - Il mismatch blocca prima della creazione timeline e prima di staging/coda render, senza cambiare
   lo stato del batch.
 - Suite: Creative `115/115` PASS; Windows `35` PASS e `1` SKIP DPAPI noto.
-- `PC_PERSONALE`: identità runtime verificata; gate reale bloccato correttamente sul playback a
-  24 FPS del progetto disposable e rollback a SafeWrite02 completato. `PC_SEGRETERIA` non toccato.
+- `PC_PERSONALE`: Creative03 reinstallato e `ready`; chiamata reale del tool pubblico bloccata
+  correttamente sul playback a 24 FPS del progetto disposable, con timeline non creata e flag
+  24→30 completo. `PC_SEGRETERIA` non toccato.
 
 ## 2026-10-07 — Workflow editoriali e render batch sicuri
 

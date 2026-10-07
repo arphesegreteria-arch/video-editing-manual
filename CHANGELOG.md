@@ -6,8 +6,10 @@
   Resolve 21.1.1 omette `JobStatus` da `GetRenderJobList()` anche per job completati.
 - Resta un fallback alla coda per compatibilità, ma `unknown` non viene accettato come completato.
 - Suite: Creative `116/116` PASS; Windows `36` PASS e `1` SKIP DPAPI noto.
-- Gate reale `PC_PERSONALE`: il secondo job è stato avviato selettivamente e ha prodotto il file
-  staging; il job preesistente è rimasto fermo. `PC_SEGRETERIA` non toccato.
+- Gate reale `PC_PERSONALE`: **PASS**. Il secondo job è stato avviato selettivamente, verificato
+  (MP4/H.264 High, 1080×1920, 30 fps, AAC 48 kHz) e promosso in `publishable`; il job
+  preesistente è rimasto fermo durante il render ed è stato poi annullato e rimosso da solo nella
+  prova di rollback. Runtime finale `ready`, Creative03 attivo. `PC_SEGRETERIA` non toccato.
 
 ## 2026-10-07 — Registri runtime inclusi nel rollout Creative03
 

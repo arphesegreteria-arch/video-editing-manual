@@ -110,6 +110,18 @@ class FakeProject:
         return "ARPHE_PROJECT"
 
 
+class ReadOnlyPlaybackProject(FakeProject):
+    def __init__(self):
+        super().__init__()
+        self.set_calls = []
+
+    def SetSetting(self, key, value):
+        self.set_calls.append((key, value))
+        if key == "timelinePlaybackFrameRate":
+            return False
+        return super().SetSetting(key, value)
+
+
 class ProjectTimelineSafetyTests(unittest.TestCase):
     def test_review_sequence_timecode_preserves_resolve_start_hour(self):
         self.assertEqual("01:00:00:00", _frame_to_timecode(108000, 30))
@@ -170,6 +182,7 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             project = FakeProject()
+            project.settings["timelinePlaybackFrameRate"] = "30"
             registry = Registry(root / "state.json")
             registry.add_project("ARPHE_PROJECT")
             result = create_timeline(project, config_for(root), registry,
@@ -178,6 +191,22 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
             self.assertTrue(result["settings_match"])
             self.assertEqual({"width": "1080", "height": "1920", "fps": "30", "playback_fps": "30"}, result["actual_settings"])
             self.assertEqual(1, project.pool.create_calls)
+
+    def test_playback_mismatch_returns_chat_action_flag_before_timeline_create(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = ReadOnlyPlaybackProject()
+            registry = Registry(root / "state.json")
+            registry.add_project("ARPHE_PROJECT")
+            result = create_timeline(project, config_for(root), registry,
+                                     "ARPHE_VERTICAL_GATE", 1080, 1920, 30)
+            self.assertFalse(result["ok"])
+            self.assertEqual("PLAYBACK_FPS_ACTION_REQUIRED", result.get("flag"))
+            self.assertEqual("24", result.get("actual_playback_fps"))
+            self.assertEqual("30", result.get("required_playback_fps"))
+            self.assertIn("Project Settings", result.get("operator_action", ""))
+            self.assertEqual(0, project.pool.create_calls)
+            self.assertNotIn(("timelinePlaybackFrameRate", "30"), project.set_calls)
 
     def test_visibility_window_has_hold_and_closed_boundaries(self):
         class FakeComp:

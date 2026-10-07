@@ -9,7 +9,8 @@ from .feature_flags import require_capability
 from .format_contract import ResolvedFormat, apply_project_format, verify_timeline_format
 from .registry import Registry
 from .resolve_connection import safe_call
-from .safety import ValidationError, arphe_name, ensure_no_collision, require_arphe_name, validate_timeline_settings
+from .safety import (PlaybackFpsActionRequired, ValidationError, arphe_name,
+                     ensure_no_collision, require_arphe_name, validate_timeline_settings)
 
 
 def timelines(project: Any) -> list[Any]:
@@ -41,6 +42,12 @@ def create_timeline(project: Any, config: CreativeConfig, registry: Registry,
     contract = ResolvedFormat(width, height, Fraction(str(fps)), Fraction(str(fps)))
     try:
         applied = apply_project_format(project, contract)
+    except PlaybackFpsActionRequired as exc:
+        return {
+            "ok": False, "action": "create_timeline", "stage": "playback_fps",
+            "project": project_name, "requested_timeline": target,
+            "error": str(exc), "timeline_created": False, **exc.payload(),
+        }
     except ValidationError as exc:
         return {
             "ok": False, "action": "create_timeline", "stage": "project_settings",

@@ -43,6 +43,12 @@ In ogni linea `playback FPS = project FPS = timeline FPS`. “Review render” i
 “playback FPS” indica la riproduzione in Resolve. Sorgenti con FPS differenti richiedono la
 conferma della sorgente/frequenza primaria.
 
+In Resolve Studio 21.1.1 `timelinePlaybackFrameRate` è leggibile ma non scrivibile tramite la
+API di scripting. Il bridge non tenta quindi di forzarla. Se il valore non coincide con il
+contratto, la chat mostra il flag `PLAYBACK_FPS_ACTION_REQUIRED`, il valore trovato, quello
+richiesto e l'istruzione `Project Settings > Master Settings`. Fino al read-back conforme non
+vengono create né timeline, né directory di staging, né job render.
+
 ## Sequenza render obbligatoria
 
 1. `validate_editorial_brief` registra il brief e segnala domande irrisolte.
@@ -72,15 +78,21 @@ Un riavvio rilegge batch e lock dal registry. Non ricrea automaticamente i job.
 
 Usare un progetto/timeline di prova e un job innocuo creato appositamente; non usare lavori reali.
 
-### PC_PERSONALE — PENDING
+### PC_PERSONALE — BLOCKED (playback FPS)
 
-- [ ] identità e percorsi del profilo;
-- [ ] read-back formato e playback FPS;
+- [x] identità, task e percorsi del profilo verificati (`PC_PERSONALE`);
+- [ ] read-back formato e playback FPS: rilevati timeline/progetto 30 FPS ma playback 24 FPS;
 - [ ] job innocuo preesistente lasciato intatto;
 - [ ] prepare senza start;
 - [ ] approvazione e avvio selettivo;
 - [ ] verifica media e promozione;
 - [ ] prova recovery/rollback circoscritta.
+
+Evidenza 2026-10-07: il rollout Creative03 è stato interrotto sul progetto disposable
+`ARPHE_ROLLOUT_PC_PERSONALE_20261007` prima del gate render. Il runtime è stato riportato a
+SafeWrite02 e `/readyz` è tornato `ready`. Il problema è ora coperto dal flag chat fail-closed;
+il gate riparte dopo la modifica manuale del playback FPS e un nuovo read-back. Nessun test è
+stato eseguito sul progetto di lavoro della segreteria.
 
 ### PC_SEGRETERIA — PENDING
 

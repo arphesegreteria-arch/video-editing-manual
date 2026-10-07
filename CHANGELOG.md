@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-10-07 — Gate playback FPS visibile in chat
+
+- Corretto il contratto formato per Resolve Studio 21.1.1: `timelinePlaybackFrameRate` è trattato
+  come read-only e non viene più inviato a `Project.SetSetting`.
+- Se il playback FPS non coincide con il workflow, la chat riceve
+  `PLAYBACK_FPS_ACTION_REQUIRED` con valore attuale, valore richiesto e percorso dell'impostazione.
+- Il mismatch blocca prima della creazione timeline e prima di staging/coda render, senza cambiare
+  lo stato del batch.
+- Suite: Creative `115/115` PASS; Windows `35` PASS e `1` SKIP DPAPI noto.
+- `PC_PERSONALE`: identità runtime verificata; gate reale bloccato correttamente sul playback a
+  24 FPS del progetto disposable e rollback a SafeWrite02 completato. `PC_SEGRETERIA` non toccato.
+
 ## 2026-10-07 — Workflow editoriali e render batch sicuri
 
 - Aggiunti quattro workflow versionati e profili review/master/pubblicabile.

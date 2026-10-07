@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 from bridge.config import DEFAULT_FLAGS, load_config  # noqa: E402
 from bridge.creative_tools import _animate  # noqa: E402
 from bridge.motion_presets import motion_plan, stack_plan  # noqa: E402
-from bridge.safety import (ValidationError, allowed_asset, arphe_name,
+from bridge.safety import (PlaybackFpsActionRequired, ValidationError, allowed_asset, arphe_name,
                            ensure_no_collision, validate_color_role,
                            validate_frame_range, validate_preset,
                            validate_review, validate_timeline_settings)  # noqa: E402
@@ -32,6 +32,15 @@ from bridge.registry import Registry  # noqa: E402
 
 
 class SafetyTests(unittest.TestCase):
+    def test_public_error_exposes_playback_action_flag_for_chat(self):
+        result = server._error(PlaybackFpsActionRequired("24", "30"))
+        self.assertFalse(result["ok"])
+        self.assertEqual("operator_action_required", result["stage"])
+        self.assertEqual("PLAYBACK_FPS_ACTION_REQUIRED", result["flag"])
+        self.assertEqual("24", result["actual_playback_fps"])
+        self.assertEqual("30", result["required_playback_fps"])
+        self.assertIn("Project Settings", result["operator_action"])
+
     def test_name_is_sanitized_and_prefixed(self):
         self.assertEqual("ARPHE_Mia_Creative", arphe_name("  Mia Creative!! ", "FALLBACK"))
         self.assertTrue(arphe_name("x" * 200, "FALLBACK").startswith("ARPHE_"))

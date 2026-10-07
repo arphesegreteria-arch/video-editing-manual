@@ -22,7 +22,7 @@ from bridge.render_batches import (  # noqa: E402
 )
 from bridge.render_tools import (cancel_render_batch, get_render_batch_status,
                                  prepare_render_batch, start_render_batch)  # noqa: E402
-from bridge.safety import ValidationError  # noqa: E402
+from bridge.safety import PlaybackFpsActionRequired, ValidationError  # noqa: E402
 
 
 def fixtures(override=False):
@@ -109,11 +109,13 @@ class FakeRenderProject:
         self.started = []
         self.deleted = []
         self.settings = {}
+        self.project_settings = {"timelinePlaybackFrameRate": "29.97"}
         self.timeline = type("Timeline", (), {"GetName": lambda self: "ARPHE_MAIN",
                                                "GetStartFrame": lambda self: 0,
                                                "GetEndFrame": lambda self: 300})()
 
     def GetName(self): return "ARPHE_PROJECT"
+    def GetSetting(self, key): return self.project_settings.get(key)
     def GetCurrentTimeline(self): return self.timeline
     def SetCurrentTimeline(self, timeline): self.timeline = timeline; return True
     def GetTimelineCount(self): return 1
@@ -144,6 +146,17 @@ def stored_batch(registry: Registry):
 
 
 class RenderBatchPreparationTests(unittest.TestCase):
+    def test_playback_mismatch_blocks_before_staging_or_queue_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)
+            project = FakeRenderProject()
+            project.project_settings["timelinePlaybackFrameRate"] = "24"
+            with self.assertRaises(PlaybackFpsActionRequired):
+                prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            self.assertEqual(["old-job"], [job["JobId"] for job in project.jobs])
+            self.assertFalse((configured(root).render_root / "staging" / batch.batch_id).exists())
+            self.assertEqual("CONFIRMED", registry.render_batch(batch.batch_id).status)
+
     def test_prepare_never_calls_start_rendering(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)

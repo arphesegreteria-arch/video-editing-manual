@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-07 — Stato render letto dall'API dedicata
+
+- `get_render_batch_status` e la verifica finale usano `Project.GetRenderJobStatus(job_id)`;
+  Resolve 21.1.1 omette `JobStatus` da `GetRenderJobList()` anche per job completati.
+- Resta un fallback alla coda per compatibilità, ma `unknown` non viene accettato come completato.
+- Suite: Creative `116/116` PASS; Windows `36` PASS e `1` SKIP DPAPI noto.
+- Gate reale `PC_PERSONALE`: il secondo job è stato avviato selettivamente e ha prodotto il file
+  staging; il job preesistente è rimasto fermo. `PC_SEGRETERIA` non toccato.
+
 ## 2026-10-07 — Registri runtime inclusi nel rollout Creative03
 
 - L'installer Creative03 copia ora anche `editorial_workflows.json` e `render_profiles.json`;

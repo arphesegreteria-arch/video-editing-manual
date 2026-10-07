@@ -59,7 +59,10 @@ class MediaVerificationTests(unittest.TestCase):
                         evidence={"expected_duration_seconds": "300"})
         registry.save_render_batch(batch)
         shutil.copy2(CARRIER, staging / "ARPHE_OUTPUT.mp4")
-        project = type("Project", (), {"GetRenderJobList": lambda self: [{"JobId": "job-1", "JobStatus": "Complete"}]})()
+        project = type("Project", (), {
+            "GetRenderJobList": lambda self: [{"JobId": "job-1"}],
+            "GetRenderJobStatus": lambda self, job_id: {"JobId": job_id, "JobStatus": "Complete"},
+        })()
         return registry, batch, project
 
     def test_failed_verify_retains_staging_and_marks_batch_failed(self):

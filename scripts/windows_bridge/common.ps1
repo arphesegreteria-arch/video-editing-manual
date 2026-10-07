@@ -7,6 +7,7 @@ $script:ArpheRuntimeId = 'ARPHE_WINDOWS_BRIDGE_RUNTIME_V1'
 $script:ArpheBaseDataDir = Join-Path $env:LOCALAPPDATA 'ARPHE\WindowsBridgeRuntimeV1'
 $script:ArpheLegacyConfigPath = Join-Path $script:ArpheBaseDataDir 'bridge_config.json'
 $script:ArpheLegacySecretPath = Join-Path $script:ArpheBaseDataDir 'runtime_api_key.dpapi'
+$workstationExplicit = -not [string]::IsNullOrWhiteSpace($WorkstationId)
 $detectedWorkstation = $WorkstationId
 if (-not $detectedWorkstation -and (Test-Path -LiteralPath $script:ArpheLegacyConfigPath -PathType Leaf)) {
     try { $detectedWorkstation = [string](Get-Content -Raw -LiteralPath $script:ArpheLegacyConfigPath | ConvertFrom-Json).workstation_id } catch {}
@@ -24,7 +25,8 @@ $profileDataDir = Join-Path $script:ArpheBaseDataDir $script:ArpheWorkstationId
 # WindowsBridgeRuntimeV1. Reuse that profile only when its identity matches; new
 # workstation profiles continue to use the isolated directory.
 $script:ArpheDataDir = $profileDataDir
-if (-not (Test-Path -LiteralPath (Join-Path $profileDataDir 'bridge_config.json') -PathType Leaf) -and
+if (-not $workstationExplicit -and
+    -not (Test-Path -LiteralPath (Join-Path $profileDataDir 'bridge_config.json') -PathType Leaf) -and
     (Test-Path -LiteralPath $script:ArpheLegacyConfigPath -PathType Leaf)) {
     $script:ArpheDataDir = $script:ArpheBaseDataDir
 }

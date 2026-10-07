@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "workflows": [
+    {
+      "workflow_id": "ARPHE_PODCAST_REELS_CTA",
+      "version": 1,
+      "label": "Reel da podcast ARPHE con CTA",
+      "purpose": "Estratti non verticali dal podcast ARPHE con CTA standard.",
+      "recognition_hints": ["podcast ARPHE", "reel", "CTA"],
+      "automation_level": "ASSISTED",
+      "questions": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+      "format_contract": {"resolution_mode": "source", "frame_rate_mode": "source"},
+      "allowed_profiles": ["ARPHE_PODCAST_H264"],
+      "technical_override_roles": ["TECNICO", "ALESSIO"]
+    },
+    {
+      "workflow_id": "ARPHE_VERTICAL_SOCIAL",
+      "version": 1,
+      "label": "Verticale recensioni, short e ADV",
+      "purpose": "Produzione social verticale con master e derivato separati.",
+      "recognition_hints": ["recensione", "short", "ADV", "verticale"],
+      "automation_level": "ASSISTED",
+      "questions": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+      "format_contract": {"resolution_mode": "fixed", "resolution": [1080, 1920], "frame_rate_mode": "fixed", "frame_rate": "30"},
+      "allowed_profiles": ["VERTICAL_PRORES_MASTER", "VERTICAL_SOCIAL_H264"],
+      "technical_override_roles": ["TECNICO", "ALESSIO"]
+    },
+    {
+      "workflow_id": "CARABELLESE_YOUTUBE_CLEANUP",
+      "version": 1,
+      "label": "Pulizia podcast Studio Carabellese",
+      "purpose": "Taglio delle pause e ricomposizione per YouTube.",
+      "recognition_hints": ["Studio Carabellese", "pause", "YouTube"],
+      "automation_level": "ASSISTED",
+      "questions": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+      "format_contract": {"resolution_mode": "fixed", "resolution": [1920, 1080], "frame_rate_mode": "source"},
+      "allowed_profiles": ["YOUTUBE_H264"],
+      "technical_override_roles": ["TECNICO", "ALESSIO"]
+    },
+    {
+      "workflow_id": "ARPHE_LONGFORM_EDITORIAL",
+      "version": 1,
+      "label": "Longform editoriale ARPHE",
+      "purpose": "Montaggio longform con struttura editoriale, grafiche e CTA.",
+      "recognition_hints": ["longform", "grafiche", "montaggio completo"],
+      "automation_level": "EDITOR_LED",
+      "questions": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+      "format_contract": {"resolution_mode": "explicit", "frame_rate_mode": "explicit"},
+      "allowed_profiles": ["LONGFORM_REVIEW_H264", "LONGFORM_MASTER_PRORES", "LONGFORM_PUBLISH_H264"],
+      "technical_override_roles": ["TECNICO", "ALESSIO"]
+    }
+  ]
+}

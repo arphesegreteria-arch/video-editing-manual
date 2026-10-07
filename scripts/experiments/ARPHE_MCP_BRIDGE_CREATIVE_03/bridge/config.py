@@ -64,6 +64,8 @@ class CreativeConfig:
     audio_root: Path = Path(".")
     audio_jobs_root: Path = Path(".")
     workstation_id: str = "PC_UNSPECIFIED"
+    workflow_registry_path: Path = Path("editorial_workflows.json")
+    render_profile_registry_path: Path = Path("render_profiles.json")
 
 
 def _path(value: str, base: Path) -> Path:
@@ -96,6 +98,7 @@ def load_config(path: Path | None = None) -> CreativeConfig:
     from .safety import validate_palette
     validate_palette(palette)
     base = selected.parent
+    package_root = Path(__file__).resolve().parents[1]
     render_format = str(raw.get("render_format", "mp4"))
     render_codec = str(raw.get("render_codec", "H264"))
     if (render_format, render_codec) not in ALLOWED_RENDER_PAIRS:
@@ -122,4 +125,6 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         audio_jobs_root=_path(str(raw.get("audio_jobs_root", "")),
                               Path(os.environ.get("LOCALAPPDATA", str(base))) / "ARPHE" / "Longform04" / "audio_jobs"),
         workstation_id=str(raw["workstation_id"]),
+        workflow_registry_path=_path(str(raw.get("workflow_registry_path", "")), package_root / "editorial_workflows.json"),
+        render_profile_registry_path=_path(str(raw.get("render_profile_registry_path", "")), package_root / "render_profiles.json"),
     )

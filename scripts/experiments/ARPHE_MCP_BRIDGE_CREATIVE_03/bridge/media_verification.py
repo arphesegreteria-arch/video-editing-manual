@@ -13,6 +13,7 @@ import av
 from .config import CreativeConfig
 from .registry import Registry
 from .render_batches import RenderBatch, transition_batch
+from .render_tools import render_job_status
 from .resolve_connection import safe_call
 from .safety import ValidationError
 
@@ -118,9 +119,7 @@ def verify_and_promote_batch(project: Any, config: CreativeConfig, registry: Reg
     if batch.status == "RENDERING":
         batch = transition_batch(registry, batch_id, "RENDERING", "VERIFYING", {})
     try:
-        jobs = {str(job.get("JobId") or job.get("JobID")): str(job.get("JobStatus", ""))
-                for job in (safe_call(project, "GetRenderJobList") or []) if isinstance(job, dict)}
-        if any(jobs.get(job_id, "").casefold() not in {"complete", "completed"}
+        if any(render_job_status(project, job_id).casefold() not in {"complete", "completed"}
                for job_id in batch.created_job_ids):
             raise ValidationError("Uno o più job Resolve non risultano completati")
         staging = Path(batch.staging_directory or "")

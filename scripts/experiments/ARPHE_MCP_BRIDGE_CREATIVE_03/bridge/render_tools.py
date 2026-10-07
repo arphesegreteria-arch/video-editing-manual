@@ -38,6 +38,14 @@ def _job_map(project: Any) -> dict[str, dict[str, Any]]:
     return {str(job.get("JobId") or job.get("JobID")): dict(job) for job in jobs if isinstance(job, dict)}
 
 
+def render_job_status(project: Any, job_id: str) -> str:
+    """Read status from Resolve's dedicated API; queue listings may omit it."""
+    value = safe_call(project, "GetRenderJobStatus", job_id)
+    if isinstance(value, dict) and value.get("JobStatus"):
+        return str(value["JobStatus"])
+    return str(_job_map(project).get(job_id, {}).get("JobStatus") or "unknown")
+
+
 def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registry, batch_id: str) -> dict[str, Any]:
     batch = registry.render_batch(batch_id)
     if batch is None or batch.status != "CONFIRMED":
@@ -140,10 +148,9 @@ def get_render_batch_status(project: Any, registry: Registry, batch_id: str) -> 
     batch = registry.render_batch(batch_id)
     if batch is None:
         raise ValidationError("Render batch non trovato")
-    jobs = _job_map(project)
     return {"ok": True, "action": "get_render_batch_status", "batch_id": batch_id,
             "status": batch.status,
-            "jobs": {job_id: jobs.get(job_id, {}).get("JobStatus", "unknown")
+            "jobs": {job_id: render_job_status(project, job_id)
                      for job_id in batch.created_job_ids}}
 
 

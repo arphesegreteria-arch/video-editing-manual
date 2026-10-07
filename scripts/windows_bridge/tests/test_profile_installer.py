@@ -179,14 +179,14 @@ class ProfileInstallerTests(unittest.TestCase):
             "-ProfilePath", str(self.profile_path), "-AllowSystemDrive", "-PreflightOnly",
         ], capture_output=True, text=True, check=False, env=env)
 
-    def run_feature_flag_dry_run(self):
+    def run_feature_flag_dry_run(self, name="CAP_MOTION"):
         env = os.environ.copy()
         env["LOCALAPPDATA"] = str(self.local_app_data)
         script = str(SET_FEATURE_FLAG).replace("'", "''")
         profile = str(self.profile_path).replace("'", "''")
         command = (
             f"& '{script}' -WorkstationId PC_PERSONALE -ProfilePath '{profile}' "
-            "-Name CAP_MOTION -Enabled $true -WhatIf"
+            f"-Name {name} -Enabled $true -WhatIf"
         )
         return subprocess.run([
             str(POWERSHELL), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command,
@@ -347,6 +347,16 @@ class ProfileInstallerTests(unittest.TestCase):
         result = self.run_feature_flag_dry_run()
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn(str(creative_config), result.stdout)
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_feature_flag_accepts_artifact_maintenance_gate(self):
+        creative_config, _command = self.write_profile_runtime_config()
+        config = json.loads(creative_config.read_text(encoding="utf-8"))
+        config["feature_flags"]["CAP_ARTIFACT_MAINTENANCE"] = False
+        creative_config.write_text(json.dumps(config), encoding="utf-8")
+        result = self.run_feature_flag_dry_run("CAP_ARTIFACT_MAINTENANCE")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("CAP_ARTIFACT_MAINTENANCE", result.stdout)
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_keeps_state_and_audit_inside_profile_directory(self):

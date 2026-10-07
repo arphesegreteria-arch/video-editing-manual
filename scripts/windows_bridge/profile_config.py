@@ -114,6 +114,25 @@ def load_profile(path: Path | str, *, allow_placeholder_tunnel: bool = False) ->
     return validate_profile(raw, allow_placeholder_tunnel=allow_placeholder_tunnel)
 
 
+def runtime_paths(profile: dict[str, Any]) -> dict[str, str]:
+    normalized = validate_profile(profile, allow_placeholder_tunnel=True)
+    profile_root = f"{normalized['install_root']}/runtime-configs/{normalized['workstation_id']}"
+    return {
+        "profile_root": profile_root,
+        "runtime_config": f"{profile_root}/bridge_config.json",
+        "creative_config": f"{profile_root}/creative_config.json",
+        "backup_dir": f"{profile_root}/backups",
+        "log_dir": f"{normalized['log_dir']}/{normalized['workstation_id']}",
+        "venv_python": f"{normalized['venv_root']}/Scripts/python.exe",
+    }
+
+
+def runtime_command(profile: dict[str, Any]) -> str:
+    normalized = validate_profile(profile, allow_placeholder_tunnel=True)
+    paths = runtime_paths(normalized)
+    return f'"{paths["venv_python"]}" "{normalized["mcp_entrypoint"]}"'
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate an ARPHE workstation deployment profile.")
     subparsers = parser.add_subparsers(dest="command", required=True)

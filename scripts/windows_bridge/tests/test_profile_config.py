@@ -88,6 +88,30 @@ class ProfileConfigTests(unittest.TestCase):
             loaded = module.load_profile(path, allow_placeholder_tunnel=False)
         self.assertEqual("C:/Program Files/Python312/python.exe", loaded["python_path"])
 
+    def test_runtime_paths_keep_creative_config_inside_workstation_directory(self):
+        module = load_profile_module()
+        personal = module.runtime_paths(valid_personal_profile())
+        office = module.runtime_paths(valid_personal_profile(
+            workstation_id="PC_SEGRETERIA",
+            tunnel_name="ARPHE-RESOLVE-SEGRETERIA",
+            tunnel_id="tunnel_office_test",
+            python_path="C:/Program Files/Python313/python.exe",
+            pythonw_path="C:/Program Files/Python313/pythonw.exe",
+            python_version="3.13.15",
+            venv_root="C:/ARPHE/MCP/runtimes/PC_SEGRETERIA/venv",
+        ))
+        self.assertEqual(
+            "C:/ARPHE/MCP/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/runtime-configs/PC_PERSONALE/creative_config.json",
+            personal["creative_config"],
+        )
+        self.assertNotEqual(personal["creative_config"], office["creative_config"])
+
+    def test_runtime_command_uses_absolute_profile_venv_python(self):
+        module = load_profile_module()
+        command = module.runtime_command(valid_personal_profile())
+        self.assertTrue(command.startswith('"C:/ARPHE/MCP/runtimes/PC_PERSONALE/venv/Scripts/python.exe"'))
+        self.assertNotIn("py -3", command)
+
 
 if __name__ == "__main__":
     unittest.main()

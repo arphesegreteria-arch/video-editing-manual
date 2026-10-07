@@ -1,7 +1,7 @@
 # 18 — Workflow editoriali e consegna render
 
 Stato codice: implementato e verificato automaticamente. Rollout e prove Resolve reali:
-`PENDING` separatamente su `PC_PERSONALE` e `PC_SEGRETERIA`.
+`PASS` su `PC_PERSONALE`; `PENDING` separatamente su `PC_SEGRETERIA`.
 
 ## Scelta della linea
 
@@ -78,15 +78,15 @@ Un riavvio rilegge batch e lock dal registry. Non ricrea automaticamente i job.
 
 Usare un progetto/timeline di prova e un job innocuo creato appositamente; non usare lavori reali.
 
-### PC_PERSONALE — IN PROGRESS
+### PC_PERSONALE — PASS (2026-10-07)
 
 - [x] identità, task e percorsi del profilo verificati (`PC_PERSONALE`);
 - [x] read-back progetto/timeline/playback 1080×1920/30 dopo correzione UI sul progetto disposable;
-- [ ] job innocuo preesistente lasciato intatto;
-- [ ] prepare senza start;
-- [ ] approvazione e avvio selettivo;
-- [ ] verifica media e promozione;
-- [ ] prova recovery/rollback circoscritta.
+- [x] job innocuo preesistente lasciato intatto durante l'avvio selettivo;
+- [x] prepare senza start;
+- [x] approvazione `ALESSIO` e avvio selettivo;
+- [x] verifica media e promozione;
+- [x] prova recovery/rollback circoscritta.
 
 Evidenza 2026-10-07: il primo rollout Creative03 è stato interrotto sul progetto disposable
 `ARPHE_ROLLOUT_PC_PERSONALE_20261007` prima del gate render e riportato temporaneamente a
@@ -99,8 +99,16 @@ creato la timeline disposable con read-back conforme. Durante il passaggio al re
 individuato e corretto l'installer che ometteva i registri workflow/render. Nessun test è stato
 eseguito sul progetto di lavoro della segreteria. Il gate ha inoltre confermato che
 `GetRenderJobList()` non espone `JobStatus` in Resolve 21.1.1: lo stato viene ora letto con
-`GetRenderJobStatus(job_id)`. Il render selettivo ha creato il file staging lasciando fermo il
-job preesistente; verifica e promozione restano da completare dopo il redeploy della correzione.
+`GetRenderJobStatus(job_id)`.
+
+Il batch selettivo `2f97060e-f34b-44ba-95ff-68867eea6299` è stato approvato, avviato e completato
+senza avviare il batch preesistente. Il file tecnico
+`ARPHE_ROLLOUT_SELECTIVE_JOB_20261007.mp4` è stato verificato (MP4/H.264 High, 1080×1920,
+30 fps, durata 10,005 s, AAC 48 kHz) e promosso in `renders/creative/publishable/`. La prova di
+recovery ha annullato il solo batch preesistente `9ee8ebe1-0fc3-4646-b6b1-7112bad66359` e rimosso
+soltanto il relativo job. Controllo finale: task `Running`, `/readyz=ready`, Creative03 attivo e
+workstation `PC_PERSONALE`. Il file è un artefatto tecnico marcato **NON PUBBLICARE**.
+`PC_SEGRETERIA`, il suo runtime e il suo progetto di lavoro non sono stati toccati.
 
 ### PC_SEGRETERIA — PENDING
 

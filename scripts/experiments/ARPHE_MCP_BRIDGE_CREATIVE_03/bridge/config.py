@@ -72,6 +72,13 @@ def _path(value: str, base: Path) -> Path:
     return Path(os.path.expandvars(value)).expanduser().resolve() if value else base.resolve()
 
 
+def _registry_path(value: object, package_default: Path) -> Path:
+    if not value:
+        return package_default.resolve()
+    selected = Path(os.path.expandvars(str(value))).expanduser()
+    return (selected if selected.is_absolute() else package_default.parent / selected).resolve()
+
+
 def load_config(path: Path | None = None) -> CreativeConfig:
     selected = path or Path(os.environ.get("ARPHE_CREATIVE_CONFIG", "") or _default_config_path())
     selected = selected.expanduser().resolve()
@@ -125,6 +132,6 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         audio_jobs_root=_path(str(raw.get("audio_jobs_root", "")),
                               Path(os.environ.get("LOCALAPPDATA", str(base))) / "ARPHE" / "Longform04" / "audio_jobs"),
         workstation_id=str(raw["workstation_id"]),
-        workflow_registry_path=_path(str(raw.get("workflow_registry_path", "")), package_root / "editorial_workflows.json"),
-        render_profile_registry_path=_path(str(raw.get("render_profile_registry_path", "")), package_root / "render_profiles.json"),
+        workflow_registry_path=_registry_path(raw.get("workflow_registry_path"), package_root / "editorial_workflows.json"),
+        render_profile_registry_path=_registry_path(raw.get("render_profile_registry_path"), package_root / "render_profiles.json"),
     )

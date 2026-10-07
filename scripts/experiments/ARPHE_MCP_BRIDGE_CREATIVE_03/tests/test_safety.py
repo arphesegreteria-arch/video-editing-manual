@@ -27,6 +27,8 @@ from bridge.safety import (ValidationError, allowed_asset, arphe_name,
 from bridge.tool_catalog import EXPOSED_TOOL_NAMES, FORBIDDEN_GENERIC_TOOLS  # noqa: E402
 from bridge.server import mcp  # noqa: E402
 import bridge.server as server  # noqa: E402
+from bridge.editorial_workflows import EditorialBrief  # noqa: E402
+from bridge.registry import Registry  # noqa: E402
 
 
 class SafetyTests(unittest.TestCase):
@@ -112,6 +114,39 @@ class SafetyTests(unittest.TestCase):
         self.assertNotIn("primary_source", raw)
         self.assertNotIn("media_path", raw)
         self.assertNotIn("review_text", raw)
+
+    def test_legacy_render_wrappers_do_not_touch_resolve(self):
+        with patch("bridge.server._runtime", side_effect=AssertionError("Resolve must not be touched")):
+            self.assertFalse(server.render_preview()["render_started"])
+            self.assertFalse(server.queue_longform_exports()["render_started"])
+            self.assertFalse(server.queue_publish_package_exports("A", ["B"], "C")["render_started"])
+
+    def test_registry_paths_are_package_relative_not_runtime_config_relative(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps({"runtime_id": "ARPHE_MCP_BRIDGE_CREATIVE_03",
+                                        "workstation_id": "PC_PERSONALE",
+                                        "workflow_registry_path": "editorial_workflows.json",
+                                        "render_profile_registry_path": "render_profiles.json"}), encoding="utf-8")
+            config = load_config(path)
+        self.assertEqual(ROOT / "editorial_workflows.json", config.workflow_registry_path)
+        self.assertEqual(ROOT / "render_profiles.json", config.render_profile_registry_path)
+
+    def test_public_prepare_rejects_profile_from_another_workflow_before_resolve_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); state = root / "state.json"; registry = Registry(state)
+            brief = EditorialBrief("brief-1", "CARABELLESE_YOUTUBE_CLEANUP", 1, "SEGRETERIA",
+                                   "source.mov", ("publishable",), {}, {}, ())
+            registry.save_brief(brief)
+            config = SimpleNamespace(state_path=state, render_profile_registry_path=ROOT / "render_profiles.json",
+                                     workstation_id="PC_PERSONALE")
+            runtime = (object(), object(), object(), object(), config, registry, None)
+            with patch("bridge.server._runtime", return_value=runtime), \
+                 patch("bridge.server.do_prepare_render_batch", side_effect=AssertionError("must not write")):
+                result = server.prepare_render_batch("brief-1", "VERTICAL_SOCIAL_H264", "ARPHE_PROJECT",
+                                                     ["ARPHE_MAIN"], ["OUT"], 1080, 1920, "30")
+            self.assertFalse(result["ok"])
+            self.assertEqual("ValidationError", result["error_type"])
 
     def test_default_flags_gate_advanced_writes(self):
         self.assertTrue(DEFAULT_FLAGS["CAP_PROJECT"])

@@ -25,6 +25,7 @@ from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_fr
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
 from .editorial_workflows import (EditorialBrief, load_render_profile_registry,
                                   load_workflow_registry,
+                                  resolve_delivery_profile,
                                   validate_editorial_brief as do_validate_editorial_brief)
 from .format_contract import ResolvedFormat
 from .feature_flags import report as feature_report
@@ -150,8 +151,14 @@ def prepare_render_batch(brief_id: str, profile_id: str, project_name: str,
         _, _, project, _, config, registry, error = _runtime()
         if error: return error
         brief = _stored_brief(registry, brief_id)
-        profile = load_render_profile_registry(config.render_profile_registry_path).profiles[profile_id]
+        profile = resolve_delivery_profile(
+            brief, profile_id, load_render_profile_registry(config.render_profile_registry_path)
+        )
         rate = Fraction(frame_rate)
+        if profile.resolution_mode == "fixed" and profile.resolution != (width, height):
+            raise ValidationError("Risoluzione incompatibile con il render profile")
+        if profile.frame_rate_mode == "fixed" and Fraction(profile.frame_rate or "0") != rate:
+            raise ValidationError("Frame rate incompatibile con il render profile")
         batch = create_render_batch(brief, profile, ResolvedFormat(width, height, rate, rate),
                                     project_name, tuple(timeline_names), tuple(output_names), config.workstation_id)
         registry.save_render_batch(batch)
@@ -672,13 +679,9 @@ def render_preview(output_name: str = "ARPHE_PREVIEW") -> dict[str, Any]:
 
 @mcp.tool(annotations=SAFE_WRITE)
 def queue_longform_exports() -> dict[str, Any]:
-    """Create one Deliver job per registered long-form clip timeline without starting render."""
-    try:
-        _, manager, project, _, config, registry, error = _runtime()
-        if error: return error
-        if not project: return {"ok": False, "stage": "preflight", "error": "Serve un progetto aperto."}
-        return _call(do_queue_longform_exports, manager, project, config, registry)
-    except Exception as exc: return _error(exc)
+    """Deprecated compatibility response; use prepare_render_batch."""
+    return {"ok": False, "action": "queue_longform_exports", "deprecated": True,
+            "render_started": False, "next_action": "prepare_render_batch"}
 
 
 @mcp.tool(annotations=SAFE_WRITE)
@@ -692,12 +695,8 @@ def start_longform_exports() -> dict[str, Any]:
 def queue_publish_package_exports(full_timeline_name: str, clip_timeline_names: list[str],
                                   output_directory: str) -> dict[str, Any]:
     """Compatibility queue-only wrapper; never starts rendering."""
-    try:
-        _, manager, project, _, config, registry, error = _runtime()
-        if error: return error
-        return _call(do_queue_publish_package_exports, manager, project, config, registry,
-                     full_timeline_name, clip_timeline_names, output_directory, False)
-    except Exception as exc: return _error(exc)
+    return {"ok": False, "action": "queue_publish_package_exports", "deprecated": True,
+            "render_started": False, "next_action": "prepare_render_batch"}
 
 
 @mcp.tool(annotations=READ_ONLY)

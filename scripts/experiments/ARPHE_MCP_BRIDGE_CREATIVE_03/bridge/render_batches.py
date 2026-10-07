@@ -19,7 +19,7 @@ TRANSITIONS = {
     "CONFIRMED": {"PREPARED", "FAILED_PREPARE", "CANCELLED"},
     "PREPARED": {"APPROVED", "FAILED_PREPARE", "CANCELLED"},
     "APPROVED": {"RENDERING", "CANCELLED"},
-    "RENDERING": {"VERIFYING", "FAILED_RENDER"},
+    "RENDERING": {"VERIFYING", "FAILED_RENDER", "CANCELLED"},
     "VERIFYING": {"VERIFIED", "FAILED_VERIFY"},
 }
 
@@ -43,6 +43,7 @@ class RenderBatch:
     playback_rate: str
     container: str
     video_codec: str
+    video_profile: str | None
     audio_codec: str | None
     audio_sample_rate: int | None
     audio_required: bool
@@ -77,7 +78,7 @@ def create_render_batch(brief: EditorialBrief, profile: RenderProfile, resolved_
         workstation_id=workstation_id, width=resolved_format.width, height=resolved_format.height,
         frame_rate=_fraction_text(resolved_format.project_rate),
         playback_rate=_fraction_text(resolved_format.playback_rate), container=profile.container,
-        video_codec=profile.video_codec, audio_codec=profile.audio_codec,
+        video_codec=profile.video_codec, video_profile=profile.video_profile, audio_codec=profile.audio_codec,
         audio_sample_rate=profile.audio_sample_rate, audio_required=profile.audio_required,
         attempt=attempt, previous_batch_id=previous_batch_id,
         status="DRAFT" if brief.unresolved_questions else "CONFIRMED",
@@ -130,6 +131,7 @@ def approve_render_batch(registry: Any, batch_id: str, operator_role: str) -> Re
 
 def render_batch_from_dict(raw: dict[str, Any]) -> RenderBatch:
     data = dict(raw)
+    data.setdefault("video_profile", None)
     for key in ("timeline_names", "output_names", "queue_before", "created_job_ids", "expected_outputs"):
         data[key] = tuple(data.get(key, ()))
     return RenderBatch(**data)

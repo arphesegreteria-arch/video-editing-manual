@@ -109,7 +109,9 @@ class FakeRenderProject:
         self.started = []
         self.deleted = []
         self.settings = {}
-        self.timeline = type("Timeline", (), {"GetName": lambda self: "ARPHE_MAIN"})()
+        self.timeline = type("Timeline", (), {"GetName": lambda self: "ARPHE_MAIN",
+                                               "GetStartFrame": lambda self: 0,
+                                               "GetEndFrame": lambda self: 300})()
 
     def GetName(self): return "ARPHE_PROJECT"
     def GetCurrentTimeline(self): return self.timeline
@@ -128,8 +130,9 @@ class FakeRenderProject:
 
 
 def configured(root: Path):
+    flags = dict(DEFAULT_FLAGS); flags["CAP_RENDER"] = True
     return CreativeConfig(root / "config", root / "assets", root / "renders", root / "state.json",
-                          root / "audit.jsonl", dict(DEFAULT_PALETTE), dict(DEFAULT_FLAGS),
+                          root / "audit.jsonl", dict(DEFAULT_PALETTE), flags,
                           frozenset(), frozenset(), "mp4", "H264", workstation_id="PC_PERSONALE")
 
 
@@ -185,6 +188,14 @@ class RenderBatchPreparationTests(unittest.TestCase):
             self.assertEqual((configured(root).render_root / "staging" / batch.batch_id).resolve(),
                              Path(prepared.staging_directory).resolve())
 
+    def test_prepare_records_duration_and_h264_high_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json"); batch = stored_batch(registry)
+            project = FakeRenderProject(); prepare_render_batch(project, configured(root), registry, batch.batch_id)
+            prepared = registry.render_batch(batch.batch_id)
+            self.assertEqual("High", project.settings["EncodingProfile"])
+            self.assertEqual("1001/100", prepared.evidence["expected_durations"]["ARPHE_OUTPUT.mp4"])
+
 
 def approved_batch(root: Path, project: FakeRenderProject):
     registry = Registry(root / "state.json"); batch = stored_batch(registry)
@@ -232,6 +243,14 @@ class RenderBatchExecutionTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertEqual(["new-job-1"], project.deleted)
             self.assertEqual("old-job", project.jobs[0]["JobId"])
+
+    def test_cancel_owned_render_transitions_to_cancelled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); project = FakeRenderProject(); registry, batch = approved_batch(root, project)
+            start_render_batch(project, registry, batch.batch_id, batch.approval_token)
+            project.StopRendering = lambda: True
+            result = cancel_render_batch(project, registry, batch.batch_id, "ALESSIO")
+            self.assertEqual("CANCELLED", result["status"])
 
 
 if __name__ == "__main__":

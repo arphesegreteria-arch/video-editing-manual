@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .config import CreativeConfig
 from .feature_flags import require_capability
+from fractions import Fraction
 from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name, ensure_no_collision, require_arphe_name
@@ -42,6 +43,7 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
         raise ValidationError("Serve un render batch CONFIRMED")
     if str(safe_call(project, "GetName") or "") != batch.project_name:
         raise ValidationError("Il progetto corrente non corrisponde al batch")
+    require_capability("CAP_RENDER", config, None, project, safe_call(project, "GetCurrentTimeline"))
     before = _render_job_ids(project)
     timelines = _timeline_map(project)
     original = safe_call(project, "GetCurrentTimeline")
@@ -49,6 +51,7 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
     staging.mkdir(parents=True, exist_ok=False)
     created: list[str] = []
     expected: list[str] = []
+    expected_durations: dict[str, str] = {}
     try:
         for timeline_name, output_name in zip(batch.timeline_names, batch.output_names, strict=True):
             timeline = timelines.get(timeline_name)
@@ -65,6 +68,8 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
                 settings["AudioCodec"] = batch.audio_codec
             if batch.audio_sample_rate:
                 settings["AudioSampleRate"] = batch.audio_sample_rate
+            if batch.video_profile:
+                settings["EncodingProfile"] = batch.video_profile
             if not safe_call(project, "SetRenderSettings", settings):
                 raise ValidationError("Impostazioni render rifiutate")
             returned = safe_call(project, "AddRenderJob")
@@ -73,7 +78,14 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
             if len(new_ids) != 1 or str(returned) != new_ids[0]:
                 raise ValidationError("Impossibile identificare in modo univoco il nuovo job")
             created.append(new_ids[0])
-            expected.append(f"{output_name}.{batch.container}")
+            filename = f"{output_name}.{batch.container}"
+            expected.append(filename)
+            start = safe_call(timeline, "GetStartFrame")
+            end = safe_call(timeline, "GetEndFrame")
+            if not isinstance(start, int) or not isinstance(end, int) or end <= start:
+                raise ValidationError("Durata timeline non leggibile")
+            duration = Fraction(end - start, 1) / Fraction(batch.frame_rate)
+            expected_durations[filename] = f"{duration.numerator}/{duration.denominator}"
     except Exception as exc:
         current = set(_render_job_ids(project))
         for job_id in created:
@@ -89,6 +101,7 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
     prepared = transition_batch(registry, batch.batch_id, "CONFIRMED", "PREPARED",
                                 {"queue_before": list(before), "created_job_ids": created,
                                  "job_snapshots": snapshots, "expected_outputs": expected,
+                                 "expected_durations": expected_durations,
                                  "staging_directory": str(staging)})
     return {"ok": True, "action": "prepare_render_batch", "batch_id": batch_id,
             "created_job_ids": list(prepared.created_job_ids), "render_started": False,

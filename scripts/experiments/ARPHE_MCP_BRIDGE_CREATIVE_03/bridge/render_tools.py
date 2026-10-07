@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .config import CreativeConfig
 from .feature_flags import require_capability
+from .format_contract import require_project_playback
 from fractions import Fraction
 from .registry import Registry
 from .resolve_connection import safe_call
@@ -43,6 +44,7 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
         raise ValidationError("Serve un render batch CONFIRMED")
     if str(safe_call(project, "GetName") or "") != batch.project_name:
         raise ValidationError("Il progetto corrente non corrisponde al batch")
+    require_project_playback(project, Fraction(batch.playback_rate))
     require_capability("CAP_RENDER", config, None, project, safe_call(project, "GetCurrentTimeline"))
     before = _render_job_ids(project)
     timelines = _timeline_map(project)

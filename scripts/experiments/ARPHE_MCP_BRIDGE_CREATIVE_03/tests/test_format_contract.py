@@ -78,15 +78,17 @@ class FormatContractTests(unittest.TestCase):
         )
         self.assertEqual(ResolvedFormat(1080, 1920, Fraction(30), Fraction(30)), contract)
 
-    def test_project_rejecting_playback_rate_stops_before_timeline_create(self):
-        project = FakeSettings(reject="timelinePlaybackFrameRate")
-        with self.assertRaisesRegex(ValidationError, "playback"):
-            apply_project_format(project, ResolvedFormat(1080, 1920, Fraction(30), Fraction(30)))
-        self.assertEqual(0, sum(1 for key, _ in project.calls if key == "CreateEmptyTimeline"))
+    def test_read_only_playback_rate_is_never_written(self):
+        project = FakeSettings()
+        project.settings["timelinePlaybackFrameRate"] = "30"
+        result = apply_project_format(project, ResolvedFormat(1080, 1920, Fraction(30), Fraction(30)))
+        self.assertNotIn(("timelinePlaybackFrameRate", "30"), project.calls)
+        self.assertEqual("30", result["timelinePlaybackFrameRate"])
 
     def test_readback_mismatch_raises_before_editing(self):
         project = FakeSettings()
         contract = ResolvedFormat(1920, 1080, Fraction(30000, 1001), Fraction(30000, 1001))
+        project.settings["timelinePlaybackFrameRate"] = "29.97"
         apply_project_format(project, contract)
         timeline = FakeSettings()
         timeline.settings.update(project.settings)

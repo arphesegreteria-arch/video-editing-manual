@@ -26,6 +26,29 @@ class ValidationError(ValueError):
     pass
 
 
+class PlaybackFpsActionRequired(ValidationError):
+    flag = "PLAYBACK_FPS_ACTION_REQUIRED"
+
+    def __init__(self, actual: object, required: object):
+        self.actual = str(actual)
+        self.required = str(required)
+        super().__init__(
+            f"Playback FPS {self.actual}; richiesto {self.required}. "
+            "Impostazione manuale necessaria in Project Settings."
+        )
+
+    def payload(self) -> dict[str, object]:
+        return {
+            "flag": self.flag,
+            "actual_playback_fps": self.actual,
+            "required_playback_fps": self.required,
+            "operator_action": (
+                "In DaVinci Resolve apri Project Settings > Master Settings, "
+                f"imposta Playback frame rate a {self.required} FPS e riprova."
+            ),
+        }
+
+
 def arphe_name(value: str, fallback: str) -> str:
     if not isinstance(value, str):
         raise ValidationError("Il nome deve essere una stringa")

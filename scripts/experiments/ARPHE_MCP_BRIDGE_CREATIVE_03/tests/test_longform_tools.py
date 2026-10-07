@@ -75,7 +75,7 @@ class LongformTests(unittest.TestCase):
                         "timelineResolutionWidth": "1920",
                         "timelineResolutionHeight": "1080",
                         "timelineFrameRate": "24",
-                        "timelinePlaybackFrameRate": "24",
+                        "timelinePlaybackFrameRate": "30",
                     }
                     self.setting_calls = []
                 def GetMediaPool(self): return self.pool
@@ -108,7 +108,7 @@ class LongformTests(unittest.TestCase):
             self.assertEqual(4, len(by_name["ARPHE_TEST_MASTER"].entries))
             self.assertEqual(2, len(by_name["ARPHE_CLIP_01"].entries))
             self.assertEqual(2, len(by_name["ARPHE_CLIP_02"].entries))
-            self.assertIn(("timelinePlaybackFrameRate", "30"), created.setting_calls)
+            self.assertNotIn(("timelinePlaybackFrameRate", "30"), created.setting_calls)
 
     def test_longform_is_technically_available_from_current_project(self):
         class Api:

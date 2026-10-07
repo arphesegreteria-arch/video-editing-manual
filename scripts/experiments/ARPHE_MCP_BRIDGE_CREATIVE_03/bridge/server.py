@@ -52,7 +52,7 @@ from .render_tools import (queue_longform_exports as do_queue_longform_exports,
                            cancel_render_batch as do_cancel_render_batch)
 from .media_verification import verify_and_promote_batch as do_verify_render_batch
 from .resolve_connection import RESOLVE_ACCESS_LOCK, context, safe_call
-from .safety import ValidationError
+from .safety import PlaybackFpsActionRequired, ValidationError
 from .timeline_tools import (create_safe_working_timeline as do_safe_timeline,
                              create_timeline as do_create_timeline,
                              duplicate_timeline as do_duplicate_timeline,
@@ -83,6 +83,9 @@ DESTRUCTIVE_WRITE = ToolAnnotations(
 
 
 def _error(exc: Exception) -> dict[str, Any]:
+    if isinstance(exc, PlaybackFpsActionRequired):
+        return {"ok": False, "stage": "operator_action_required",
+                "error_type": type(exc).__name__, "error": str(exc), **exc.payload()}
     return {"ok": False, "stage": "validation" if isinstance(exc, ValidationError) else "runtime",
             "error_type": type(exc).__name__, "error": str(exc)}
 

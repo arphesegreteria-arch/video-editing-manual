@@ -36,6 +36,7 @@ def valid_personal_profile(**overrides):
         "log_dir": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1",
         "creative_destination": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_CREATIVE_03",
         "mcp_entrypoint": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_CREATIVE_03/ARPHE_MCP_BRIDGE_CREATIVE_03.py",
+        "safe_write_entrypoint": "C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py",
         "requirements_path": "C:/ARPHE/video-editing-manual/scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03/requirements.txt",
         "venv_root": "C:/ARPHE/MCP/runtimes/PC_PERSONALE/venv",
         "feature_flags": {"CAP_PROJECT": True, "CAP_TIMELINE": True},
@@ -45,6 +46,13 @@ def valid_personal_profile(**overrides):
 
 
 class ProfileConfigTests(unittest.TestCase):
+    def test_runtime_config_example_uses_profile_paths_and_absolute_commands(self):
+        example = json.loads((MODULE_DIR / "bridge_config.example.json").read_text(encoding="utf-8"))
+        self.assertNotIn("py -3", example["mcp_command"])
+        self.assertTrue(example["mcp_command"].startswith('"C:/'))
+        self.assertEqual({"Creative03", "SafeWrite02"}, set(example["bridge_commands"]))
+        self.assertIn("runtime-configs/PC_SEGRETERIA", example["creative_config_path"])
+
     def test_profiles_have_distinct_workstations_and_tunnel_names(self):
         module = load_profile_module()
         personal = module.load_profile(PROFILES / "pc_personale.example.json", allow_placeholder_tunnel=True)
@@ -111,6 +119,14 @@ class ProfileConfigTests(unittest.TestCase):
         command = module.runtime_command(valid_personal_profile())
         self.assertTrue(command.startswith('"C:/ARPHE/MCP/runtimes/PC_PERSONALE/venv/Scripts/python.exe"'))
         self.assertNotIn("py -3", command)
+
+    def test_runtime_commands_register_creative_and_safe_write_with_absolute_python(self):
+        module = load_profile_module()
+        commands = module.runtime_commands(valid_personal_profile())
+        self.assertEqual({"Creative03", "SafeWrite02"}, set(commands))
+        self.assertTrue(all(command.startswith('"C:/ARPHE/MCP/runtimes/PC_PERSONALE/venv/Scripts/python.exe"')
+                            for command in commands.values()))
+        self.assertNotIn("py -3", " ".join(commands.values()))
 
 
 if __name__ == "__main__":

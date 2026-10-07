@@ -3,16 +3,17 @@
 Bridge MCP sperimentale, affiancato ai bridge validati e dedicato alle creative social E09.
 
 - Entry point: `ARPHE_MCP_BRIDGE_CREATIVE_03.py`
-- Config locale: `%LOCALAPPDATA%\ARPHE\CreativeBridge03\creative_config.json`
+- Config locale: `<install_root>\runtime-configs\<WORKSTATION_ID>\creative_config.json`
 - Asset allowlist predefinita: `C:\ARPHE\MCP\assets\creative`
 - Render root predefinita: `C:\ARPHE\MCP\renders\creative`
-- Audit minimale: `%LOCALAPPDATA%\ARPHE\CreativeBridge03\audit.jsonl`
+- Stato e audit: nella stessa directory per-workstation della config Creative
 
 Installazione, tool, flag, gate e rollback sono documentati in
 `docs/11_CREATIVE_BRIDGE_AND_E09.md`.
 
 Le feature progressive si modificano nella config locale, senza cambiare lo schema MCP, tramite
-`set_feature_flag.ps1`; dopo la modifica riavviare il runtime Creative03.
+`set_feature_flag.ps1 -WorkstationId <ID> -ProfilePath <profilo.local.json>`; dopo la modifica
+riavviare il runtime Creative03.
 
 Stato: **50 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
 GATE E SEQUENCE TRANSITION PASS / PAPER STACK + GATES F-G PENDING**.

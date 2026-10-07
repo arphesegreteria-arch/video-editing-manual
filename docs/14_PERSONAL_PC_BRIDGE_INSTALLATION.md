@@ -45,7 +45,9 @@ Copy-Item .\scripts\windows_bridge\profiles\pc_personale.example.json `
 ```
 
 Modificare esclusivamente la copia `.local.json`: inserire il nuovo `tunnel_id` personale e
-verificare i percorsi. Il file locale è escluso da Git. Prima di installare eseguire il preflight,
+verificare i percorsi. Se la copia locale è precedente al 2026-10-07, aggiungere anche
+`safe_write_entrypoint` prendendolo dall'esempio aggiornato; il file indicato deve già esistere
+per garantire un rollback effettivo. Il file locale è escluso da Git. Prima di installare eseguire il preflight,
 che non scrive file, task o segreti:
 
 ```powershell
@@ -72,7 +74,9 @@ Il codice locale non può creare da solo tunnel, chiave o registrazione della ap
 
 ```powershell
 cd C:\ARPHE\video-editing-manual
-.\scripts\windows_bridge\status_bridge.ps1
+.\scripts\windows_bridge\status_bridge.ps1 `
+  -WorkstationId PC_PERSONALE `
+  -ProfilePath .\scripts\windows_bridge\profiles\pc_personale.local.json
 ```
 
 Attendere `Readyz : True`, poi con Resolve aperto chiamare dalla app personale:

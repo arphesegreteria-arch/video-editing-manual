@@ -3,7 +3,9 @@ param(
     [ValidatePattern('^PC_[A-Z0-9_]{2,48}$')][string]$WorkstationId = 'PC_SEGRETERIA',
     [Parameter(Mandatory)][ValidatePattern('^tunnel_[A-Za-z0-9_-]+$')][string]$TunnelId,
     [string]$TunnelClientPath = 'C:\ARPHE\MCP\tunnel client\tunnel-client-runtime-cloudflared.exe',
-    [string]$McpCommand = 'py -3 C:/ARPHE/MCP/ARPHE_MCP_BRIDGE_SAFE_WRITE_02/ARPHE_MCP_BRIDGE_SAFE_WRITE_02.py',
+    [Parameter(Mandatory)][string]$McpCommand,
+    [ValidateSet('Creative03', 'SafeWrite02')][string]$McpMode = 'SafeWrite02',
+    [string]$SafeWriteMcpCommand = '',
     [string]$InstallRoot = 'C:\ARPHE\MCP\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1',
     [string]$LogDir = 'C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1',
     [string]$CreativeConfigPath = '',
@@ -34,11 +36,30 @@ function Resolve-Executable {
     throw "Could not find a real executable for: $($Candidates -join ', '). WindowsApps aliases are not valid for Task Scheduler; pass an explicit Python path."
 }
 
+function Assert-AbsoluteMcpCommand {
+    param([Parameter(Mandatory)][string]$Command, [Parameter(Mandatory)][string]$Label)
+    if ($Command -notmatch '^"([^"]+)"\s+"([^"]+)"$') {
+        throw "$Label must contain one quoted absolute interpreter and one quoted absolute entrypoint."
+    }
+    $interpreter = $Matches[1]
+    $entrypoint = $Matches[2]
+    if (-not [IO.Path]::IsPathRooted($interpreter) -or -not (Test-Path -LiteralPath $interpreter -PathType Leaf)) {
+        throw "$Label absolute interpreter not found: $interpreter"
+    }
+    if (-not [IO.Path]::IsPathRooted($entrypoint) -or -not (Test-Path -LiteralPath $entrypoint -PathType Leaf)) {
+        throw "$Label absolute entrypoint not found: $entrypoint"
+    }
+}
+
 Write-Host "Installing logical workstation identity $script:ArpheWorkstationId on Windows computer '$env:COMPUTERNAME'."
 
 $TunnelClientPath = (Resolve-Path -LiteralPath $TunnelClientPath -ErrorAction Stop).Path
 $PythonPath = Resolve-Executable -Requested $PythonPath -Candidates @('py.exe', 'python.exe')
 $PythonwPath = Resolve-Executable -Requested $PythonwPath -Candidates @('pyw.exe', 'pythonw.exe')
+Assert-AbsoluteMcpCommand -Command $McpCommand -Label 'McpCommand'
+if ($SafeWriteMcpCommand) {
+    Assert-AbsoluteMcpCommand -Command $SafeWriteMcpCommand -Label 'SafeWriteMcpCommand'
+}
 
 $sourceFiles = @('arphe_bridge_runtime.py', 'health.py', 'secret_store.py')
 foreach ($file in $sourceFiles) {
@@ -65,6 +86,8 @@ $config = [ordered]@{
     tunnel_id = $TunnelId
     tunnel_client_path = $TunnelClientPath.Replace('\', '/')
     mcp_command = $McpCommand
+    bridge_commands = [ordered]@{ $McpMode = $McpCommand }
+    python_path = $PythonPath.Replace('\', '/')
     ready_url = 'http://127.0.0.1:8080/readyz'
     log_dir = $LogDir.Replace('\', '/')
     secret_path = $script:ArpheSecretPath.Replace('\', '/')
@@ -76,6 +99,9 @@ $config = [ordered]@{
     backoff_initial_seconds = 2
     backoff_max_seconds = 60
     backoff_reset_after_seconds = 300
+}
+if ($SafeWriteMcpCommand) {
+    $config.bridge_commands['SafeWrite02'] = $SafeWriteMcpCommand
 }
 if ($CreativeConfigPath) {
     $resolvedCreativeConfig = (Resolve-Path -LiteralPath $CreativeConfigPath -ErrorAction Stop).Path

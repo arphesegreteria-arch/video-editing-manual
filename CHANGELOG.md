@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2026-10-07 — Isolamento completo dei percorsi workstation (codice)
+
+- Config Creative, stato, audit, runtime e backup sono risolti dal profilo esplicito
+  `PC_PERSONALE` o `PC_SEGRETERIA`.
+- Lo switch non contiene più fallback `py -3`: usa solo comandi assoluti registrati e verifica
+  sia l'interprete sia l'entry point prima del riavvio.
+- Il rollback `SafeWrite02` e il bridge `Creative03` sono entrambi registrati nella configurazione
+  generata dall'installer; il preflight rifiuta un rollback dichiarato ma non installato.
+- Switch, backup, stato e modifica feature flag ricevono il profilo locale esplicito e risolvono
+  la config runtime sotto `<install_root>\runtime-configs\<WORKSTATION_ID>`, senza ricadere nella
+  copia storica sotto `AppData`.
+- `set_feature_flag.ps1` e `backup_arphe.ps1` richiedono l'identità workstation e non leggono più
+  la configurazione condivisa legacy.
+- Una config Creative legacy viene copiata nel percorso del profilo soltanto se dichiara la
+  stessa workstation; stato e audit esistenti vengono copiati senza eliminare gli originali.
+  Una config appartenente all'altro PC blocca l'installazione prima delle scritture.
+- Validazione automatica in worktree: suite Creative `62/62` PASS; suite Windows `35` PASS e
+  `1` SKIP DPAPI perché il token sandbox non dispone del profilo CurrentUser.
+- Stato workstation reale: **NON ANCORA VALIDATO**. Nessun installer, task, tunnel o Resolve dei
+  due PC è stato modificato da questo cambiamento; READ/SAFE WRITE vanno ripetuti per PC dopo il
+  rollout esplicito.
+
 ## 2026-10-02 — Caption Engine mobile e render verticale
 
 - Verificata `CreateSubtitlesFromAudio` in Resolve Studio dopo apertura esplicita della pagina Edit.

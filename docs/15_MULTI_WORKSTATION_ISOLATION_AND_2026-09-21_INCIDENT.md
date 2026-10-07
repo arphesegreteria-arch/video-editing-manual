@@ -137,6 +137,25 @@ Sul PC personale sono stati completati questi passaggi:
 Il PC di segreteria non è stato modificato. Il suo upgrade va eseguito separatamente usando il
 profilo `PC_SEGRETERIA`, il suo interprete Python e il suo tunnel.
 
+## Migrazione profili del 2026-10-07 — gate ancora da eseguire
+
+Il codice condiviso è stato migrato affinché ogni comando operativo riceva il profilo locale
+esplicito e risolva la config sotto
+`<install_root>\runtime-configs\<WORKSTATION_ID>`. Creative config, stato, audit, runtime, Python,
+log e backup non usano più un percorso condiviso implicito. Il rollback SafeWrite02 viene
+registrato con un interprete assoluto e il preflight fallisce se il target non esiste.
+
+Questa è una validazione del codice, non delle workstation reali:
+
+| Workstation | Preflight profilo | Apply | READ | SAFE WRITE | Evidenza |
+|---|---|---|---|---|---|
+| `PC_PERSONALE` | PENDING | PENDING | PENDING | PENDING | da registrare dopo rollout locale |
+| `PC_SEGRETERIA` | PENDING | PENDING | PENDING | PENDING | da registrare sul PC segreteria, separatamente |
+
+Per entrambi, usare una copia `.local.json` aggiornata che includa `safe_write_entrypoint`.
+Eseguire prima `-PreflightOnly`; applicare e riavviare soltanto il task della workstation
+corrente. Un PASS su un PC non vale come prova dell'altro.
+
 ### Seconda causa operativa individuata
 
 Durante l'installazione remota, il filesystem isolato della sessione Codex mostrava nuovi file in

@@ -1,6 +1,17 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-10-02.
+Ultimo aggiornamento: sessione 2026-10-07.
+
+## Isolamento workstation — CODICE MIGRATO / ROLLOUT PENDING
+
+La repository usa ora profili espliciti per separare config runtime e Creative, stato, audit,
+Python, tunnel, log e backup di `PC_PERSONALE` e `PC_SEGRETERIA`. Il codice condiviso resta su
+un'unica linea; i dati operativi non vengono condivisi tra le macchine.
+
+Validazione automatica del 2026-10-07: Creative `62/62` PASS; Windows `35` PASS e `1` SKIP DPAPI
+per indisponibilità del profilo CurrentUser nel token di test. Nessun task, tunnel, segreto o
+Resolve reale è stato modificato durante questa migrazione. Preflight, installazione, READ e SAFE
+WRITE restano `PENDING` separatamente su ciascun PC.
 
 ## Shortform caption mobile — PARTIAL / render verificato
 
@@ -31,7 +42,9 @@ incoerenti e il log personale ha ricevuto solo una delle due richieste. Il bridg
 Resolve funzionano localmente; la causa più probabile è il prelievo delle richieste da due client
 differenti sullo stesso tunnel.
 
-Fino alla separazione dei tunnel non eseguire write remote. Vedere
+La separazione del tunnel personale è stata completata successivamente. Per la migrazione profili
+del 2026-10-07 resta però valida una regola analoga: non eseguire write remote finché la singola
+workstation non ha superato il proprio preflight, rollout e gate READ. Vedere
 `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md`.
 
 ## E09 — prossimo test recensioni
@@ -64,14 +77,15 @@ Root locale corrente:
 
 Il tunnel usato nei test è `ARPHE-RESOLVE-HOME`; il nome è legacy/fuorviante perché il runtime è sul PC segreteria. Quando possibile rinominarlo in `ARPHE-RESOLVE-SEGRETERIA`, oppure mantenere il nome legacy documentando il mapping.
 
-### PC_PERSONALE — LOCAL READ PASS / TUNNEL ISOLATION PENDING
+### PC_PERSONALE — TUNNEL DEDICATO / NUOVO PROFILO PENDING
 
 Il PC personale ha ora Resolve Studio `21.0.4.5`, Python `3.12.10`, runtime automatico `ready` e
 collegamento locale read-only a Resolve verificato sul progetto `New Project 4`.
 
-Non è ancora validato end-to-end: il runtime personale usa temporaneamente il tunnel legacy
-della segreteria. Deve ricevere `ARPHE-RESOLVE-PERSONALE` prima di ripetere READ e SAFE WRITE
-remote.
+Il tunnel dedicato `ARPHE-RESOLVE-PERSONALE` e la relativa app sono stati configurati e il `ping`
+remoto ha restituito `workstation_id: PC_PERSONALE`. La nuova migrazione di profilo del
+2026-10-07 non è però ancora stata applicata né rivalidata su questa macchina; READ e SAFE WRITE
+vanno ripetuti dopo il rollout.
 
 Il codice è ora portabile: runtime e Creative Bridge accettano l'identità `PC_PERSONALE`, esiste
 un installer coordinato e la procedura completa è in `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md`.

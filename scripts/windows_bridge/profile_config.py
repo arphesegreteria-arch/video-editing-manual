@@ -20,6 +20,7 @@ REQUIRED_FIELDS = {
     "log_dir",
     "creative_destination",
     "mcp_entrypoint",
+    "safe_write_entrypoint",
     "requirements_path",
     "venv_root",
     "feature_flags",
@@ -33,6 +34,7 @@ PATH_FIELDS = {
     "log_dir",
     "creative_destination",
     "mcp_entrypoint",
+    "safe_write_entrypoint",
     "requirements_path",
     "venv_root",
 }
@@ -128,9 +130,16 @@ def runtime_paths(profile: dict[str, Any]) -> dict[str, str]:
 
 
 def runtime_command(profile: dict[str, Any]) -> str:
+    return runtime_commands(profile)["Creative03"]
+
+
+def runtime_commands(profile: dict[str, Any]) -> dict[str, str]:
     normalized = validate_profile(profile, allow_placeholder_tunnel=True)
-    paths = runtime_paths(normalized)
-    return f'"{paths["venv_python"]}" "{normalized["mcp_entrypoint"]}"'
+    python = runtime_paths(normalized)["venv_python"]
+    return {
+        "Creative03": f'"{python}" "{normalized["mcp_entrypoint"]}"',
+        "SafeWrite02": f'"{python}" "{normalized["safe_write_entrypoint"]}"',
+    }
 
 
 def main() -> int:

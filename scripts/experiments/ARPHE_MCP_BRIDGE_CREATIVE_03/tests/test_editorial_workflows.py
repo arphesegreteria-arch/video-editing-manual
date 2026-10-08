@@ -49,6 +49,9 @@ class EditorialWorkflowRegistryTests(unittest.TestCase):
         vertical = self.workflows.workflows["ARPHE_VERTICAL_SOCIAL"]
         self.assertEqual([1080, 1920], vertical.format_contract["resolution"])
         self.assertEqual("30", vertical.format_contract["frame_rate"])
+        podcast = self.workflows.workflows["ARPHE_PODCAST_REELS_CTA"]
+        self.assertEqual("fixed", podcast.format_contract["frame_rate_mode"])
+        self.assertEqual("30", podcast.format_contract["frame_rate"])
 
     def test_standard_secretary_brief_resolves_only_allowed_profiles(self):
         brief = validate_editorial_brief({
@@ -75,7 +78,7 @@ class EditorialWorkflowRegistryTests(unittest.TestCase):
         self.assertIn("primary_source", brief.unresolved_questions)
         self.assertIn("requested_outputs", brief.unresolved_questions)
 
-    def test_mixed_source_rates_require_confirmed_primary_rate(self):
+    def test_fixed_rate_podcast_does_not_ask_for_primary_rate(self):
         brief = validate_editorial_brief({
             "workflow_id": "ARPHE_PODCAST_REELS_CTA",
             "operator_role": "SEGRETERIA",
@@ -84,7 +87,7 @@ class EditorialWorkflowRegistryTests(unittest.TestCase):
             "format_request": {"source_rates": ["25", "30000/1001"]},
             "answers": {str(index): "confermato" for index in range(1, 10)},
         }, self.workflows)
-        self.assertIn("primary_frame_rate", brief.unresolved_questions)
+        self.assertNotIn("primary_frame_rate", brief.unresolved_questions)
 
     def test_new_registry_entry_loads_without_render_engine_branch(self):
         payload = json.loads(WORKFLOWS.read_text(encoding="utf-8"))

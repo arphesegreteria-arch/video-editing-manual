@@ -54,12 +54,12 @@ def brief(workflow_id: str, format_request=None, primary="source-a"):
 
 
 class FormatContractTests(unittest.TestCase):
-    def test_arphe_podcast_preserves_source_dimensions_and_rate(self):
+    def test_arphe_podcast_preserves_source_dimensions_and_forces_30(self):
         contract = resolve_format_contract(
             brief("ARPHE_PODCAST_REELS_CTA"),
             [SourceFormat(3840, 2160, Fraction(25, 1))],
         )
-        self.assertEqual((3840, 2160, Fraction(25), Fraction(25)),
+        self.assertEqual((3840, 2160, Fraction(30), Fraction(30)),
                          (contract.width, contract.height, contract.project_rate, contract.playback_rate))
 
     def test_carabellese_forces_1080p_and_preserves_fractional_source_rate(self):
@@ -96,15 +96,16 @@ class FormatContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "read-back"):
             verify_timeline_format(project, timeline, contract)
 
-    def test_mixed_sources_without_confirmed_primary_rate_fail_closed(self):
-        with self.assertRaisesRegex(ValidationError, "primaria"):
-            resolve_format_contract(
-                brief("ARPHE_PODCAST_REELS_CTA", primary=None),
-                [
-                    SourceFormat(1920, 1080, Fraction(25)),
-                    SourceFormat(1920, 1080, Fraction(30)),
-                ],
-            )
+    def test_fixed_30_podcast_accepts_mixed_source_rates_without_rate_question(self):
+        contract = resolve_format_contract(
+            brief("ARPHE_PODCAST_REELS_CTA"),
+            [
+                SourceFormat(1920, 1080, Fraction(25)),
+                SourceFormat(1920, 1080, Fraction(30)),
+            ],
+        )
+        self.assertEqual((Fraction(30), Fraction(30)),
+                         (contract.project_rate, contract.playback_rate))
 
 
 if __name__ == "__main__":

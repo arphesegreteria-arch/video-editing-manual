@@ -191,7 +191,8 @@ def validate_editorial_brief(raw: dict[str, Any], workflows: WorkflowRegistry) -
     if workflow is not None:
         unresolved.extend(question for question in workflow.questions if not str(answers.get(question, "")).strip())
     source_rates = {str(value) for value in format_request.get("source_rates", [])}
-    if len(source_rates) > 1 and not format_request.get("primary_frame_rate"):
+    needs_source_rate = workflow is None or workflow.format_contract.get("frame_rate_mode") != "fixed"
+    if needs_source_rate and len(source_rates) > 1 and not format_request.get("primary_frame_rate"):
         unresolved.append("primary_frame_rate")
     return EditorialBrief(
         brief_id=str(raw.get("brief_id") or uuid4()),

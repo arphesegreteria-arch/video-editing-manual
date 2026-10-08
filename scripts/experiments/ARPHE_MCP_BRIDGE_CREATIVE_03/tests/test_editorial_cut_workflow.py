@@ -22,7 +22,7 @@ from bridge.editorial_cut_workflow import (  # noqa: E402
 )
 from bridge.editorial_jobs import EditorialJobStore, new_editorial_job  # noqa: E402
 from bridge.editorial_selection_contract import load_selection_contract  # noqa: E402
-from bridge.safety import ValidationError  # noqa: E402
+from bridge.safety import PlaybackFpsActionRequired, ValidationError  # noqa: E402
 
 
 CONTRACT = load_selection_contract(ROOT / "editorial_selection_contract.json")
@@ -116,7 +116,7 @@ class FakePool:
 class FakeProject:
     def __init__(self, source_item, cta_item):
         self.settings = {"timelineResolutionWidth": "1920", "timelineResolutionHeight": "1080",
-                         "timelineFrameRate": "24", "timelinePlaybackFrameRate": "24"}
+                         "timelineFrameRate": "30", "timelinePlaybackFrameRate": "30"}
         self.calls: list[tuple] = []
         self.source = FakeTimeline("ARPHE_SOURCE", "source-uid", self.settings)
         source_clip = FakeTimelineItem(source_item, 0, source_item.frames - 1, 0)
@@ -200,6 +200,21 @@ def environment(root: Path):
 
 
 class EditorialCutWorkflowTests(unittest.TestCase):
+    def test_cut_blocks_24_fps_before_creating_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cfg, project, store, job = environment(Path(directory))
+            project.settings["timelineFrameRate"] = "24"
+            project.settings["timelinePlaybackFrameRate"] = "24"
+            project.source.settings.update(project.settings)
+
+            with self.assertRaises(PlaybackFpsActionRequired):
+                apply_or_resume_editorial_cuts(
+                    FakeResolve(), FakeManager(project), cfg, store,
+                    job.editorial_job_id, "d" * 64,
+                )
+
+        self.assertFalse(any(call[0] == "CreateEmptyTimeline" for call in project.calls))
+
     def test_format_setup_trusts_readback_when_resolve_returns_false(self):
         timeline = FakeTimeline("OUTPUT", "output-uid", {
             "timelineResolutionWidth": "1920", "timelineResolutionHeight": "1080",
@@ -235,8 +250,8 @@ class EditorialCutWorkflowTests(unittest.TestCase):
             cfg = config(root)
             source_path = cfg.media_roots[0] / "podcast.mov"
             source_path.write_bytes(b"source-30-fps")
-            source = FakeMediaItem("podcast.mov", 30 * 3600, source_path, "30")
-            cta = FakeMediaItem(CONTRACT.cta_media_pool_name, 30 * 10, fps="30")
+            source = FakeMediaItem("podcast.mov", 25 * 3600, source_path, "25")
+            cta = FakeMediaItem(CONTRACT.cta_media_pool_name, 25 * 10, fps="25")
             project = FakeProject(source, cta)
             store = EditorialJobStore(cfg.editorial_jobs_path, cfg.workstation_id)
             selected = (candidate(1, 10, 14),)
@@ -251,11 +266,11 @@ class EditorialCutWorkflowTests(unittest.TestCase):
 
         self.assertEqual("VERIFIED", result.state)
         appends = [call for call in project.calls if call[0] == "AppendToTimeline"]
-        self.assertEqual((300, 419), appends[0][3:5])
-        self.assertEqual((0, 149), appends[1][3:5])
+        self.assertEqual((250, 349), appends[0][3:5])
+        self.assertEqual((0, 124), appends[1][3:5])
         output = next(timeline for timeline in project.timelines if timeline.name.endswith("_R01"))
-        self.assertEqual(96, output.video[1].record_start)
-        self.assertEqual(216, output.GetEndFrame() - output.GetStartFrame() + 1)
+        self.assertEqual(120, output.video[1].record_start)
+        self.assertEqual(270, output.GetEndFrame() - output.GetStartFrame() + 1)
 
     def test_approve_modify_reject_create_two_verified_timelines_in_order(self):
         with tempfile.TemporaryDirectory() as directory:

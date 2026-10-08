@@ -48,7 +48,8 @@ class EditorialSelectionToolTests(unittest.TestCase):
             def __init__(self): self.markers = {}; self.add_calls = 0
             def GetName(self): return "ARPHE_SOURCE"
             def GetUniqueId(self): return "source-uid"
-            def GetSetting(self, key): return {"timelineFrameRate": "24"}.get(key)
+            def GetSetting(self, key):
+                return {"timelineFrameRate": "30", "timelinePlaybackFrameRate": "30"}.get(key)
             def GetMarkers(self): return dict(self.markers)
             def AddMarker(self, frame, color, name, note, duration, custom):
                 self.add_calls += 1
@@ -70,7 +71,8 @@ class EditorialSelectionToolTests(unittest.TestCase):
             def GetTimelineByIndex(self, _index): return self.timeline
             def GetMediaPool(self): return self.pool
             def SetCurrentTimeline(self, _timeline): return True
-            def GetSetting(self, key): return {"timelineFrameRate": "24"}.get(key)
+            def GetSetting(self, key):
+                return {"timelineFrameRate": "30", "timelinePlaybackFrameRate": "30"}.get(key)
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); cfg = config(root, enabled=True)
@@ -108,6 +110,30 @@ class EditorialSelectionToolTests(unittest.TestCase):
         self.assertTrue(second["idempotent"])
         self.assertEqual(2, timeline.add_calls)
 
+    def test_prepare_blocks_24_fps_with_chat_flag_before_any_marker_write(self):
+        class Timeline:
+            def GetSetting(self, key):
+                return {"timelineFrameRate": "24", "timelinePlaybackFrameRate": "24"}.get(key)
+
+        class Project:
+            def GetSetting(self, key):
+                return {"timelineFrameRate": "24", "timelinePlaybackFrameRate": "24"}.get(key)
+
+        with tempfile.TemporaryDirectory() as directory:
+            cfg = config(Path(directory), enabled=True)
+            runtime = (object(), object(), Project(), Timeline(), cfg, object(), None)
+            with patch("bridge.server._runtime", return_value=runtime), \
+                 patch("bridge.server.require_capability"), \
+                 patch("bridge.server.do_mark_candidates", side_effect=AssertionError("must not mark")):
+                result = server.prepare_podcast_reel_selection(
+                    "missing.json", "a" * 64, "b" * 64, [],
+                )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("PLAYBACK_FPS_ACTION_REQUIRED", result.get("flag"))
+        self.assertEqual("24", result.get("actual_playback_fps"))
+        self.assertEqual("30", result.get("required_playback_fps"))
+
     def test_catalog_has_only_closed_editorial_surface_and_no_override_parameters(self):
         self.assertTrue(TOOLS.issubset(EXPOSED_TOOL_NAMES))
         forbidden = {"workstation_id", "workflow_id", "max_duration", "shell", "code"}
@@ -122,6 +148,7 @@ class EditorialSelectionToolTests(unittest.TestCase):
                 metrics = server.inspect_editorial_learning()
         self.assertTrue(contract["ok"])
         self.assertEqual("ARPHE_PODCAST_REELS_CTA", contract["workflow_id"])
+        self.assertEqual(30.0, contract["required_project_fps"])
         self.assertTrue(metrics["ok"])
         self.assertEqual(0, metrics["candidate_count"])
 

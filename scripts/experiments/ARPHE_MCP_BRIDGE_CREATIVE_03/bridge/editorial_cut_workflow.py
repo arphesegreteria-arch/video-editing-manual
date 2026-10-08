@@ -13,7 +13,7 @@ from .editorial_markers import timeline_identity
 from .editorial_selection_contract import SelectionContract, load_selection_contract
 from .longform_tools import allowed_media, append_media_range, import_media_item
 from .resolve_connection import RESOLVE_ACCESS_LOCK, safe_call
-from .safety import ValidationError
+from .safety import PlaybackFpsActionRequired, ValidationError
 
 
 CONTRACT_PATH = Path(__file__).resolve().parents[1] / "editorial_selection_contract.json"
@@ -233,6 +233,12 @@ def apply_or_resume_editorial_cuts(resolve: object, manager: object, config: Cre
             raise ValidationError("Progetto corrente diverso dal job")
         source_timeline = _source_timeline(project, job)
         expected_format = _source_format(source_timeline)
+        required_fps = Fraction(str(contract.required_project_fps))
+        if (Fraction(str(expected_format["fps"])) != required_fps
+                or Fraction(str(expected_format["playback_fps"])) != required_fps):
+            raise PlaybackFpsActionRequired(
+                expected_format["playback_fps"], str(contract.required_project_fps).rstrip("0").rstrip("."),
+            )
         if not _project_matches_format(project, expected_format):
             raise ValidationError("Formato progetto diverso dalla timeline sorgente")
         source_item = _source_media(source_timeline, config, job.source_fingerprint)

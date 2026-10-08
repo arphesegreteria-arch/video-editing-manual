@@ -49,7 +49,7 @@ from .editorial_selection import load_pinned_transcript, validate_candidate_batc
 from .editorial_selection_contract import (
     canonical_digest, load_preference_profile, load_selection_contract,
 )
-from .format_contract import ResolvedFormat
+from .format_contract import ResolvedFormat, require_project_playback
 from .feature_flags import report as feature_report, require_capability
 from .fusion_tools import (MAX_AUTOMATIC_FUSION_FRAMES, add_background, add_text,
                            create_composition, retime)
@@ -166,6 +166,24 @@ def _require_editorial(config: Any, manager: Any = None, project: Any = None,
             raise ValidationError(str(exc)) from exc
 
 
+def _require_podcast_reel_fps(project: Any, timeline: Any, required_fps: float) -> None:
+    required = Fraction(str(required_fps))
+    require_project_playback(project, required)
+    required_label = str(required.numerator) if required.denominator == 1 else str(float(required))
+    for target, key in (
+        (project, "timelineFrameRate"),
+        (timeline, "timelineFrameRate"),
+        (timeline, "timelinePlaybackFrameRate"),
+    ):
+        actual = safe_call(target, "GetSetting", key)
+        try:
+            matches = Fraction(str(actual)) == required
+        except (ValueError, ZeroDivisionError):
+            matches = False
+        if not matches:
+            raise PlaybackFpsActionRequired(actual, required_label)
+
+
 def _allowed_transcript(path_text: str, config: Any) -> Path:
     selected = Path(path_text).expanduser().resolve(strict=True)
     root = config.transcript_root.expanduser().resolve(strict=True)
@@ -197,6 +215,7 @@ def inspect_editorial_selection() -> dict[str, Any]:
             "ok": True, "workflow_id": contract.workflow_id,
             "max_candidates": contract.max_candidates,
             "max_final_seconds": contract.max_final_seconds,
+            "required_project_fps": contract.required_project_fps,
             "cta_duration_seconds": contract.cta_duration_seconds,
             "marker_color": contract.marker_color,
             "capability_enabled": bool(config.flags.get("CAP_EDITORIAL_SELECTION", False)),
@@ -219,6 +238,7 @@ def prepare_podcast_reel_selection(transcript_path: str, transcript_fingerprint:
         if project is None or timeline is None:
             raise ValidationError("Serve un progetto e una timeline sorgente aperti")
         contract = load_selection_contract(EDITORIAL_CONTRACT_PATH)
+        _require_podcast_reel_fps(project, timeline, contract.required_project_fps)
         transcript = load_pinned_transcript(
             _allowed_transcript(transcript_path, config), transcript_fingerprint
         )

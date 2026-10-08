@@ -72,17 +72,18 @@ def resolve_format_contract(brief: EditorialBrief, sources: list[SourceFormat]) 
     if contract["resolution_mode"] == "source" or contract["frame_rate_mode"] == "source":
         if not normalized:
             raise ValidationError("Formato della sorgente primaria richiesto")
-    source_rates = {source.frame_rate for source in normalized}
     selected_rate = None
-    confirmed = brief.format_request.get("primary_frame_rate")
-    if confirmed is not None:
-        selected_rate = _rate(confirmed)
-        if source_rates and selected_rate not in source_rates:
-            raise ValidationError("Il frame rate primario confermato non appartiene alle sorgenti")
-    elif len(source_rates) == 1:
-        selected_rate = next(iter(source_rates))
-    elif len(source_rates) > 1:
-        raise ValidationError("Con sorgenti miste serve la conferma della frequenza primaria")
+    if contract["frame_rate_mode"] == "source":
+        source_rates = {source.frame_rate for source in normalized}
+        confirmed = brief.format_request.get("primary_frame_rate")
+        if confirmed is not None:
+            selected_rate = _rate(confirmed)
+            if source_rates and selected_rate not in source_rates:
+                raise ValidationError("Il frame rate primario confermato non appartiene alle sorgenti")
+        elif len(source_rates) == 1:
+            selected_rate = next(iter(source_rates))
+        elif len(source_rates) > 1:
+            raise ValidationError("Con sorgenti miste serve la conferma della frequenza primaria")
 
     if contract["resolution_mode"] == "fixed":
         width, height = (int(value) for value in contract["resolution"])

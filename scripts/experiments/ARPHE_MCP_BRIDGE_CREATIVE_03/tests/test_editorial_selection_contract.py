@@ -46,6 +46,7 @@ class EditorialSelectionContractTests(unittest.TestCase):
         self.assertEqual("ARPHE_PODCAST_REELS_CTA", contract.workflow_id)
         self.assertEqual(20, contract.max_candidates)
         self.assertEqual(180.0, contract.max_final_seconds)
+        self.assertEqual(30.0, contract.required_project_fps)
         self.assertGreater(contract.cta_duration_seconds, 0)
         self.assertEqual("ARPHE_CTA_STANDARD", contract.cta_media_pool_name)
         self.assertGreater(contract.modified_anchor_window_seconds, 0)
@@ -70,6 +71,8 @@ class EditorialSelectionContractTests(unittest.TestCase):
         invalids.append(wrong_type)
         wrong_schema = dict(valid, schema_version=2)
         invalids.append(wrong_schema)
+        wrong_fps = dict(valid, required_project_fps=24)
+        invalids.append(wrong_fps)
 
         with tempfile.TemporaryDirectory() as raw_root:
             root = Path(raw_root)

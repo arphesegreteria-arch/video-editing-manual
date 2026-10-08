@@ -10,9 +10,11 @@
   overflow, formato/FPS, contratto, gate o approvazione non validi.
 - `CAP_READABILITY_GUARD=false` per default su entrambi i PC; upgrade e installer preservano
   identità e valore esplicito senza copiare stato tra workstation.
-- Evidenza automatica: Creative `203/203 PASS` (2 skip ambientali), Windows `52/52 PASS` (1 skip
+- Evidenza automatica: Creative `206/206 PASS` (2 skip ambientali), Windows `52/52 PASS` (1 skip
   DPAPI). Prove live `PC_PERSONALE` e `PC_SEGRETERIA`: `PENDING`, registrate separatamente nel
   ledger; il PC segreteria non è stato toccato.
+- La revisione integrale ha aggiunto il check Noto Serif 300 nel template, legato le approvazioni
+  alla workstation, impedito che intro/CTA comprimano le card e chiuso i write Review legacy.
 
 ## 2026-10-08 — Ritiro Resolve archive-first e recovery senza overwrite
 

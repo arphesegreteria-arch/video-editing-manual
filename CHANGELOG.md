@@ -17,6 +17,13 @@
 - La revisione integrale ha aggiunto il check Noto Serif 300 nel template, legato le approvazioni
   alla workstation, impedito che intro/CTA comprimano le card e chiuso i write Review legacy.
   Corretto anche il falso negativo GDI per i pesi Windows esposti come famiglie `Light`/`Medium`.
+- Gate live `PC_PERSONALE`: **FAIL/BLOCKED**, non validato. La sequenza sintetica isolata è stata
+  costruita con intro, cinque card e CTA, ma le catture sono nere. Il log Resolve prova che Fusion
+  non aveva ricaricato Noto installato dopo l'avvio (`Could not find font: Noto Serif Display:
+  Light`), benché GDI fosse verde. Una successiva chiamata diagnostica diretta all'output Fusion,
+  ora esclusa dalla procedura, ha causato un crash; Resolve è stato riavviato nel Project Manager.
+  Il flag è stato riportato a `false`, il runtime personale è `ready`, gli artefatti di test sono
+  conservati e `PC_SEGRETERIA` resta `PENDING` e non toccato.
 
 ## 2026-10-08 — Ritiro Resolve archive-first e recovery senza overwrite
 

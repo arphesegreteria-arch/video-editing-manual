@@ -27,11 +27,14 @@
       "graphic_kit_repository_commit": "665ed816176bc76b6b10ca5f274b0054b2791437",
       "policy_version": "ARPHE_VIDEO_READABILITY_V1",
       "policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
-      "observed_at": "2026-10-08T12:22:00+02:00",
-      "result": "PENDING",
+      "observed_at": "2026-10-08T14:43:33+02:00",
+      "result": "FAIL",
       "limitations": [
-        "Installation, isolated runtime restart, pinned contract and final-font readiness passed on PC_PERSONALE with CAP_READABILITY_GUARD=false.",
-        "No guarded Resolve write, mobile visual inspection or rollback cycle has yet been observed; live validation remains pending."
+        "Installation, isolated runtime restart, pinned contract and Windows GDI final-font readiness passed on PC_PERSONALE.",
+        "The guarded isolated write created a synthetic intro, five-card sequence including one approved verbatim split, and CTA, but every captured frame was black; no review text is stored in this ledger.",
+        "Resolve 21.1.1 logs identify an unavailable Noto Serif Display Light inside Fusion because the font was installed after Resolve had started; this proves GDI readiness alone did not validate the already-running Fusion font catalog.",
+        "An unsupported direct Fusion output-value diagnostic caused Resolve to crash; the diagnostic processes were removed, Resolve was restarted to Project Manager, the test artefacts were preserved, CAP_READABILITY_GUARD was rolled back to false, and the personal runtime returned ready.",
+        "Mobile visual validation and the successful post-restart rerun remain blocked until the personal project is opened; PC_SEGRETERIA was not touched."
       ],
       "current_state_reference": "CURRENT_STATE.md#review-readability-guard",
       "validated_workstations": []

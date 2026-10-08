@@ -3,7 +3,7 @@
 Ultimo aggiornamento: sessione 2026-10-08.
 
 <a id="review-readability-guard"></a>
-## Leggibilità recensioni — CODICE VALIDATO / PERSONALE PREFLIGHT PASS
+## Leggibilità recensioni — CODICE VALIDATO / PERSONALE LIVE FAIL-BLOCKED
 
 Il Graphic Kit è la fonte canonica di safe area, palette e ruoli font. Il bridge video ne include
 un contratto pinning esatto (`ARPHE_VIDEO_READABILITY_V1`) e calcola durata a quattro parole al
@@ -14,14 +14,21 @@ righe, safe area `0.08/0.84/0.10/0.82`; fallback font non accettato come finale.
 Evidenza automatica: Creative `207/207 PASS` con 1 skip symlink ambientale; Windows `52/52
 PASS` con 1 skip DPAPI ambientale. Contratto Graphic Kit `665ed816176bc76b6b10ca5f274b0054b2791437`,
 digest `68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe`. Sul PC personale
-installazione isolata, contratto e readiness dei font finali sono PASS con il gate ancora spento.
-La prova ha corretto il falso negativo GDI per i nomi Windows dei pesi Light/Medium. La revisione
+installazione isolata, contratto e readiness GDI dei font finali sono PASS. La prova ha corretto
+il falso negativo GDI per i nomi Windows dei pesi Light/Medium. La revisione
 integrale ha inoltre chiuso controllo del serif nel template, binding approvazione-PC, durate
 esplicite con intro/CTA e i due write Review legacy rimasti fuori dal gate.
 
-`CAP_READABILITY_GUARD=false` di default e separato per workstation. `PC_PERSONALE`: preflight
-PASS, ma scrittura Resolve isolata, ispezione mobile e rollback restano `PENDING`.
-`PC_SEGRETERIA`: `PENDING` e non toccato. Fonte delle evidenze:
+`PC_PERSONALE`: la write isolata ha creato correttamente una sequenza sintetica con intro, cinque
+card (compreso uno split verbatim approvato) e CTA, ma tutte le catture sono risultate nere.
+Il log nativo di Resolve 21.1.1 identifica la causa: Fusion non aveva ricaricato Noto installato
+a Resolve già aperto (`Could not find font: Noto Serif Display: Light`), mentre il preflight GDI
+era già verde. Una diagnostica diretta non supportata sul valore d'uscita Fusion ha poi causato
+un crash; Resolve è stato riavviato e si trova nel Project Manager, senza progetto aperto via API.
+Il test è quindi `FAIL/BLOCKED`, non PASS: serve aprire il progetto personale e ripetere il gate
+dopo il riavvio, includendo controllo mobile. Il rollout è stato riportato in sicurezza a
+`CAP_READABILITY_GUARD=false`; runtime personale `ready`. Timeline di test e catture restano
+conservate come evidenza. `PC_SEGRETERIA`: `PENDING` e non toccato. Fonte delle evidenze:
 `validation/review-readability-ledger.json`.
 
 ## Ritiro Resolve archive-first — CODICE VALIDATO / PC_PERSONALE LIVE PASS

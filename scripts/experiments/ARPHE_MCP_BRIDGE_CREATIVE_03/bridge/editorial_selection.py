@@ -75,6 +75,7 @@ def load_pinned_transcript(path: Path, expected_fingerprint: str) -> dict[str, o
         raise ValidationError("Transcript non completo o schema non supportato")
     if not isinstance(data.get("source"), dict) or not isinstance(data.get("segments"), list):
         raise ValidationError("Transcript privo di source o segments")
+    data["_pinned_fingerprint"] = expected_fingerprint
     return data
 
 
@@ -164,6 +165,11 @@ def _resolved_anchor(transcript: Mapping[str, object], anchor: TranscriptAnchor,
 def resolve_anchor(transcript: Mapping[str, object], anchor: TranscriptAnchor,
                    *, near_seconds: tuple[float, float] | None = None) -> float:
     return _resolved_anchor(transcript, anchor, near_seconds)[0]
+
+
+def resolve_anchor_span(transcript: Mapping[str, object], anchor: TranscriptAnchor,
+                        *, near_seconds: tuple[float, float] | None = None) -> tuple[float, float]:
+    return _resolved_anchor(transcript, anchor, near_seconds)
 
 
 def _anchor(raw: object, name: str) -> TranscriptAnchor:

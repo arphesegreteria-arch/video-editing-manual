@@ -1,5 +1,25 @@
 # EXPERIMENT LOG
 
+## 2026-10-08 — Selezione Reel podcast: validazione automatica
+
+### Ipotesi
+
+Separare decisione editoriale e lama, far ascoltare le proposte direttamente sulla sorgente e
+richiedere una sola review motivata riduce ricostruzioni da chat e permette apprendimento misurabile.
+
+### Risultato automatico
+
+- marker a coppie, review completa, limite 180 secondi, CTA e formato: PASS nei fake Resolve;
+- failure parziale, resume senza duplicati e collisioni estranee: PASS;
+- journal locale, metriche, privacy e approvazione profilo: PASS;
+- isolamento installazione personale/segreteria: PASS;
+- test live: PENDING su entrambe le workstation.
+
+### Decisione
+
+Mantenere il flag spento finché ogni PC non supera il proprio gate live. Non inferire mai lo stato
+di segreteria dai test automatici o dal PC personale.
+
 ## 2026-10-02 — E10 Caption Engine shortform mobile
 
 ### Ambiente e sorgente

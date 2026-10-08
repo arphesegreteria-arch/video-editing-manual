@@ -2,6 +2,23 @@
 
 Ultimo aggiornamento: sessione 2026-10-08.
 
+<a id="editorial-selection-learning"></a>
+## Selezione Reel podcast e apprendimento — CODICE VALIDATO / LIVE PENDING
+
+Il workflow `ARPHE_PODCAST_REELS_CTA` propone pochi estratti forti, mette marker `IN/OUT` sulla
+timeline sorgente e applica soltanto una review completa. Ogni Reel conserva formato e FPS della
+sorgente, impone playback uguale agli FPS progetto, aggiunge la CTA standard e non può superare
+180 secondi complessivi. Tagli parziali sono riprendibili senza duplicare timeline.
+
+Per la segreteria l'interazione è: ascoltare ogni coppia di marker, non spostarli né eliminarli,
+poi rispondere una sola volta con `OK`, `MODIFICA` o `RIFIUTA` e un motivo breve per ogni `Rxx`.
+Recuperi, collisioni, profili condivisi e override restano ad Alessio o a personale tecnico.
+
+Evidenza automatica: bridge `270 PASS / 1 SKIP` ambientale e Windows `55 PASS / 1 SKIP` DPAPI
+prima del validator documentale. `CAP_EDITORIAL_SELECTION=false` per default. `PC_PERSONALE` e
+`PC_SEGRETERIA` sono entrambi `PENDING`; nessun Resolve reale e nessun lavoro aperto in segreteria
+sono stati toccati. Fonte: `validation/editorial-selection-ledger.json`.
+
 <a id="review-readability-guard"></a>
 ## Leggibilità recensioni — CODICE VALIDATO / PC_PERSONALE LIVE PASS
 

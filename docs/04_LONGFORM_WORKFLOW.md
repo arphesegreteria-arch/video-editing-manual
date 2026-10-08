@@ -147,6 +147,20 @@ alla fine. Il contratto previsto è asincrono: avvio job, lettura stato, metadat
 questo modo si evitano timeout 504 e ChatGPT carica soltanto le finestre temporali necessarie alla
 decisione editoriale.
 
+## Flusso operativo Reel podcast con marker
+
+Per `ARPHE_PODCAST_REELS_CTA` ChatGPT propone estratti autosufficienti senza quota minima e con
+massimo tecnico di 20 candidati. La segreteria lavora così:
+
+1. ascolta dalla coppia `ARPHE_Rxx_IN` / `ARPHE_Rxx_OUT` direttamente sulla timeline sorgente;
+2. non sposta e non elimina i marker;
+3. invia un solo messaggio con `OK`, `MODIFICA` o `RIFIUTA` e un motivo per ogni `Rxx`;
+4. ascolta le timeline provvisorie create solo per le proposte accettate o modificate.
+
+Ogni output include la CTA standard e deve restare entro 180 secondi. In caso di `BLOCKED` o
+`FAILED_RECOVERABLE` non creare un nuovo job: serve la ripresa tecnica dello stesso ID. Solo
+Alessio o personale qualificato approva profili appresi, recuperi e modifiche ai contratti.
+
 ## Selezione episodio 2 e primo gate applicativo — 2026-09-15
 
 L'intera trascrizione è stata analizzata in un'unica sessione editoriale. Sono stati approvati 11

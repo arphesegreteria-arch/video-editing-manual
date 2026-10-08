@@ -104,6 +104,16 @@ in **Attivate**, il salvataggio
 aggiorna direttamente la versione attiva: in questo flusso non compare un secondo pulsante
 **Pubblica**. La pagina amministrativa può richiedere circa 30 secondi o più a causa del numero
 di app/azioni; non ricaricarla durante l'attesa.
+
+## Selezione Reel podcast
+
+La superficie pubblica usa pochi comandi completi: ispezione, preparazione/marker, ispezione job,
+review completa, applicazione/ripresa, chiusura e apprendimento. `CAP_EDITORIAL_SELECTION` è
+`false` per default. La segreteria ascolta ogni coppia `Rxx_IN/Rxx_OUT`, non modifica i marker e
+risponde una volta con decisione e motivo per tutti i candidati. Stati `BLOCKED`,
+`FAILED_RECOVERABLE` o `STALE` richiedono assistenza tecnica; non avviare un secondo job sulla
+stessa timeline. Il profilo condiviso può cambiare soltanto dopo approvazione `ALESSIO` e revisione
+esplicita della patch; motivi, trascrizioni e percorsi restano locali.
 # Render batch sicuri
 
 I render nuovi seguono il percorso chiuso `validate_editorial_brief` →

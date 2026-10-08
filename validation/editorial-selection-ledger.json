@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "workflow_id": "ARPHE_PODCAST_REELS_CTA",
+  "capability_default": false,
+  "automated_evidence": {
+    "result": "PASS",
+    "observed_at": "2026-10-08T17:50:00+02:00",
+    "repository_commit": "290099e627142316bc224d2eed62f1283f05d9f5",
+    "contract_digest": "446ef5ac69ec9980cead1f61c77fab8fe1ea7aa00d0c8e54f2f918a6c2dd082d",
+    "test_results": [
+      "Bridge automated suite passed 270 tests with one documented Windows symlink skip before this ledger commit.",
+      "Windows automated suite passed 55 tests with one documented CurrentUser DPAPI skip before this ledger commit.",
+      "Editorial-selection validator focused tests are part of the documentation commit that records this evidence."
+    ],
+    "limitations": [
+      "Automated evidence does not validate Resolve behavior on either workstation.",
+      "No live project, current editorial work or segreteria runtime was touched."
+    ]
+  },
+  "workstation_gates": {
+    "PC_PERSONALE": {
+      "workstation_id": "PC_PERSONALE",
+      "status": "PENDING",
+      "checks": {
+        "cleanup": "PENDING",
+        "complete_review": "PENDING",
+        "cut_outputs": "PENDING",
+        "duration_limit": "PENDING",
+        "marker_pairs": "PENDING",
+        "partial_failure_resume": "PENDING",
+        "rollback_flag": "PENDING"
+      },
+      "evidence": [],
+      "limitations": [
+        "The isolated live gate has not yet been run on PC_PERSONALE."
+      ]
+    },
+    "PC_SEGRETERIA": {
+      "workstation_id": "PC_SEGRETERIA",
+      "status": "PENDING",
+      "checks": {
+        "cleanup": "PENDING",
+        "complete_review": "PENDING",
+        "cut_outputs": "PENDING",
+        "duration_limit": "PENDING",
+        "marker_pairs": "PENDING",
+        "partial_failure_resume": "PENDING",
+        "rollback_flag": "PENDING"
+      },
+      "evidence": [],
+      "limitations": [
+        "PC_SEGRETERIA and its open Resolve work were not touched; no result is inferred from automated or personal evidence."
+      ]
+    }
+  }
+}

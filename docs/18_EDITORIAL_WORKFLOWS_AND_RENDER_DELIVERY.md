@@ -121,3 +121,12 @@ workstation `PC_PERSONALE`. Il file è un artefatto tecnico marcato **NON PUBBLI
 - [ ] prova recovery/rollback circoscritta.
 
 Il lavoro attualmente in sospeso sul PC segreteria non deve essere usato per questi gate.
+
+## Gate separato per la selezione editoriale podcast
+
+`CAP_EDITORIAL_SELECTION` è indipendente dal render e parte `false`. Le letture di contratto,
+job e metriche restano disponibili; marker, review, tagli, cleanup e profili richiedono il gate.
+L'installer conserva il valore locale e i quattro file di stato della workstation senza copiarli
+fra personale e segreteria. Il ledger `validation/editorial-selection-ledger.json` richiede prove
+separate per marker, review, cut, resume, durata, cleanup e rollback: una macchina non può validare
+l'altra.

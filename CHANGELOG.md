@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-10-08 — Selezione editoriale Reel podcast, ripresa e apprendimento locale
+
+- Aggiunto il flusso chiuso proposta → marker → review completa → tagli verificati → cleanup.
+- Limite assoluto 180 secondi CTA inclusa, formato sorgente esplicito, playback uguale agli FPS
+  progetto, audio derivato accettato soltanto con manifest legato alla sorgente.
+- Job e tagli sono riprendibili; collisioni e output modificati bloccano senza adozione implicita.
+- Motivi e dettagli restano nel journal locale. Solo aggregati redatti possono diventare una
+  proposta, previa approvazione di Alessio e digest del profilo precedente.
+- Stato e flag sono separati per workstation; `CAP_EDITORIAL_SELECTION=false` per default.
+  `PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING`; nessun test live è dichiarato.
+
 ## 2026-10-08 — Leggibilità misurabile per Reel recensioni
 
 - Il Graphic Kit definisce il contratto canonico per safe area, size, righe, velocità di lettura

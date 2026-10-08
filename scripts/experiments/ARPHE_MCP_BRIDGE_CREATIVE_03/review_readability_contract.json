@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "graphic_kit_repository": "https://github.com/arphesegreteria-arch/arphe-graphic-kit.git",
+  "graphic_kit_commit": "fd074838cb3dbad8d5a939cb4845251d4fbaeafe",
+  "graphic_kit_policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
+  "policy": {
+    "schema_version": 1,
+    "policy_version": "ARPHE_VIDEO_READABILITY_V1",
+    "canvases": {
+      "story_reel_1080x1920": {
+        "width": 1080,
+        "height": 1920,
+        "essential_safe_area": {
+          "left": 0.08,
+          "right": 0.84,
+          "top": 0.10,
+          "bottom": 0.82
+        }
+      }
+    },
+    "reading": {
+      "words_per_second": 4.0,
+      "settle_seconds": 1,
+      "minimum_seconds": 3,
+      "standard_maximum_seconds": 12
+    },
+    "review_body": {
+      "size_tiers": [0.052, 0.047, 0.042],
+      "maximum_lines": 7
+    },
+    "typography": {
+      "heading": {"family": "Noto Serif Display", "weight": 300},
+      "body": {"family": "Satoshi", "weight": 400},
+      "label": {"family": "Satoshi", "weight": 500},
+      "button": {"family": "Satoshi", "weight": 700}
+    },
+    "technical_fallback_is_final": false
+  }
+}

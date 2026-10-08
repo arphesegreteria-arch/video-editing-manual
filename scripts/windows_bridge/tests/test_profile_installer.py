@@ -192,13 +192,14 @@ class ProfileInstallerTests(unittest.TestCase):
             str(POWERSHELL), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command,
         ], capture_output=True, text=True, check=False, env=env)
 
-    def run_creative_install(self, config_path: Path, *, runtime_log_root: Path | None = None):
+    def run_creative_install(self, config_path: Path, *, runtime_log_root: Path | None = None,
+                             workstation_id: str = "PC_PERSONALE", destination: Path | None = None):
         env = os.environ.copy()
         env["LOCALAPPDATA"] = str(self.local_app_data)
         command = [
             str(POWERSHELL), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-            str(CREATIVE_INSTALLER), "-WorkstationId", "PC_PERSONALE",
-            "-Destination", str(self.root / "creative-install"),
+            str(CREATIVE_INSTALLER), "-WorkstationId", workstation_id,
+            "-Destination", str(destination or (self.root / "creative-install")),
             "-AssetRoot", str(self.root / "assets"), "-RenderRoot", str(self.root / "renders"),
             "-ConfigPath", str(config_path),
         ]
@@ -369,6 +370,16 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertIn("CAP_RESOLVE_RETIREMENT", result.stdout)
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_feature_flag_accepts_readability_guard_gate(self):
+        creative_config, _command = self.write_profile_runtime_config()
+        config = json.loads(creative_config.read_text(encoding="utf-8"))
+        config["feature_flags"]["CAP_READABILITY_GUARD"] = False
+        creative_config.write_text(json.dumps(config), encoding="utf-8")
+        result = self.run_feature_flag_dry_run("CAP_READABILITY_GUARD")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("CAP_READABILITY_GUARD", result.stdout)
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_keeps_state_and_audit_inside_profile_directory(self):
         config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
         result = self.run_creative_install(config_path)
@@ -383,7 +394,8 @@ class ProfileInstallerTests(unittest.TestCase):
         result = self.run_creative_install(config_path)
         self.assertEqual(0, result.returncode, result.stderr)
         destination = self.root / "creative-install"
-        for name in ("editorial_workflows.json", "render_profiles.json", "artifact_retention.json"):
+        for name in ("editorial_workflows.json", "render_profiles.json", "artifact_retention.json",
+                     "review_readability_contract.json"):
             self.assertEqual(
                 (CREATIVE_INSTALLER.parent / name).read_bytes(),
                 (destination / name).read_bytes(),
@@ -406,6 +418,24 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertEqual(config_path.parent / "resolve_retirement_registry.json",
                          Path(config["resolve_retirement_registry_path"]))
         self.assertFalse(config["feature_flags"]["CAP_RESOLVE_RETIREMENT"])
+        self.assertFalse(config["feature_flags"]["CAP_READABILITY_GUARD"])
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_install_defaults_readability_guard_off_for_both_workstations(self):
+        for workstation_id in ("PC_PERSONALE", "PC_SEGRETERIA"):
+            with self.subTest(workstation_id=workstation_id):
+                config_path = self.root / workstation_id / "creative_config.json"
+                destination = self.root / f"creative-{workstation_id}"
+                result = self.run_creative_install(
+                    config_path,
+                    workstation_id=workstation_id,
+                    destination=destination,
+                    runtime_log_root=self.root / "logs" / workstation_id,
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                config = json.loads(config_path.read_text(encoding="utf-8"))
+                self.assertEqual(workstation_id, config["workstation_id"])
+                self.assertFalse(config["feature_flags"]["CAP_READABILITY_GUARD"])
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_upgrade_preserves_explicit_artifact_gate(self):
@@ -421,6 +451,21 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         config = json.loads(config_path.read_text(encoding="utf-8"))
         self.assertTrue(config["feature_flags"]["CAP_ARTIFACT_MAINTENANCE"])
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_upgrade_preserves_explicit_readability_guard(self):
+        config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(json.dumps({
+            "workstation_id": "PC_PERSONALE",
+            "state_path": str(config_path.parent / "creative_state.json"),
+            "audit_log_path": str(config_path.parent / "audit.jsonl"),
+            "feature_flags": {"CAP_READABILITY_GUARD": True},
+        }), encoding="utf-8")
+        result = self.run_creative_install(config_path)
+        self.assertEqual(0, result.returncode, result.stderr)
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        self.assertTrue(config["feature_flags"]["CAP_READABILITY_GUARD"])
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_rejects_foreign_artifact_registry_before_writes(self):
@@ -480,6 +525,7 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         migrated = json.loads(config_path.read_text(encoding="utf-8"))
         self.assertTrue(migrated["feature_flags"]["CAP_MOTION"])
+        self.assertFalse(migrated["feature_flags"]["CAP_READABILITY_GUARD"])
         self.assertEqual('{"legacy": true}', (config_path.parent / "creative_state.json").read_text(encoding="utf-8"))
         self.assertTrue((config_path.parent / "audit.jsonl").is_file())
         self.assertTrue(self.legacy_creative_config_path.is_file())

@@ -70,7 +70,7 @@ New-Item -ItemType Directory -Path $bridgeDestination -Force | Out-Null
 Get-ChildItem -LiteralPath $bridgeSource -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $bridgeDestination -Force
 }
-foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json', 'artifact_retention.json')) {
+foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json', 'artifact_retention.json', 'review_readability_contract.json')) {
     $registrySource = Join-Path $PSScriptRoot $registryName
     if (-not (Test-Path -LiteralPath $registrySource -PathType Leaf)) {
         throw "Creative registry not found: $registrySource"
@@ -107,6 +107,9 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_RESOLVE_RETIREMENT']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_RESOLVE_RETIREMENT -NotePropertyValue $false
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_READABILITY_GUARD']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_READABILITY_GUARD -NotePropertyValue $false
     }
     if ($null -ne $legacyConfig) {
         foreach ($migration in @(
@@ -192,6 +195,10 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_RESOLVE_RETIREMENT']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_RESOLVE_RETIREMENT -NotePropertyValue $false
+        $changed = $true
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_READABILITY_GUARD']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_READABILITY_GUARD -NotePropertyValue $false
         $changed = $true
     }
     if ($changed) {

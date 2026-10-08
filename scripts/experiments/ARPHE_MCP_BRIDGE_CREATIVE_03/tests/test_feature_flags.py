@@ -42,6 +42,10 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertTrue(capabilities["CAP_FUSION"]["validated"])
         self.assertFalse(capabilities["CAP_ARTIFACT_MAINTENANCE"]["active"])
         self.assertTrue(capabilities["CAP_ARTIFACT_MAINTENANCE"]["technically_available"])
+        self.assertFalse(DEFAULT_FLAGS["CAP_READABILITY_GUARD"])
+        self.assertFalse(capabilities["CAP_READABILITY_GUARD"]["active"])
+        self.assertTrue(capabilities["CAP_READABILITY_GUARD"]["technically_available"])
+        self.assertEqual("PARTIAL", capabilities["CAP_READABILITY_GUARD"]["status"])
 
 
 if __name__ == "__main__":

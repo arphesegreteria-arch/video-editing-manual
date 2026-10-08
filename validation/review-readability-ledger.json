@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "evidence": [
+    {
+      "evidence_id": "readability-automated-2026-10-08",
+      "kind": "AUTOMATED",
+      "workstation_id": null,
+      "video_repository_commit": "a96a24b84d8c070ec35e6ee3657a207cb6aee8a5",
+      "graphic_kit_repository_commit": "fd074838cb3dbad8d5a939cb4845251d4fbaeafe",
+      "policy_version": "ARPHE_VIDEO_READABILITY_V1",
+      "policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
+      "observed_at": "2026-10-08T12:22:00+02:00",
+      "result": "PASS",
+      "limitations": [
+        "Creative 207/207 and Windows 52/52 automated tests passed against video code commit a96a24b84d8c070ec35e6ee3657a207cb6aee8a5; validation-ledger tests are part of the documentation commit that records this evidence.",
+        "Automated evidence does not validate Resolve rendering, mobile visual quality or either workstation.",
+        "One symlink privilege test and one CurrentUser DPAPI test were skipped for explicit environment limitations."
+      ],
+      "current_state_reference": "CURRENT_STATE.md#review-readability-guard",
+      "validated_workstations": []
+    },
+    {
+      "evidence_id": "readability-pc-personale-pass-2026-10-08",
+      "kind": "PC_PERSONALE_LIVE",
+      "workstation_id": "PC_PERSONALE",
+      "video_repository_commit": "a96a24b84d8c070ec35e6ee3657a207cb6aee8a5",
+      "graphic_kit_repository_commit": "fd074838cb3dbad8d5a939cb4845251d4fbaeafe",
+      "policy_version": "ARPHE_VIDEO_READABILITY_V1",
+      "policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
+      "observed_at": "2026-10-08T15:00:00+02:00",
+      "result": "PASS",
+      "limitations": [
+        "Installation, pinned contract and Windows GDI final-font readiness passed on PC_PERSONALE; the Noto Light instance was rebuilt from the Graphic Kit OFL source with canonical Fusion family/style names after the first attempt exposed a font-catalog mismatch.",
+        "The guarded isolated write created synthetic intro, five-card sequence including one approved verbatim split, and CTA. Seven preserved 1080x1920 captures at frame offsets 45, 150, 395, 770, 1100, 1365 and 1560 render legibly without visible overflow; no review text is stored in this ledger.",
+        "Resolve project, timeline and playback are 30 fps. No new missing-font line appears in ResolveDebug after the corrected font and Resolve restart.",
+        "Rollback passed with CAP_READABILITY_GUARD false: inspection returned PASS, all five public Review write routes returned ValidationError for the disabled guard, and project/timeline/state snapshots were identical before and after. The personal guard was then re-enabled; the dedicated scheduled task is Running and /readyz returns ready.",
+        "Visual inspection covers the generated portrait frames, not an upload viewed inside a social app on a physical phone. PC_SEGRETERIA was not touched and remains pending."
+      ],
+      "current_state_reference": "CURRENT_STATE.md#review-readability-guard",
+      "validated_workstations": [
+        "PC_PERSONALE"
+      ]
+    },
+    {
+      "evidence_id": "readability-pc-segreteria-pending-2026-10-08",
+      "kind": "PC_SEGRETERIA_LIVE",
+      "workstation_id": "PC_SEGRETERIA",
+      "video_repository_commit": "a96a24b84d8c070ec35e6ee3657a207cb6aee8a5",
+      "graphic_kit_repository_commit": "fd074838cb3dbad8d5a939cb4845251d4fbaeafe",
+      "policy_version": "ARPHE_VIDEO_READABILITY_V1",
+      "policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
+      "observed_at": "2026-10-08T12:22:00+02:00",
+      "result": "PENDING",
+      "limitations": [
+        "PC_SEGRETERIA and its open Resolve work were not touched; no result is inferred from PC_PERSONALE or automated evidence."
+      ],
+      "current_state_reference": "CURRENT_STATE.md#review-readability-guard",
+      "validated_workstations": []
+    }
+  ]
+}

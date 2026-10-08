@@ -19,9 +19,7 @@ from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
 from .artifact_records import artifact_store_for, load_artifact_policy
 from .config import load_config
 from .creative_tools import (add_end_card as do_add_end_card,
-                             add_review_card as do_add_review_card,
                              animate_element, animate_stack,
-                             create_review_sequence as do_create_review_sequence,
                              set_review_highlight as do_set_review_highlight)
 from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_frames,
                                inspect_fusion_graph as do_inspect_fusion_graph)
@@ -43,6 +41,13 @@ from .project_tools import (create_project as do_create_project,
                             save_project as do_save_project,
                             set_current_project as do_set_current_project)
 from .registry import Registry
+from .readability_approvals import approve_readability as do_approve_readability
+from .review_workflow import (
+    add_guarded_review_card as do_add_guarded_review_card,
+    create_guarded_review_sequence as do_create_guarded_review_sequence,
+    inspect_sequence_readability as do_inspect_sequence_readability,
+    require_readability_guard as do_require_readability_guard,
+)
 from .render_batches import (approve_render_batch as do_approve_render_batch,
                              create_render_batch)
 from .render_tools import (queue_longform_exports as do_queue_longform_exports,
@@ -546,30 +551,62 @@ def add_text_plus(composition_id: str, text: str, start_frame: int, end_frame: i
 
 
 @mcp.tool(annotations=SAFE_WRITE)
+def approve_review_readability(assessment_fingerprint: str, decisions: list[dict[str, Any]],
+                               operator_role: str) -> dict[str, Any]:
+    """Approve only fingerprint-bound long-card or verbatim-split exceptions."""
+    try:
+        config = load_config()
+        registry = Registry(config.state_path)
+        approval = do_approve_readability(
+            registry, config.workstation_id, assessment_fingerprint, decisions, operator_role
+        )
+        return {"ok": True, "action": "approve_review_readability", "token": approval.token,
+                "assessment_fingerprint": approval.assessment_fingerprint,
+                "workstation_id": approval.workstation_id,
+                "decision_count": len(approval.decisions)}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_review_readability(reviews: list[dict[str, Any]]) -> dict[str, Any]:
+    """Inspect review timing, type fit and font readiness without mutating Resolve."""
+    try:
+        _, _, _project, timeline, config, _registry, error = _runtime()
+        if error: return error
+        return {"ok": True, "action": "inspect_review_readability",
+                **do_inspect_sequence_readability(timeline, config, reviews).to_dict()}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
 def add_review_card(composition_id: str, text: str, stars: int, start_frame: int, end_frame: int,
                     style_role: str = "cream", highlight_text: str | None = None,
-                    small_label: str | None = None) -> dict[str, Any]:
+                    small_label: str | None = None,
+                    readability_approval_token: str | None = None) -> dict[str, Any]:
     """Create one controlled review card; review content is input and never hardcoded."""
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
-        return _call(do_add_review_card, project, timeline, config, registry, composition_id,
-                     text, stars, start_frame, end_frame, style_role, highlight_text, small_label)
+        return _call(do_add_guarded_review_card, project, timeline, config, registry, composition_id,
+                     text, stars, start_frame, end_frame, style_role, highlight_text, small_label,
+                     readability_approval_token)
     except Exception as exc: return _error(exc)
 
 
 @mcp.tool(annotations=SAFE_WRITE)
 def create_review_sequence(name: str, reviews: list[dict[str, Any]],
                            duration_frames: int = 0, stagger_frames: int = 24,
-                           style_role: str = "cream") -> dict[str, Any]:
+                           style_role: str = "cream",
+                           readability_approval_token: str | None = None) -> dict[str, Any]:
     """Compatibility wrapper; create one gap-free sequence for older clients."""
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
         requested = duration_frames + max(0, len(reviews) - 1) * stagger_frames
         total = 0 if duration_frames == 0 else max(len(reviews), min(MAX_AUTOMATIC_FUSION_FRAMES, requested))
-        result = _call(do_create_review_sequence, project, timeline, config, registry,
-                       name, reviews, total, style_role)
+        result = _call(do_create_guarded_review_sequence, project, timeline, config, registry,
+                       name, reviews, total, style_role, None, None,
+                       readability_approval_token)
         if isinstance(result, dict):
             result["compatibility_mode"] = True
             result["preferred_tool"] = "create_review_sequence_v2"
@@ -581,13 +618,15 @@ def create_review_sequence(name: str, reviews: list[dict[str, Any]],
 def create_review_sequence_v2(name: str, reviews: list[dict[str, Any]],
                               total_duration_frames: int = 0,
                               style_role: str = "cream", cta: dict[str, Any] | None = None,
-                              intro: dict[str, Any] | None = None) -> dict[str, Any]:
+                              intro: dict[str, Any] | None = None,
+                              readability_approval_token: str | None = None) -> dict[str, Any]:
     """Create 1-8 cards, with optional kit-based intro and branded CTA."""
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
-        return _call(do_create_review_sequence, project, timeline, config, registry,
-                     name, reviews, total_duration_frames, style_role, cta, intro)
+        return _call(do_create_guarded_review_sequence, project, timeline, config, registry,
+                     name, reviews, total_duration_frames, style_role, cta, intro,
+                     readability_approval_token)
     except Exception as exc: return _error(exc)
 
 
@@ -597,6 +636,7 @@ def set_review_highlight(composition_id: str, card_id: str, highlight_text: str)
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
+        do_require_readability_guard(config)
         return _call(do_set_review_highlight, project, timeline, config, registry,
                      composition_id, card_id, highlight_text)
     except Exception as exc: return _error(exc)
@@ -609,6 +649,7 @@ def add_end_card(composition_id: str, headline: str, cta: str, start_frame: int,
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
+        do_require_readability_guard(config)
         return _call(do_add_end_card, project, timeline, config, registry, composition_id,
                      headline, cta, start_frame, end_frame, style_role)
     except Exception as exc: return _error(exc)

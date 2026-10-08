@@ -55,6 +55,11 @@ Il ritiro di timeline/progetti è un modulo separato: prima esporta e verifica u
 richiede approvazione tecnica e ricontrolla target e last-modified. È disabilitato per default da
 `CAP_RESOLVE_RETIREMENT`; il recovery importa sempre un nuovo progetto `ARPHE_RECOVERY_...`.
 
+La leggibilità recensioni ha un gate separato, `CAP_READABILITY_GUARD=false` per default.
+`inspect_review_readability` è sempre read-only; le scritture Review richiedono contratto valido,
+font esatti, 1080×1920/30 per progetto/timeline/playback e, quando necessario, un'approvazione
+legata all'impronta. Spegnere il gate è il rollback e non modifica timeline già create.
+
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato
 espone 30 azioni, inclusa `create_review_sequence_v2` e il wrapper compatibile
@@ -73,7 +78,8 @@ interno `arphe_fusion_carrier_5m.mp4`: Resolve riceve prima un clip tecnico con 
 richiesta e poi un Fusion Clip sopra di esso. Il canvas ARPHÈ lo copre integralmente. La durata
 è quindi automatica fino a 9.000 frame (5 minuti a 30 fps), senza trim manuale in timeline.
 Per `create_review_sequence_v2`, `total_duration_frames: 0` (il valore predefinito) assegna a
-ciascuna card il proprio tempo di lettura: 3–5 secondi in base al testo e una breve
+ciascuna card il proprio tempo di lettura: quattro parole al secondo più un secondo, minimo tre,
+standard massimo dodici secondi, e una breve
 sovrapposizione fra le card. Le card non aggiungono un'etichetta se `small_label` viene
 omesso: è il comportamento raccomandato per recensioni anonime, senza medico o dicitura
 “Paziente verificato”. Gli oggetti opzionali `intro` e `cta` aggiungono rispettivamente

@@ -16,7 +16,8 @@ class Registry:
     def _load(self) -> dict[str, Any]:
         if not self.path.is_file():
             return {"schema_version": 1, "projects": {}, "elements": {},
-                    "briefs": {}, "render_batches": {}, "render_locks": {}}
+                    "briefs": {}, "render_batches": {}, "render_locks": {},
+                    "readability_approvals": {}}
         data = json.loads(self.path.read_text(encoding="utf-8-sig"))
         if data.get("schema_version") != 1:
             raise ValueError("Versione registry non supportata")
@@ -25,6 +26,7 @@ class Registry:
         data.setdefault("briefs", {})
         data.setdefault("render_batches", {})
         data.setdefault("render_locks", {})
+        data.setdefault("readability_approvals", {})
         return data
 
     def _save(self, data: dict[str, Any]) -> None:
@@ -134,3 +136,14 @@ class Registry:
         if existing and existing.get("batch_id") == batch_id:
             data["render_locks"].pop(project, None)
             self._save(data)
+
+    def save_readability_approval(self, approval: Any) -> None:
+        from dataclasses import asdict
+        data = self._load()
+        payload = asdict(approval)
+        payload["decisions"] = [dict(decision) for decision in payload["decisions"]]
+        data["readability_approvals"][approval.token] = payload
+        self._save(data)
+
+    def readability_approval(self, token: str) -> dict[str, Any] | None:
+        return self._load()["readability_approvals"].get(token)

@@ -8,6 +8,7 @@
 | `CURRENT_STATE.md` | Stato tecnico corrente |
 | `EXPERIMENT_LOG.md` | Registro persistente degli esperimenti e dei prossimi step |
 | `CHANGELOG.md` | Storico delle decisioni |
+| `validation/review-readability-ledger.json` | Evidenze separate: automatiche, PC personale e PC segreteria |
 | `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md` | **Architettura prodotto corrente: ChatGPT -> MCP -> Resolve Studio** |
 | `docs/09_MCP_TUNNEL_ROLLOUT_CHECKLIST.md` | Procedura tunnel e gate ChatGPT READ/WRITE |
 | `docs/10_WINDOWS_BRIDGE_AUTOSTART_AND_WORKSTATIONS.md` | **Autostart Windows, PC segreteria vs PC personale, replica e handoff Codex** |

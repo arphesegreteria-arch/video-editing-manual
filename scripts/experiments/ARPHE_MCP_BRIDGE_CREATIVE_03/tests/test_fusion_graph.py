@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import inspect
 import sys
 import unittest
 
@@ -8,7 +9,15 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from bridge.creative_tools import _merge, _remove_tools_created_after, _text  # noqa: E402
+from bridge.creative_tools import (  # noqa: E402
+    _layout_typography,
+    _merge,
+    _portrait_review_geometry,
+    _remove_tools_created_after,
+    _text,
+    add_review_card,
+    create_review_sequence,
+)
 from bridge.fusion_tools import connect_input  # noqa: E402
 
 
@@ -81,6 +90,57 @@ class FakeTextComp:
 
 
 class FusionGraphTests(unittest.TestCase):
+    def canonical_layout(self):
+        return {
+            "duration_frames": 360,
+            "selected_size": 0.042,
+            "line_count": 7,
+            "safe_area": {"left": 0.08, "right": 0.84, "top": 0.10, "bottom": 0.82},
+            "typography": {
+                "heading": {"family": "Noto Serif Display", "weight": 300},
+                "body": {"family": "Satoshi", "weight": 400},
+                "label": {"family": "Satoshi", "weight": 500},
+                "button": {"family": "Satoshi", "weight": 700},
+            },
+        }
+
+    def test_canonical_roles_map_to_resolve_fonts_without_satoshi_black(self):
+        layout = self.canonical_layout()
+
+        self.assertEqual(_layout_typography(layout, "body"), ("Satoshi", "Regular"))
+        self.assertEqual(_layout_typography(layout, "label"), ("Satoshi", "Medium"))
+        self.assertEqual(_layout_typography(layout, "button"), ("Satoshi", "Bold"))
+        self.assertEqual(
+            _layout_typography(layout, "heading"),
+            ("Noto Serif Display", "Light"),
+        )
+        self.assertNotIn("Black", str([_layout_typography(layout, role) for role in layout["typography"]]))
+
+    def test_vertical_essential_boxes_stay_inside_canonical_safe_area(self):
+        layout = self.canonical_layout()
+
+        geometry = _portrait_review_geometry(layout)
+
+        self.assertEqual(geometry["body_size"], 0.042)
+        self.assertEqual(geometry["body_lines"], 7)
+        for name, box in geometry["boxes"].items():
+            with self.subTest(name=name):
+                left, bottom, right, top = box
+                self.assertGreaterEqual(left, 0.08)
+                self.assertLessEqual(right, 0.84)
+                self.assertGreaterEqual(bottom, 0.18)
+                self.assertLessEqual(top, 0.90)
+
+    def test_internal_review_primitives_require_preflight_layouts(self):
+        self.assertIs(
+            inspect.signature(add_review_card).parameters["readability_layout"].default,
+            inspect.Parameter.empty,
+        )
+        self.assertIs(
+            inspect.signature(create_review_sequence).parameters["readability_layouts"].default,
+            inspect.Parameter.empty,
+        )
+
     def test_named_socket_connection_is_verified(self):
         source = FakeSource()
         target = FakeTarget(("Foreground",))

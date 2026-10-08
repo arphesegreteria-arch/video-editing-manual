@@ -154,8 +154,8 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
             {"text": " ".join(["accogliente"] * 30)},
         ]
         self.assertEqual(90, _review_reading_frames(reviews[0]))
-        self.assertEqual(150, _review_reading_frames(reviews[1]))
-        self.assertEqual(([(0, 100), (90, 240)], 240),
+        self.assertEqual(270, _review_reading_frames(reviews[1]))
+        self.assertEqual(([(0, 100), (90, 360)], 360),
                          _automatic_sequence_windows(reviews))
         self.assertEqual(120, _cta_duration_frames({"headline": "Scopri Arphè", "text": "Prenota ora"}))
         self.assertEqual(90, _intro_duration_frames({"headline": "Dicono di noi", "text": "su MioDottore"}))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from .config import CreativeConfig
@@ -44,23 +45,21 @@ def _sequence_windows(card_count: int, total_duration_frames: int,
 
 
 def _review_reading_frames(review: dict[str, Any]) -> int:
-    """Return a comfortable on-screen duration for one review.
-
-    This is deliberately a conservative reading-time estimate, rather than a
-    fixed card length: three seconds is the floor for a very short review, with
-    a short extra beat for an entry and a final pause.  A cap protects the
-    sequence from an accidentally pasted essay.
-    """
+    """Return the canonical four-words-per-second duration at 30 fps."""
     words = len(str(review.get("text") or "").split())
-    reading_seconds = words / 5.5  # brisk, but still readable on a full-HD card
-    seconds = max(3, min(5, int(reading_seconds + 1.999)))
+    seconds = max(3, math.ceil(words / 4.0) + 1)
     return seconds * 30
 
 
 def _automatic_sequence_windows(reviews: list[dict[str, Any]],
-                                transition_overlap_frames: int = 10) -> tuple[list[tuple[int, int]], int]:
+                                transition_overlap_frames: int = 10,
+                                readability_layouts: list[dict[str, Any]] | None = None) -> tuple[list[tuple[int, int]], int]:
     """Allocate individual card windows from their actual reading times."""
-    base_durations = [_review_reading_frames(review) for review in reviews]
+    base_durations = (
+        [int(layout["duration_frames"]) for layout in readability_layouts]
+        if readability_layouts is not None
+        else [_review_reading_frames(review) for review in reviews]
+    )
     windows: list[tuple[int, int]] = []
     cursor = 0
     for index, duration in enumerate(base_durations):
@@ -96,7 +95,8 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
                            name: str, reviews: list[dict[str, Any]],
                            total_duration_frames: int = 0,
                            style_role: str = "cream", cta: dict[str, Any] | None = None,
-                           intro: dict[str, Any] | None = None) -> dict:
+                           intro: dict[str, Any] | None = None,
+                           *, readability_layouts: list[dict[str, Any]] | None = None) -> dict:
     """Create a gap-free review sequence inside one Fusion composition.
 
     Pass ``0`` (the default) to let the bridge derive every card's time on
@@ -109,6 +109,8 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
         raise ValidationError("reviews deve contenere 1-8 card")
     if any(not isinstance(review, dict) for review in reviews):
         raise ValidationError("Ogni review deve essere un oggetto")
+    if readability_layouts is not None and len(readability_layouts) != len(reviews):
+        raise ValidationError("readability_layouts deve corrispondere alle review")
     if cta is not None:
         if not isinstance(cta, dict):
             raise ValidationError("cta deve essere un oggetto")
@@ -131,7 +133,9 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
         )
     automatic_duration = total_duration_frames == 0
     if automatic_duration:
-        windows, review_duration_frames = _automatic_sequence_windows(reviews)
+        windows, review_duration_frames = _automatic_sequence_windows(
+            reviews, readability_layouts=readability_layouts
+        )
         intro_duration_frames = _intro_duration_frames(intro) if intro else 0
         windows = [(start + intro_duration_frames, end + intro_duration_frames)
                    for start, end in windows]
@@ -185,7 +189,9 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
         start, end = windows[index]
         card = add_review_card(project, timeline, config, registry, composition_id,
                                text, stars, start, end, style_role,
-                               review.get("highlight_text"), label)
+                               review.get("highlight_text"), label,
+                               readability_layout=(readability_layouts[index]
+                                                   if readability_layouts is not None else None))
         results.append({"index": index, "card_id": card["card_id"],
                         "frame_range": [start, end]})
     cta_result = None
@@ -304,7 +310,8 @@ def _remove_tools_created_after(comp: Any, snapshot: set[str]) -> int:
 def add_review_card(project: Any, timeline: Any, config: CreativeConfig, registry: Registry,
                     composition_id: str, text: str, stars: int, start_frame: int, end_frame: int,
                     style_role: str, highlight_text: str | None = None,
-                    small_label: str | None = None) -> dict:
+                    small_label: str | None = None,
+                    *, readability_layout: dict[str, Any] | None = None) -> dict:
     require_capability("CAP_REVIEW", config, None, project, timeline)
     start, end = validate_frame_range(start_frame, end_frame)
     validate_review(text, stars, highlight_text, small_label)
@@ -329,7 +336,9 @@ def add_review_card(project: Any, timeline: Any, config: CreativeConfig, registr
             # A phone is the primary viewing distance for a Reel.  Use a much
             # larger type scale and let the card grow vertically rather than
             # preserving desktop proportions.
-            review_size = 0.052 if len(text) <= 110 else (0.047 if len(text) <= 180 else 0.042)
+            review_size = (float(readability_layout["selected_size"])
+                           if readability_layout is not None
+                           else (0.052 if len(text) <= 110 else (0.047 if len(text) <= 180 else 0.042)))
             card_width, card_height = 0.90, 0.46
             text_width, text_height = 0.78, 0.27
             stars_size, stars_y = 0.045, 0.66

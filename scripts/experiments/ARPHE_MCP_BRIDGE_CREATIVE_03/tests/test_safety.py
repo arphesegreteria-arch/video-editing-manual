@@ -185,6 +185,8 @@ class SafetyTests(unittest.TestCase):
                 server.add_review_card("COMP", "Testo", 5, 0, 90),
                 server.create_review_sequence("SEQ", [{"text": "Testo", "stars": 5}]),
                 server.create_review_sequence_v2("SEQ", [{"text": "Testo", "stars": 5}]),
+                server.set_review_highlight("COMP", "CARD", "Testo"),
+                server.add_end_card("COMP", "Titolo", "Azione", 0, 120),
             )
         self.assertTrue(inspected["ok"])
         for result in writes:

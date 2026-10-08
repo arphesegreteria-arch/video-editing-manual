@@ -243,6 +243,30 @@ class ReviewWorkflowTests(unittest.TestCase):
                 )
             primitive.assert_not_called()
 
+    def test_explicit_total_includes_intro_cta_and_every_assessed_card_minimum(self):
+        reviews = [
+            {"text": "Testo sintetico.", "stars": 5},
+            {"text": review_words(44), "stars": 5},
+        ]
+        with patch("bridge.review_workflow.WindowsGdiTextMeasurer", return_value=ReadyMeasurer()), patch(
+            "bridge.review_workflow.create_review_sequence"
+        ) as primitive:
+            with self.assertRaisesRegex(Exception, "leggibilità"):
+                create_guarded_review_sequence(
+                    self.project,
+                    self.timeline,
+                    self.config,
+                    self.registry,
+                    "READABILITY_TEST",
+                    reviews,
+                    450,
+                    "cream",
+                    {"headline": "Scopri ARPHÈ", "text": "Prenota ora"},
+                    {"headline": "Dicono di noi", "text": "Recensioni"},
+                    None,
+                )
+            primitive.assert_not_called()
+
     def test_mcp_surface_is_guarded_and_redacted(self):
         self.assertIn("inspect_review_readability", EXPOSED_TOOL_NAMES)
         self.assertIn("approve_review_readability", EXPOSED_TOOL_NAMES)

@@ -5,7 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from .config import CreativeConfig
-from .creative_tools import add_review_card, create_review_sequence
+from .creative_tools import (
+    _cta_duration_frames,
+    _intro_duration_frames,
+    add_review_card,
+    create_review_sequence,
+)
 from .font_readiness import WindowsGdiTextMeasurer, check_required_fonts
 from .readability_approvals import require_current_approval
 from .readability_contract import load_readability_contract
@@ -88,6 +93,11 @@ def inspect_sequence_readability(
     return assessment
 
 
+def require_readability_guard(config: CreativeConfig) -> None:
+    if not config.flags.get("CAP_READABILITY_GUARD", False):
+        raise ValidationError("Capability disabilitata: CAP_READABILITY_GUARD")
+
+
 def _guard_and_expand(
     project: Any,
     timeline: Any,
@@ -96,14 +106,15 @@ def _guard_and_expand(
     reviews: list[dict],
     approval_token: str | None,
 ) -> tuple[list[dict], list[dict[str, Any]], SequenceAssessment]:
-    if not config.flags.get("CAP_READABILITY_GUARD", False):
-        raise ValidationError("Capability disabilitata: CAP_READABILITY_GUARD")
+    require_readability_guard(config)
     _require_vertical_30(project, timeline)
     assessment, policy, measurer, fonts = _assessment(timeline, reviews)
     if assessment.status == BLOCKED:
         reasons = ",".join(assessment.reason_codes)
         raise ValidationError(f"readability BLOCKED: {reasons}")
-    approval = require_current_approval(registry, assessment, approval_token)
+    approval = require_current_approval(
+        registry, assessment, approval_token, config.workstation_id
+    )
     decisions = {
         int(item["review_index"]): item for item in (approval.decisions if approval else ())
     }
@@ -166,7 +177,11 @@ def create_guarded_review_sequence(
     expanded, layouts, assessment = _guard_and_expand(
         project, timeline, config, registry, reviews, approval_token
     )
-    minimum = sum(int(layout["duration_frames"]) for layout in layouts)
+    minimum = (
+        sum(int(layout["duration_frames"]) for layout in layouts)
+        + (_intro_duration_frames(intro) if intro else 0)
+        + (_cta_duration_frames(cta) if cta else 0)
+    )
     if total_duration_frames and total_duration_frames < minimum:
         raise ValidationError(
             f"total_duration_frames non può essere inferiore alla leggibilità ({minimum})"

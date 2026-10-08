@@ -143,6 +143,21 @@ class ReadabilityApprovalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             require_current_approval(self.registry, assessment, incomplete.token)
 
+    def test_approval_from_another_workstation_is_stale(self):
+        assessment = self.assessment([{"text": sentence("cura", 45), "stars": 5}])
+        approval = approve_readability(
+            self.registry,
+            "PC_PERSONALE",
+            assessment.fingerprint,
+            [{"review_index": 0, "decision": "LONG_SINGLE"}],
+            "ALESSIO",
+        )
+
+        with self.assertRaisesRegex(ReadabilityApprovalError, "STALE_APPROVAL.*workstation"):
+            require_current_approval(
+                self.registry, assessment, approval.token, "PC_SEGRETERIA"
+            )
+
     def test_registry_persists_no_review_text_or_fragments(self):
         private_text = sentence("contenuto-riservato", 45)
         assessment = self.assessment([{"text": private_text, "stars": 5}])

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "graphic_kit_repository": "https://github.com/arphesegreteria-arch/arphe-graphic-kit.git",
-  "graphic_kit_commit": "a404fa869dc5c49c89548ba06b0a7a51f82aa243",
+  "graphic_kit_commit": "665ed816176bc76b6b10ca5f274b0054b2791437",
   "graphic_kit_policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
   "policy": {
     "schema_version": 1,

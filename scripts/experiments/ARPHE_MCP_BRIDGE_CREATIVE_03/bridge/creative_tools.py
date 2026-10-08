@@ -139,6 +139,33 @@ def _automatic_sequence_windows(reviews: list[dict[str, Any]],
     return windows, cursor
 
 
+def _fixed_readability_windows(
+    readability_layouts: list[dict[str, Any]],
+    total_duration_frames: int,
+    transition_overlap_frames: int = 10,
+) -> list[tuple[int, int]]:
+    """Distribute surplus time without shortening any assessed card."""
+    durations = [int(layout["duration_frames"]) for layout in readability_layouts]
+    minimum = sum(durations)
+    if total_duration_frames < minimum:
+        raise ValidationError(
+            f"Durata recensioni inferiore alla leggibilità ({minimum})"
+        )
+    surplus, remainder = divmod(total_duration_frames - minimum, len(durations))
+    allocated = [
+        duration + surplus + (1 if index < remainder else 0)
+        for index, duration in enumerate(durations)
+    ]
+    windows: list[tuple[int, int]] = []
+    cursor = 0
+    for index, duration in enumerate(allocated):
+        end = cursor + duration
+        visible_end = end + (transition_overlap_frames if index < len(allocated) - 1 else 0)
+        windows.append((cursor, visible_end))
+        cursor = end
+    return windows
+
+
 def _cta_duration_frames(cta: dict[str, Any]) -> int:
     """Give the end card a calm but concise fixed reading window."""
     words = len(f"{cta.get('headline') or ''} {cta.get('text') or ''}".split())
@@ -222,8 +249,9 @@ def create_review_sequence(project: Any, timeline: Any, config: CreativeConfig, 
             raise ValidationError("Durata insufficiente dopo aver riservato la CTA")
         transition_overlap_frames = min(10, max(0, review_duration_frames // len(reviews) - 1))
         windows = [(start + intro_duration_frames, end + intro_duration_frames)
-                   for start, end in _sequence_windows(len(reviews), review_duration_frames,
-                                                       transition_overlap_frames)]
+                   for start, end in _fixed_readability_windows(
+                       readability_layouts, review_duration_frames, transition_overlap_frames
+                   )]
     validate_color_role(style_role)
     timeline_name = str(safe_call(timeline, "GetName") or "")
     if not timeline_name.startswith("ARPHE_"):

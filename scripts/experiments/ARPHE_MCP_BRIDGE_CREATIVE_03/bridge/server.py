@@ -46,6 +46,7 @@ from .review_workflow import (
     add_guarded_review_card as do_add_guarded_review_card,
     create_guarded_review_sequence as do_create_guarded_review_sequence,
     inspect_sequence_readability as do_inspect_sequence_readability,
+    require_readability_guard as do_require_readability_guard,
 )
 from .render_batches import (approve_render_batch as do_approve_render_batch,
                              create_render_batch)
@@ -635,6 +636,7 @@ def set_review_highlight(composition_id: str, card_id: str, highlight_text: str)
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
+        do_require_readability_guard(config)
         return _call(do_set_review_highlight, project, timeline, config, registry,
                      composition_id, card_id, highlight_text)
     except Exception as exc: return _error(exc)
@@ -647,6 +649,7 @@ def add_end_card(composition_id: str, headline: str, cta: str, start_frame: int,
     try:
         _, _, project, timeline, config, registry, error = _runtime()
         if error: return error
+        do_require_readability_guard(config)
         return _call(do_add_end_card, project, timeline, config, registry, composition_id,
                      headline, cta, start_frame, end_frame, style_role)
     except Exception as exc: return _error(exc)

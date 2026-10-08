@@ -141,6 +141,7 @@ def require_current_approval(
     registry: Registry,
     assessment: SequenceAssessment,
     approval_token: str | None,
+    workstation_id: str | None = None,
 ) -> ReadabilityApproval | None:
     if assessment.status == PASS and approval_token is None:
         return None
@@ -154,6 +155,8 @@ def require_current_approval(
     if record is None:
         raise ReadabilityApprovalError(f"{STALE_APPROVAL}: token sconosciuto")
     approval = _from_record(record)
+    if workstation_id is not None and approval.workstation_id != workstation_id:
+        raise ReadabilityApprovalError(f"{STALE_APPROVAL}: workstation diversa")
     if approval.assessment_fingerprint != assessment.fingerprint:
         raise ReadabilityApprovalError(f"{STALE_APPROVAL}: assessment modificato")
 

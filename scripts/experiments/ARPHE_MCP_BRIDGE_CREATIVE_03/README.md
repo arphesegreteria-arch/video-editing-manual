@@ -60,6 +60,11 @@ La leggibilità recensioni ha un gate separato, `CAP_READABILITY_GUARD=false` pe
 font esatti, 1080×1920/30 per progetto/timeline/playback e, quando necessario, un'approvazione
 legata all'impronta. Spegnere il gate è il rollback e non modifica timeline già create.
 
+`ARPHE_PODCAST_REELS_CTA` conserva la risoluzione sorgente ma richiede progetto, timeline e
+playback a 30 fps. Il playback è read-only nell'API Resolve: va impostato come default/preset in
+Project Settings. Il bridge esegue read-back prima di marker e tagli e, se trova 24, restituisce
+`PLAYBACK_FPS_ACTION_REQUIRED` senza scrivere.
+
 Stato operativo E09: progetto `ARPHE_E09_MIODOTTORE_REVIEWS_16X9`; Gate C V5 e timeline
 `ARPHE_E09_16X9_GATE_D_V1` sono baseline da conservare. Dal 2026-09-11 il runtime installato
 espone 30 azioni, inclusa `create_review_sequence_v2` e il wrapper compatibile

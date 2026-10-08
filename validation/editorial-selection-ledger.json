@@ -4,11 +4,11 @@
   "capability_default": false,
   "automated_evidence": {
     "result": "PASS",
-    "observed_at": "2026-10-08T17:50:00+02:00",
-    "repository_commit": "290099e627142316bc224d2eed62f1283f05d9f5",
-    "contract_digest": "446ef5ac69ec9980cead1f61c77fab8fe1ea7aa00d0c8e54f2f918a6c2dd082d",
+    "observed_at": "2026-10-08T18:18:39+02:00",
+    "repository_commit": "96a80abde951f73f896c7ff59ae16ce22319ae1a",
+    "contract_digest": "6b5d8e7f9fe5c112aee495003432b6e6fbd47b5135b31ad8f6d98a0db137b11a",
     "test_results": [
-      "Bridge automated suite passed 270 tests with one documented Windows symlink skip before this ledger commit.",
+      "Bridge automated suite passed 281 tests with one documented Windows symlink skip before this ledger update.",
       "Windows automated suite passed 55 tests with one documented CurrentUser DPAPI skip before this ledger commit.",
       "Editorial-selection validator focused tests are part of the documentation commit that records this evidence."
     ],
@@ -32,7 +32,7 @@
       },
       "evidence": [],
       "limitations": [
-        "The isolated live gate has not yet been run on PC_PERSONALE."
+        "The production 30 FPS live gate is pending the one-time DaVinci project-default change; a coherent 24 FPS diagnostic run is not accepted as production evidence."
       ]
     },
     "PC_SEGRETERIA": {

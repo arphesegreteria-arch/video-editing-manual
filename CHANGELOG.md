@@ -10,6 +10,11 @@
   proposta, previa approvazione di Alessio e digest del profilo precedente.
 - Stato e flag sono separati per workstation; `CAP_EDITORIAL_SELECTION=false` per default.
   `PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING`; nessun test live è dichiarato.
+- Chiarito il contratto ARPHÈ Podcast Reels: risoluzione source-native, ma progetto, timeline e
+  playback obbligatori a 30 fps. Il bridge non scrive il playback read-only di Resolve: con 24
+  restituisce `PLAYBACK_FPS_ACTION_REQUIRED` prima di marker o tagli.
+- Il gate personale 24/24 ha validato il meccanismo tecnico ma non è promosso a prova produttiva;
+  il PASS resta in attesa del default DaVinci 30/30 impostato manualmente e del nuovo gate.
 
 ## 2026-10-08 — Leggibilità misurabile per Reel recensioni
 

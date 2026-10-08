@@ -9,16 +9,19 @@ richiedere una sola review motivata riduce ricostruzioni da chat e permette appr
 
 ### Risultato automatico
 
-- marker a coppie, review completa, limite 180 secondi, CTA e formato: PASS nei fake Resolve;
+- marker a coppie, review completa, limite 180 secondi, CTA e formato 30/30: PASS nei fake Resolve;
 - failure parziale, resume senza duplicati e collisioni estranee: PASS;
 - journal locale, metriche, privacy e approvazione profilo: PASS;
 - isolamento installazione personale/segreteria: PASS;
-- test live: PENDING su entrambe le workstation.
+- diagnostica live personale 24/24: recovery, resume, cleanup e rollback PASS, ma non valida il
+  contratto produttivo; gate 30/30 PENDING su entrambe le workstation.
 
 ### Decisione
 
-Mantenere il flag spento finché ogni PC non supera il proprio gate live. Non inferire mai lo stato
-di segreteria dai test automatici o dal PC personale.
+Impostare una volta in DaVinci il default progetto/playback a 30 fps; il bridge lo tratta come
+read-only, lo verifica prima di marker e tagli e restituisce un flag operativo se legge 24.
+Mantenere il flag spento finché ogni PC non supera il proprio gate 30/30. Non inferire mai lo
+stato di segreteria dai test automatici o dal PC personale.
 
 ## 2026-10-02 — E10 Caption Engine shortform mobile
 

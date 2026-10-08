@@ -7,7 +7,7 @@ Stato codice: implementato e verificato automaticamente. Rollout e prove Resolve
 
 ChatGPT propone la linea più probabile e chiede una conferma breve. Se la richiesta è ambigua:
 
-1. `ARPHE_PODCAST_REELS_CTA` — estratti 16:9/source-native con CTA;
+1. `ARPHE_PODCAST_REELS_CTA` — estratti source-native a 30 fps con CTA;
 2. `ARPHE_VERTICAL_SOCIAL` — recensioni, short o ADV 1080×1920/30;
 3. `CARABELLESE_YOUTUBE_CLEANUP` — pulizia pause 1920×1080, FPS sorgente;
 4. `ARPHE_LONGFORM_EDITORIAL` — montaggio editoriale completo, guidato dall'editor.
@@ -33,13 +33,16 @@ inventano testi o risultati clinici.
 
 ## Contratti di formato
 
-- Podcast ARPHÈ: risoluzione e FPS della sorgente primaria; MP4/H.264 High/AAC 48 kHz.
+- Podcast ARPHÈ: risoluzione della sorgente primaria, progetto/timeline/playback fissi a 30 fps;
+  MP4/H.264 High/AAC 48 kHz.
 - Verticale: progetto, timeline, playback e render 1080×1920/30; master ProRes 422 HQ e derivato
   H.264 separati.
 - Carabellese: 1920×1080, FPS esatto della sorgente, MP4/H.264 High/AAC 48 kHz.
 - Longform: risoluzione e FPS dichiarati nel brief; review render, master e pubblicabile separati.
 
-In ogni linea `playback FPS = project FPS = timeline FPS`. “Review render” indica un file;
+In ogni linea `playback FPS = project FPS = timeline FPS`. Per Podcast ARPHÈ il valore è sempre
+30, anche quando il file sorgente ha un altro rate: Resolve effettua il conform sulla timeline.
+“Review render” indica un file;
 “playback FPS” indica la riproduzione in Resolve. Sorgenti con FPS differenti richiedono la
 conferma della sorgente/frequenza primaria.
 
@@ -48,6 +51,11 @@ API di scripting. Il bridge non tenta quindi di forzarla. Se il valore non coinc
 contratto, la chat mostra il flag `PLAYBACK_FPS_ACTION_REQUIRED`, il valore trovato, quello
 richiesto e l'istruzione `Project Settings > Master Settings`. Fino al read-back conforme non
 vengono create né timeline, né directory di staging, né job render.
+
+Impostare manualmente una volta il default di DaVinci in `Project Settings > Master Settings`:
+`Timeline frame rate = 30` e `Playback frame rate = 30`, quindi salvare il preset/default prima
+di creare altre timeline. Il bridge ripete il read-back a ogni preparazione e applicazione del
+workflow; non considera valido un gate 24/24 anche se internamente coerente.
 
 ## Sequenza render obbligatoria
 

@@ -152,6 +152,11 @@ decisione editoriale.
 Per `ARPHE_PODCAST_REELS_CTA` ChatGPT propone estratti autosufficienti senza quota minima e con
 massimo tecnico di 20 candidati. La segreteria lavora così:
 
+Il progetto deve essere aperto con `Timeline frame rate = 30` e `Playback frame rate = 30`.
+La risoluzione resta quella della sorgente; il rate 30/30 è invece fisso. Poiché Resolve non rende
+scrivibile il playback via API, il default va impostato manualmente una volta in DaVinci. Se il
+read-back restituisce 24, il bridge mostra `PLAYBACK_FPS_ACTION_REQUIRED` e non scrive marker.
+
 1. ascolta dalla coppia `ARPHE_Rxx_IN` / `ARPHE_Rxx_OUT` direttamente sulla timeline sorgente;
 2. non sposta e non elimina i marker;
 3. invia un solo messaggio con `OK`, `MODIFICA` o `RIFIUTA` e un motivo per ogni `Rxx`;

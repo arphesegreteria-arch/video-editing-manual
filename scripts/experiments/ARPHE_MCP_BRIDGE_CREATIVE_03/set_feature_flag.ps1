@@ -10,7 +10,8 @@ param(
     [Parameter(Mandatory)]
     [ValidateSet('CAP_PROJECT', 'CAP_TIMELINE', 'CAP_FUSION', 'CAP_REVIEW',
                  'CAP_MOTION', 'CAP_ASSETS', 'CAP_RENDER', 'CAP_LONGFORM', 'CAP_CLEANUP',
-                 'CAP_ARTIFACT_MAINTENANCE', 'CAP_RESOLVE_RETIREMENT', 'CAP_READABILITY_GUARD')]
+                 'CAP_ARTIFACT_MAINTENANCE', 'CAP_RESOLVE_RETIREMENT', 'CAP_READABILITY_GUARD',
+                 'CAP_EDITORIAL_SELECTION')]
     [string]$Name,
 
     [Parameter(Mandatory)]
@@ -34,6 +35,7 @@ if (-not (Test-Path -LiteralPath $creativeConfigPath -PathType Leaf)) {
     throw "Config Creative03 non trovata: $creativeConfigPath"
 }
 Write-Host "Creative config: $creativeConfigPath"
+Write-Host "Workstation: $WorkstationId"
 
 $creativeConfig = Get-Content -Raw -LiteralPath $creativeConfigPath | ConvertFrom-Json
 if (-not $creativeConfig.feature_flags) {

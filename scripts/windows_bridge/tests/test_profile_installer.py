@@ -380,6 +380,17 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertIn("CAP_READABILITY_GUARD", result.stdout)
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_feature_flag_accepts_editorial_selection_gate_and_discloses_profile_target(self):
+        creative_config, _command = self.write_profile_runtime_config()
+        config = json.loads(creative_config.read_text(encoding="utf-8"))
+        config["feature_flags"]["CAP_EDITORIAL_SELECTION"] = False
+        creative_config.write_text(json.dumps(config), encoding="utf-8")
+        result = self.run_feature_flag_dry_run("CAP_EDITORIAL_SELECTION")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("PC_PERSONALE", result.stdout)
+        self.assertIn(str(creative_config), result.stdout)
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_keeps_state_and_audit_inside_profile_directory(self):
         config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
         result = self.run_creative_install(config_path)
@@ -395,7 +406,8 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         destination = self.root / "creative-install"
         for name in ("editorial_workflows.json", "render_profiles.json", "artifact_retention.json",
-                     "review_readability_contract.json"):
+                     "review_readability_contract.json", "editorial_selection_contract.json",
+                     "editorial_preferences.json"):
             self.assertEqual(
                 (CREATIVE_INSTALLER.parent / name).read_bytes(),
                 (destination / name).read_bytes(),
@@ -419,6 +431,13 @@ class ProfileInstallerTests(unittest.TestCase):
                          Path(config["resolve_retirement_registry_path"]))
         self.assertFalse(config["feature_flags"]["CAP_RESOLVE_RETIREMENT"])
         self.assertFalse(config["feature_flags"]["CAP_READABILITY_GUARD"])
+        self.assertFalse(config["feature_flags"]["CAP_EDITORIAL_SELECTION"])
+        self.assertEqual(config_path.parent / "editorial_jobs.json", Path(config["editorial_jobs_path"]))
+        self.assertEqual(config_path.parent / "editorial_journal.jsonl", Path(config["editorial_journal_path"]))
+        self.assertEqual(config_path.parent / "editorial_profile_overlay.json",
+                         Path(config["editorial_profile_overlay_path"]))
+        self.assertEqual(config_path.parent / "editorial_profile_proposals.json",
+                         Path(config["editorial_profile_proposals_path"]))
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_defaults_readability_guard_off_for_both_workstations(self):
@@ -466,6 +485,45 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         config = json.loads(config_path.read_text(encoding="utf-8"))
         self.assertTrue(config["feature_flags"]["CAP_READABILITY_GUARD"])
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_upgrade_preserves_editorial_flag_and_local_state_for_true_and_false(self):
+        for enabled in (True, False):
+            with self.subTest(enabled=enabled):
+                config_path = self.root / f"upgrade-{enabled}" / "PC_PERSONALE" / "creative_config.json"
+                config_path.parent.mkdir(parents=True)
+                jobs = config_path.parent / "editorial_jobs.json"
+                jobs.write_text(json.dumps({"schema": "ARPHE_EDITORIAL_JOBS_V1",
+                                            "workstation_id": "PC_PERSONALE", "jobs": {}}), encoding="utf-8")
+                before = jobs.read_bytes()
+                config_path.write_text(json.dumps({
+                    "workstation_id": "PC_PERSONALE",
+                    "state_path": str(config_path.parent / "creative_state.json"),
+                    "audit_log_path": str(config_path.parent / "audit.jsonl"),
+                    "editorial_jobs_path": str(jobs),
+                    "feature_flags": {"CAP_EDITORIAL_SELECTION": enabled},
+                }), encoding="utf-8")
+                result = self.run_creative_install(
+                    config_path, destination=self.root / f"creative-upgrade-{enabled}"
+                )
+                self.assertEqual(0, result.returncode, result.stderr)
+                updated = json.loads(config_path.read_text(encoding="utf-8"))
+                self.assertEqual(enabled, updated["feature_flags"]["CAP_EDITORIAL_SELECTION"])
+                self.assertEqual(before, jobs.read_bytes())
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_install_rejects_foreign_editorial_state_before_writes(self):
+        config_path = self.root / "foreign-editorial" / "PC_PERSONALE" / "creative_config.json"
+        config_path.parent.mkdir(parents=True)
+        jobs = config_path.parent / "editorial_jobs.json"
+        jobs.write_text(json.dumps({"schema": "ARPHE_EDITORIAL_JOBS_V1",
+                                    "workstation_id": "PC_SEGRETERIA", "jobs": {}}), encoding="utf-8")
+        result = self.run_creative_install(
+            config_path, destination=self.root / "creative-foreign-editorial"
+        )
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("PC_SEGRETERIA", result.stderr)
+        self.assertFalse((self.root / "creative-foreign-editorial").exists())
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_rejects_foreign_artifact_registry_before_writes(self):

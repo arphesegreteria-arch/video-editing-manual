@@ -115,6 +115,7 @@ class ProfileConfigTests(unittest.TestCase):
         self.assertNotEqual(personal["creative_config"], office["creative_config"])
         for key in ("artifact_registry", "quarantine_root", "log_dir"):
             self.assertNotEqual(personal[key], office[key])
+        self.assertNotEqual(personal["creative_config"], office["creative_config"])
         self.assertEqual(
             "C:/ARPHE/MCP/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/runtime-configs/PC_PERSONALE/artifact_registry.json",
             personal["artifact_registry"],

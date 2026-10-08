@@ -15,6 +15,10 @@ $configDir = Split-Path -Parent $configPath
 $artifactRegistryPath = Join-Path $configDir 'artifact_registry.json'
 $resolveArchiveRoot = Join-Path $configDir 'resolve-retirement-archives'
 $resolveRetirementRegistryPath = Join-Path $configDir 'resolve_retirement_registry.json'
+$editorialJobsPath = Join-Path $configDir 'editorial_jobs.json'
+$editorialJournalPath = Join-Path $configDir 'editorial_journal.jsonl'
+$editorialOverlayPath = Join-Path $configDir 'editorial_profile_overlay.json'
+$editorialProposalsPath = Join-Path $configDir 'editorial_profile_proposals.json'
 if (-not $RuntimeLogRoot) {
     $RuntimeLogRoot = Join-Path 'C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1' $WorkstationId
 }
@@ -59,6 +63,23 @@ if (Test-Path -LiteralPath $resolveRetirementRegistryPath -PathType Leaf) {
         throw "Il registry retirement Resolve appartiene a '$($existingResolveRegistry.workstation_id)', non a '$WorkstationId'. Installazione rifiutata senza modifiche."
     }
 }
+foreach ($editorialState in @($editorialJobsPath, $editorialOverlayPath, $editorialProposalsPath)) {
+    if (Test-Path -LiteralPath $editorialState -PathType Leaf) {
+        $existingEditorialState = Get-Content -Raw -LiteralPath $editorialState | ConvertFrom-Json
+        if ([string]$existingEditorialState.workstation_id -ne $WorkstationId) {
+            throw "Lo stato editoriale '$editorialState' appartiene a '$($existingEditorialState.workstation_id)', non a '$WorkstationId'. Installazione rifiutata senza modifiche."
+        }
+    }
+}
+if (Test-Path -LiteralPath $editorialJournalPath -PathType Leaf) {
+    $firstEditorialRecord = Get-Content -LiteralPath $editorialJournalPath | Where-Object { $_.Trim() } | Select-Object -First 1
+    if ($firstEditorialRecord) {
+        $existingEditorialJournal = $firstEditorialRecord | ConvertFrom-Json
+        if ([string]$existingEditorialJournal.workstation_id -ne $WorkstationId) {
+            throw "Il journal editoriale appartiene a '$($existingEditorialJournal.workstation_id)', non a '$WorkstationId'. Installazione rifiutata senza modifiche."
+        }
+    }
+}
 
 if (-not $PSCmdlet.ShouldProcess($Destination, 'Install creative bridge beside validated bridges')) { return }
 
@@ -70,7 +91,7 @@ New-Item -ItemType Directory -Path $bridgeDestination -Force | Out-Null
 Get-ChildItem -LiteralPath $bridgeSource -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $bridgeDestination -Force
 }
-foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json', 'artifact_retention.json', 'review_readability_contract.json')) {
+foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json', 'artifact_retention.json', 'review_readability_contract.json', 'editorial_selection_contract.json', 'editorial_preferences.json')) {
     $registrySource = Join-Path $PSScriptRoot $registryName
     if (-not (Test-Path -LiteralPath $registrySource -PathType Leaf)) {
         throw "Creative registry not found: $registrySource"
@@ -102,6 +123,10 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     Set-ConfigProperty -Config $config -Name runtime_log_root -Value $RuntimeLogRoot.Replace('\', '/')
     Set-ConfigProperty -Config $config -Name resolve_archive_root -Value $resolveArchiveRoot.Replace('\', '/')
     Set-ConfigProperty -Config $config -Name resolve_retirement_registry_path -Value $resolveRetirementRegistryPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name editorial_jobs_path -Value $editorialJobsPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name editorial_journal_path -Value $editorialJournalPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name editorial_profile_overlay_path -Value $editorialOverlayPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name editorial_profile_proposals_path -Value $editorialProposalsPath.Replace('\', '/')
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_ARTIFACT_MAINTENANCE']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_ARTIFACT_MAINTENANCE -NotePropertyValue $false
     }
@@ -110,6 +135,9 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_READABILITY_GUARD']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_READABILITY_GUARD -NotePropertyValue $false
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_EDITORIAL_SELECTION']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_EDITORIAL_SELECTION -NotePropertyValue $false
     }
     if ($null -ne $legacyConfig) {
         foreach ($migration in @(
@@ -155,7 +183,11 @@ if (-not (Test-Path -LiteralPath $configPath)) {
         @{ Name = 'artifact_registry_path'; Value = $profileArtifactRegistryPath },
         @{ Name = 'runtime_log_root'; Value = $profileRuntimeLogRoot },
         @{ Name = 'resolve_archive_root'; Value = $profileResolveArchiveRoot },
-        @{ Name = 'resolve_retirement_registry_path'; Value = $profileResolveRetirementRegistryPath }
+        @{ Name = 'resolve_retirement_registry_path'; Value = $profileResolveRetirementRegistryPath },
+        @{ Name = 'editorial_jobs_path'; Value = $editorialJobsPath.Replace('\', '/') },
+        @{ Name = 'editorial_journal_path'; Value = $editorialJournalPath.Replace('\', '/') },
+        @{ Name = 'editorial_profile_overlay_path'; Value = $editorialOverlayPath.Replace('\', '/') },
+        @{ Name = 'editorial_profile_proposals_path'; Value = $editorialProposalsPath.Replace('\', '/') }
     )) {
         if ($null -eq $config.PSObject.Properties[$pathField.Name]) {
             $config | Add-Member -NotePropertyName $pathField.Name -NotePropertyValue $pathField.Value
@@ -199,6 +231,10 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_READABILITY_GUARD']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_READABILITY_GUARD -NotePropertyValue $false
+        $changed = $true
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_EDITORIAL_SELECTION']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_EDITORIAL_SELECTION -NotePropertyValue $false
         $changed = $true
     }
     if ($changed) {

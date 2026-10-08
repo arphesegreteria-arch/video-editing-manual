@@ -34,7 +34,8 @@
     "CAP_CLEANUP": false,
     "CAP_ARTIFACT_MAINTENANCE": false,
     "CAP_RESOLVE_RETIREMENT": false,
-    "CAP_READABILITY_GUARD": false
+    "CAP_READABILITY_GUARD": false,
+    "CAP_EDITORIAL_SELECTION": false
   },
   "palette": {
     "ivory": "#F7F2E8",

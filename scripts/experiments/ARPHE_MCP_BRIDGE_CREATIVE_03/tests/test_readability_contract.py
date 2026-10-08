@@ -33,7 +33,7 @@ class ReadabilityContractTests(unittest.TestCase):
         policy = load_readability_contract(CONTRACT_PATH)
 
         self.assertEqual(policy.policy_version, "ARPHE_VIDEO_READABILITY_V1")
-        self.assertEqual(policy.graphic_kit_commit, "665ed816176bc76b6b10ca5f274b0054b2791437")
+        self.assertEqual(policy.graphic_kit_commit, "fd074838cb3dbad8d5a939cb4845251d4fbaeafe")
         self.assertEqual(
             contract_digest(policy),
             "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",

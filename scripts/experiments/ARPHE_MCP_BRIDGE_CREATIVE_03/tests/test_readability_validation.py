@@ -15,7 +15,7 @@ from scripts.validate_review_readability_ledger import validate_readability_ledg
 
 
 VIDEO_COMMIT = "f500179ef58aed2b706aa364bf4caa9c06983d4c"
-GRAPHIC_COMMIT = "665ed816176bc76b6b10ca5f274b0054b2791437"
+GRAPHIC_COMMIT = "fd074838cb3dbad8d5a939cb4845251d4fbaeafe"
 POLICY_DIGEST = "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe"
 STATE_REFERENCE = "CURRENT_STATE.md#review-readability-guard"
 

@@ -12,7 +12,7 @@ approvazione, mentre lo split è solo verbatim ed esplicito. Size minima `0.042`
 righe, safe area `0.08/0.84/0.10/0.82`; fallback font non accettato come finale.
 
 Evidenza automatica: Creative `207/207 PASS` con 1 skip symlink ambientale; Windows `52/52
-PASS` con 1 skip DPAPI ambientale. Contratto Graphic Kit `665ed816176bc76b6b10ca5f274b0054b2791437`,
+PASS` con 1 skip DPAPI ambientale. Contratto Graphic Kit `fd074838cb3dbad8d5a939cb4845251d4fbaeafe`,
 digest `68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe`. Sul PC personale
 installazione isolata, contratto e readiness GDI dei font finali sono PASS. La prova ha corretto
 il falso negativo GDI per i nomi Windows dei pesi Light/Medium. La revisione

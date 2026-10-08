@@ -77,6 +77,10 @@ class CreativeConfig:
     runtime_log_root: Path = Path("runtime-logs")
     resolve_archive_root: Path = Path("resolve-archives")
     resolve_retirement_registry_path: Path = Path("resolve-retirements.json")
+    editorial_jobs_path: Path = Path("editorial_jobs.json")
+    editorial_journal_path: Path = Path("editorial_journal.jsonl")
+    editorial_profile_overlay_path: Path = Path("editorial_profile_overlay.json")
+    editorial_profile_proposals_path: Path = Path("editorial_profile_proposals.json")
 
 
 def _path(value: str, base: Path) -> Path:
@@ -121,11 +125,13 @@ def load_config(path: Path | None = None) -> CreativeConfig:
     render_codec = str(raw.get("render_codec", "H264"))
     if (render_format, render_codec) not in ALLOWED_RENDER_PAIRS:
         raise ValueError("Coppia render_format/render_codec non consentita")
+    state_path = _path(str(raw.get("state_path", "")), base / "creative_state.json")
+    editorial_root = state_path.parent
     return CreativeConfig(
         path=selected,
         asset_root=_path(str(raw.get("asset_root", "")), base / "assets"),
         render_root=_path(str(raw.get("render_root", "")), base / "renders"),
-        state_path=_path(str(raw.get("state_path", "")), base / "creative_state.json"),
+        state_path=state_path,
         audit_log_path=_path(str(raw.get("audit_log_path", "")), base / "audit.jsonl"),
         palette=palette,
         flags=flags,
@@ -151,5 +157,17 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         resolve_archive_root=_path(str(raw.get("resolve_archive_root", "")), base / "resolve-archives"),
         resolve_retirement_registry_path=_path(
             str(raw.get("resolve_retirement_registry_path", "")), base / "resolve-retirements.json"
+        ),
+        editorial_jobs_path=_path(
+            str(raw.get("editorial_jobs_path", "")), editorial_root / "editorial_jobs.json"
+        ),
+        editorial_journal_path=_path(
+            str(raw.get("editorial_journal_path", "")), editorial_root / "editorial_journal.jsonl"
+        ),
+        editorial_profile_overlay_path=_path(
+            str(raw.get("editorial_profile_overlay_path", "")), editorial_root / "editorial_profile_overlay.json"
+        ),
+        editorial_profile_proposals_path=_path(
+            str(raw.get("editorial_profile_proposals_path", "")), editorial_root / "editorial_profile_proposals.json"
         ),
     )

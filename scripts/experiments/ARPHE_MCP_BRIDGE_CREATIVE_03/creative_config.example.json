@@ -16,6 +16,10 @@
   "runtime_log_root": "C:/ARPHE/MCP/logs/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/PC_SEGRETERIA",
   "resolve_archive_root": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/resolve-retirement-archives",
   "resolve_retirement_registry_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/resolve_retirement_registry.json",
+  "editorial_jobs_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/editorial_jobs.json",
+  "editorial_journal_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/editorial_journal.jsonl",
+  "editorial_profile_overlay_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/editorial_profile_overlay.json",
+  "editorial_profile_proposals_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/editorial_profile_proposals.json",
   "allowed_projects": [],
   "allowed_timelines": [],
   "feature_flags": {

@@ -20,6 +20,29 @@ DEFAULT_PITCH = 0
 FF_DONTCARE = 0
 LOGPIXELSY = 90
 
+_WINDOWS_WEIGHT_FAMILY_SUFFIXES = {
+    100: "Thin",
+    200: "ExtraLight",
+    300: "Light",
+    500: "Medium",
+    600: "SemiBold",
+    800: "ExtraBold",
+    900: "Black",
+}
+
+
+def font_family_candidates(family: str, weight: int) -> tuple[str, ...]:
+    """Return exact Windows family names that may represent one canonical weight.
+
+    Some static Windows fonts expose non-Regular/Bold weights as separate GDI
+    families (for example ``Satoshi Medium``) even though DirectWrite and CSS use
+    the canonical family ``Satoshi`` with weight 500.  Keep the mapping narrow:
+    only the standardized family suffix for the requested weight is accepted.
+    """
+
+    suffix = _WINDOWS_WEIGHT_FAMILY_SUFFIXES.get(int(weight))
+    return (family, f"{family} {suffix}") if suffix else (family,)
+
 
 class TextMeasurer(Protocol):
     def font_available(self, family: str, weight: int) -> bool: ...
@@ -145,9 +168,6 @@ class WindowsGdiTextMeasurer:
         if not dc:
             return False
         found = False
-        logical_font = LOGFONTW()
-        logical_font.lfCharSet = DEFAULT_CHARSET
-        logical_font.lfFaceName = family[: LF_FACESIZE - 1]
         callback_type = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)(
             ctypes.c_int,
             ctypes.POINTER(LOGFONTW),
@@ -156,15 +176,6 @@ class WindowsGdiTextMeasurer:
             wintypes.LPARAM,
         )
 
-        def inspect(logfont, _metric, _font_type, _lparam):
-            nonlocal found
-            face = str(logfont.contents.lfFaceName).casefold()
-            if face == family.casefold() and int(logfont.contents.lfWeight) == int(weight):
-                found = True
-                return 0
-            return 1
-
-        callback = callback_type(inspect)
         self._gdi32.EnumFontFamiliesExW.argtypes = [
             wintypes.HDC,
             ctypes.POINTER(LOGFONTW),
@@ -174,7 +185,26 @@ class WindowsGdiTextMeasurer:
         ]
         self._gdi32.EnumFontFamiliesExW.restype = ctypes.c_int
         try:
-            self._gdi32.EnumFontFamiliesExW(dc, ctypes.byref(logical_font), callback, 0, 0)
+            for candidate in font_family_candidates(family, weight):
+                expected_face = candidate.casefold()
+                logical_font = LOGFONTW()
+                logical_font.lfCharSet = DEFAULT_CHARSET
+                logical_font.lfFaceName = candidate[: LF_FACESIZE - 1]
+
+                def inspect(logfont, _metric, _font_type, _lparam):
+                    nonlocal found
+                    face = str(logfont.contents.lfFaceName).casefold()
+                    if face == expected_face and int(logfont.contents.lfWeight) == int(weight):
+                        found = True
+                        return 0
+                    return 1
+
+                callback = callback_type(inspect)
+                self._gdi32.EnumFontFamiliesExW(
+                    dc, ctypes.byref(logical_font), callback, 0, 0
+                )
+                if found:
+                    break
             return found
         finally:
             self._gdi32.DeleteDC(dc)

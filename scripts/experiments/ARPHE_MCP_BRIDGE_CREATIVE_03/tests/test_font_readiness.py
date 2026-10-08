@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from bridge.font_readiness import (  # noqa: E402
     WindowsGdiTextMeasurer,
     check_required_fonts,
+    font_family_candidates,
 )
 from bridge.readability_contract import load_readability_contract  # noqa: E402
 
@@ -45,6 +46,18 @@ REQUIRED = {
 
 
 class FontReadinessTests(unittest.TestCase):
+    def test_windows_weight_aliases_are_narrow_and_deterministic(self):
+        self.assertEqual(
+            font_family_candidates("Satoshi", 500),
+            ("Satoshi", "Satoshi Medium"),
+        )
+        self.assertEqual(
+            font_family_candidates("Noto Serif Display", 300),
+            ("Noto Serif Display", "Noto Serif Display Light"),
+        )
+        self.assertEqual(font_family_candidates("Satoshi", 400), ("Satoshi",))
+        self.assertEqual(font_family_candidates("Satoshi", 700), ("Satoshi",))
+
     def test_checks_each_required_family_and_weight_independently(self):
         measurer = FakeMeasurer(REQUIRED)
 

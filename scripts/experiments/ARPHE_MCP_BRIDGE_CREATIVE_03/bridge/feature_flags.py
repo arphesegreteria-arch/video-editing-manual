@@ -19,6 +19,7 @@ CAPABILITY_STATUS = {
     "CAP_CLEANUP": "PENDING",
     "CAP_ARTIFACT_MAINTENANCE": "PENDING",
     "CAP_RESOLVE_RETIREMENT": "PENDING",
+    "CAP_READABILITY_GUARD": "PARTIAL",
 }
 
 
@@ -32,6 +33,21 @@ def _call(obj: Any, name: str) -> Any:
         return method() if callable(method) else None
     except Exception:
         return None
+
+
+def _readability_guard_available() -> bool:
+    try:
+        from . import review_workflow
+        from .readability_contract import load_readability_contract
+
+        load_readability_contract(review_workflow.CONTRACT_PATH)
+        return all(callable(getattr(review_workflow, name, None)) for name in (
+            "inspect_sequence_readability",
+            "add_guarded_review_card",
+            "create_guarded_review_sequence",
+        ))
+    except Exception:
+        return False
 
 
 def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
@@ -66,6 +82,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_CLEANUP": False,
         "CAP_ARTIFACT_MAINTENANCE": True,
         "CAP_RESOLVE_RETIREMENT": retirement_ok,
+        "CAP_READABILITY_GUARD": _readability_guard_available(),
     }
 
 

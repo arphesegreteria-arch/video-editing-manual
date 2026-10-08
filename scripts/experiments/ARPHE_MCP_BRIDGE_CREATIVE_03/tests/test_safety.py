@@ -160,8 +160,37 @@ class SafetyTests(unittest.TestCase):
     def test_default_flags_gate_advanced_writes(self):
         self.assertTrue(DEFAULT_FLAGS["CAP_PROJECT"])
         self.assertTrue(DEFAULT_FLAGS["CAP_TIMELINE"])
-        for name in ("CAP_FUSION", "CAP_REVIEW", "CAP_MOTION", "CAP_ASSETS", "CAP_RENDER"):
+        for name in ("CAP_FUSION", "CAP_REVIEW", "CAP_MOTION", "CAP_ASSETS", "CAP_RENDER",
+                     "CAP_READABILITY_GUARD"):
             self.assertFalse(DEFAULT_FLAGS[name])
+
+    def test_readability_inspection_stays_open_while_every_review_write_fails_closed(self):
+        class ResolveTrap:
+            def __getattr__(self, name):
+                raise AssertionError(f"Resolve must not be touched: {name}")
+
+        config = SimpleNamespace(
+            flags={**DEFAULT_FLAGS, "CAP_REVIEW": True, "CAP_READABILITY_GUARD": False},
+            state_path=Path("unused-state.json"),
+            audit_log_path=Path("unused-audit.jsonl"),
+        )
+        runtime = (object(), object(), ResolveTrap(), ResolveTrap(), config, object(), None)
+        assessment = SimpleNamespace(to_dict=lambda: {"status": "PASS", "reviews": []})
+        with patch("bridge.server._runtime", return_value=runtime), \
+             patch("bridge.server.do_inspect_sequence_readability", return_value=assessment), \
+             patch("bridge.server.load_config", return_value=config), \
+             patch("bridge.server.write_audit"):
+            inspected = server.inspect_review_readability([{"text": "Testo", "stars": 5}])
+            writes = (
+                server.add_review_card("COMP", "Testo", 5, 0, 90),
+                server.create_review_sequence("SEQ", [{"text": "Testo", "stars": 5}]),
+                server.create_review_sequence_v2("SEQ", [{"text": "Testo", "stars": 5}]),
+            )
+        self.assertTrue(inspected["ok"])
+        for result in writes:
+            self.assertFalse(result["ok"])
+            self.assertEqual("ValidationError", result["error_type"])
+            self.assertIn("CAP_READABILITY_GUARD", result["error"])
 
     def test_malformed_config_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

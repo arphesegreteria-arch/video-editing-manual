@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,17 +10,13 @@ import uuid
 from typing import Any
 
 from .audio_worker import DISTANT_PRESET, LEVEL_PRESET, NATURAL_PRESET, PRESET, PRESETS
+from .audio_provenance import media_fingerprint
 from .config import CreativeConfig
 from .longform_tools import allowed_media
 from .safety import ValidationError, arphe_name
 
 
 JOB_ID = re.compile(r"^audio_[0-9a-f]{16}$")
-
-
-def _fingerprint(path: Path) -> str:
-    stat = path.stat()
-    return hashlib.sha256(f"{path}|{stat.st_size}|{stat.st_mtime_ns}".encode()).hexdigest()
 
 
 def start_audio_job(config: CreativeConfig, media_path: str, preset: str = PRESET) -> dict[str, Any]:
@@ -42,9 +37,9 @@ def start_audio_job(config: CreativeConfig, media_path: str, preset: str = PRESE
     )
     output = config.audio_root / f"ARPHE_{label}_{source_name}_{job_id[-8:]}.wav"
     job_path = config.audio_jobs_root / f"{job_id}.json"
-    payload = {"schema": "ARPHE_AUDIO_JOB_V1", "job_id": job_id, "status": "QUEUED",
+    payload = {"schema": "ARPHE_AUDIO_JOB_V2", "job_id": job_id, "status": "QUEUED",
                "progress_percent": 0, "preset": preset, "source_name": source.name,
-               "source_fingerprint": _fingerprint(source), "output_path": str(output)}
+               "source_fingerprint": media_fingerprint(source), "output_path": str(output.resolve())}
     job_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS if os.name == "nt" else 0
     subprocess.Popen([sys.executable, "-m", "bridge.audio_worker", "--source", str(source),

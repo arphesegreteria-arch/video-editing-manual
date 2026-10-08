@@ -8,6 +8,8 @@ import tempfile
 import time
 import traceback
 
+from .audio_provenance import file_sha256, media_fingerprint
+
 
 PRESET = "ARPHE_DIALOGUE_CLEAN_V1"
 LEVEL_PRESET = "ARPHE_DIALOGUE_LEVEL_V2"
@@ -42,6 +44,14 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
         raise ValueError("Preset audio non consentito")
 
     state = json.loads(job_path.read_text(encoding="utf-8-sig"))
+    if state.get("schema") != "ARPHE_AUDIO_JOB_V2":
+        raise ValueError("Manifest audio job V2 richiesto")
+    if state.get("preset") != preset:
+        raise ValueError("Preset richiesto diverso dal manifest")
+    if state.get("source_fingerprint") != media_fingerprint(source):
+        raise ValueError("Sorgente audio diversa dal manifest")
+    if Path(str(state.get("output_path", ""))).resolve() != output.resolve():
+        raise ValueError("Output audio diverso dal manifest")
     state.update(status="RUNNING", progress_percent=0)
     _save(job_path, state)
     source_container = av.open(str(source))
@@ -184,10 +194,15 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
     check_stream = next(stream for stream in check.streams if stream.type == "audio")
     output_duration = float(check_stream.duration * check_stream.time_base) if check_stream.duration else None
     check.close()
-    if output_duration is not None and duration and abs(output_duration - duration) > (1 / 30):
-        raise RuntimeError(f"Audio non sincronizzato: differenza {output_duration - duration:.3f}s")
+    if output_duration is None or not duration:
+        raise RuntimeError("Durata sorgente/output audio non disponibile")
+    sync_delta = output_duration - duration
+    if abs(sync_delta) > (1 / 30):
+        raise RuntimeError(f"Audio non sincronizzato: differenza {sync_delta:.3f}s")
     state.update(status="COMPLETED", progress_percent=100, output_path=str(output),
-                 output_duration_seconds=output_duration, sample_rate=48000, channels=2)
+                 source_duration_seconds=duration, output_duration_seconds=output_duration,
+                 sync_delta_seconds=sync_delta, output_sha256=file_sha256(output),
+                 sample_rate=48000, channels=2)
     _save(job_path, state)
 
 

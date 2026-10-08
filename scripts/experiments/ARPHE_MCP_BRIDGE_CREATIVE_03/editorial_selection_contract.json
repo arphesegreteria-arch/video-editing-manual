@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "workflow_id": "ARPHE_PODCAST_REELS_CTA",
+  "max_candidates": 20,
+  "max_final_seconds": 180.0,
+  "marker_color": "Blue",
+  "cta_duration_seconds": 5.0,
+  "modified_anchor_window_seconds": 90.0
+}

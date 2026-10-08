@@ -2,6 +2,24 @@
 
 Ultimo aggiornamento: sessione 2026-10-08.
 
+<a id="review-readability-guard"></a>
+## Leggibilità recensioni — CODICE VALIDATO / LIVE PENDING
+
+Il Graphic Kit è la fonte canonica di safe area, palette e ruoli font. Il bridge video ne include
+un contratto pinning esatto (`ARPHE_VIDEO_READABILITY_V1`) e calcola durata a quattro parole al
+secondo più un secondo, minimo tre. Una card resta la regola; oltre dodici secondi richiede
+approvazione, mentre lo split è solo verbatim ed esplicito. Size minima `0.042`, massimo sette
+righe, safe area `0.08/0.84/0.10/0.82`; fallback font non accettato come finale.
+
+Evidenza automatica: Creative `203/203 PASS` con 2 skip ambientali espliciti; Windows `52/52
+PASS` con 1 skip DPAPI ambientale. Contratto Graphic Kit `a404fa869dc5c49c89548ba06b0a7a51f82aa243`,
+digest `68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe`. Sul PC personale
+mancano attualmente `Noto Serif Display 300` e `Satoshi 500`: nessun PASS font/live è dichiarato.
+
+`CAP_READABILITY_GUARD=false` di default e separato per workstation. `PC_PERSONALE`: `PENDING`.
+`PC_SEGRETERIA`: `PENDING` e non toccato. Fonte delle evidenze:
+`validation/review-readability-ledger.json`.
+
 ## Ritiro Resolve archive-first — CODICE VALIDATO / PC_PERSONALE LIVE PASS
 
 Timeline e progetti ARPHÈ possono essere ritirati soltanto dopo salvataggio, export `.drp`

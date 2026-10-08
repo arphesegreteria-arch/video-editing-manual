@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-10-08 — Leggibilità misurabile per Reel recensioni
+
+- Il Graphic Kit definisce il contratto canonico per safe area, size, righe, velocità di lettura
+  e ruoli font; il bridge video lo include con commit e digest verificabili.
+- La regola operativa è una card unica quando possibile, quattro parole/secondo più un secondo,
+  minimo 3 e standard massimo 12 secondi. Split solo verbatim e previa approvazione.
+- Aggiunti ispezione read-only, approvazioni legate all'impronta e blocco zero-write per font,
+  overflow, formato/FPS, contratto, gate o approvazione non validi.
+- `CAP_READABILITY_GUARD=false` per default su entrambi i PC; upgrade e installer preservano
+  identità e valore esplicito senza copiare stato tra workstation.
+- Evidenza automatica: Creative `203/203 PASS` (2 skip ambientali), Windows `52/52 PASS` (1 skip
+  DPAPI). Prove live `PC_PERSONALE` e `PC_SEGRETERIA`: `PENDING`, registrate separatamente nel
+  ledger; il PC segreteria non è stato toccato.
+
 ## 2026-10-08 — Ritiro Resolve archive-first e recovery senza overwrite
 
 - Aggiunti prepare, approvazione tecnica, execute idempotente, inspection e recovery per timeline

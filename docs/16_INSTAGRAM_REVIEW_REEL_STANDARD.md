@@ -12,8 +12,8 @@ sulla prova visuale mobile-first `ARPHE_E09_REELS_MIODOTTORE_V3` e deve essere r
 - formato nativo Reel: **1080×1920, 30 fps, 9:16**;
 - fino a otto recensioni originali;
 - apertura editoriale, card in sequenza e CTA conclusiva;
-- durata automatica: **3–5 secondi per card**, tre secondi di intro e quattro di CTA;
-- durata tipica per cinque recensioni: circa **27 secondi**;
+- durata automatica per card: `max(3, ceil(parole / 4) + 1)` secondi;
+- fino a 12 secondi la card può rientrare nello standard; oltre richiede approvazione esplicita;
 - timeline e composition nuove per ogni consegna, senza sovrascrivere esperimenti precedenti.
 
 Non usare la versione 16:9 come sorgente da ritagliare: il Reel nasce verticale.
@@ -39,33 +39,48 @@ Il template senza dati reali è `plans/ARPHE_INSTAGRAM_REVIEW_REEL_TEMPLATE.json
 | Testo | dark brown `#3A2923` |
 | Stelle e titolo | burgundy `#6C2438` |
 | Micro-etichetta e sottotitolo | warm brown `#8A6248` |
-| Font | Satoshi: Regular per corpo, Medium per etichette, Bold/Black per titoli |
+| Font | Noto Serif Display Light 300 per titoli; Satoshi 400 corpo, 500 etichette, 700 pulsanti |
 
 L'apertura usa un pannello cream centrato sul canvas beige: micro-etichetta `ARPHE
 POLIAMBULATORIO`, titolo su due righe `Dicono / di noi` e sottotitolo `Recensioni su MioDottore`.
 Non aggiungere una barra verticale accanto al titolo: nella prima prova appariva accidentalmente
 attaccata alla lettera “D”.
 
-Le card verticali hanno larghezza relativa 90%, altezza 46% e testo 0,052/0,047/0,042 in base
-alla lunghezza: è una scala scelta per la lettura su telefono, non per il Viewer desktop. Intro e
-CTA usano anch'essi titoli più grandi rispetto alla 16:9.
-Il contenuto resta nell'area centrale: evitare elementi essenziali ai bordi superiore e inferiore,
-dove l'interfaccia Instagram può sovrapporsi.
+Il corpo prova nell'ordine le size `0.052`, `0.047`, `0.042`, senza scendere sotto il minimo e
+senza superare sette righe. Titolo, testo, stelle, etichette e CTA devono restare nell'area
+essenziale normalizzata `left 0.08 / right 0.84 / top 0.10 / bottom 0.82`. Un fallback font è
+diagnostico, non un risultato finale accettabile.
 
 ## Procedura standard
 
-1. Verificare che `CAP_REVIEW`, `CAP_FUSION` e `CAP_MOTION` siano attive e che il bridge risponda
-   `ready`.
-2. Creare o selezionare un progetto ARPHÈ autorizzato.
-3. Creare una timeline con nome `ARPHE_<SERIE>_REELS_V<n>`, 1080×1920, 30 fps.
-4. Chiamare `create_review_sequence_v2` con `total_duration_frames: 0`, `style_role: cream`,
+1. Chiamare `inspect_review_readability`: è read-only e resta disponibile anche con
+   `CAP_READABILITY_GUARD=false`.
+2. Mostrare una sola card per recensione come proposta predefinita e ottenere l'approvazione del
+   contenuto originale anonimizzato.
+3. Se l'esito è `NEEDS_REVIEW`, ottenere anche l'approvazione leggibilità: preferire
+   `LONG_SINGLE`; usare `VERBATIM_SPLIT` soltanto su richiesta e sul punto proposto. Non
+   abbreviare, riscrivere o spezzare automaticamente.
+4. Verificare `CAP_REVIEW`, `CAP_FUSION`, `CAP_READABILITY_GUARD`, progetto/timeline/playback
+   1080×1920/30 e i quattro pesi font esatti.
+5. Chiamare `create_review_sequence_v2` con `total_duration_frames: 0`, `style_role: cream`,
    l'intro e la CTA dello standard. Omettere `small_label` da ogni recensione.
-5. Applicare `animate_card_entry` a ogni card: `ARPHE_ELEGANT_REVEAL`, direzione `left`,
+6. Applicare `animate_card_entry` a ogni card: `ARPHE_ELEGANT_REVEAL`, direzione `left`,
    `ease_out`, 8 frame, `settle: false`.
-6. Catturare almeno un frame dell'intro, una card breve, una card lunga e la CTA. Il playhead deve
+7. Catturare almeno un frame dell'intro, una card breve, una card lunga e la CTA. Il playhead deve
    risultare ripristinato.
-7. Chiedere approvazione visuale. Solo dopo un'autorizzazione esplicita salvare il progetto o
+8. Chiedere approvazione visuale su anteprima mobile. Solo dopo un'autorizzazione esplicita salvare il progetto o
    renderizzare.
+
+## Esiti della verifica
+
+| Esito/codice | Azione |
+|---|---|
+| `PASS` | Procedere dopo l'approvazione contenuto. |
+| `TOO_LONG_FOR_STANDARD` | Approvare `LONG_SINGLE` come regola; `VERBATIM_SPLIT` è eccezione esplicita. |
+| `TEXT_OVERFLOW` | Fermarsi: nessun rimpicciolimento, taglio o riassunto automatico. |
+| `FONT_UNAVAILABLE` | Installare famiglia e peso mancanti; non accettare il fallback come finale. |
+| `UNSAFE_LAYOUT` | Correggere formato/safe area prima di qualsiasi scrittura. |
+| `CONTRACT_MISMATCH` | Reinstallare/verificare contratto e versione; non aggirare il blocco. |
 
 ## Naming e verifiche
 

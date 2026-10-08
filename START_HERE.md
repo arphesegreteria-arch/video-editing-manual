@@ -33,6 +33,8 @@ Non costruire una GUI desktop ARPHE separata come interfaccia primaria salvo nuo
 16. `docs/18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md` — scelta linea, formato e render sicuro.
 17. `docs/19_ARTIFACT_HYGIENE_AND_QUARANTINE.md` — file tecnici, quarantena e ripristino.
 18. `docs/20_RESOLVE_RETIREMENT_AND_RECOVERY.md` — ritiro archive-first e recovery Resolve.
+19. `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md` — card recensioni, leggibilità, approvazioni e rollback.
+20. `validation/review-readability-ledger.json` — cosa è automatico e cosa è stato osservato su ciascun PC.
 
 ## Regola per ChatGPT
 
@@ -45,6 +47,7 @@ Quando questa repository viene usata in una nuova sessione:
 - non assumere che gli script nella cartella `experiments/` siano affidabili;
 - trattare `scripts/validated/` come primitive già verificate;
 - aggiornare lo stato persistente quando un test cambia ciò che sappiamo.
+- non trasformare un test automatico o un PASS del PC personale in validazione del PC segreteria.
 
 ## Documenti storici superati
 

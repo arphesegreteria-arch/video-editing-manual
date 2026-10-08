@@ -96,10 +96,27 @@ e ai preset, non tool MCP arbitrari.
 | `CAP_ASSETS` | false | sì | no | PENDING |
 | `CAP_RENDER` | false | sì | no | PENDING — Gate G |
 | `CAP_LONGFORM` | false | sì | parziale | Piano/tagli implementati; audio pre-cut ed export separati in test runtime |
+| `CAP_READABILITY_GUARD` | false | sì | automatico | Contratto e workflow disponibili; validazione live separata per PC PENDING |
 
 `get_feature_flags` separa `configured`, `implemented`, `technically_available`, `active` e
 `validated`. Un flag configurato diventa `active` solo se l'oggetto Resolve corrente espone i
 metodi richiesti. Lo stato resta `PENDING` finché il gate non è registrato con evidenza reale.
+
+### Gate leggibilità recensioni
+
+Il flusso pubblico è `inspect_review_readability` → approvazione contenuto → eventuale
+`approve_review_readability` → `create_review_sequence_v2` → catture e approvazione visuale.
+L'ispezione resta disponibile con il gate spento; `add_review_card`, il wrapper compatibile e la
+V2 bloccano prima di qualunque chiamata Resolve quando `CAP_READABILITY_GUARD=false`.
+
+La regola è una card unica quando possibile: quattro parole al secondo più un secondo di
+assestamento, minimo tre e standard massimo dodici secondi. Oltre lo standard serve approvazione
+`LONG_SINGLE`; lo split è solo verbatim, esplicito e legato all'impronta della proposta. Overflow,
+font mancanti, layout non sicuro o contratto non valido producono zero write. Il rollback normale
+è spegnere soltanto `CAP_READABILITY_GUARD`: non cancella e non modifica timeline esistenti.
+
+Le prove sono registrate in `validation/review-readability-ledger.json`: automazione,
+`PC_PERSONALE` e `PC_SEGRETERIA` sono evidenze distinte e nessuna macchina valida l'altra.
 
 ## Sicurezza
 

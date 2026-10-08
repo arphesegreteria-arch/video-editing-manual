@@ -114,6 +114,13 @@ def _ceil_frame(seconds: float, fps: Fraction) -> int:
     return -(-value.numerator // value.denominator)
 
 
+def _media_fps(item: object, label: str, fallback: Fraction | None = None) -> Fraction:
+    value = safe_call(item, "GetClipProperty", "FPS")
+    if value in (None, "") and fallback is not None:
+        return fallback
+    return _fraction(value, f"FPS {label}")
+
+
 def _set_and_verify_format(timeline: object, expected: dict[str, object]) -> None:
     requested = {
         "timelineResolutionWidth": str(expected["width"]),
@@ -121,8 +128,9 @@ def _set_and_verify_format(timeline: object, expected: dict[str, object]) -> Non
         "timelineFrameRate": str(expected["fps"]),
     }
     for key, value in requested.items():
-        if not safe_call(timeline, "SetSetting", key, value):
-            raise ValidationError(f"Impossibile impostare {key} sulla timeline output")
+        # Resolve may return False when an inherited value is already correct.
+        # The API read-back is authoritative; a stale value still fails below.
+        safe_call(timeline, "SetSetting", key, value)
     actual = _source_format(timeline)
     if actual != expected:
         raise ValidationError("Read-back formato timeline output non conforme")
@@ -145,12 +153,29 @@ def _verify_operation(project: object, operation: dict[str, object],
     source_item, cta_item = video
     if _media_name(safe_call(cta_item, "GetMediaPoolItem")) != contract.cta_media_pool_name:
         raise ValidationError("tampered_registered_output: CTA")
-    if int(safe_call(source_item, "GetLeftOffset") or 0) != int(operation["source_in_frame"]):
+    if int(safe_call(source_item, "GetLeftOffset") or 0) != int(operation["source_timeline_in_frame"]):
         raise ValidationError("tampered_registered_output: source in")
-    source_duration = int(safe_call(source_item, "GetEnd") or 0) - int(safe_call(source_item, "GetStart") or 0)
-    if source_duration != int(operation["source_out_frame_exclusive"]) - int(operation["source_in_frame"]):
+    source_duration = (
+        int(safe_call(source_item, "GetEnd") or 0)
+        - int(safe_call(source_item, "GetStart") or 0)
+        + 1
+    )
+    if source_duration != int(operation["speech_timeline_frames"]):
         raise ValidationError("tampered_registered_output: source duration")
-    total = int(safe_call(timeline, "GetEndFrame") or 0) - int(safe_call(timeline, "GetStartFrame") or 0)
+    if int(safe_call(cta_item, "GetStart") or 0) != int(operation["speech_timeline_frames"]):
+        raise ValidationError("tampered_registered_output: CTA start")
+    cta_duration = (
+        int(safe_call(cta_item, "GetEnd") or 0)
+        - int(safe_call(cta_item, "GetStart") or 0)
+        + 1
+    )
+    if cta_duration != int(operation["cta_timeline_frames"]):
+        raise ValidationError("tampered_registered_output: CTA duration")
+    total = (
+        int(safe_call(cta_item, "GetEnd") or 0)
+        - int(safe_call(source_item, "GetStart") or 0)
+        + 1
+    )
     if total != int(operation["final_frames"]):
         raise ValidationError("tampered_registered_output: final duration")
     fps = Fraction(str(expected_format["fps"]))
@@ -216,12 +241,15 @@ def apply_or_resume_editorial_cuts(resolve: object, manager: object, config: Cre
             raise ValidationError("Media pool non disponibile")
         cta_item = _media_by_name(pool, contract.cta_media_pool_name)
         fps = Fraction(str(expected_format["fps"]))
-        cta_frames = math.ceil(float(contract.cta_duration_seconds * fps))
+        source_fps = _media_fps(source_item, "media sorgente")
+        cta_fps = _media_fps(cta_item, "CTA")
+        cta_source_frames = math.ceil(float(contract.cta_duration_seconds * cta_fps))
+        cta_timeline_frames = math.ceil(float(contract.cta_duration_seconds * fps))
         try:
             cta_available = int(safe_call(cta_item, "GetClipProperty", "Frames") or 0)
         except (TypeError, ValueError) as exc:
             raise ValidationError("Durata CTA non leggibile") from exc
-        if cta_available < cta_frames:
+        if cta_available < cta_source_frames:
             raise ValidationError("CTA standard più corta del contratto")
         verified_audio = None
         if audio_job_id is not None:
@@ -253,6 +281,7 @@ def apply_or_resume_editorial_cuts(resolve: object, manager: object, config: Cre
             audio_item = import_media_item(resolve, pool, verified_audio.path)
             if audio_item is None:
                 raise ValidationError("Import audio verificato fallito")
+        audio_fps = None if audio_item is None else _media_fps(audio_item, "audio", fps)
         current = job
         try:
             for decision in job.decisions:
@@ -265,9 +294,14 @@ def apply_or_resume_editorial_cuts(resolve: object, manager: object, config: Cre
                     current = store.save(replace(current, operations=current.operations + (operation,)),
                                          current.revision)
                     continue
-                start = _floor_frame(float(decision["source_start_seconds"]), fps)
-                end = _ceil_frame(float(decision["source_end_seconds"]), fps)
-                final_frames = end - start + cta_frames
+                start_seconds = float(decision["source_start_seconds"])
+                end_seconds = float(decision["source_end_seconds"])
+                timeline_start = _floor_frame(start_seconds, fps)
+                timeline_end = _ceil_frame(end_seconds, fps)
+                speech_timeline_frames = timeline_end - timeline_start
+                source_start = _floor_frame(start_seconds, source_fps)
+                source_end = _ceil_frame(end_seconds, source_fps)
+                final_frames = speech_timeline_frames + cta_timeline_frames
                 if Fraction(final_frames, 1) / fps > Fraction(str(contract.max_final_seconds)):
                     raise ValidationError("Durata frame finale oltre 180 secondi")
                 name = f"ARPHE_{job.editorial_job_id[-8:]}_{candidate_id}"
@@ -278,23 +312,30 @@ def apply_or_resume_editorial_cuts(resolve: object, manager: object, config: Cre
                 if not safe_call(project, "SetCurrentTimeline", timeline):
                     raise RuntimeError(f"select_timeline_failed:{candidate_id}")
                 if audio_item is None:
-                    if not append_media_range(pool, source_item, 0, start, end):
+                    if not append_media_range(pool, source_item, 0, source_start, source_end):
                         raise RuntimeError(f"append_source_failed:{candidate_id}")
                 else:
-                    if not append_media_range(pool, source_item, 0, start, end, 1):
+                    if not append_media_range(pool, source_item, 0, source_start, source_end, 1):
                         raise RuntimeError(f"append_video_failed:{candidate_id}")
-                    if not append_media_range(pool, audio_item, 0, start, end, 2):
+                    audio_start = _floor_frame(start_seconds, audio_fps)
+                    audio_end = _ceil_frame(end_seconds, audio_fps)
+                    if not append_media_range(pool, audio_item, 0, audio_start, audio_end, 2):
                         raise RuntimeError(f"append_audio_failed:{candidate_id}")
-                if not append_media_range(pool, cta_item, end - start, 0, cta_frames):
+                if not append_media_range(pool, cta_item, speech_timeline_frames,
+                                          0, cta_source_frames):
                     raise RuntimeError(f"append_cta_failed:{candidate_id}")
                 operation = {
                     "candidate_id": candidate_id,
                     "status": "VERIFIED",
                     "timeline_name": name,
                     "timeline_identity": timeline_identity(timeline),
-                    "source_in_frame": start,
-                    "source_out_frame_exclusive": end,
-                    "cta_frames": cta_frames,
+                    "source_in_frame": source_start,
+                    "source_out_frame_exclusive": source_end,
+                    "source_timeline_in_frame": timeline_start,
+                    "speech_timeline_frames": speech_timeline_frames,
+                    "cta_frames": cta_timeline_frames,
+                    "cta_source_frames": cta_source_frames,
+                    "cta_timeline_frames": cta_timeline_frames,
                     "final_frames": final_frames,
                     "format": expected_format,
                     "audio_job_id": None if verified_audio is None else verified_audio.audio_job_id,

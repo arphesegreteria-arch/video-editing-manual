@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from fractions import Fraction
 import json
 from pathlib import Path
 import sys
@@ -14,7 +15,11 @@ if str(ROOT) not in sys.path:
 
 from bridge.audio_provenance import file_sha256, media_fingerprint  # noqa: E402
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
-from bridge.editorial_cut_workflow import apply_or_resume_editorial_cuts, verify_editorial_outputs  # noqa: E402
+from bridge.editorial_cut_workflow import (  # noqa: E402
+    _set_and_verify_format,
+    apply_or_resume_editorial_cuts,
+    verify_editorial_outputs,
+)
 from bridge.editorial_jobs import EditorialJobStore, new_editorial_job  # noqa: E402
 from bridge.editorial_selection_contract import load_selection_contract  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
@@ -24,26 +29,31 @@ CONTRACT = load_selection_contract(ROOT / "editorial_selection_contract.json")
 
 
 class FakeMediaItem:
-    def __init__(self, name: str, frames: int, path: Path | None = None):
-        self.name, self.frames, self.path = name, frames, path
+    def __init__(self, name: str, frames: int, path: Path | None = None, fps: str = "24"):
+        self.name, self.frames, self.path, self.fps = name, frames, path, fps
 
     def GetName(self): return self.name
     def GetClipProperty(self, key):
-        return {"Frames": str(self.frames), "File Path": "" if self.path is None else str(self.path)}.get(key)
+        return {"Frames": str(self.frames), "File Path": "" if self.path is None else str(self.path),
+                "FPS": self.fps}.get(key)
 
 
 class FakeTimelineItem:
-    def __init__(self, media_item, source_start, source_end, record_start):
+    def __init__(self, media_item, source_start, source_end, record_start, timeline_fps="24"):
         self.media_item = media_item
         self.source_start = source_start
         self.source_end = source_end
         self.record_start = record_start
+        self.timeline_fps = Fraction(str(timeline_fps))
+
+    def _scaled(self, frames):
+        return int(Fraction(frames, 1) * self.timeline_fps / Fraction(str(self.media_item.fps)))
 
     def GetMediaPoolItem(self): return self.media_item
     def GetStart(self): return self.record_start
-    def GetEnd(self): return self.record_start + self.source_end - self.source_start + 1
-    def GetLeftOffset(self): return self.source_start
-    def GetRightOffset(self): return self.media_item.frames - self.source_end - 1
+    def GetEnd(self): return self.record_start + self._scaled(self.source_end - self.source_start + 1) - 1
+    def GetLeftOffset(self): return self._scaled(self.source_start)
+    def GetRightOffset(self): return self._scaled(self.media_item.frames - self.source_end - 1)
 
 
 class FakeTimeline:
@@ -90,7 +100,8 @@ class FakePool:
         self.project.calls.append(("AppendToTimeline", self.project.current.name, item.name,
                                    record["startFrame"], record["endFrame"],
                                    record.get("mediaType")))
-        target = FakeTimelineItem(item, record["startFrame"], record["endFrame"], record["recordFrame"])
+        target = FakeTimelineItem(item, record["startFrame"], record["endFrame"], record["recordFrame"],
+                                  self.project.current.settings["timelineFrameRate"])
         media_type = record.get("mediaType")
         if media_type in (None, 1): self.project.current.video.append(target)
         if media_type in (None, 2): self.project.current.audio.append(target)
@@ -189,6 +200,63 @@ def environment(root: Path):
 
 
 class EditorialCutWorkflowTests(unittest.TestCase):
+    def test_format_setup_trusts_readback_when_resolve_returns_false(self):
+        timeline = FakeTimeline("OUTPUT", "output-uid", {
+            "timelineResolutionWidth": "1920", "timelineResolutionHeight": "1080",
+            "timelineFrameRate": "24", "timelinePlaybackFrameRate": "24",
+        })
+
+        def false_but_unchanged(key, value):
+            return False
+
+        timeline.SetSetting = false_but_unchanged
+        _set_and_verify_format(timeline, {
+            "width": 1920, "height": 1080, "fps": "24", "playback_fps": "24",
+        })
+
+    def test_format_setup_rejects_false_return_with_wrong_readback(self):
+        timeline = FakeTimeline("OUTPUT", "output-uid", {
+            "timelineResolutionWidth": "1280", "timelineResolutionHeight": "720",
+            "timelineFrameRate": "24", "timelinePlaybackFrameRate": "24",
+        })
+
+        def false_and_stale(key, value):
+            return False
+
+        timeline.SetSetting = false_and_stale
+        with self.assertRaisesRegex(ValidationError, "Read-back"):
+            _set_and_verify_format(timeline, {
+                "width": 1920, "height": 1080, "fps": "24", "playback_fps": "24",
+            })
+
+    def test_media_and_timeline_frame_rates_are_converted_explicitly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cfg = config(root)
+            source_path = cfg.media_roots[0] / "podcast.mov"
+            source_path.write_bytes(b"source-30-fps")
+            source = FakeMediaItem("podcast.mov", 30 * 3600, source_path, "30")
+            cta = FakeMediaItem(CONTRACT.cta_media_pool_name, 30 * 10, fps="30")
+            project = FakeProject(source, cta)
+            store = EditorialJobStore(cfg.editorial_jobs_path, cfg.workstation_id)
+            selected = (candidate(1, 10, 14),)
+            decisions = ({"candidate_id": "R01", "outcome": "APPROVE",
+                          "source_start_seconds": 10.0, "source_end_seconds": 14.0,
+                          "final_duration_seconds": 9.0, "reason": "forte"},)
+            job = reviewed_job(store, media_fingerprint(source_path), selected, decisions)
+
+            result = apply_or_resume_editorial_cuts(
+                FakeResolve(), FakeManager(project), cfg, store, job.editorial_job_id, "d" * 64,
+            )
+
+        self.assertEqual("VERIFIED", result.state)
+        appends = [call for call in project.calls if call[0] == "AppendToTimeline"]
+        self.assertEqual((300, 419), appends[0][3:5])
+        self.assertEqual((0, 149), appends[1][3:5])
+        output = next(timeline for timeline in project.timelines if timeline.name.endswith("_R01"))
+        self.assertEqual(96, output.video[1].record_start)
+        self.assertEqual(216, output.GetEndFrame() - output.GetStartFrame() + 1)
+
     def test_approve_modify_reject_create_two_verified_timelines_in_order(self):
         with tempfile.TemporaryDirectory() as directory:
             cfg, project, store, job = environment(Path(directory))

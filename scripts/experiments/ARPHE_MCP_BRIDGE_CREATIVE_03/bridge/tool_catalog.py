@@ -20,6 +20,11 @@ EXPOSED_TOOL_NAMES = (
     "inspect_artifact_hygiene", "run_artifact_maintenance", "restore_quarantined_artifact",
     "inspect_resolve_retirements", "prepare_resolve_retirement",
     "approve_resolve_retirement", "execute_resolve_retirement", "recover_resolve_retirement",
+    "inspect_editorial_selection", "prepare_podcast_reel_selection",
+    "inspect_editorial_selection_job", "submit_podcast_reel_review",
+    "apply_podcast_reel_selection", "close_podcast_reel_selection",
+    "inspect_editorial_learning", "compile_editorial_profile_proposal",
+    "approve_editorial_profile_proposal",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {

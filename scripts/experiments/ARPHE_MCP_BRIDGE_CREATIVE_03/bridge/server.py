@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import hashlib
+from dataclasses import asdict
 from datetime import datetime, timezone
 from fractions import Fraction
+from pathlib import Path
 from typing import Any, Callable
 
 from mcp.server import MCPServer
@@ -28,8 +30,27 @@ from .editorial_workflows import (EditorialBrief, load_render_profile_registry,
                                   load_workflow_registry,
                                   resolve_delivery_profile,
                                   validate_editorial_brief as do_validate_editorial_brief)
+from .editorial_cut_workflow import apply_or_resume_editorial_cuts as do_apply_editorial_cuts
+from .editorial_jobs import EditorialJobStore, new_editorial_job
+from .editorial_learning import (
+    append_local_outcome as do_append_editorial_outcome,
+    approve_profile_proposal as do_approve_editorial_profile,
+    compile_profile_proposal as do_compile_editorial_profile,
+    inspect_local_metrics as do_inspect_editorial_metrics,
+    load_effective_preferences,
+)
+from .editorial_markers import (
+    cleanup_verified_markers as do_cleanup_editorial_markers,
+    mark_candidates as do_mark_candidates,
+    timeline_identity as editorial_timeline_identity,
+)
+from .editorial_review import secretary_instructions, submit_structured_review as do_submit_editorial_review
+from .editorial_selection import load_pinned_transcript, validate_candidate_batch
+from .editorial_selection_contract import (
+    canonical_digest, load_preference_profile, load_selection_contract,
+)
 from .format_contract import ResolvedFormat
-from .feature_flags import report as feature_report
+from .feature_flags import report as feature_report, require_capability
 from .fusion_tools import (MAX_AUTOMATIC_FUSION_FRAMES, add_background, add_text,
                            create_composition, retime)
 from .longform_tools import (apply_plan as do_apply_longform_plan,
@@ -124,6 +145,253 @@ def _call(operation: Callable[..., dict], *args: Any, **kwargs: Any) -> dict:
     except Exception:
         pass
     return result
+
+
+EDITORIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "editorial_selection_contract.json"
+EDITORIAL_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "editorial_preferences.json"
+
+
+def _editorial_store(config: Any) -> EditorialJobStore:
+    return EditorialJobStore(config.editorial_jobs_path, config.workstation_id)
+
+
+def _require_editorial(config: Any, manager: Any = None, project: Any = None,
+                       timeline: Any = None, *, resolve_required: bool = False) -> None:
+    if not config.flags.get("CAP_EDITORIAL_SELECTION", False):
+        raise ValidationError("CAP_EDITORIAL_SELECTION non attiva nella config locale")
+    if resolve_required:
+        try:
+            require_capability("CAP_EDITORIAL_SELECTION", config, manager, project, timeline)
+        except RuntimeError as exc:
+            raise ValidationError(str(exc)) from exc
+
+
+def _allowed_transcript(path_text: str, config: Any) -> Path:
+    selected = Path(path_text).expanduser().resolve(strict=True)
+    root = config.transcript_root.expanduser().resolve(strict=True)
+    if not selected.is_file() or not selected.is_relative_to(root):
+        raise ValidationError("Transcript fuori dalla cartella consentita")
+    return selected
+
+
+def _editorial_timeline(project: Any, job: Any) -> Any:
+    matches = [
+        safe_call(project, "GetTimelineByIndex", index)
+        for index in range(1, int(safe_call(project, "GetTimelineCount") or 0) + 1)
+    ]
+    matches = [item for item in matches if item is not None and safe_call(item, "GetName") == job.timeline_name]
+    if len(matches) != 1 or editorial_timeline_identity(matches[0]) != job.timeline_identity:
+        raise ValidationError("Timeline sorgente del job non disponibile o diversa")
+    return matches[0]
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_editorial_selection() -> dict[str, Any]:
+    """Inspect the fixed podcast-Reel contract and effective aggregate preferences."""
+    try:
+        config = load_config()
+        contract = load_selection_contract(EDITORIAL_CONTRACT_PATH)
+        shared = load_preference_profile(EDITORIAL_SHARED_PROFILE_PATH)
+        effective = load_effective_preferences(config, shared)
+        return {
+            "ok": True, "workflow_id": contract.workflow_id,
+            "max_candidates": contract.max_candidates,
+            "max_final_seconds": contract.max_final_seconds,
+            "cta_duration_seconds": contract.cta_duration_seconds,
+            "marker_color": contract.marker_color,
+            "capability_enabled": bool(config.flags.get("CAP_EDITORIAL_SELECTION", False)),
+            "effective_preferences": effective,
+        }
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def prepare_podcast_reel_selection(transcript_path: str, transcript_fingerprint: str,
+                                   source_fingerprint: str,
+                                   candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    """Validate structured candidates and mark the current source timeline in one workflow call."""
+    try:
+        _, manager, project, timeline, config, _, error = _runtime()
+        _require_editorial(config, manager, project, timeline, resolve_required=True)
+        if error:
+            return error
+        if project is None or timeline is None:
+            raise ValidationError("Serve un progetto e una timeline sorgente aperti")
+        contract = load_selection_contract(EDITORIAL_CONTRACT_PATH)
+        transcript = load_pinned_transcript(
+            _allowed_transcript(transcript_path, config), transcript_fingerprint
+        )
+        fps = Fraction(str(safe_call(timeline, "GetSetting", "timelineFrameRate")))
+        resolved = validate_candidate_batch(candidates, transcript=transcript, fps=fps, contract=contract)
+        payload = []
+        for item in resolved:
+            value = asdict(item.proposal)
+            value.update({
+                "source_in_frame": item.source_in_frame,
+                "source_out_frame_exclusive": item.source_out_frame_exclusive,
+                "transcript_start_seconds": item.transcript_start_seconds,
+                "transcript_end_seconds": item.transcript_end_seconds,
+            })
+            payload.append(value)
+        candidate_fingerprint = canonical_digest({"candidates": payload})
+        store = _editorial_store(config)
+        identity = editorial_timeline_identity(timeline)
+        owner = store.active_for_timeline(identity)
+        if owner is not None:
+            if (owner.source_fingerprint == source_fingerprint
+                    and owner.transcript_fingerprint == transcript_fingerprint
+                    and owner.candidate_fingerprint == candidate_fingerprint):
+                return {"ok": True, "action": "prepare_podcast_reel_selection",
+                        "editorial_job_id": owner.editorial_job_id, "state": owner.state,
+                        "candidate_count": len(owner.candidates), "idempotent": True}
+            raise ValidationError("La timeline ha già un job editoriale differente non chiuso")
+        job = store.create(new_editorial_job(
+            workstation_id=config.workstation_id, workflow_version=1,
+            project_name=str(safe_call(project, "GetName")),
+            timeline_name=str(safe_call(timeline, "GetName")), timeline_identity=identity,
+            source_fingerprint=source_fingerprint, transcript_fingerprint=transcript_fingerprint,
+            candidate_fingerprint=candidate_fingerprint, candidates=payload,
+        ))
+        marked = do_mark_candidates(timeline, store, job, contract)
+        return {"ok": marked.state == "MARKED", "action": "prepare_podcast_reel_selection",
+                "editorial_job_id": marked.editorial_job_id, "state": marked.state,
+                "candidate_count": len(marked.candidates), "idempotent": False}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_editorial_selection_job(editorial_job_id: str) -> dict[str, Any]:
+    """Return compact operator or recovery instructions for one local editorial job."""
+    try:
+        config = load_config()
+        job = _editorial_store(config).get(editorial_job_id, config.workstation_id)
+        result: dict[str, Any] = {
+            "ok": True, "editorial_job_id": job.editorial_job_id, "state": job.state,
+            "revision": job.revision, "candidate_count": len(job.candidates),
+            "project": job.project_name, "timeline": job.timeline_name,
+        }
+        if job.state == "MARKED":
+            result["instructions"] = secretary_instructions(job)
+            result["next_action"] = "submit_complete_review"
+        elif job.state in {"BLOCKED", "FAILED_RECOVERABLE", "STALE"}:
+            result["next_action"] = "recovery_required"
+            result["instructions"] = [
+                "Non avviare un nuovo job sulla stessa timeline.",
+                "Chiedi ad Alessio o a personale tecnico di ispezionare e riprendere questo job.",
+            ]
+        else:
+            result["next_action"] = {
+                "REVIEWED": "apply_selection", "CUT": "resume_selection",
+                "VERIFIED": "close_selection", "CLOSED": "complete",
+            }.get(job.state, "wait")
+        return result
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def submit_podcast_reel_review(editorial_job_id: str, decisions: list[dict[str, Any]],
+                               transcript_path: str, transcript_fingerprint: str) -> dict[str, Any]:
+    """Bind one complete structured human review to the marked candidate job."""
+    try:
+        config = load_config()
+        _require_editorial(config)
+        store = _editorial_store(config)
+        job = store.get(editorial_job_id, config.workstation_id)
+        transcript = load_pinned_transcript(
+            _allowed_transcript(transcript_path, config), transcript_fingerprint
+        )
+        reviewed = do_submit_editorial_review(
+            store, job, decisions, transcript, load_selection_contract(EDITORIAL_CONTRACT_PATH)
+        )
+        return {"ok": True, "action": "submit_podcast_reel_review",
+                "editorial_job_id": reviewed.editorial_job_id, "state": reviewed.state,
+                "review_fingerprint": reviewed.review_fingerprint,
+                "decision_count": len(reviewed.decisions)}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def apply_podcast_reel_selection(editorial_job_id: str,
+                                 expected_review_fingerprint: str,
+                                 audio_job_id: str | None = None) -> dict[str, Any]:
+    """Apply or resume verified Reel cuts; never starts rendering."""
+    try:
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        _require_editorial(config, manager, project, timeline, resolve_required=True)
+        if error:
+            return error
+        job = do_apply_editorial_cuts(
+            resolve, manager, config, _editorial_store(config), editorial_job_id,
+            expected_review_fingerprint, audio_job_id=audio_job_id,
+        )
+        return {"ok": job.state == "VERIFIED", "action": "apply_podcast_reel_selection",
+                "editorial_job_id": job.editorial_job_id, "state": job.state,
+                "verified_outputs": sum(op.get("status") == "VERIFIED" for op in job.operations)}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def close_podcast_reel_selection(editorial_job_id: str) -> dict[str, Any]:
+    """Record verified learning, remove only owned markers and close the job."""
+    try:
+        _, manager, project, timeline, config, _, error = _runtime()
+        _require_editorial(config, manager, project, timeline, resolve_required=True)
+        if error:
+            return error
+        store = _editorial_store(config)
+        job = store.get(editorial_job_id, config.workstation_id)
+        if job.state == "CLOSED":
+            return {"ok": True, "action": "close_podcast_reel_selection",
+                    "editorial_job_id": job.editorial_job_id, "state": job.state}
+        do_append_editorial_outcome(config, job)
+        closed = do_cleanup_editorial_markers(_editorial_timeline(project, job), store, job)
+        return {"ok": closed.state == "CLOSED", "action": "close_podcast_reel_selection",
+                "editorial_job_id": closed.editorial_job_id, "state": closed.state}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_editorial_learning() -> dict[str, Any]:
+    """Inspect aggregate local metrics without returning reasons, media or transcript content."""
+    try:
+        return {"ok": True, **do_inspect_editorial_metrics(load_config())}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def compile_editorial_profile_proposal(minimum_samples: int = 5) -> dict[str, Any]:
+    """Compile a redacted local proposal; never edits or pushes the repository profile."""
+    try:
+        config = load_config()
+        _require_editorial(config)
+        proposal = do_compile_editorial_profile(
+            config, load_preference_profile(EDITORIAL_SHARED_PROFILE_PATH),
+            minimum_samples=minimum_samples,
+        )
+        return {"ok": True, "action": "compile_editorial_profile_proposal", **proposal}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_editorial_profile_proposal(proposal_id: str, operator_role: str,
+                                       expected_prior_digest: str) -> dict[str, Any]:
+    """Approve one redacted profile overlay locally as Alessio; performs no Git action."""
+    try:
+        config = load_config()
+        _require_editorial(config)
+        return {"action": "approve_editorial_profile_proposal", **do_approve_editorial_profile(
+            config, proposal_id, operator_role, expected_prior_digest
+        )}
+    except Exception as exc:
+        return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)

@@ -18,9 +18,12 @@ class Fake:
     def __getattr__(self, name):
         if name in {"CreateProject", "LoadProject", "SaveProject",
                     "GetCurrentProject", "GetProjectListInCurrentFolder", "SetCurrentTimeline",
+                    "GetName",
                     "GetTimelineCount", "GetTimelineByIndex", "GetSetting", "SetSetting",
                     "CreateEmptyTimeline", "ImportMedia",
                     "AppendToTimeline", "InsertFusionCompositionIntoTimeline",
+                    "GetRootFolder", "GetClipList", "GetSubFolderList", "AddMarker",
+                    "GetMarkers", "DeleteMarkerAtFrame", "GetUniqueId", "GetItemListInTrack",
                     "SetCurrentRenderFormatAndCodec", "SetRenderSettings", "AddRenderJob", "StartRendering"}:
             return lambda *_args: True
         raise AttributeError(name)
@@ -46,6 +49,9 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertFalse(capabilities["CAP_READABILITY_GUARD"]["active"])
         self.assertTrue(capabilities["CAP_READABILITY_GUARD"]["technically_available"])
         self.assertEqual("PARTIAL", capabilities["CAP_READABILITY_GUARD"]["status"])
+        self.assertFalse(DEFAULT_FLAGS["CAP_EDITORIAL_SELECTION"])
+        self.assertFalse(capabilities["CAP_EDITORIAL_SELECTION"]["active"])
+        self.assertTrue(capabilities["CAP_EDITORIAL_SELECTION"]["technically_available"])
 
 
 if __name__ == "__main__":

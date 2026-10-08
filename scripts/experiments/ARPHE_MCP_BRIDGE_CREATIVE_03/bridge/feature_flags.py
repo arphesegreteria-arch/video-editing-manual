@@ -20,6 +20,7 @@ CAPABILITY_STATUS = {
     "CAP_ARTIFACT_MAINTENANCE": "PENDING",
     "CAP_RESOLVE_RETIREMENT": "PENDING",
     "CAP_READABILITY_GUARD": "PARTIAL",
+    "CAP_EDITORIAL_SELECTION": "PENDING",
 }
 
 
@@ -46,6 +47,32 @@ def _readability_guard_available() -> bool:
             "add_guarded_review_card",
             "create_guarded_review_sequence",
         ))
+    except Exception:
+        return False
+
+
+def _editorial_selection_available(project: Any, timeline: Any) -> bool:
+    try:
+        from . import editorial_cut_workflow, editorial_learning, editorial_markers, editorial_review
+        pool = _call(project, "GetMediaPool") if project is not None else None
+        modules_ok = all(callable(function) for function in (
+            editorial_cut_workflow.apply_or_resume_editorial_cuts,
+            editorial_learning.append_local_outcome,
+            editorial_markers.mark_candidates,
+            editorial_review.submit_structured_review,
+        ))
+        project_ok = project is not None and pool is not None and all(_method(project, name) for name in (
+            "GetName", "GetTimelineCount", "GetTimelineByIndex", "GetMediaPool", "SetCurrentTimeline",
+            "GetSetting",
+        ))
+        timeline_ok = timeline is not None and all(_method(timeline, name) for name in (
+            "GetName", "GetUniqueId", "GetSetting", "GetMarkers", "AddMarker",
+            "DeleteMarkerAtFrame", "GetItemListInTrack",
+        ))
+        pool_ok = pool is not None and all(_method(pool, name) for name in (
+            "CreateEmptyTimeline", "AppendToTimeline", "GetRootFolder",
+        ))
+        return modules_ok and project_ok and timeline_ok and pool_ok
     except Exception:
         return False
 
@@ -83,6 +110,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_ARTIFACT_MAINTENANCE": True,
         "CAP_RESOLVE_RETIREMENT": retirement_ok,
         "CAP_READABILITY_GUARD": _readability_guard_available(),
+        "CAP_EDITORIAL_SELECTION": _editorial_selection_available(project, timeline),
     }
 
 

@@ -190,6 +190,8 @@ class ReviewWorkflowTests(unittest.TestCase):
             self.assertTrue(self.create(short)["ok"])
             short_layout = captured[-1][1]["readability_layouts"][0]
             self.assertEqual(short_layout["duration_frames"], 90)
+            self.assertEqual(short_layout["safe_area"]["right"], 0.84)
+            self.assertEqual(short_layout["typography"]["heading"]["weight"], 300)
 
             long_reviews = [{"text": review_words(45), "stars": 5}]
             assessment = inspect_sequence_readability(self.timeline, self.config, long_reviews)

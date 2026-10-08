@@ -109,6 +109,18 @@ def _guard_and_expand(
     }
     expanded: list[dict] = []
     layouts: list[dict[str, Any]] = []
+    safe_area = dict(policy.canvases["story_reel_1080x1920"]["essential_safe_area"])
+    typography = {role: dict(values) for role, values in policy.typography.items()}
+
+    def layout_for(item: Any) -> dict[str, Any]:
+        return {
+            "duration_frames": item.duration_frames,
+            "selected_size": item.selected_size,
+            "line_count": item.line_count,
+            "safe_area": dict(safe_area),
+            "typography": {role: dict(values) for role, values in typography.items()},
+        }
+
     for index, (review, item_assessment) in enumerate(zip(reviews, assessment.reviews)):
         decision = decisions.get(index)
         if decision and decision["decision"] == "VERBATIM_SPLIT":
@@ -131,22 +143,10 @@ def _guard_and_expand(
                 if part_assessment.status != PASS:
                     raise ValidationError("TEXT_OVERFLOW: parte split non leggibile")
                 expanded.append(payload)
-                layouts.append(
-                    {
-                        "duration_frames": part_assessment.duration_frames,
-                        "selected_size": part_assessment.selected_size,
-                        "line_count": part_assessment.line_count,
-                    }
-                )
+                layouts.append(layout_for(part_assessment))
         else:
             expanded.append(dict(review))
-            layouts.append(
-                {
-                    "duration_frames": item_assessment.duration_frames,
-                    "selected_size": item_assessment.selected_size,
-                    "line_count": item_assessment.line_count,
-                }
-            )
+            layouts.append(layout_for(item_assessment))
     return expanded, layouts, assessment
 
 

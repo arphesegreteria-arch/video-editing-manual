@@ -13,7 +13,8 @@ from .safety import ValidationError
 WORKFLOW_ID = "ARPHE_PODCAST_REELS_CTA"
 CONTRACT_KEYS = {
     "schema_version", "workflow_id", "max_candidates", "max_final_seconds",
-    "marker_color", "cta_duration_seconds", "modified_anchor_window_seconds",
+    "marker_color", "cta_duration_seconds", "cta_media_pool_name",
+    "modified_anchor_window_seconds",
 }
 PROFILE_KEYS = {
     "schema_version", "profile_version", "workflow_id", "aggregate_preferences",
@@ -38,6 +39,7 @@ class SelectionContract:
     max_final_seconds: float
     marker_color: str
     cta_duration_seconds: float
+    cta_media_pool_name: str
     modified_anchor_window_seconds: float
 
 
@@ -103,10 +105,13 @@ def load_selection_contract(path: Path) -> SelectionContract:
     if not isinstance(marker_color, str) or marker_color not in RESOLVE_MARKER_COLORS:
         raise ValidationError("marker_color non supportato da Resolve")
     cta = _plain_number(raw["cta_duration_seconds"], "cta_duration_seconds")
+    cta_name = raw["cta_media_pool_name"]
+    if not isinstance(cta_name, str) or not re.fullmatch(r"ARPHE_[A-Z0-9_]{3,80}", cta_name):
+        raise ValidationError("cta_media_pool_name non valido")
     window = _plain_number(raw["modified_anchor_window_seconds"], "modified_anchor_window_seconds")
     if cta >= final_seconds or window > 600:
         raise ValidationError("Durata CTA o finestra anchor fuori limite")
-    return SelectionContract(1, WORKFLOW_ID, maximum, final_seconds, marker_color, cta, window)
+    return SelectionContract(1, WORKFLOW_ID, maximum, final_seconds, marker_color, cta, cta_name, window)
 
 
 def _tags(value: object, name: str) -> list[str]:

@@ -5,5 +5,6 @@
   "max_final_seconds": 180.0,
   "marker_color": "Blue",
   "cta_duration_seconds": 5.0,
+  "cta_media_pool_name": "ARPHE_CTA_STANDARD",
   "modified_anchor_window_seconds": 90.0
 }

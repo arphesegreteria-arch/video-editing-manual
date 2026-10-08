@@ -47,6 +47,7 @@ class EditorialSelectionContractTests(unittest.TestCase):
         self.assertEqual(20, contract.max_candidates)
         self.assertEqual(180.0, contract.max_final_seconds)
         self.assertGreater(contract.cta_duration_seconds, 0)
+        self.assertEqual("ARPHE_CTA_STANDARD", contract.cta_media_pool_name)
         self.assertGreater(contract.modified_anchor_window_seconds, 0)
         self.assertIn(contract.marker_color, {"Blue", "Cyan", "Green", "Yellow", "Red", "Pink", "Purple"})
 

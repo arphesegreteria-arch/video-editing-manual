@@ -18,6 +18,25 @@ MAX_CLIP_SECONDS = 180.0
 MEDIA_EXTENSIONS = {".mp4", ".mov", ".mxf", ".mkv", ".m4v"}
 
 
+def import_media_item(resolve: Any, pool: Any, path: Path) -> Any:
+    media_storage = safe_call(resolve, "GetMediaStorage")
+    imported = safe_call(media_storage, "AddItemListToMediaPool", str(path)) if media_storage else None
+    if not imported:
+        imported = safe_call(pool, "ImportMedia", [str(path)])
+    return imported[0] if imported else None
+
+
+def append_media_range(pool: Any, item: Any, record_frame: int, source_in_frame: int,
+                       source_out_frame_exclusive: int, media_type: int | None = None) -> bool:
+    if source_out_frame_exclusive <= source_in_frame:
+        raise ValidationError("Intervallo media vuoto")
+    record = {"mediaPoolItem": item, "startFrame": source_in_frame,
+              "endFrame": source_out_frame_exclusive - 1, "recordFrame": record_frame}
+    if media_type is not None:
+        record["mediaType"] = media_type
+    return bool(safe_call(pool, "AppendToTimeline", [record]))
+
+
 def _inside_roots(path: Path, roots: tuple[Path, ...]) -> bool:
     selected = path.expanduser().resolve(strict=True)
     return selected.is_file() and any(selected.is_relative_to(root.resolve(strict=True)) for root in roots)
@@ -133,35 +152,22 @@ def apply_plan(resolve: Any, manager: Any, config: CreativeConfig, registry: Reg
         return {"ok": False, "action": "apply_longform_edit_plan", "stage": "project_settings",
                 "project": project_name, "error": str(exc)}
     pool = safe_call(project, "GetMediaPool")
-    media_storage = safe_call(resolve, "GetMediaStorage")
-    imported = safe_call(media_storage, "AddItemListToMediaPool", str(media)) if media_storage else None
-    if not imported:
-        imported = safe_call(pool, "ImportMedia", [str(media)])
-    item = imported[0] if imported else None
+    item = import_media_item(resolve, pool, media)
     if not item:
         return {"ok": False, "action": "apply_longform_edit_plan", "stage": "import_media",
                 "project": project_name}
     audio_item = None
     if enhanced_audio is not None:
-        imported_audio = safe_call(media_storage, "AddItemListToMediaPool", str(enhanced_audio)) if media_storage else None
-        if not imported_audio:
-            imported_audio = safe_call(pool, "ImportMedia", [str(enhanced_audio)])
-        audio_item = imported_audio[0] if imported_audio else None
+        audio_item = import_media_item(resolve, pool, enhanced_audio)
         if not audio_item:
             return {"ok": False, "action": "apply_longform_edit_plan", "stage": "import_enhanced_audio",
                     "project": project_name}
 
     def append_range(record_frame: int, start: int, end_inclusive: int) -> bool:
         if audio_item is None:
-            return bool(safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": item, "startFrame": start,
-                                                               "endFrame": end_inclusive,
-                                                               "recordFrame": record_frame}]))
-        video = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": item, "mediaType": 1,
-                                                        "startFrame": start, "endFrame": end_inclusive,
-                                                        "recordFrame": record_frame}])
-        audio = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": audio_item, "mediaType": 2,
-                                                        "startFrame": start, "endFrame": end_inclusive,
-                                                        "recordFrame": record_frame}])
+            return append_media_range(pool, item, record_frame, start, end_inclusive + 1)
+        video = append_media_range(pool, item, record_frame, start, end_inclusive + 1, 1)
+        audio = append_media_range(pool, audio_item, record_frame, start, end_inclusive + 1, 2)
         return bool(video and audio)
     created_full_timeline = None
     if full_timeline_name:

@@ -11,19 +11,22 @@
 - `CAP_READABILITY_GUARD=false` per default su entrambi i PC; upgrade e installer preservano
   identità e valore esplicito senza copiare stato tra workstation.
 - Evidenza automatica: Creative `207/207 PASS` (1 skip symlink ambientale), Windows `52/52 PASS`
-  (1 skip DPAPI). Sul `PC_PERSONALE` installazione, riavvio isolato, contratto e font finali sono
-  PASS con guard ancora `false`; scrittura Resolve, controllo mobile e rollback restano `PENDING`.
+  (1 skip DPAPI). Installazione, contratto e font finali sono PASS su `PC_PERSONALE`;
   `PC_SEGRETERIA` non è stato toccato.
 - La revisione integrale ha aggiunto il check Noto Serif 300 nel template, legato le approvazioni
   alla workstation, impedito che intro/CTA comprimano le card e chiuso i write Review legacy.
   Corretto anche il falso negativo GDI per i pesi Windows esposti come famiglie `Light`/`Medium`.
-- Gate live `PC_PERSONALE`: **FAIL/BLOCKED**, non validato. La sequenza sintetica isolata è stata
-  costruita con intro, cinque card e CTA, ma le catture sono nere. Il log Resolve prova che Fusion
-  non aveva ricaricato Noto installato dopo l'avvio (`Could not find font: Noto Serif Display:
-  Light`), benché GDI fosse verde. Una successiva chiamata diagnostica diretta all'output Fusion,
-  ora esclusa dalla procedura, ha causato un crash; Resolve è stato riavviato nel Project Manager.
-  Il flag è stato riportato a `false`, il runtime personale è `ready`, gli artefatti di test sono
-  conservati e `PC_SEGRETERIA` resta `PENDING` e non toccato.
+- Gate live `PC_PERSONALE`: **PASS**. Il primo tentativo ha isolato un alias Noto non riconosciuto
+  da Fusion e una diagnostica diretta non supportata che ha causato un crash di Resolve. La font
+  Light è stata rigenerata dalla sorgente OFL del Graphic Kit con famiglia/stile canonici, la copia
+  precedente è stata salvata in backup e Resolve è stato riavviato. Il rerun ha prodotto sette
+  catture leggibili 1080x1920 — intro, card corta, due casi limite, due metà dello split verbatim e
+  CTA — senza overflow, con progetto/timeline/playback a 30 fps e senza nuovi errori font nel log.
+- Rollback live PASS: a guardia spenta l'ispezione resta disponibile, 5/5 write Review pubbliche
+  sono bloccate e snapshot Resolve/stato rimane identico. È stata poi riattivata soltanto
+  `CAP_READABILITY_GUARD` su `PC_PERSONALE`; task `Running` e `/readyz=ready`. La timeline e le
+  catture sono conservate. Il controllo visuale non comprende un upload nell'app social su un
+  telefono reale. `PC_SEGRETERIA` resta `PENDING` e non toccato.
 
 ## 2026-10-08 — Ritiro Resolve archive-first e recovery senza overwrite
 

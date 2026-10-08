@@ -3,7 +3,7 @@
 Ultimo aggiornamento: sessione 2026-10-08.
 
 <a id="review-readability-guard"></a>
-## Leggibilità recensioni — CODICE VALIDATO / PERSONALE LIVE FAIL-BLOCKED
+## Leggibilità recensioni — CODICE VALIDATO / PC_PERSONALE LIVE PASS
 
 Il Graphic Kit è la fonte canonica di safe area, palette e ruoli font. Il bridge video ne include
 un contratto pinning esatto (`ARPHE_VIDEO_READABILITY_V1`) e calcola durata a quattro parole al
@@ -19,16 +19,21 @@ il falso negativo GDI per i nomi Windows dei pesi Light/Medium. La revisione
 integrale ha inoltre chiuso controllo del serif nel template, binding approvazione-PC, durate
 esplicite con intro/CTA e i due write Review legacy rimasti fuori dal gate.
 
-`PC_PERSONALE`: la write isolata ha creato correttamente una sequenza sintetica con intro, cinque
-card (compreso uno split verbatim approvato) e CTA, ma tutte le catture sono risultate nere.
-Il log nativo di Resolve 21.1.1 identifica la causa: Fusion non aveva ricaricato Noto installato
-a Resolve già aperto (`Could not find font: Noto Serif Display: Light`), mentre il preflight GDI
-era già verde. Una diagnostica diretta non supportata sul valore d'uscita Fusion ha poi causato
-un crash; Resolve è stato riavviato e si trova nel Project Manager, senza progetto aperto via API.
-Il test è quindi `FAIL/BLOCKED`, non PASS: serve aprire il progetto personale e ripetere il gate
-dopo il riavvio, includendo controllo mobile. Il rollout è stato riportato in sicurezza a
-`CAP_READABILITY_GUARD=false`; runtime personale `ready`. Timeline di test e catture restano
-conservate come evidenza. `PC_SEGRETERIA`: `PENDING` e non toccato. Fonte delle evidenze:
+`PC_PERSONALE`: **LIVE PASS** sul progetto isolato
+`ARPHE_ROLLOUT_PLAYBACK_FLAG_PROJECT_20261007`, timeline
+`ARPHE_READABILITY_LIVE_20261008_141745`. La write approvata ha creato intro, cinque card
+(corta, due casi limite e due parti dello split verbatim approvato) e CTA. Dopo la sostituzione
+dell'istanza Noto Light con una build statica che espone a Fusion famiglia `Noto Serif Display`
+e stile `Light`, sette catture 1080x1920 risultano renderizzate, leggibili, senza overflow e
+dentro la safe area; il log non riporta nuovi errori font dopo il riavvio. Progetto, timeline e
+playback sono tutti a 30 fps.
+
+Rollback reale PASS con guardia disattivata: ispezione disponibile, tutti i cinque percorsi
+pubblici Review di scrittura bloccati e snapshot Resolve/stato byte-invariato. La sola guardia
+personale è stata poi riattivata; attività pianificata `Running`, `/readyz=ready`, capability
+attiva e tecnicamente disponibile. Timeline e catture restano conservate come evidenza. Il
+controllo visuale copre i frame verticali prodotti, non un upload dentro l'app social su telefono.
+`PC_SEGRETERIA`: `PENDING`, non installato né toccato da questo rollout. Fonte:
 `validation/review-readability-ledger.json`.
 
 ## Ritiro Resolve archive-first — CODICE VALIDATO / PC_PERSONALE LIVE PASS

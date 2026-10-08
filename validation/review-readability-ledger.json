@@ -20,24 +20,26 @@
       "validated_workstations": []
     },
     {
-      "evidence_id": "readability-pc-personale-pending-2026-10-08",
+      "evidence_id": "readability-pc-personale-pass-2026-10-08",
       "kind": "PC_PERSONALE_LIVE",
       "workstation_id": "PC_PERSONALE",
       "video_repository_commit": "a96a24b84d8c070ec35e6ee3657a207cb6aee8a5",
       "graphic_kit_repository_commit": "665ed816176bc76b6b10ca5f274b0054b2791437",
       "policy_version": "ARPHE_VIDEO_READABILITY_V1",
       "policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
-      "observed_at": "2026-10-08T14:43:33+02:00",
-      "result": "FAIL",
+      "observed_at": "2026-10-08T15:00:00+02:00",
+      "result": "PASS",
       "limitations": [
-        "Installation, isolated runtime restart, pinned contract and Windows GDI final-font readiness passed on PC_PERSONALE.",
-        "The guarded isolated write created a synthetic intro, five-card sequence including one approved verbatim split, and CTA, but every captured frame was black; no review text is stored in this ledger.",
-        "Resolve 21.1.1 logs identify an unavailable Noto Serif Display Light inside Fusion because the font was installed after Resolve had started; this proves GDI readiness alone did not validate the already-running Fusion font catalog.",
-        "An unsupported direct Fusion output-value diagnostic caused Resolve to crash; the diagnostic processes were removed, Resolve was restarted to Project Manager, the test artefacts were preserved, CAP_READABILITY_GUARD was rolled back to false, and the personal runtime returned ready.",
-        "Mobile visual validation and the successful post-restart rerun remain blocked until the personal project is opened; PC_SEGRETERIA was not touched."
+        "Installation, pinned contract and Windows GDI final-font readiness passed on PC_PERSONALE; the Noto Light instance was rebuilt from the Graphic Kit OFL source with canonical Fusion family/style names after the first attempt exposed a font-catalog mismatch.",
+        "The guarded isolated write created synthetic intro, five-card sequence including one approved verbatim split, and CTA. Seven preserved 1080x1920 captures at frame offsets 45, 150, 395, 770, 1100, 1365 and 1560 render legibly without visible overflow; no review text is stored in this ledger.",
+        "Resolve project, timeline and playback are 30 fps. No new missing-font line appears in ResolveDebug after the corrected font and Resolve restart.",
+        "Rollback passed with CAP_READABILITY_GUARD false: inspection returned PASS, all five public Review write routes returned ValidationError for the disabled guard, and project/timeline/state snapshots were identical before and after. The personal guard was then re-enabled; the dedicated scheduled task is Running and /readyz returns ready.",
+        "Visual inspection covers the generated portrait frames, not an upload viewed inside a social app on a physical phone. PC_SEGRETERIA was not touched and remains pending."
       ],
       "current_state_reference": "CURRENT_STATE.md#review-readability-guard",
-      "validated_workstations": []
+      "validated_workstations": [
+        "PC_PERSONALE"
+      ]
     },
     {
       "evidence_id": "readability-pc-segreteria-pending-2026-10-08",

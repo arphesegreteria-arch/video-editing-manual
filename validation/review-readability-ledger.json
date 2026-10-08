@@ -5,16 +5,15 @@
       "evidence_id": "readability-automated-2026-10-08",
       "kind": "AUTOMATED",
       "workstation_id": null,
-      "video_repository_commit": "8444f88407f2b84c5d141110db84fa7b545d9426",
+      "video_repository_commit": "a96a24b84d8c070ec35e6ee3657a207cb6aee8a5",
       "graphic_kit_repository_commit": "665ed816176bc76b6b10ca5f274b0054b2791437",
       "policy_version": "ARPHE_VIDEO_READABILITY_V1",
       "policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
-      "observed_at": "2026-10-08T20:00:00+02:00",
+      "observed_at": "2026-10-08T12:22:00+02:00",
       "result": "PASS",
       "limitations": [
-        "Creative 206/206 and Windows 52/52 automated tests passed against video code commit 8444f88407f2b84c5d141110db84fa7b545d9426; validation-ledger tests are part of the documentation commit that records this evidence.",
+        "Creative 207/207 and Windows 52/52 automated tests passed against video code commit a96a24b84d8c070ec35e6ee3657a207cb6aee8a5; validation-ledger tests are part of the documentation commit that records this evidence.",
         "Automated evidence does not validate Resolve rendering, mobile visual quality or either workstation.",
-        "The host lacked Noto Serif Display 300 and Satoshi 500, so the environment-dependent final-font integration test was skipped.",
         "One symlink privilege test and one CurrentUser DPAPI test were skipped for explicit environment limitations."
       ],
       "current_state_reference": "CURRENT_STATE.md#review-readability-guard",
@@ -24,14 +23,15 @@
       "evidence_id": "readability-pc-personale-pending-2026-10-08",
       "kind": "PC_PERSONALE_LIVE",
       "workstation_id": "PC_PERSONALE",
-      "video_repository_commit": "8444f88407f2b84c5d141110db84fa7b545d9426",
+      "video_repository_commit": "a96a24b84d8c070ec35e6ee3657a207cb6aee8a5",
       "graphic_kit_repository_commit": "665ed816176bc76b6b10ca5f274b0054b2791437",
       "policy_version": "ARPHE_VIDEO_READABILITY_V1",
       "policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
-      "observed_at": "2026-10-08T20:00:00+02:00",
+      "observed_at": "2026-10-08T12:22:00+02:00",
       "result": "PENDING",
       "limitations": [
-        "No installation, Resolve write, font-complete render, mobile preview or rollback test has been observed for this change on PC_PERSONALE."
+        "Installation, isolated runtime restart, pinned contract and final-font readiness passed on PC_PERSONALE with CAP_READABILITY_GUARD=false.",
+        "No guarded Resolve write, mobile visual inspection or rollback cycle has yet been observed; live validation remains pending."
       ],
       "current_state_reference": "CURRENT_STATE.md#review-readability-guard",
       "validated_workstations": []
@@ -40,11 +40,11 @@
       "evidence_id": "readability-pc-segreteria-pending-2026-10-08",
       "kind": "PC_SEGRETERIA_LIVE",
       "workstation_id": "PC_SEGRETERIA",
-      "video_repository_commit": "8444f88407f2b84c5d141110db84fa7b545d9426",
+      "video_repository_commit": "a96a24b84d8c070ec35e6ee3657a207cb6aee8a5",
       "graphic_kit_repository_commit": "665ed816176bc76b6b10ca5f274b0054b2791437",
       "policy_version": "ARPHE_VIDEO_READABILITY_V1",
       "policy_digest": "68b240d727e23707b4b64e5da069c47519e166a25bce94e33cc3de5ae005c0fe",
-      "observed_at": "2026-10-08T20:00:00+02:00",
+      "observed_at": "2026-10-08T12:22:00+02:00",
       "result": "PENDING",
       "limitations": [
         "PC_SEGRETERIA and its open Resolve work were not touched; no result is inferred from PC_PERSONALE or automated evidence."

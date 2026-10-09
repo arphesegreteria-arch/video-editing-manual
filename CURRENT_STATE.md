@@ -1,6 +1,6 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-10-08.
+Ultimo aggiornamento: sessione 2026-10-09.
 
 <a id="editorial-selection-learning"></a>
 ## Selezione Reel podcast e apprendimento — CODICE VALIDATO / PC_PERSONALE LIVE PASS
@@ -14,12 +14,14 @@ Per la segreteria l'interazione è: ascoltare ogni coppia di marker, non spostar
 poi rispondere una sola volta con `OK`, `MODIFICA` o `RIFIUTA` e un motivo breve per ogni `Rxx`.
 Recuperi, collisioni, profili condivisi e override restano ad Alessio o a personale tecnico.
 
-Evidenza automatica: bridge `281 PASS / 1 SKIP` ambientale e Windows `55 PASS / 1 SKIP` DPAPI.
+Evidenza automatica: bridge `282 PASS / 1 SKIP` ambientale e Windows `55 PASS / 1 SKIP` DPAPI.
 `CAP_EDITORIAL_SELECTION=false` per default. Il gate definitivo sulla copia installata
 `PC_PERSONALE` è PASS: nuovo progetto nato 30/30, tre proposte con review completa, sei marker,
 due output verificati, failure controllata e resume, marker estraneo preservato, cleanup completo
 e rollback zero-write. Il flag finale è `false`. `PC_SEGRETERIA` resta `PENDING` e non è stata
-toccata. Fonte:
+toccata. La review finale impedisce inoltre che un preflight fallito alteri lo stato persistito
+di un job `BLOCKED`. Il supervisore personale è stato riallineato e verificato `Running`, con PID
+vivo, `/readyz=ready`, hash installato corrispondente e capability ancora disabilitata. Fonte:
 `validation/editorial-selection-ledger.json`.
 
 <a id="review-readability-guard"></a>

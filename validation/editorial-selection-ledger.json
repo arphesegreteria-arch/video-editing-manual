@@ -4,11 +4,11 @@
   "capability_default": false,
   "automated_evidence": {
     "result": "PASS",
-    "observed_at": "2026-10-08T18:18:39+02:00",
-    "repository_commit": "96a80abde951f73f896c7ff59ae16ce22319ae1a",
+    "observed_at": "2026-10-09T12:16:42+02:00",
+    "repository_commit": "58727af2068346f06fba653d9e20a68f86b1479c",
     "contract_digest": "6b5d8e7f9fe5c112aee495003432b6e6fbd47b5135b31ad8f6d98a0db137b11a",
     "test_results": [
-      "Bridge automated suite passed 281 tests with one documented Windows symlink skip before this ledger update.",
+      "Bridge automated suite passed 282 tests with one documented Windows symlink skip after the blocked-job zero-write review fix.",
       "Windows automated suite passed 55 tests with one documented CurrentUser DPAPI skip before this ledger commit.",
       "Editorial-selection validator focused tests are part of the documentation commit that records this evidence."
     ],
@@ -52,7 +52,8 @@
         }
       ],
       "limitations": [
-        "Validation covers the installed personal runtime at project, timeline and playback 30 FPS; it does not validate PC_SEGRETERIA."
+        "Validation covers the installed personal runtime at project, timeline and playback 30 FPS; it does not validate PC_SEGRETERIA.",
+        "After the live gate, the personal supervisor was realigned and its stale runtime-state file was archived; task, PID, readiness, installed hash and disabled capability were reverified."
       ]
     },
     "PC_SEGRETERIA": {

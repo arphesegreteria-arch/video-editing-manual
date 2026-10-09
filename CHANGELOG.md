@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 2026-10-09 — Chiusura gate personale e hardening del preflight
+
+- Il gate live definitivo `PC_PERSONALE` resta PASS a progetto, timeline e playback 30 fps;
+  `CAP_EDITORIAL_SELECTION` è tornata `false` dopo il rollback.
+- La review finale ha trovato e corretto una scrittura prematura: un job `BLOCKED` che fallisce
+  fingerprint o controllo FPS ora resta byte-invariato. Aggiunto il test di regressione.
+- Suite rieseguite: bridge `282 PASS / 1 SKIP`, Windows `55 PASS / 1 SKIP`; validatore editoriale,
+  compilazione e `git diff --check` PASS.
+- Riallineato soltanto il runtime `PC_PERSONALE`: task `Running`, supervisore e tunnel vivi,
+  `/readyz=ready`, hash installato uguale alla repository e capability disabilitata. Il vecchio
+  file di stato diagnostico è stato conservato come backup recuperabile. `PC_SEGRETERIA` non è
+  stato toccato e resta `PENDING`.
+
 ## 2026-10-08 — Selezione editoriale Reel podcast, ripresa e apprendimento locale
 
 - Aggiunto il flusso chiuso proposta → marker → review completa → tagli verificati → cleanup.

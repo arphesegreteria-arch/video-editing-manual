@@ -1,5 +1,32 @@
 # EXPERIMENT LOG
 
+## 2026-10-09 — Studio Carabellese cleanup: gate nativo personale
+
+### Ipotesi
+
+Il flusso a timeline unica può applicare una pulizia moderata e riprendibile su Resolve reale,
+con review completa prima dei tagli e checkpoint `.drt` verificato prima di ogni write distruttiva.
+
+### Risultato
+
+- suite complete: bridge `360 PASS / 1 SKIP`, Windows `58 PASS / 1 SKIP`, validatore e diff PASS;
+- probe e gate nativo `PC_PERSONALE`: PASS con 6 candidati, inclusi 2 intervalli pausa;
+- failure di staging provocata prima della rimozione originale, restore DRT e seconda applicazione:
+  PASS; una sola timeline finale e marker estraneo conservato;
+- emerse e corrette differenze dell'API reale: oggetti wrapper distinti, import DRT che ignora il
+  nome richiesto e eredita il playback 30 dal progetto, `endFrame` esclusivo e revisione job stale
+  in caso di fallimento della verifica finale;
+- progetto originario riaperto esattamente, progetto/file sintetici eliminati, 62 file installati
+  con hash uguale alla repository, runtime personale `Running` e `/readyz=ready`;
+- round-trip del flag PASS; valore finale `CAP_CARABELLESE_CLEANUP=false`.
+
+### Decisione
+
+Promuovere `PC_PERSONALE` a `VALIDATED`, lasciando la capability spenta fino al primo uso
+deliberato. Non trasferire l'esito a `PC_SEGRETERIA`: resta `PENDING` e richiede installazione e
+gate indipendenti quando il lavoro aperto sul PC lo consente. La prova non valida CTA, grafiche,
+Graphic Kit o render, che restano fuori dalla v1.
+
 ## 2026-10-08 — Selezione Reel podcast: validazione automatica
 
 ### Ipotesi

@@ -3,7 +3,7 @@
 Ultimo aggiornamento: sessione 2026-10-09.
 
 <a id="carabellese-youtube-cleanup"></a>
-## Studio Carabellese YouTube cleanup — CODICE VALIDATO / LIVE PENDING
+## Studio Carabellese YouTube cleanup — PC_PERSONALE LIVE PASS
 
 Il workflow `CARABELLESE_YOUTUBE_CLEANUP` conserva una sola timeline 1920×1080 agli FPS della
 sorgente, con playback coincidente. Propone inizio/fine reali, pause da ridurre e indicazioni
@@ -11,10 +11,17 @@ editoriali parlate; richiede una review completa con motivi, crea un `.drt` prim
 ripristinarlo dopo una failure. La v1 non comprende CTA, Graphic Kit, grafiche o render.
 
 Stato locale, journal, checkpoint e apprendimento sono separati per workstation;
-`CAP_CARABELLESE_CLEANUP=false` per default. Le suite automatiche coprono binding sorgente,
-marker, review, checkpoint, apply, recovery, timeline unica, privacy e installer. Nessun gate live
-è ancora dichiarato: `PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING`; il lavoro aperto in
-segreteria non è stato toccato. Fonte: `validation/carabellese-cleanup-ledger.json`.
+`CAP_CARABELLESE_CLEANUP=false` per default. Suite: bridge `360 PASS / 1 SKIP` ambientale,
+Windows `58 PASS / 1 SKIP` ambientale, validatore e diff PASS.
+
+`PC_PERSONALE`: gate nativo PASS su progetto usa-e-getta a 30/30. Verificati sei candidati,
+review completa e motivata, checkpoint/restore `.drt`, failure parziale con ripresa, una sola
+timeline finale, binding sorgente e conservazione di marker estranei. Il test ha corretto le
+semantiche reali di wrapper Resolve, import DRT ed `endFrame` esclusivo. Progetto originario
+ripristinato, artefatti sintetici rimossi, 62 hash installati corrispondenti, task `Running`,
+supervisore vivo, `/readyz=ready`, restart count 0 e flag finale `false`.
+`PC_SEGRETERIA` resta `PENDING` e non è stato toccato. Fonte:
+`validation/carabellese-cleanup-ledger.json`.
 
 <a id="editorial-selection-learning"></a>
 ## Selezione Reel podcast e apprendimento — CODICE VALIDATO / PC_PERSONALE LIVE PASS

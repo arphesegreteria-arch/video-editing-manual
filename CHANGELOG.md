@@ -9,8 +9,13 @@
   redatto e strumenti pubblici chiusi con una sola card per la segreteria.
 - Installer e flag preservano stato e valore locali e rifiutano file di un'altra workstation;
   `CAP_CARABELLESE_CLEANUP=false` per default.
-- Ledger iniziale: `PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING`; nessun progetto live è stato
-  usato o modificato in questa fase.
+- Gate nativo `PC_PERSONALE`: PASS su media e progetto sintetici. Verificati review, checkpoint,
+  failure/ripresa, timeline unica, marker estranei, pulizia e rollback del flag.
+- Il gate ha corretto quattro differenze dell'API reale: wrapper Python non stabili, nome e playback
+  ereditato nell'import DRT, `endFrame` esclusivo e salvataggio recuperabile dopo verifica finale.
+- Runtime personale riallineato: 62 hash uguali, task `Running`, `/readyz=ready`, restart count 0,
+  progetto originario ripristinato, artefatti sintetici rimossi e flag finale `false`.
+  `PC_SEGRETERIA=PENDING` e non toccato.
 
 ## 2026-10-09 — Chiusura gate personale e hardening del preflight
 

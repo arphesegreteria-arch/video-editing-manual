@@ -11,7 +11,7 @@ editoriali parlate; richiede una review completa con motivi, crea un `.drt` prim
 ripristinarlo dopo una failure. La v1 non comprende CTA, Graphic Kit, grafiche o render.
 
 Stato locale, journal, checkpoint e apprendimento sono separati per workstation;
-`CAP_CARABELLESE_CLEANUP=false` per default. Suite: bridge `360 PASS / 1 SKIP` ambientale,
+`CAP_CARABELLESE_CLEANUP=false` per default. Suite: bridge `362 PASS / 1 SKIP` ambientale,
 Windows `58 PASS / 1 SKIP` ambientale, validatore e diff PASS.
 
 `PC_PERSONALE`: gate nativo PASS su progetto usa-e-getta a 30/30. Verificati sei candidati,
@@ -20,6 +20,8 @@ timeline finale, binding sorgente e conservazione di marker estranei. Il test ha
 semantiche reali di wrapper Resolve, import DRT ed `endFrame` esclusivo. Progetto originario
 ripristinato, artefatti sintetici rimossi, 62 hash installati corrispondenti, task `Running`,
 supervisore vivo, `/readyz=ready`, restart count 0 e flag finale `false`.
+La review integrale ha inoltre chiuso il binding A/V del wrapper pubblico, il rollback di una
+promozione DRT interrotta e i replay duplicati di review/recovery.
 `PC_SEGRETERIA` resta `PENDING` e non è stato toccato. Fonte:
 `validation/carabellese-cleanup-ledger.json`.
 

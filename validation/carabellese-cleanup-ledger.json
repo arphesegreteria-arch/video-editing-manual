@@ -5,10 +5,10 @@
   "automated_evidence": {
     "result": "PASS",
     "observed_at": "2026-10-09T17:28:25+02:00",
-    "repository_commit": "fbfb951108bd66d6a74cabcc9a2891892632e4fc",
+    "repository_commit": "91c3918c8f8cada45a770aa49082ac4b7c22385b",
     "contract_digest": "64882dad173d9359b2724de344d02892e345c08dc8dc5c90f5c39eb75bfd712f",
     "test_results": [
-      "Bridge automated suite passed 360 tests with one documented environment skip after native-gate hardening.",
+      "Bridge automated suite passed 362 tests with one documented environment skip after final review fixes.",
       "Windows automated suite passed 58 tests with one documented environment skip after native-gate hardening.",
       "The rollout validator and repository diff check passed."
     ],

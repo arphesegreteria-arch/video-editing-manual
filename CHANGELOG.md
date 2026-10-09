@@ -13,6 +13,8 @@
   failure/ripresa, timeline unica, marker estranei, pulizia e rollback del flag.
 - Il gate ha corretto quattro differenze dell'API reale: wrapper Python non stabili, nome e playback
   ereditato nell'import DRT, `endFrame` esclusivo e salvataggio recuperabile dopo verifica finale.
+- La review finale ha unificato il binding A/V anche nel wrapper pubblico, reso completo il rollback
+  se la promozione DRT si interrompe e reso idempotente il doppio invio di review/recovery.
 - Runtime personale riallineato: 62 hash uguali, task `Running`, `/readyz=ready`, restart count 0,
   progetto originario ripristinato, artefatti sintetici rimossi e flag finale `false`.
   `PC_SEGRETERIA=PENDING` e non toccato.

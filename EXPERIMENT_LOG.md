@@ -9,7 +9,7 @@ con review completa prima dei tagli e checkpoint `.drt` verificato prima di ogni
 
 ### Risultato
 
-- suite complete: bridge `360 PASS / 1 SKIP`, Windows `58 PASS / 1 SKIP`, validatore e diff PASS;
+- suite complete: bridge `362 PASS / 1 SKIP`, Windows `58 PASS / 1 SKIP`, validatore e diff PASS;
 - probe e gate nativo `PC_PERSONALE`: PASS con 6 candidati, inclusi 2 intervalli pausa;
 - failure di staging provocata prima della rimozione originale, restore DRT e seconda applicazione:
   PASS; una sola timeline finale e marker estraneo conservato;
@@ -19,6 +19,8 @@ con review completa prima dei tagli e checkpoint `.drt` verificato prima di ogni
 - progetto originario riaperto esattamente, progetto/file sintetici eliminati, 62 file installati
   con hash uguale alla repository, runtime personale `Running` e `/readyz=ready`;
 - round-trip del flag PASS; valore finale `CAP_CARABELLESE_CLEANUP=false`.
+- review integrale: binding A/V pubblico con wrapper distinti, rollback della promozione DRT e
+  replay idempotenti di review/recovery coperti da regressioni; gate nativo ripetuto PASS.
 
 ### Decisione
 

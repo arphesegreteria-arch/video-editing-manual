@@ -24,6 +24,8 @@ $carabelleseJournalPath = Join-Path $configDir 'carabellese_journal.jsonl'
 $carabelleseOverlayPath = Join-Path $configDir 'carabellese_profile_overlay.json'
 $carabelleseProposalsPath = Join-Path $configDir 'carabellese_profile_proposals.json'
 $carabelleseCheckpointRoot = Join-Path $configDir 'carabellese-checkpoints'
+$verticalSocialPlansPath = Join-Path $configDir 'vertical_social_plans.json'
+$verticalSocialJournalPath = Join-Path $configDir 'vertical_social_journal.jsonl'
 if (-not $RuntimeLogRoot) {
     $RuntimeLogRoot = Join-Path 'C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1' $WorkstationId
 }
@@ -154,6 +156,8 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     Set-ConfigProperty -Config $config -Name carabellese_profile_overlay_path -Value $carabelleseOverlayPath.Replace('\', '/')
     Set-ConfigProperty -Config $config -Name carabellese_profile_proposals_path -Value $carabelleseProposalsPath.Replace('\', '/')
     Set-ConfigProperty -Config $config -Name carabellese_checkpoint_root -Value $carabelleseCheckpointRoot.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name vertical_social_plans_path -Value $verticalSocialPlansPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name vertical_social_journal_path -Value $verticalSocialJournalPath.Replace('\', '/')
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_ARTIFACT_MAINTENANCE']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_ARTIFACT_MAINTENANCE -NotePropertyValue $false
     }
@@ -168,6 +172,9 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_CARABELLESE_CLEANUP']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_CARABELLESE_CLEANUP -NotePropertyValue $false
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_VERTICAL_SOCIAL']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_VERTICAL_SOCIAL -NotePropertyValue $false
     }
     if ($null -ne $legacyConfig) {
         foreach ($migration in @(
@@ -222,7 +229,9 @@ if (-not (Test-Path -LiteralPath $configPath)) {
         @{ Name = 'carabellese_journal_path'; Value = $carabelleseJournalPath.Replace('\', '/') },
         @{ Name = 'carabellese_profile_overlay_path'; Value = $carabelleseOverlayPath.Replace('\', '/') },
         @{ Name = 'carabellese_profile_proposals_path'; Value = $carabelleseProposalsPath.Replace('\', '/') },
-        @{ Name = 'carabellese_checkpoint_root'; Value = $carabelleseCheckpointRoot.Replace('\', '/') }
+        @{ Name = 'carabellese_checkpoint_root'; Value = $carabelleseCheckpointRoot.Replace('\', '/') },
+        @{ Name = 'vertical_social_plans_path'; Value = $verticalSocialPlansPath.Replace('\', '/') },
+        @{ Name = 'vertical_social_journal_path'; Value = $verticalSocialJournalPath.Replace('\', '/') }
     )) {
         if ($null -eq $config.PSObject.Properties[$pathField.Name]) {
             $config | Add-Member -NotePropertyName $pathField.Name -NotePropertyValue $pathField.Value
@@ -274,6 +283,10 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_CARABELLESE_CLEANUP']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_CARABELLESE_CLEANUP -NotePropertyValue $false
+        $changed = $true
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_VERTICAL_SOCIAL']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_VERTICAL_SOCIAL -NotePropertyValue $false
         $changed = $true
     }
     if ($changed) {

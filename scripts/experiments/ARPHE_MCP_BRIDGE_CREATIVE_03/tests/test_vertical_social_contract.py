@@ -80,7 +80,24 @@ class VerticalSocialContractTests(unittest.TestCase):
                 contract, {"action_id": "a1", "type": "CAPTIONS", "phase": "POST_LOCK"}, True
             )
 
+    def test_config_keeps_vertical_social_state_local_and_disabled(self):
+        from bridge.config import load_config
+
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            path = root / "creative.json"
+            path.write_text(json.dumps({
+                "runtime_id": "ARPHE_MCP_BRIDGE_CREATIVE_03",
+                "workstation_id": "PC_PERSONALE",
+                "state_path": str(root / "state" / "creative_state.json"),
+                "feature_flags": {},
+            }), encoding="utf-8")
+            config = load_config(path)
+
+        self.assertFalse(config.flags["CAP_VERTICAL_SOCIAL"])
+        self.assertEqual(root / "state" / "vertical_social_plans.json", config.vertical_social_plans_path)
+        self.assertEqual(root / "state" / "vertical_social_journal.jsonl", config.vertical_social_journal_path)
+
 
 if __name__ == "__main__":
     unittest.main()
-

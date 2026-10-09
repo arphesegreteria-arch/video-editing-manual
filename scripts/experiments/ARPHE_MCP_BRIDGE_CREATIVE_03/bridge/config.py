@@ -16,6 +16,7 @@ CAPABILITY_NAMES = (
     "CAP_READABILITY_GUARD",
     "CAP_EDITORIAL_SELECTION",
     "CAP_CARABELLESE_CLEANUP",
+    "CAP_VERTICAL_SOCIAL",
 )
 
 DEFAULT_PALETTE = {
@@ -44,6 +45,7 @@ DEFAULT_FLAGS = {
     "CAP_READABILITY_GUARD": False,
     "CAP_EDITORIAL_SELECTION": False,
     "CAP_CARABELLESE_CLEANUP": False,
+    "CAP_VERTICAL_SOCIAL": False,
 }
 
 ALLOWED_RENDER_PAIRS = {("mp4", "H264"), ("mov", "ProRes422HQ")}
@@ -90,6 +92,8 @@ class CreativeConfig:
     carabellese_profile_overlay_path: Path = Path("carabellese_profile_overlay.json")
     carabellese_profile_proposals_path: Path = Path("carabellese_profile_proposals.json")
     carabellese_checkpoint_root: Path = Path("carabellese-checkpoints")
+    vertical_social_plans_path: Path = Path("vertical_social_plans.json")
+    vertical_social_journal_path: Path = Path("vertical_social_journal.jsonl")
 
 
 def _path(value: str, base: Path) -> Path:
@@ -195,5 +199,11 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         ),
         carabellese_checkpoint_root=_path(
             str(raw.get("carabellese_checkpoint_root", "")), editorial_root / "carabellese-checkpoints"
+        ),
+        vertical_social_plans_path=_path(
+            str(raw.get("vertical_social_plans_path", "")), editorial_root / "vertical_social_plans.json"
+        ),
+        vertical_social_journal_path=_path(
+            str(raw.get("vertical_social_journal_path", "")), editorial_root / "vertical_social_journal.jsonl"
         ),
     )

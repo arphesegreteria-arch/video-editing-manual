@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
+from fractions import Fraction
 import hashlib
 import json
 from pathlib import Path
@@ -33,12 +34,32 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _same_rate(left: object, right: object) -> bool:
+    try:
+        return float(str(left).strip()) == float(str(right).strip())
+    except (TypeError, ValueError):
+        return False
+
+
+def _fingerprint_rate(value: object, fallback: object | None = None) -> str:
+    selected = fallback if value is None or not str(value).strip() else value
+    try:
+        return str(Fraction(str(selected).strip()))
+    except (TypeError, ValueError, ZeroDivisionError) as exc:
+        raise ValidationError("FPS timeline non validi per il fingerprint") from exc
+
+
 def timeline_content_fingerprint(timeline: object) -> str:
+    frame_rate = _call(timeline, "GetSetting", "timelineFrameRate")
+    playback_rate = _call(timeline, "GetSetting", "timelinePlaybackFrameRate")
     payload: dict[str, object] = {
         "start": _call(timeline, "GetStartFrame"), "end": _call(timeline, "GetEndFrame"),
-        "settings": {key: _call(timeline, "GetSetting", key) for key in (
-            "timelineResolutionWidth", "timelineResolutionHeight", "timelineFrameRate",
-            "timelinePlaybackFrameRate")},
+        "settings": {
+            "timelineResolutionWidth": _call(timeline, "GetSetting", "timelineResolutionWidth"),
+            "timelineResolutionHeight": _call(timeline, "GetSetting", "timelineResolutionHeight"),
+            "timelineFrameRate": _fingerprint_rate(frame_rate),
+            "timelinePlaybackFrameRate": _fingerprint_rate(playback_rate, frame_rate),
+        },
     }
     tracks = []
     for kind in ("video", "audio"):
@@ -150,8 +171,39 @@ def restore_timeline_checkpoint(resolve: object, project: object, store: Carabel
     if imported is None:
         raise ValidationError("Import checkpoint DRT fallito")
     try:
+        if _call(imported, "GetName") != temp_name \
+                and not _call(imported, "SetName", temp_name):
+            raise ValidationError("Impossibile assegnare il nome temporaneo al checkpoint importato")
         if _call(imported, "GetName") != temp_name:
             raise ValidationError("Import checkpoint non possiede il nome temporaneo atteso")
+        imported_playback = _call(imported, "GetSetting", "timelinePlaybackFrameRate")
+        expected_playback = _call(failed, "GetSetting", "timelinePlaybackFrameRate")
+        if (imported_playback is None or not str(imported_playback).strip()) \
+                and expected_playback is not None and str(expected_playback).strip():
+            timeline_setter = getattr(imported, "SetSetting", None)
+            repaired = bool(timeline_setter("timelinePlaybackFrameRate",
+                                            str(expected_playback))) \
+                if callable(timeline_setter) else False
+            if not repaired:
+                inherited_playback = _call(project, "GetSetting", "timelinePlaybackFrameRate")
+                imported_rate = _call(imported, "GetSetting", "timelineFrameRate")
+                repaired = _same_rate(inherited_playback, expected_playback) \
+                    and _same_rate(imported_rate, expected_playback)
+            if not repaired:
+                if not _call(project, "SetCurrentTimeline", imported):
+                    raise ValidationError("Impossibile selezionare il checkpoint per gli FPS playback")
+                try:
+                    repaired = _same_rate(
+                        _call(imported, "GetSetting", "timelinePlaybackFrameRate"),
+                        expected_playback)
+                    if not repaired:
+                        repaired = bool(_call(project, "SetSetting", "timelinePlaybackFrameRate",
+                                              str(expected_playback)))
+                finally:
+                    if not _call(project, "SetCurrentTimeline", failed):
+                        raise ValidationError("Impossibile riselezionare la timeline guasta")
+            if not repaired:
+                raise ValidationError("Impossibile ripristinare gli FPS playback dal checkpoint")
         if timeline_content_fingerprint(imported) != job.timeline_fingerprint:
             raise ValidationError("Timeline importata con contenuto diverso dal checkpoint")
     except Exception:
@@ -172,7 +224,9 @@ def restore_timeline_checkpoint(resolve: object, project: object, store: Carabel
         _call(failed, "SetName", job.timeline_name)
         raise
     canonical = [item for item in _project_timelines(project) if _call(item, "GetName") == job.timeline_name]
-    if canonical != [imported]:
+    if (len(canonical) != 1
+            or timeline_identity(canonical[0]) != timeline_identity(imported)
+            or timeline_content_fingerprint(canonical[0]) != timeline_content_fingerprint(imported)):
         raise ValidationError("Restore non ha prodotto una sola timeline canonica")
     operation = {"operation": "restore_checkpoint", "status": "VERIFIED",
                  "checkpoint_sha256": job.checkpoint_fingerprint,

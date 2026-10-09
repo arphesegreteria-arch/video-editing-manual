@@ -96,6 +96,20 @@ def _expected_timeline_fingerprint(job: CarabelleseJob) -> str:
     return str(summaries[-1]["timeline_fingerprint_after"]) if summaries else job.timeline_fingerprint
 
 
+def _media_identity(media: object) -> tuple[str, str] | None:
+    unique = getattr(media, "GetUniqueId", None)
+    if callable(unique):
+        value = unique()
+        if value is not None and str(value).strip():
+            return "resolve", str(value).strip()
+    properties = getattr(media, "GetClipProperty", None)
+    if callable(properties):
+        value = properties("File Path")
+        if value is not None and str(value).strip():
+            return "path", str(Path(str(value)).resolve()).casefold()
+    return None
+
+
 def _timeline_shape(timeline: object) -> tuple[object, object, object]:
     if int(_call(timeline, "GetTrackCount", "video") or 0) != 1 \
             or int(_call(timeline, "GetTrackCount", "audio") or 0) != 1:
@@ -105,7 +119,10 @@ def _timeline_shape(timeline: object) -> tuple[object, object, object]:
     if len(video) != 1 or len(audio) != 1:
         raise ValidationError("Timeline deve contenere una singola clip A/V sorgente")
     video_media, audio_media = _call(video[0], "GetMediaPoolItem"), _call(audio[0], "GetMediaPoolItem")
-    if video_media is None or video_media is not audio_media:
+    video_identity = _media_identity(video_media) if video_media is not None else None
+    audio_identity = _media_identity(audio_media) if audio_media is not None else None
+    if video_media is None or audio_media is None or video_identity is None \
+            or video_identity != audio_identity:
         raise ValidationError("Clip video e audio non sono collegate alla stessa sorgente")
     if (_call(video[0], "GetStart") != _call(audio[0], "GetStart")
             or _call(video[0], "GetDuration") != _call(audio[0], "GetDuration")):
@@ -132,13 +149,17 @@ def inspect_carabellese_apply_support(resolve: object, project: object, timeline
         if effective_state not in {"CHECKPOINTED", "APPLYING", "FAILED_RECOVERABLE", "VERIFIED"}:
             raise ValidationError("Stato job non applicabile")
         verify_timeline_checkpoint(job)
-        if _call(project, "GetName") != job.project_name or _call(project, "GetCurrentTimeline") is not timeline:
+        current_timeline = _call(project, "GetCurrentTimeline")
+        if (_call(project, "GetName") != job.project_name
+                or timeline_identity(current_timeline) != timeline_identity(timeline)):
             raise ValidationError("Progetto o timeline corrente diversi dal job")
         if _call(timeline, "GetName") != job.timeline_name or timeline_identity(timeline) != job.timeline_identity:
             raise ValidationError("Identità timeline diversa dal job")
         fps = _fraction(_call(timeline, "GetSetting", "timelineFrameRate"), "timelineFrameRate")
-        playback = _fraction(_call(timeline, "GetSetting", "timelinePlaybackFrameRate"),
-                             "timelinePlaybackFrameRate")
+        playback_value = _call(timeline, "GetSetting", "timelinePlaybackFrameRate")
+        if playback_value is None or not str(playback_value).strip():
+            playback_value = _call(project, "GetSetting", "timelinePlaybackFrameRate")
+        playback = _fraction(playback_value, "timelinePlaybackFrameRate")
         if playback != fps:
             raise ValidationError("Playback FPS diverso dagli FPS timeline")
         if timeline_content_fingerprint(timeline) != _expected_timeline_fingerprint(job):
@@ -228,7 +249,9 @@ def _keep_ranges(total_frames: int, cuts: list[dict[str, object]]) -> list[tuple
 
 def verify_carabellese_timeline(project: object, timeline: object,
                                 job: CarabelleseJob) -> dict[str, object]:
-    if _call(project, "GetCurrentTimeline") is not timeline or _call(timeline, "GetName") != job.timeline_name:
+    current_timeline = _call(project, "GetCurrentTimeline")
+    if (timeline_identity(current_timeline) != timeline_identity(timeline)
+            or _call(timeline, "GetName") != job.timeline_name):
         raise ValidationError("Timeline finale Carabellese non canonica")
     if int(_call(project, "GetTimelineCount") or 0) != 1:
         raise ValidationError("Il progetto deve contenere una sola timeline finale")
@@ -297,7 +320,7 @@ def apply_or_resume_carabellese_cleanup(resolve: object, manager: object, config
             for start, end in keep:
                 for media_type in (1, 2):
                     if not _call(pool, "AppendToTimeline", [{"mediaPoolItem": media,
-                              "startFrame": start, "endFrame": end - 1, "recordFrame": record,
+                              "startFrame": start, "endFrame": end, "recordFrame": record,
                               "trackIndex": 2, "mediaType": media_type}]):
                         raise RuntimeError(f"stage_append_failed:{start}:{end}:{media_type}")
                 record += end - start
@@ -324,9 +347,10 @@ def apply_or_resume_carabellese_cleanup(resolve: object, manager: object, config
                                "final_frames": expected_duration,
                                "timeline_fingerprint_after": after,
                                "transitions_verified": False, "safe_handles_preserved": True})
-            applying = store.save(replace(current, operations=tuple(operations)), current.revision)
-            verified = store.save(replace(applying, state="VERIFIED"), applying.revision)
-            verify_carabellese_timeline(project, timeline, verified)
+            current = store.save(replace(current, operations=tuple(operations)), current.revision)
+            verified_candidate = replace(current, state="VERIFIED")
+            verify_carabellese_timeline(project, timeline, verified_candidate)
+            verified = store.save(verified_candidate, current.revision)
             _append_journal(config, {"schema": "ARPHE_CARABELLESE_JOURNAL_V1",
                                     "job_id": current.carabellese_job_id, "status": "VERIFIED",
                                     "timeline_fingerprint": after, "final_frames": expected_duration})

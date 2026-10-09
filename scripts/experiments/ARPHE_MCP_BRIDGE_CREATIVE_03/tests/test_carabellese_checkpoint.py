@@ -31,6 +31,7 @@ class FakeItem:
 class FakeTimeline:
     def __init__(self, name="PODCAST_YOUTUBE", signature=300, export_behavior="write"):
         self.name, self.signature, self.export_behavior = name, signature, export_behavior
+        self.playback = "30"
         self.export_calls = []
     def GetName(self): return self.name
     def SetName(self, value): self.name = value; return True
@@ -39,7 +40,10 @@ class FakeTimeline:
     def GetEndFrame(self): return self.signature
     def GetSetting(self, key):
         return {"timelineResolutionWidth": "1920", "timelineResolutionHeight": "1080",
-                "timelineFrameRate": "30", "timelinePlaybackFrameRate": "30"}.get(key)
+                "timelineFrameRate": "30", "timelinePlaybackFrameRate": self.playback}.get(key)
+    def SetSetting(self, key, value):
+        if key != "timelinePlaybackFrameRate": return False
+        self.playback = value; return True
     def GetTrackCount(self, kind): return 1 if kind in {"video", "audio"} else 0
     def GetItemListInTrack(self, kind, index): return [FakeItem(0, self.signature)]
     def Export(self, path, export_type):
@@ -75,10 +79,17 @@ class FakeProject:
     def GetTimelineCount(self): return len(self.timelines)
     def GetTimelineByIndex(self, index): return self.timelines[index - 1]
     def SetCurrentTimeline(self, timeline): self.current = timeline; return True
+    def GetSetting(self, key): return self.current.GetSetting(key)
+    def SetSetting(self, key, value): return self.current.SetSetting(key, value)
 
 
 class FakeResolve:
     EXPORT_DRT = 77
+
+
+class TimelineProxy:
+    def __init__(self, target): self.target = target
+    def __getattr__(self, name): return getattr(self.target, name)
 
 
 def reviewed_job(store, timeline):
@@ -95,6 +106,13 @@ def reviewed_job(store, timeline):
 
 
 class CarabelleseCheckpointTests(unittest.TestCase):
+    def test_fingerprint_treats_blank_playback_as_inherited_timeline_rate(self):
+        explicit = FakeTimeline()
+        inherited = FakeTimeline(); inherited.playback = ""
+
+        self.assertEqual(timeline_content_fingerprint(explicit),
+                         timeline_content_fingerprint(inherited))
+
     def test_export_uses_drt_verifies_file_and_retry_reuses_checkpoint(self):
         with tempfile.TemporaryDirectory() as raw_root:
             root = Path(raw_root)
@@ -165,6 +183,115 @@ class CarabelleseCheckpointTests(unittest.TestCase):
         self.assertEqual("PODCAST_YOUTUBE", project.timelines[0].name)
         self.assertIs(project.current, project.timelines[0])
         self.assertIn(failed, project.pool.delete_calls[0])
+
+    def test_restore_renames_import_when_resolve_ignores_requested_timeline_name(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            failed = FakeTimeline(); project = FakeProject(failed)
+            store = CarabelleseJobStore(root / "jobs.json", "PC_PERSONALE")
+            checkpointed = export_timeline_checkpoint(FakeResolve(), project, failed, store,
+                                                      reviewed_job(store, failed), root / "checkpoints")
+
+            def import_ignoring_options(path, options):
+                project.pool.import_calls.append((path, dict(options)))
+                timeline = FakeTimeline("PODCAST_YOUTUBE 1")
+                project.timelines.append(timeline)
+                return timeline
+
+            project.pool.ImportTimelineFromFile = import_ignoring_options
+            restored = restore_timeline_checkpoint(FakeResolve(), project, store, checkpointed)
+
+        self.assertEqual("CHECKPOINTED", restored.state)
+        self.assertEqual(["PODCAST_YOUTUBE"], [item.name for item in project.timelines])
+
+    def test_restore_repairs_playback_rate_omitted_by_drt_import(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            failed = FakeTimeline(); project = FakeProject(failed)
+            store = CarabelleseJobStore(root / "jobs.json", "PC_PERSONALE")
+            checkpointed = export_timeline_checkpoint(FakeResolve(), project, failed, store,
+                                                      reviewed_job(store, failed), root / "checkpoints")
+            original_import = project.pool.ImportTimelineFromFile
+
+            def import_without_playback(path, options):
+                timeline = original_import(path, options)
+                timeline.playback = ""
+                return timeline
+
+            project.pool.ImportTimelineFromFile = import_without_playback
+            restored = restore_timeline_checkpoint(FakeResolve(), project, store, checkpointed)
+
+        self.assertEqual("CHECKPOINTED", restored.state)
+        self.assertEqual("30", project.current.playback)
+
+    def test_restore_accepts_project_inheritance_when_timeline_rejects_setting(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            failed = FakeTimeline(); project = FakeProject(failed)
+            store = CarabelleseJobStore(root / "jobs.json", "PC_PERSONALE")
+            checkpointed = export_timeline_checkpoint(FakeResolve(), project, failed, store,
+                                                      reviewed_job(store, failed), root / "checkpoints")
+            original_import = project.pool.ImportTimelineFromFile
+
+            def import_without_timeline_setter(path, options):
+                timeline = original_import(path, options)
+                timeline.playback = ""
+                timeline.SetSetting = lambda _key, _value: False
+                return timeline
+
+            def project_setting(key, value):
+                if key != "timelinePlaybackFrameRate": return False
+                project.current.playback = value; return True
+
+            project.pool.ImportTimelineFromFile = import_without_timeline_setter
+            project.SetSetting = project_setting
+            restored = restore_timeline_checkpoint(FakeResolve(), project, store, checkpointed)
+
+        self.assertEqual("CHECKPOINTED", restored.state)
+        self.assertEqual("", project.current.playback)
+
+    def test_restore_rereads_playback_after_selecting_imported_timeline(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            failed = FakeTimeline(); project = FakeProject(failed)
+            store = CarabelleseJobStore(root / "jobs.json", "PC_PERSONALE")
+            checkpointed = export_timeline_checkpoint(FakeResolve(), project, failed, store,
+                                                      reviewed_job(store, failed), root / "checkpoints")
+            original_import = project.pool.ImportTimelineFromFile
+
+            def import_with_deferred_playback(path, options):
+                timeline = original_import(path, options)
+                timeline.playback = ""
+                timeline.SetSetting = lambda _key, _value: False
+                return timeline
+
+            def select_with_deferred_playback(timeline):
+                project.current = timeline
+                if timeline is not failed: timeline.playback = "30"
+                return True
+
+            project.pool.ImportTimelineFromFile = import_with_deferred_playback
+            project.SetCurrentTimeline = select_with_deferred_playback
+            project.SetSetting = lambda _key, _value: False
+            restored = restore_timeline_checkpoint(FakeResolve(), project, store, checkpointed)
+
+        self.assertEqual("CHECKPOINTED", restored.state)
+        self.assertEqual("30", project.current.playback)
+
+    def test_restore_accepts_distinct_resolve_wrapper_for_canonical_timeline(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            failed = FakeTimeline(); project = FakeProject(failed)
+            store = CarabelleseJobStore(root / "jobs.json", "PC_PERSONALE")
+            checkpointed = export_timeline_checkpoint(FakeResolve(), project, failed, store,
+                                                      reviewed_job(store, failed), root / "checkpoints")
+            original_get = project.GetTimelineByIndex
+            project.GetTimelineByIndex = lambda index: TimelineProxy(original_get(index))
+
+            restored = restore_timeline_checkpoint(FakeResolve(), project, store, checkpointed)
+
+        self.assertEqual("CHECKPOINTED", restored.state)
+        self.assertEqual(1, len(project.timelines))
 
     def test_bad_import_never_removes_failed_timeline(self):
         with tempfile.TemporaryDirectory() as raw_root:

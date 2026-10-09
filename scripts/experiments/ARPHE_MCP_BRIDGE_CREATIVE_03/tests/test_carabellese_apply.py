@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -97,7 +98,7 @@ class Pool:
             self.append_calls.append(dict(record))
             if self.fail_append == len(self.append_calls): return False
             kind = "video" if record.get("mediaType") == 1 else "audio"
-            duration = int(record["endFrame"]) - int(record["startFrame"]) + 1
+            duration = int(record["endFrame"]) - int(record["startFrame"])
             item = Item(record["mediaPoolItem"], int(record["recordFrame"]), duration,
                         int(record["startFrame"]))
             self.project.timeline.tracks[kind][int(record["trackIndex"]) - 1].append(item)
@@ -134,6 +135,11 @@ class Manager:
 
 
 class Resolve: pass
+
+
+class TimelineProxy:
+    def __init__(self, target): self.target = target
+    def __getattr__(self, name): return getattr(self.target, name)
 
 
 def config(root, media_root, transcript_root):
@@ -245,6 +251,39 @@ class CarabelleseApplyTests(unittest.TestCase):
                 self.assertEqual(before, project.timeline.delete_calls)
                 self.assertEqual(0, len(project.pool.append_calls))
 
+    def test_preflight_accepts_distinct_resolve_wrappers_for_same_media_source(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root); _cfg, _store, job, project, _manager = setup(root)
+            source_path = project.timeline.tracks["video"][0][0].media.path
+            project.timeline.tracks["audio"][0][0].media = Media(source_path)
+
+            result = inspect_carabellese_apply_support(
+                Resolve(), project, project.timeline, job)
+
+        self.assertTrue(result["supported"], result["reasons"])
+
+    def test_preflight_accepts_blank_timeline_playback_when_project_inherits_matching_rate(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root); _cfg, _store, job, project, _manager = setup(root)
+            project.timeline.settings["timelinePlaybackFrameRate"] = ""
+            project.GetSetting = lambda key: "30" if key == "timelinePlaybackFrameRate" \
+                else project.timeline.GetSetting(key)
+
+            result = inspect_carabellese_apply_support(
+                Resolve(), project, project.timeline, job)
+
+        self.assertTrue(result["supported"], result["reasons"])
+
+    def test_preflight_accepts_distinct_wrapper_for_current_timeline(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root); _cfg, _store, job, project, _manager = setup(root)
+            project.GetCurrentTimeline = lambda: TimelineProxy(project.timeline)
+
+            result = inspect_carabellese_apply_support(
+                Resolve(), project, project.timeline, job)
+
+        self.assertTrue(result["supported"], result["reasons"])
+
     def test_blocked_failed_preflight_is_persisted_byte_equivalent(self):
         with tempfile.TemporaryDirectory() as raw_root:
             root = Path(raw_root); cfg, store, job, project, manager = setup(root)
@@ -283,6 +322,29 @@ class CarabelleseApplyTests(unittest.TestCase):
         self.assertEqual(0, project.timeline.delete_calls)
         self.assertEqual(2, len(project.pool.append_calls))
         self.assertEqual(300, project.timeline.GetItemListInTrack("video", 1)[0].GetDuration())
+
+    def test_final_verification_accepts_distinct_current_timeline_wrapper(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root); cfg, store, job, project, manager = setup(root)
+            verified = apply_or_resume_carabellese_cleanup(
+                Resolve(), manager, cfg, store, job.carabellese_job_id, job.review_fingerprint)
+            project.GetCurrentTimeline = lambda: TimelineProxy(project.timeline)
+
+            evidence = verify_carabellese_timeline(project, project.timeline, verified)
+
+        self.assertTrue(evidence["ok"])
+
+    def test_final_verification_failure_is_persisted_as_recoverable_without_stale_revision(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root); cfg, store, job, _project, manager = setup(root)
+            with patch("bridge.carabellese_apply.verify_carabellese_timeline",
+                       side_effect=ValidationError("synthetic final verification failure")):
+                failed = apply_or_resume_carabellese_cleanup(
+                    Resolve(), manager, cfg, store, job.carabellese_job_id,
+                    job.review_fingerprint)
+
+        self.assertEqual("FAILED_RECOVERABLE", failed.state)
+        self.assertIn("synthetic final verification failure", failed.operations[-1]["reason"])
 
 
 if __name__ == "__main__":

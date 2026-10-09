@@ -110,6 +110,26 @@ class CarabelleseReviewTests(unittest.TestCase):
         self.assertRegex(reviewed.review_fingerprint, r"^[0-9a-f]{64}$")
         self.assertEqual("SHORTEN", reviewed.decisions[2]["outcome"])
 
+    def test_identical_review_replay_is_idempotent_but_changed_replay_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            store = CarabelleseJobStore(Path(raw_root) / "jobs.json", "PC_PERSONALE")
+            reviewed = submit_carabellese_review(
+                store, marked_job(store), boundaries(), pause(), exceptions(), CONTRACT,
+                transcript=transcript(),
+            )
+            replay = submit_carabellese_review(
+                store, reviewed, boundaries(), pause(), exceptions(), CONTRACT,
+                transcript=transcript(),
+            )
+            with self.assertRaisesRegex(ValidationError, "diversa"):
+                submit_carabellese_review(
+                    store, replay, boundaries(),
+                    {"outcome": "KEEP", "reason": "non accorciare"},
+                    exceptions(), CONTRACT, transcript=transcript(),
+                )
+
+        self.assertEqual(reviewed, replay)
+
     def test_missing_duplicate_unknown_or_empty_reason_leaves_job_marked(self):
         invalids = (
             ([], pause(), exceptions()),

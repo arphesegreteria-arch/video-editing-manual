@@ -24,11 +24,16 @@ class CarabelleseValidationTests(unittest.TestCase):
             path.write_text(json.dumps(payload), encoding="utf-8")
             return validate_carabellese_cleanup_ledger(path)
 
-    def test_repository_ledger_is_valid_and_both_live_gates_remain_pending(self):
+    def test_repository_ledger_validates_only_the_personal_live_gate(self):
         payload = json.loads(LEDGER.read_text(encoding="utf-8"))
         self.assertEqual([], validate_carabellese_cleanup_ledger(LEDGER))
-        self.assertEqual({"PENDING"}, {gate["status"]
-                                      for gate in payload["workstation_gates"].values()})
+        gates = payload["workstation_gates"]
+        self.assertEqual("VALIDATED", gates["PC_PERSONALE"]["status"])
+        self.assertTrue(all(value == "PASS"
+                            for value in gates["PC_PERSONALE"]["checks"].values()))
+        self.assertEqual("PENDING", gates["PC_SEGRETERIA"]["status"])
+        self.assertTrue(all(value == "PENDING"
+                            for value in gates["PC_SEGRETERIA"]["checks"].values()))
         self.assertFalse(payload["capability_default"])
 
     def test_missing_check_enabled_default_and_private_content_are_rejected(self):

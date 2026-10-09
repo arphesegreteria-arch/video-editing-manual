@@ -35,11 +35,14 @@ class CarabelleseRecoveryTests(unittest.TestCase):
             project.pool.fail_append = None
             recovered = recover_carabellese_cleanup(
                 Resolve(), manager, cfg, restarted_store, failed.carabellese_job_id)
+            replay = recover_carabellese_cleanup(
+                Resolve(), manager, cfg, restarted_store, failed.carabellese_job_id)
         self.assertEqual("CHECKPOINTED", recovered.state)
         self.assertEqual("resolve:timeline-restored", recovered.timeline_identity)
         self.assertEqual(1, len(project.timelines))
         self.assertEqual("PODCAST_YOUTUBE", project.timeline.GetName())
         self.assertEqual("restore_checkpoint", recovered.operations[-1]["operation"])
+        self.assertEqual(recovered, replay)
 
     def test_changed_timeline_or_checkpoint_blocks_recovery(self):
         for case in ("timeline", "checkpoint"):

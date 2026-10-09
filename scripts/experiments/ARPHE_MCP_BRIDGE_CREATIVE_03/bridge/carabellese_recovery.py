@@ -47,12 +47,24 @@ def recover_carabellese_cleanup(resolve: object, manager: object, config: Creati
                                  store: CarabelleseJobStore, job_id: str) -> CarabelleseJob:
     with RESOLVE_ACCESS_LOCK:
         job = store.get(job_id, config.workstation_id)
+        project = _call(manager, "GetCurrentProject")
+        timeline = _call(project, "GetCurrentTimeline")
+        if job.state == "CHECKPOINTED":
+            operation = job.operations[-1] if job.operations else {}
+            if (operation.get("operation") != "restore_checkpoint"
+                    or operation.get("status") != "VERIFIED"):
+                raise ValidationError("Replay recovery privo di restore verificato")
+            verify_timeline_checkpoint(job)
+            if (_call(project, "GetName") != job.project_name
+                    or _call(timeline, "GetName") != job.timeline_name
+                    or timeline_identity(timeline) != job.timeline_identity
+                    or timeline_content_fingerprint(timeline) != job.timeline_fingerprint):
+                raise ValidationError("Timeline cambiata dopo il recovery verificato")
+            return job
         if job.state != "FAILED_RECOVERABLE":
             raise ValidationError("Il recovery richiede un job FAILED_RECOVERABLE")
         verify_timeline_checkpoint(job)
         expected_failed = _failed_fingerprint(job, config)
-        project = _call(manager, "GetCurrentProject")
-        timeline = _call(project, "GetCurrentTimeline")
         if (_call(project, "GetName") != job.project_name
                 or _call(timeline, "GetName") != job.timeline_name
                 or timeline_identity(timeline) != job.timeline_identity):

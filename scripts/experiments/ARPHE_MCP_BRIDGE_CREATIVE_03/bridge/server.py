@@ -27,7 +27,10 @@ from .carabellese_analysis import (
     load_carabellese_inputs,
     validate_cleanup_candidates,
 )
-from .carabellese_apply import apply_or_resume_carabellese_cleanup as do_apply_carabellese_cleanup
+from .carabellese_apply import (
+    apply_or_resume_carabellese_cleanup as do_apply_carabellese_cleanup,
+    media_source_identity as carabellese_media_source_identity,
+)
 from .carabellese_checkpoint import (
     export_timeline_checkpoint as do_export_carabellese_checkpoint,
     timeline_content_fingerprint as carabellese_timeline_fingerprint,
@@ -221,7 +224,12 @@ def _carabellese_source_fingerprint(timeline: Any, config: Any) -> str:
         raise ValidationError("La preparazione richiede una singola clip sorgente A/V")
     video_media = safe_call(video[0], "GetMediaPoolItem")
     audio_media = safe_call(audio[0], "GetMediaPoolItem")
-    if video_media is None or video_media is not audio_media:
+    video_identity = carabellese_media_source_identity(video_media) \
+        if video_media is not None else None
+    audio_identity = carabellese_media_source_identity(audio_media) \
+        if audio_media is not None else None
+    if (video_media is None or audio_media is None or video_identity is None
+            or video_identity != audio_identity):
         raise ValidationError("Le clip A/V non appartengono alla stessa sorgente")
     selected = allowed_media(str(safe_call(video_media, "GetClipProperty", "File Path") or ""), config)
     return media_fingerprint(selected)

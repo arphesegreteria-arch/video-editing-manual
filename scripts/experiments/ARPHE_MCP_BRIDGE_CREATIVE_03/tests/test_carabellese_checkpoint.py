@@ -57,6 +57,7 @@ class FakePool:
     def __init__(self, project, imported_signature=300):
         self.project, self.imported_signature = project, imported_signature
         self.import_calls, self.delete_calls = [], []
+        self.fail_delete = None
     def ImportTimelineFromFile(self, path, options):
         self.import_calls.append((path, dict(options)))
         timeline = FakeTimeline(options["timelineName"], self.imported_signature)
@@ -64,6 +65,8 @@ class FakePool:
         return timeline
     def DeleteTimelines(self, timelines):
         self.delete_calls.append(list(timelines))
+        if self.fail_delete is not None and self.fail_delete in timelines:
+            return False
         for timeline in timelines:
             if timeline in self.project.timelines: self.project.timelines.remove(timeline)
         return True
@@ -304,6 +307,22 @@ class CarabelleseCheckpointTests(unittest.TestCase):
                 restore_timeline_checkpoint(FakeResolve(), project, store, checkpointed)
         self.assertIn(failed, project.timelines)
         self.assertNotIn(failed, [item for call in project.pool.delete_calls for item in call])
+
+    def test_restore_promotion_failure_rolls_back_to_original_timeline(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            failed = FakeTimeline(); project = FakeProject(failed)
+            project.pool.fail_delete = failed
+            store = CarabelleseJobStore(root / "jobs.json", "PC_PERSONALE")
+            checkpointed = export_timeline_checkpoint(FakeResolve(), project, failed, store,
+                                                      reviewed_job(store, failed), root / "checkpoints")
+
+            with self.assertRaisesRegex(ValidationError, "rimuovere timeline guasta"):
+                restore_timeline_checkpoint(FakeResolve(), project, store, checkpointed)
+
+        self.assertIs(project.current, failed)
+        self.assertEqual("PODCAST_YOUTUBE", failed.name)
+        self.assertEqual([failed], project.timelines)
 
 
 if __name__ == "__main__":

@@ -113,7 +113,9 @@ class CarabelleseToolTests(unittest.TestCase):
                 "context_before": "apertura", "context_after": "contenuto",
                 "reason": "inizio reale", "review_required": True,
                 "residual_seconds": None, "speaker_turn": False}]
-            timeline = Timeline(Media(source)); project = Project(timeline)
+            timeline = Timeline(Media(source))
+            timeline.items["audio"][0].media = Media(source)
+            project = Project(timeline)
             runtime = (object(), object(), project, timeline, cfg, object(), None)
             with patch("bridge.server.load_config", return_value=cfg), \
                  patch("bridge.server._runtime", return_value=runtime):

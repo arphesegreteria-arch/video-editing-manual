@@ -220,8 +220,23 @@ def restore_timeline_checkpoint(resolve: object, project: object, store: Carabel
             raise ValidationError("Impossibile selezionare timeline ripristinata")
         if not _call(pool, "DeleteTimelines", [failed]):
             raise ValidationError("Impossibile rimuovere timeline guasta")
-    except Exception:
-        _call(failed, "SetName", job.timeline_name)
+    except Exception as promotion_error:
+        rollback_errors = []
+        for target, method, args, label in (
+            (project, "SetCurrentTimeline", (failed,), "riselezione originale"),
+            (imported, "SetName", (temp_name,), "rinomina checkpoint temporaneo"),
+            (failed, "SetName", (job.timeline_name,), "ripristino nome originale"),
+            (pool, "DeleteTimelines", ([imported],), "rimozione checkpoint temporaneo"),
+        ):
+            try:
+                if not _call(target, method, *args):
+                    rollback_errors.append(label)
+            except Exception as rollback_error:
+                rollback_errors.append(f"{label}: {rollback_error}")
+        if rollback_errors:
+            raise ValidationError(
+                "Rollback restore incompleto: " + "; ".join(rollback_errors)
+            ) from promotion_error
         raise
     canonical = [item for item in _project_timelines(project) if _call(item, "GetName") == job.timeline_name]
     if (len(canonical) != 1

@@ -96,7 +96,7 @@ def _expected_timeline_fingerprint(job: CarabelleseJob) -> str:
     return str(summaries[-1]["timeline_fingerprint_after"]) if summaries else job.timeline_fingerprint
 
 
-def _media_identity(media: object) -> tuple[str, str] | None:
+def media_source_identity(media: object) -> tuple[str, str] | None:
     unique = getattr(media, "GetUniqueId", None)
     if callable(unique):
         value = unique()
@@ -119,8 +119,8 @@ def _timeline_shape(timeline: object) -> tuple[object, object, object]:
     if len(video) != 1 or len(audio) != 1:
         raise ValidationError("Timeline deve contenere una singola clip A/V sorgente")
     video_media, audio_media = _call(video[0], "GetMediaPoolItem"), _call(audio[0], "GetMediaPoolItem")
-    video_identity = _media_identity(video_media) if video_media is not None else None
-    audio_identity = _media_identity(audio_media) if audio_media is not None else None
+    video_identity = media_source_identity(video_media) if video_media is not None else None
+    audio_identity = media_source_identity(audio_media) if audio_media is not None else None
     if video_media is None or audio_media is None or video_identity is None \
             or video_identity != audio_identity:
         raise ValidationError("Clip video e audio non sono collegate alla stessa sorgente")

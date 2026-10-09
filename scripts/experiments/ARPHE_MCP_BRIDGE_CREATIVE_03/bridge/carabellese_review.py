@@ -119,8 +119,8 @@ def submit_carabellese_review(
     exception_decisions: Sequence[Mapping[str, object]], contract: CarabelleseContract, *,
     transcript: Mapping[str, object],
 ) -> CarabelleseJob:
-    if job.state != "MARKED":
-        raise ValidationError("La review Carabellese richiede un job MARKED")
+    if job.state not in {"MARKED", "REVIEWED"}:
+        raise ValidationError("La review Carabellese richiede un job MARKED o REVIEWED")
     if transcript.get("_pinned_fingerprint") != job.transcript_fingerprint:
         raise ValidationError("Fingerprint transcript Carabellese stale")
     actual_contract = carabellese_contract_fingerprint(contract)
@@ -168,5 +168,14 @@ def submit_carabellese_review(
         "transcript_fingerprint": job.transcript_fingerprint, "decisions": decisions,
     }, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     review_fingerprint = hashlib.sha256(encoded).hexdigest()
-    return store.save(replace(job, state="REVIEWED", decisions=tuple(decisions),
+    canonical_decisions = tuple(decisions)
+    if job.state == "REVIEWED":
+        persisted = store.get(job.carabellese_job_id, job.workstation_id)
+        if persisted != job:
+            raise ValidationError("Job Carabellese stale durante il replay review")
+        if (job.decisions != canonical_decisions
+                or job.review_fingerprint != review_fingerprint):
+            raise ValidationError("Review Carabellese ripetuta diversa da quella approvata")
+        return job
+    return store.save(replace(job, state="REVIEWED", decisions=canonical_decisions,
                               review_fingerprint=review_fingerprint), job.revision)

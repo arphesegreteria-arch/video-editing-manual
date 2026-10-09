@@ -60,6 +60,14 @@ from .carabellese_transcription import (
     get_carabellese_transcription_job as do_get_carabellese_transcription_job,
     start_carabellese_transcription as do_start_carabellese_transcription,
 )
+from .vertical_social_contract import load_vertical_social_contract
+from .vertical_social_workflow import (
+    advance_vertical_social_action as do_advance_vertical_social_action,
+    approve_vertical_social_plan as do_approve_vertical_social_plan,
+    inspect_vertical_social_plan as do_inspect_vertical_social_plan,
+    mark_vertical_social_picture_lock as do_mark_vertical_social_picture_lock,
+    prepare_vertical_social_plan as do_prepare_vertical_social_plan,
+)
 from .creative_tools import (add_end_card as do_add_end_card,
                              animate_element, animate_stack,
                              set_review_highlight as do_set_review_highlight)
@@ -192,6 +200,69 @@ EDITORIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "editorial_selec
 EDITORIAL_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "editorial_preferences.json"
 CARABELLESE_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "carabellese_cleanup_contract.json"
 CARABELLESE_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "carabellese_preferences.json"
+VERTICAL_SOCIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "vertical_social_contract.json"
+
+
+def _require_vertical_social(config: Any) -> None:
+    if not config.flags.get("CAP_VERTICAL_SOCIAL", False):
+        raise ValidationError("CAP_VERTICAL_SOCIAL non attiva nella config locale")
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_vertical_social() -> dict[str, Any]:
+    """Read the Vertical Social contract and local gate without editing Resolve."""
+    try:
+        config = load_config(); contract = load_vertical_social_contract(VERTICAL_SOCIAL_CONTRACT_PATH)
+        return {"ok": True, "card_count": 1, "workflow_id": contract.workflow_id,
+                "workflow_version": contract.version, "workstation_id": config.workstation_id,
+                "capability_enabled": bool(config.flags.get("CAP_VERTICAL_SOCIAL", False)),
+                "actions": {name: spec.capability_status for name, spec in contract.actions.items()}}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_vertical_social_plan(target: dict[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+    try:
+        config = load_config(); _require_vertical_social(config)
+        plan = do_prepare_vertical_social_plan(config.vertical_social_plans_path, config.workstation_id, target, actions)
+        return {"ok": True, "action": "prepare_vertical_social_plan", "plan_id": plan.plan_id,
+                "fingerprint": plan.fingerprint, "state": plan.state}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_vertical_social_plan(plan_id: str, fingerprint: str) -> dict[str, Any]:
+    try:
+        config = load_config(); _require_vertical_social(config)
+        plan = do_approve_vertical_social_plan(config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint)
+        return {"ok": True, "plan_id": plan.plan_id, "state": plan.state}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_vertical_social_plan(plan_id: str) -> dict[str, Any]:
+    try:
+        config = load_config()
+        return {"ok": True, **do_inspect_vertical_social_plan(config.vertical_social_plans_path, config.workstation_id, plan_id)}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def mark_vertical_social_picture_lock(plan_id: str) -> dict[str, Any]:
+    try:
+        config = load_config(); _require_vertical_social(config)
+        plan = do_mark_vertical_social_picture_lock(config.vertical_social_plans_path, config.workstation_id, plan_id)
+        return {"ok": True, "plan_id": plan.plan_id, "picture_locked": plan.picture_locked}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def advance_vertical_social_action(plan_id: str, action_id: str, next_state: str, evidence: dict[str, Any]) -> dict[str, Any]:
+    try:
+        config = load_config(); _require_vertical_social(config)
+        plan = do_advance_vertical_social_action(config.vertical_social_plans_path, config.workstation_id, plan_id, action_id, next_state, evidence)
+        return {"ok": True, "plan_id": plan.plan_id, "action_id": action_id}
+    except Exception as exc: return _error(exc)
 
 
 def _carabellese_store(config: Any) -> CarabelleseJobStore:

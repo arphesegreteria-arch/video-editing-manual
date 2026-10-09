@@ -151,6 +151,18 @@ aperto e `CAP_EDITORIAL_SELECTION=false` al termine.
 
 ## Gate separato per la pulizia YouTube Studio Carabellese
 
+## Vertical Social Assistant — pianificazione sicura
+
+`ARPHE_VERTICAL_SOCIAL` usa una card unica: richiesta libera → piano versionato → approvazione
+legata all'impronta → timeline provvisoria → autocontrollo → review umana. Le azioni sono
+semantiche e chiuse; richieste non supportate restano bloccate con un motivo, senza accesso
+arbitrario a Resolve. Caption e sottotitoli restano post-picture-lock e non vengono applicati
+finché la capability locale non è validata.
+
+Il flag `CAP_VERTICAL_SOCIAL` parte sempre `false`. Job, journal e prove restano locali alla
+workstation. Il ledger `validation/vertical-social-ledger.json` conserva gate indipendenti:
+`PC_PERSONALE=PENDING` e `PC_SEGRETERIA=PENDING` finché ciascun PC non supera la propria prova.
+
 Questo workflow non è un render e non usa il Graphic Kit: nessuna CTA, grafica o consegna finale
 fa parte della v1. Il target è una sola timeline canonica 1920×1080 agli FPS della sorgente, con
 playback identico. Il flusso è trascrizione gestita → proposte e marker → review completa in una

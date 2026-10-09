@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "workflow_id": "ARPHE_VERTICAL_SOCIAL",
+  "capability_default": false,
+  "automated_evidence": {
+    "result": "PASS",
+    "test_results": ["Contract, plan store, lifecycle and MCP-surface tests pass before native rollout."],
+    "limitations": ["Automated evidence does not validate Resolve on either workstation."]
+  },
+  "workstation_gates": {
+    "PC_PERSONALE": {"workstation_id": "PC_PERSONALE", "status": "PENDING", "checks": {"native_gate": "PENDING"}, "evidence": []},
+    "PC_SEGRETERIA": {"workstation_id": "PC_SEGRETERIA", "status": "PENDING", "checks": {"native_gate": "PENDING"}, "evidence": []}
+  }
+}
+

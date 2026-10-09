@@ -652,3 +652,7 @@ Principio ancora valido:
 - tracking sempre limitato al range utile;
 - tracking anchor separato dal centro estetico;
 - ogni passaggio manuale spiegato click-per-click.
+## 2026-10-09 — Vertical Social Assistant foundation
+
+- Aggiunti contratto, piano versionato, lifecycle, recupero locale e strumenti MCP chiusi.
+- `CAP_VERTICAL_SOCIAL` resta `false`; PC personale e segreteria mantengono stati separati.

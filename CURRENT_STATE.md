@@ -141,6 +141,12 @@ WRITE restano `PENDING` separatamente su ciascun PC.
 
 ## Shortform caption mobile — PARTIAL / render verificato
 
+## Vertical Social Assistant — AUTOMATED PASS / native gate pending
+
+Il contratto, il piano versionato, l'approvazione con impronta, il picture lock, il recupero
+locale e la superficie MCP chiusa sono implementati e testati. `CAP_VERTICAL_SOCIAL` resta
+disabilitato su ogni workstation; non sono ancora state applicate azioni creative in Resolve.
+
 Sul `PC_PERSONALE` è stato completato un probe reale sulla timeline verticale
 `ARPHE_SHORTFORM_MASTER_V4`: creazione subtitle nativa, conversione logica in un unico layer
 Fusion con 12 Text+ temporizzati, stile Satoshi Bold bianco su bordeaux, size 0.050, fascia bassa

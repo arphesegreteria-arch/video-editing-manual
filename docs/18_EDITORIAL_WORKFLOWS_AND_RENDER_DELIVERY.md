@@ -148,3 +148,18 @@ zero-write. Il progetto e i file sintetici sono stati rimossi; il progetto origi
 aperto e `CAP_EDITORIAL_SELECTION=false` al termine.
 
 `PC_SEGRETERIA` resta `PENDING`: non è stata installata, abilitata o usata per questo gate.
+
+## Gate separato per la pulizia YouTube Studio Carabellese
+
+Questo workflow non è un render e non usa il Graphic Kit: nessuna CTA, grafica o consegna finale
+fa parte della v1. Il target è una sola timeline canonica 1920×1080 agli FPS della sorgente, con
+playback identico. Il flusso è trascrizione gestita → proposte e marker → review completa in una
+card → checkpoint `.drt` → applicazione verificata → chiusura. Ogni decisione umana richiede un
+motivo; le pause ordinarie condividono una decisione batch, mentre boundary e indicazioni parlate
+restano individuali.
+
+La segreteria deve ascoltare i marker e rispondere una volta sola, senza spostarli. Alessio o
+personale qualificato gestiscono failure, restore, overlay di apprendimento e soglie tecniche. Il
+ledger `validation/carabellese-cleanup-ledger.json` parte con `PC_PERSONALE=PENDING` e
+`PC_SEGRETERIA=PENDING`: prove automatiche o di un PC non promuovono l'altro. L'installer conserva
+flag, job, journal, overlay, proposte e checkpoint locali senza copiarli tra workstation.

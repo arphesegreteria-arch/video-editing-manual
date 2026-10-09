@@ -19,6 +19,11 @@ $editorialJobsPath = Join-Path $configDir 'editorial_jobs.json'
 $editorialJournalPath = Join-Path $configDir 'editorial_journal.jsonl'
 $editorialOverlayPath = Join-Path $configDir 'editorial_profile_overlay.json'
 $editorialProposalsPath = Join-Path $configDir 'editorial_profile_proposals.json'
+$carabelleseJobsPath = Join-Path $configDir 'carabellese_jobs.json'
+$carabelleseJournalPath = Join-Path $configDir 'carabellese_journal.jsonl'
+$carabelleseOverlayPath = Join-Path $configDir 'carabellese_profile_overlay.json'
+$carabelleseProposalsPath = Join-Path $configDir 'carabellese_profile_proposals.json'
+$carabelleseCheckpointRoot = Join-Path $configDir 'carabellese-checkpoints'
 if (-not $RuntimeLogRoot) {
     $RuntimeLogRoot = Join-Path 'C:\ARPHE\MCP\logs\ARPHE_WINDOWS_BRIDGE_RUNTIME_V1' $WorkstationId
 }
@@ -80,6 +85,22 @@ if (Test-Path -LiteralPath $editorialJournalPath -PathType Leaf) {
         }
     }
 }
+foreach ($carabelleseState in @($carabelleseJobsPath, $carabelleseOverlayPath, $carabelleseProposalsPath)) {
+    if (Test-Path -LiteralPath $carabelleseState -PathType Leaf) {
+        $existingCarabelleseState = Get-Content -Raw -LiteralPath $carabelleseState | ConvertFrom-Json
+        if ([string]$existingCarabelleseState.workstation_id -ne $WorkstationId) {
+            throw "Lo stato Carabellese '$carabelleseState' appartiene a '$($existingCarabelleseState.workstation_id)', non a '$WorkstationId'. Installazione rifiutata senza modifiche."
+        }
+    }
+}
+if (Test-Path -LiteralPath $carabelleseJournalPath -PathType Leaf) {
+    foreach ($carabelleseLine in Get-Content -LiteralPath $carabelleseJournalPath | Where-Object { $_.Trim() }) {
+        $existingCarabelleseRecord = $carabelleseLine | ConvertFrom-Json
+        if ([string]$existingCarabelleseRecord.workstation_id -ne $WorkstationId) {
+            throw "Il journal Carabellese contiene stato estraneo a '$WorkstationId'. Installazione rifiutata senza modifiche."
+        }
+    }
+}
 
 if (-not $PSCmdlet.ShouldProcess($Destination, 'Install creative bridge beside validated bridges')) { return }
 
@@ -91,7 +112,7 @@ New-Item -ItemType Directory -Path $bridgeDestination -Force | Out-Null
 Get-ChildItem -LiteralPath $bridgeSource -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $bridgeDestination -Force
 }
-foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json', 'artifact_retention.json', 'review_readability_contract.json', 'editorial_selection_contract.json', 'editorial_preferences.json')) {
+foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json', 'artifact_retention.json', 'review_readability_contract.json', 'editorial_selection_contract.json', 'editorial_preferences.json', 'carabellese_cleanup_contract.json', 'carabellese_preferences.json')) {
     $registrySource = Join-Path $PSScriptRoot $registryName
     if (-not (Test-Path -LiteralPath $registrySource -PathType Leaf)) {
         throw "Creative registry not found: $registrySource"
@@ -103,6 +124,7 @@ New-Item -ItemType Directory -Path $RenderRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $RuntimeLogRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $configDir -Force | Out-Null
 New-Item -ItemType Directory -Path $resolveArchiveRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $carabelleseCheckpointRoot -Force | Out-Null
 $carrierSource = Join-Path $PSScriptRoot 'assets\arphe_fusion_carrier_5m.mp4'
 if (-not (Test-Path -LiteralPath $carrierSource)) {
     throw "Asset tecnico di durata non trovato: $carrierSource"
@@ -127,6 +149,11 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     Set-ConfigProperty -Config $config -Name editorial_journal_path -Value $editorialJournalPath.Replace('\', '/')
     Set-ConfigProperty -Config $config -Name editorial_profile_overlay_path -Value $editorialOverlayPath.Replace('\', '/')
     Set-ConfigProperty -Config $config -Name editorial_profile_proposals_path -Value $editorialProposalsPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name carabellese_jobs_path -Value $carabelleseJobsPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name carabellese_journal_path -Value $carabelleseJournalPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name carabellese_profile_overlay_path -Value $carabelleseOverlayPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name carabellese_profile_proposals_path -Value $carabelleseProposalsPath.Replace('\', '/')
+    Set-ConfigProperty -Config $config -Name carabellese_checkpoint_root -Value $carabelleseCheckpointRoot.Replace('\', '/')
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_ARTIFACT_MAINTENANCE']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_ARTIFACT_MAINTENANCE -NotePropertyValue $false
     }
@@ -138,6 +165,9 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_EDITORIAL_SELECTION']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_EDITORIAL_SELECTION -NotePropertyValue $false
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_CARABELLESE_CLEANUP']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_CARABELLESE_CLEANUP -NotePropertyValue $false
     }
     if ($null -ne $legacyConfig) {
         foreach ($migration in @(
@@ -187,7 +217,12 @@ if (-not (Test-Path -LiteralPath $configPath)) {
         @{ Name = 'editorial_jobs_path'; Value = $editorialJobsPath.Replace('\', '/') },
         @{ Name = 'editorial_journal_path'; Value = $editorialJournalPath.Replace('\', '/') },
         @{ Name = 'editorial_profile_overlay_path'; Value = $editorialOverlayPath.Replace('\', '/') },
-        @{ Name = 'editorial_profile_proposals_path'; Value = $editorialProposalsPath.Replace('\', '/') }
+        @{ Name = 'editorial_profile_proposals_path'; Value = $editorialProposalsPath.Replace('\', '/') },
+        @{ Name = 'carabellese_jobs_path'; Value = $carabelleseJobsPath.Replace('\', '/') },
+        @{ Name = 'carabellese_journal_path'; Value = $carabelleseJournalPath.Replace('\', '/') },
+        @{ Name = 'carabellese_profile_overlay_path'; Value = $carabelleseOverlayPath.Replace('\', '/') },
+        @{ Name = 'carabellese_profile_proposals_path'; Value = $carabelleseProposalsPath.Replace('\', '/') },
+        @{ Name = 'carabellese_checkpoint_root'; Value = $carabelleseCheckpointRoot.Replace('\', '/') }
     )) {
         if ($null -eq $config.PSObject.Properties[$pathField.Name]) {
             $config | Add-Member -NotePropertyName $pathField.Name -NotePropertyValue $pathField.Value
@@ -235,6 +270,10 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_EDITORIAL_SELECTION']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_EDITORIAL_SELECTION -NotePropertyValue $false
+        $changed = $true
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_CARABELLESE_CLEANUP']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_CARABELLESE_CLEANUP -NotePropertyValue $false
         $changed = $true
     }
     if ($changed) {

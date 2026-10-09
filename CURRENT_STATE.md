@@ -2,6 +2,20 @@
 
 Ultimo aggiornamento: sessione 2026-10-09.
 
+<a id="carabellese-youtube-cleanup"></a>
+## Studio Carabellese YouTube cleanup — CODICE VALIDATO / LIVE PENDING
+
+Il workflow `CARABELLESE_YOUTUBE_CLEANUP` conserva una sola timeline 1920×1080 agli FPS della
+sorgente, con playback coincidente. Propone inizio/fine reali, pause da ridurre e indicazioni
+editoriali parlate; richiede una review completa con motivi, crea un `.drt` prima dei tagli e può
+ripristinarlo dopo una failure. La v1 non comprende CTA, Graphic Kit, grafiche o render.
+
+Stato locale, journal, checkpoint e apprendimento sono separati per workstation;
+`CAP_CARABELLESE_CLEANUP=false` per default. Le suite automatiche coprono binding sorgente,
+marker, review, checkpoint, apply, recovery, timeline unica, privacy e installer. Nessun gate live
+è ancora dichiarato: `PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING`; il lavoro aperto in
+segreteria non è stato toccato. Fonte: `validation/carabellese-cleanup-ledger.json`.
+
 <a id="editorial-selection-learning"></a>
 ## Selezione Reel podcast e apprendimento — CODICE VALIDATO / PC_PERSONALE LIVE PASS
 

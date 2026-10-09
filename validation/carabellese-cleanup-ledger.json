@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "workflow_id": "CARABELLESE_YOUTUBE_CLEANUP",
+  "capability_default": false,
+  "automated_evidence": {
+    "result": "PASS",
+    "observed_at": "2026-10-09T12:00:00+02:00",
+    "repository_commit": "2263703467045d04a9e510d95c9abe0ab6a9a6e3",
+    "contract_digest": "64882dad173d9359b2724de344d02892e345c08dc8dc5c90f5c39eb75bfd712f",
+    "test_results": [
+      "Bridge automated suite passed 346 tests with one documented environment skip before rollout documentation.",
+      "Windows automated suite passed 55 tests with one documented environment skip before rollout documentation."
+    ],
+    "limitations": [
+      "Automated evidence does not validate Resolve behavior on either workstation.",
+      "No live project or installed runtime was modified by this evidence."
+    ]
+  },
+  "workstation_gates": {
+    "PC_PERSONALE": {
+      "workstation_id": "PC_PERSONALE",
+      "status": "PENDING",
+      "checks": {
+        "capability_probe": "PENDING",
+        "source_binding": "PENDING",
+        "complete_review": "PENDING",
+        "checkpoint_restore": "PENDING",
+        "single_timeline": "PENDING",
+        "partial_failure_recovery": "PENDING",
+        "foreign_marker_preservation": "PENDING",
+        "rollback_flag": "PENDING"
+      },
+      "evidence": [],
+      "limitations": [
+        "The isolated personal live gate has not run; capability remains disabled."
+      ]
+    },
+    "PC_SEGRETERIA": {
+      "workstation_id": "PC_SEGRETERIA",
+      "status": "PENDING",
+      "checks": {
+        "capability_probe": "PENDING",
+        "source_binding": "PENDING",
+        "complete_review": "PENDING",
+        "checkpoint_restore": "PENDING",
+        "single_timeline": "PENDING",
+        "partial_failure_recovery": "PENDING",
+        "foreign_marker_preservation": "PENDING",
+        "rollback_flag": "PENDING"
+      },
+      "evidence": [],
+      "limitations": [
+        "PC_SEGRETERIA and its open Resolve work were not touched; no result is inferred from personal evidence."
+      ]
+    }
+  }
+}

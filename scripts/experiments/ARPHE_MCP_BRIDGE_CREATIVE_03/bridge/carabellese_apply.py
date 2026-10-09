@@ -26,7 +26,8 @@ CONTRACT_PATH = Path(__file__).resolve().parents[1] / "carabellese_cleanup_contr
 def _append_journal(config: CreativeConfig, payload: dict[str, object]) -> None:
     path = config.carabellese_journal_path
     path.parent.mkdir(parents=True, exist_ok=True)
-    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+    record = {"workstation_id": config.workstation_id, **payload}
+    encoded = json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
     try:
         with path.open("a", encoding="utf-8") as handle:
             handle.write(encoded)

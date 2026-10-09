@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-10-09 — Workflow Studio Carabellese YouTube cleanup
+
+- Aggiunto il flusso isolato trascrizione → proposte/marker → review con motivi → checkpoint DRT →
+  applicazione verificata → recovery/chiusura, mantenendo una sola timeline canonica.
+- La v1 esegue soltanto pulizia editoriale: niente CTA, Graphic Kit, grafiche o render.
+- Aggiunti journal riprendibile, restore vincolato a fingerprint, marker di proprietà, apprendimento
+  redatto e strumenti pubblici chiusi con una sola card per la segreteria.
+- Installer e flag preservano stato e valore locali e rifiutano file di un'altra workstation;
+  `CAP_CARABELLESE_CLEANUP=false` per default.
+- Ledger iniziale: `PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING`; nessun progetto live è stato
+  usato o modificato in questa fase.
+
 ## 2026-10-09 — Chiusura gate personale e hardening del preflight
 
 - Il gate live definitivo `PC_PERSONALE` resta PASS a progetto, timeline e playback 30 fps;

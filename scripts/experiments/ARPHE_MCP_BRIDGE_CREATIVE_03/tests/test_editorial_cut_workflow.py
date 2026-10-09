@@ -200,6 +200,30 @@ def environment(root: Path):
 
 
 class EditorialCutWorkflowTests(unittest.TestCase):
+    def test_blocked_job_preflight_failure_keeps_persisted_state_unchanged(self):
+        for case in ("review", "fps"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                cfg, project, store, job = environment(Path(directory))
+                blocked = store.save(
+                    replace(job, state="BLOCKED", resume_state="REVIEWED"), job.revision,
+                )
+                fingerprint = "e" * 64 if case == "review" else "d" * 64
+                if case == "fps":
+                    project.settings["timelineFrameRate"] = "24"
+                    project.settings["timelinePlaybackFrameRate"] = "24"
+                    project.source.settings.update(project.settings)
+
+                with self.assertRaises(ValidationError):
+                    apply_or_resume_editorial_cuts(
+                        FakeResolve(), FakeManager(project), cfg, store,
+                        blocked.editorial_job_id, fingerprint,
+                    )
+
+                persisted = store.get(blocked.editorial_job_id, cfg.workstation_id)
+                self.assertEqual("BLOCKED", persisted.state)
+                self.assertEqual("REVIEWED", persisted.resume_state)
+                self.assertEqual(blocked.revision, persisted.revision)
+
     def test_cut_blocks_24_fps_before_creating_output(self):
         with tempfile.TemporaryDirectory() as directory:
             cfg, project, store, job = environment(Path(directory))

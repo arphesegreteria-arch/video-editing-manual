@@ -205,12 +205,12 @@ def _block(store: EditorialJobStore, job: EditorialJob, reason: str) -> Editoria
     ), job.revision)
 
 
-def _recover_blocked(store: EditorialJobStore, job: EditorialJob) -> EditorialJob:
+def _recover_blocked(job: EditorialJob) -> EditorialJob:
     if job.state != "BLOCKED":
         return job
     if job.resume_state not in {"REVIEWED", "FAILED_RECOVERABLE", "CUT"}:
         raise ValidationError("Job BLOCKED non riprendibile dal cut workflow")
-    return store.save(replace(job, state=job.resume_state, resume_state=None), job.revision)
+    return replace(job, state=job.resume_state, resume_state=None)
 
 
 def apply_or_resume_editorial_cuts(resolve: object, manager: object, config: CreativeConfig,
@@ -219,7 +219,9 @@ def apply_or_resume_editorial_cuts(resolve: object, manager: object, config: Cre
                                    *, audio_job_id: str | None = None) -> EditorialJob:
     contract = load_selection_contract(CONTRACT_PATH)
     with RESOLVE_ACCESS_LOCK:
-        job = _recover_blocked(store, store.get(job_id, config.workstation_id))
+        persisted_job = store.get(job_id, config.workstation_id)
+        recovered_from_blocked = persisted_job.state == "BLOCKED"
+        job = _recover_blocked(persisted_job)
         if job.state == "VERIFIED":
             project = safe_call(manager, "GetCurrentProject")
             verify_editorial_outputs(project, job, contract)
@@ -282,13 +284,17 @@ def apply_or_resume_editorial_cuts(resolve: object, manager: object, config: Cre
                     _verify_operation(project, operation, expected_format, contract)
                 except ValidationError as exc:
                     return _block(store, job, f"tampered_registered_output:{exc}")
+        current = (
+            store.save(job, persisted_job.revision)
+            if recovered_from_blocked
+            else job
+        )
         audio_item = None
         if verified_audio is not None:
             audio_item = import_media_item(resolve, pool, verified_audio.path)
             if audio_item is None:
                 raise ValidationError("Import audio verificato fallito")
         audio_fps = None if audio_item is None else _media_fps(audio_item, "audio", fps)
-        current = job
         try:
             for decision in job.decisions:
                 candidate_id = str(decision["candidate_id"])

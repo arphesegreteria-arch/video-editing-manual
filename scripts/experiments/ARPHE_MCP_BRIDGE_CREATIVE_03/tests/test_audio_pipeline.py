@@ -200,6 +200,32 @@ class AudioPipelineTests(unittest.TestCase):
         self.assertEqual(job_id, verified.audio_job_id)
         self.assertEqual(expected_output_hash, verified.output_sha256)
 
+    def test_verified_audio_exposes_validated_silence_windows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cfg = config(root)
+            source = cfg.media_roots[0] / "source.mov"
+            source.write_bytes(b"source-media")
+            output = cfg.audio_root / "clean.wav"
+            output.write_bytes(b"RIFF-valid-audio")
+            job_id = "audio_0123456789abcdef"
+            manifest = {
+                "schema": "ARPHE_AUDIO_JOB_V2", "job_id": job_id, "status": "COMPLETED",
+                "preset": NATURAL_PRESET, "source_fingerprint": media_fingerprint(source),
+                "output_path": str(output), "output_sha256": file_sha256(output),
+                "source_duration_seconds": 60.0, "output_duration_seconds": 60.0,
+                "sync_delta_seconds": 0.0, "sample_rate": 48000, "channels": 2,
+                "silence_windows": [{"start": 1.0, "end": 2.0}, {"start": 4.0, "end": 5.5}],
+            }
+            (cfg.audio_jobs_root / f"{job_id}.json").write_text(json.dumps(manifest), encoding="utf-8")
+            verified = verify_audio_manifest(cfg, job_id, media_fingerprint(source))
+            self.assertEqual(((1.0, 2.0), (4.0, 5.5)), verified.silence_windows)
+
+            manifest["silence_windows"] = [{"start": 2.0, "end": 1.0}]
+            (cfg.audio_jobs_root / f"{job_id}.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValidationError, "silence"):
+                verify_audio_manifest(cfg, job_id, media_fingerprint(source))
+
     def test_invalid_audio_provenance_blocks_before_downstream_mutation(self):
         mutations: list[str] = []
         cases = ("foreign_source", "changed_wav", "excessive_sync", "legacy", "wrong_job_id", "missing")

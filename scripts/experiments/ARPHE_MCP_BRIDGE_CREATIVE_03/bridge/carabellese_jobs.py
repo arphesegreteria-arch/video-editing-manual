@@ -214,6 +214,12 @@ def _validate_transition(current: CarabelleseJob, requested: CarabelleseJob) -> 
             raise ValidationError("BLOCKED può tornare soltanto al resume_state registrato")
         return
     if current.state == "FAILED_RECOVERABLE":
+        if requested.state == "CHECKPOINTED" and requested.resume_state is None:
+            operation = requested.operations[-1] if requested.operations else {}
+            if (operation.get("operation") != "restore_checkpoint"
+                    or operation.get("status") != "VERIFIED"):
+                raise ValidationError("Il ritorno a CHECKPOINTED richiede un restore verificato")
+            return
         if requested.state != current.resume_state or requested.resume_state is not None:
             raise ValidationError("FAILED_RECOVERABLE può soltanto riprendere lo stadio interrotto")
         return
@@ -322,12 +328,25 @@ class CarabelleseJobStore:
             raise ValidationError("Il chiamante non può impostare revision")
         immutable = (
             "carabellese_job_id", "workstation_id", "workflow_id", "workflow_version",
-            "project_name", "timeline_name", "timeline_identity", "timeline_fingerprint",
+            "project_name", "timeline_name", "timeline_fingerprint",
             "source_fingerprint", "transcript_fingerprint", "contract_fingerprint",
             "proposal_fingerprint", "candidates",
         )
         if any(getattr(job, name) != getattr(current, name) for name in immutable):
             raise ValidationError("Identità o evidenza immutabile del job modificata")
+        if job.timeline_identity != current.timeline_identity:
+            operation = job.operations[-1] if job.operations else {}
+            identity_restored = (
+                current.state == "FAILED_RECOVERABLE"
+                and job.state == "CHECKPOINTED"
+                and job.resume_state is None
+                and operation.get("operation") == "restore_checkpoint"
+                and operation.get("status") == "VERIFIED"
+                and operation.get("previous_timeline_identity") == current.timeline_identity
+                and operation.get("restored_timeline_identity") == job.timeline_identity
+            )
+            if not identity_restored:
+                raise ValidationError("Identità timeline immutabile senza restore verificato")
         _validate_transition(current, job)
         timestamps = dict(current.state_timestamps)
         if job.state != current.state:

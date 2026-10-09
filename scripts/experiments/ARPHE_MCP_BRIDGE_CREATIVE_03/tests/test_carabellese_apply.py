@@ -47,8 +47,10 @@ class Item:
 
 
 class Timeline:
-    def __init__(self, media, foreign_marker=False, extra_track=False):
+    def __init__(self, media, foreign_marker=False, extra_track=False,
+                 unique_id="timeline-carabellese"):
         self.name = "PODCAST_YOUTUBE"
+        self.unique_id = unique_id
         self.settings = {"timelineResolutionWidth": "1920", "timelineResolutionHeight": "1080",
                          "timelineFrameRate": "30", "timelinePlaybackFrameRate": "30"}
         self.tracks = {"video": [[Item(media, 0, 300)]], "audio": [[Item(media, 0, 300)]]}
@@ -57,8 +59,9 @@ class Timeline:
         self.markers = {60: {"color": "Cyan", "name": "m", "note": "n", "duration": 1,
                              "customData": custom}}
         self.delete_calls = 0
-    def GetUniqueId(self): return "timeline-carabellese"
+    def GetUniqueId(self): return self.unique_id
     def GetName(self): return self.name
+    def SetName(self, value): self.name = value; return True
     def GetStartFrame(self): return 0
     def GetEndFrame(self):
         items = [item for tracks in self.tracks.values() for track in tracks for item in track]
@@ -67,6 +70,14 @@ class Timeline:
     def GetTrackCount(self, kind): return len(self.tracks[kind])
     def GetItemListInTrack(self, kind, index): return list(self.tracks[kind][index - 1])
     def GetMarkers(self): return {frame: dict(value) for frame, value in self.markers.items()}
+    def AddMarker(self, frame, color, name, note, duration, custom_data):
+        self.markers[frame] = {"color": color, "name": name, "note": note,
+                               "duration": duration, "customData": custom_data}
+        return True
+    def DeleteMarkerAtFrame(self, frame):
+        if frame not in self.markers: return False
+        del self.markers[frame]
+        return True
     def AddTrack(self, kind): self.tracks[kind].append([]); return True
     def DeleteClips(self, items, _ripple=False):
         self.delete_calls += 1
@@ -91,18 +102,29 @@ class Pool:
                         int(record["startFrame"]))
             self.project.timeline.tracks[kind][int(record["trackIndex"]) - 1].append(item)
         return True
+    def ImportTimelineFromFile(self, path, options):
+        del path
+        media = self.project.timelines[0].tracks["video"][0][0].GetMediaPoolItem()
+        imported = Timeline(media, unique_id="timeline-restored")
+        imported.name = options["timelineName"]
+        self.project.timelines.append(imported)
+        return imported
+    def DeleteTimelines(self, timelines):
+        for timeline in timelines:
+            if timeline in self.project.timelines: self.project.timelines.remove(timeline)
+        return True
 
 
 class Project:
     def __init__(self, timeline, fail_append=None):
-        self.timeline, self.pool = timeline, None
+        self.timeline, self.timelines, self.pool = timeline, [timeline], None
         self.pool = Pool(self, fail_append)
     def GetName(self): return "STUDIO_CARABELLESE"
     def GetCurrentTimeline(self): return self.timeline
     def SetCurrentTimeline(self, timeline): self.timeline = timeline; return True
     def GetMediaPool(self): return self.pool
-    def GetTimelineCount(self): return 1
-    def GetTimelineByIndex(self, index): return self.timeline if index == 1 else None
+    def GetTimelineCount(self): return len(self.timelines)
+    def GetTimelineByIndex(self, index): return self.timelines[index - 1]
     def GetSetting(self, key): return self.timeline.GetSetting(key)
 
 
@@ -120,7 +142,8 @@ def config(root, media_root, transcript_root):
         render_root=root / "renders", state_path=root / "state.json", audit_log_path=root / "audit.jsonl",
         palette=dict(DEFAULT_PALETTE), flags=flags, allowed_projects=frozenset(),
         allowed_timelines=frozenset(), render_format="mp4", render_codec="H264",
-        media_roots=(media_root,), transcript_root=transcript_root, workstation_id="PC_PERSONALE")
+        media_roots=(media_root,), transcript_root=transcript_root, workstation_id="PC_PERSONALE",
+        carabellese_journal_path=root / "carabellese_journal.jsonl")
 
 
 def setup(root, *, foreign_marker=False, extra_track=False, fail_append=None):
@@ -153,7 +176,8 @@ def setup(root, *, foreign_marker=False, extra_track=False, fail_append=None):
         proposal_fingerprint=proposal_fp, candidates=candidates))
     if not foreign_marker:
         timeline.markers[60]["customData"] = f"CARABELLESE:{created.carabellese_job_id}:C01:IN"
-    marked = store.save(replace(created, state="MARKED", markers=({"frame": 60},)), created.revision)
+    marker_record = {"frame": 60, **timeline.markers[60]}
+    marked = store.save(replace(created, state="MARKED", markers=(marker_record,)), created.revision)
     decisions = ({"candidate_id": "C01", "outcome": "REMOVE", "reason": "serio",
                   "start_seconds": 2.0, "end_seconds": 3.0},
                  {"candidate_id": "P01", "outcome": "SHORTEN", "reason": "ritmo",

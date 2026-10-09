@@ -4,6 +4,7 @@ from dataclasses import replace
 from fractions import Fraction
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,36 @@ from .safety import ValidationError
 
 
 CONTRACT_PATH = Path(__file__).resolve().parents[1] / "carabellese_cleanup_contract.json"
+
+
+def _append_journal(config: CreativeConfig, payload: dict[str, object]) -> None:
+    path = config.carabellese_journal_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+    try:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError as exc:
+        raise ValidationError(f"Journal Carabellese non scrivibile: {exc}") from exc
+
+
+def read_carabellese_journal(config: CreativeConfig, job_id: str) -> tuple[dict[str, object], ...]:
+    path = config.carabellese_journal_path
+    if not path.is_file():
+        return ()
+    events = []
+    try:
+        for line in path.read_text(encoding="utf-8-sig").splitlines():
+            raw = json.loads(line)
+            if not isinstance(raw, dict):
+                raise ValueError("evento non oggetto")
+            if raw.get("job_id") == job_id:
+                events.append(raw)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise ValidationError(f"Journal Carabellese non leggibile: {exc}") from exc
+    return tuple(events)
 
 
 def _call(target: object, method: str, *args: object) -> Any:
@@ -251,6 +282,10 @@ def apply_or_resume_carabellese_cleanup(resolve: object, manager: object, config
             current = store.save(replace(current, state="APPLYING", resume_state=None), current.revision)
         elif current.state == "CHECKPOINTED":
             current = store.save(replace(current, state="APPLYING"), current.revision)
+        _append_journal(config, {"schema": "ARPHE_CARABELLESE_JOURNAL_V1",
+                                "job_id": current.carabellese_job_id, "status": "APPLYING",
+                                "revision": current.revision,
+                                "timeline_fingerprint": timeline_content_fingerprint(timeline)})
         staged = False
         destructive_started = False
         try:
@@ -265,6 +300,9 @@ def apply_or_resume_carabellese_cleanup(resolve: object, manager: object, config
                               "trackIndex": 2, "mediaType": media_type}]):
                         raise RuntimeError(f"stage_append_failed:{start}:{end}:{media_type}")
                 record += end - start
+                _append_journal(config, {"schema": "ARPHE_CARABELLESE_JOURNAL_V1",
+                                        "job_id": current.carabellese_job_id, "status": "STAGED",
+                                        "source_start_frame": start, "source_end_frame_exclusive": end})
             staged_video = _call(timeline, "GetItemListInTrack", "video", 2) or []
             staged_audio = _call(timeline, "GetItemListInTrack", "audio", 2) or []
             expected_duration = sum(end - start for start, end in keep)
@@ -288,6 +326,9 @@ def apply_or_resume_carabellese_cleanup(resolve: object, manager: object, config
             applying = store.save(replace(current, operations=tuple(operations)), current.revision)
             verified = store.save(replace(applying, state="VERIFIED"), applying.revision)
             verify_carabellese_timeline(project, timeline, verified)
+            _append_journal(config, {"schema": "ARPHE_CARABELLESE_JOURNAL_V1",
+                                    "job_id": current.carabellese_job_id, "status": "VERIFIED",
+                                    "timeline_fingerprint": after, "final_frames": expected_duration})
             return verified
         except Exception as exc:
             if staged and not destructive_started:
@@ -296,6 +337,12 @@ def apply_or_resume_carabellese_cleanup(resolve: object, manager: object, config
                 if int(_call(timeline, "GetTrackCount", "audio")) > 1:
                     _call(timeline, "DeleteTrack", "audio", 2)
             failed_operation = {"operation": "apply", "status": "FAILED",
-                                "reason": f"{type(exc).__name__}:{exc}"}
-            return store.save(replace(current, state="FAILED_RECOVERABLE", resume_state="APPLYING",
+                                "reason": f"{type(exc).__name__}:{exc}",
+                                "timeline_fingerprint_at_failure": timeline_content_fingerprint(timeline)}
+            failed = store.save(replace(current, state="FAILED_RECOVERABLE", resume_state="APPLYING",
                                       operations=current.operations + (failed_operation,)), current.revision)
+            _append_journal(config, {"schema": "ARPHE_CARABELLESE_JOURNAL_V1",
+                                    "job_id": current.carabellese_job_id, "status": "FAILED",
+                                    "revision": failed.revision,
+                                    "timeline_fingerprint": failed_operation["timeline_fingerprint_at_failure"]})
+            return failed

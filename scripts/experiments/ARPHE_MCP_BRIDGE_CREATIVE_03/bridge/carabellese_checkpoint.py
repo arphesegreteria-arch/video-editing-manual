@@ -175,5 +175,7 @@ def restore_timeline_checkpoint(resolve: object, project: object, store: Carabel
     if canonical != [imported]:
         raise ValidationError("Restore non ha prodotto una sola timeline canonica")
     operation = {"operation": "restore_checkpoint", "status": "VERIFIED",
-                 "checkpoint_sha256": job.checkpoint_fingerprint}
+                 "checkpoint_sha256": job.checkpoint_fingerprint,
+                 "previous_timeline_identity": job.timeline_identity,
+                 "restored_timeline_identity": timeline_identity(imported)}
     return store.save(replace(job, operations=job.operations + (operation,)), job.revision)

@@ -15,6 +15,7 @@ CAPABILITY_NAMES = (
     "CAP_RESOLVE_RETIREMENT",
     "CAP_READABILITY_GUARD",
     "CAP_EDITORIAL_SELECTION",
+    "CAP_CARABELLESE_CLEANUP",
 )
 
 DEFAULT_PALETTE = {
@@ -42,6 +43,7 @@ DEFAULT_FLAGS = {
     "CAP_RESOLVE_RETIREMENT": False,
     "CAP_READABILITY_GUARD": False,
     "CAP_EDITORIAL_SELECTION": False,
+    "CAP_CARABELLESE_CLEANUP": False,
 }
 
 ALLOWED_RENDER_PAIRS = {("mp4", "H264"), ("mov", "ProRes422HQ")}
@@ -83,6 +85,11 @@ class CreativeConfig:
     editorial_journal_path: Path = Path("editorial_journal.jsonl")
     editorial_profile_overlay_path: Path = Path("editorial_profile_overlay.json")
     editorial_profile_proposals_path: Path = Path("editorial_profile_proposals.json")
+    carabellese_jobs_path: Path = Path("carabellese_jobs.json")
+    carabellese_journal_path: Path = Path("carabellese_journal.jsonl")
+    carabellese_profile_overlay_path: Path = Path("carabellese_profile_overlay.json")
+    carabellese_profile_proposals_path: Path = Path("carabellese_profile_proposals.json")
+    carabellese_checkpoint_root: Path = Path("carabellese-checkpoints")
 
 
 def _path(value: str, base: Path) -> Path:
@@ -171,5 +178,22 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         ),
         editorial_profile_proposals_path=_path(
             str(raw.get("editorial_profile_proposals_path", "")), editorial_root / "editorial_profile_proposals.json"
+        ),
+        carabellese_jobs_path=_path(
+            str(raw.get("carabellese_jobs_path", "")), editorial_root / "carabellese_jobs.json"
+        ),
+        carabellese_journal_path=_path(
+            str(raw.get("carabellese_journal_path", "")), editorial_root / "carabellese_journal.jsonl"
+        ),
+        carabellese_profile_overlay_path=_path(
+            str(raw.get("carabellese_profile_overlay_path", "")),
+            editorial_root / "carabellese_profile_overlay.json",
+        ),
+        carabellese_profile_proposals_path=_path(
+            str(raw.get("carabellese_profile_proposals_path", "")),
+            editorial_root / "carabellese_profile_proposals.json",
+        ),
+        carabellese_checkpoint_root=_path(
+            str(raw.get("carabellese_checkpoint_root", "")), editorial_root / "carabellese-checkpoints"
         ),
     )

@@ -52,6 +52,9 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertFalse(DEFAULT_FLAGS["CAP_EDITORIAL_SELECTION"])
         self.assertFalse(capabilities["CAP_EDITORIAL_SELECTION"]["active"])
         self.assertTrue(capabilities["CAP_EDITORIAL_SELECTION"]["technically_available"])
+        self.assertFalse(DEFAULT_FLAGS["CAP_CARABELLESE_CLEANUP"])
+        self.assertFalse(capabilities["CAP_CARABELLESE_CLEANUP"]["active"])
+        self.assertTrue(capabilities["CAP_CARABELLESE_CLEANUP"]["technically_available"])
 
 
 if __name__ == "__main__":

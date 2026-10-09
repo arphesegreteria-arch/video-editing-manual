@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "workflow_id": "CARABELLESE_YOUTUBE_CLEANUP",
+  "version": 1,
+  "residual_pause_seconds": 0.6,
+  "minimum_learning_samples": 5
+}

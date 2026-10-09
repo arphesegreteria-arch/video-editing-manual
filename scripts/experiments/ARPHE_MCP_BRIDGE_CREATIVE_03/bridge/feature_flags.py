@@ -21,6 +21,7 @@ CAPABILITY_STATUS = {
     "CAP_RESOLVE_RETIREMENT": "PENDING",
     "CAP_READABILITY_GUARD": "PARTIAL",
     "CAP_EDITORIAL_SELECTION": "PENDING",
+    "CAP_CARABELLESE_CLEANUP": "PENDING",
 }
 
 
@@ -77,6 +78,19 @@ def _editorial_selection_available(project: Any, timeline: Any) -> bool:
         return False
 
 
+def _carabellese_cleanup_available() -> bool:
+    try:
+        from pathlib import Path
+        from .carabellese_contract import load_carabellese_contract
+
+        load_carabellese_contract(
+            Path(__file__).resolve().parents[1] / "carabellese_cleanup_contract.json"
+        )
+        return True
+    except Exception:
+        return False
+
+
 def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
     project_ok = manager is not None and all(_method(manager, name) for name in (
         "CreateProject", "LoadProject", "SaveProject", "GetCurrentProject", "GetProjectListInCurrentFolder",
@@ -111,6 +125,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_RESOLVE_RETIREMENT": retirement_ok,
         "CAP_READABILITY_GUARD": _readability_guard_available(),
         "CAP_EDITORIAL_SELECTION": _editorial_selection_available(project, timeline),
+        "CAP_CARABELLESE_CLEANUP": _carabellese_cleanup_available(),
     }
 
 

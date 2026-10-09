@@ -61,7 +61,12 @@ def _single_synced_av_source(timeline: object) -> object:
             or _resolve_call(video[0], "GetDuration") != _resolve_call(audio[0], "GetDuration")):
         raise ValidationError("Clip A/V sorgenti non allineate")
     media = _resolve_call(video[0], "GetMediaPoolItem")
-    if media is None or media is not _resolve_call(audio[0], "GetMediaPoolItem"):
+    audio_media = _resolve_call(audio[0], "GetMediaPoolItem")
+    identity = getattr(media, "GetUniqueId", None)
+    audio_identity = getattr(audio_media, "GetUniqueId", None)
+    same_source = (media is audio_media or (callable(identity) and callable(audio_identity)
+                   and identity() and identity() == audio_identity()))
+    if media is None or audio_media is None or not same_source:
         raise ValidationError("Clip A/V non collegate alla stessa sorgente")
     return media
 

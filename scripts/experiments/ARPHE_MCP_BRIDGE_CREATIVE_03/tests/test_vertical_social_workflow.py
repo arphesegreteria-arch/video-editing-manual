@@ -62,8 +62,42 @@ class VerticalSocialWorkflowTests(unittest.TestCase):
                 path, "PC_PERSONALE", locked.plan_id, "cut-1", "BLOCKED", {"reason": "edit decision"}
             )
             self.assertEqual("cut-1", module.inspect_vertical_social_plan(path, "PC_PERSONALE", blocked.plan_id)["next_action"])
+
+    def test_execution_lookup_requires_exact_approved_fingerprint(self):
+        module = self._module()
+        with tempfile.TemporaryDirectory() as raw_root:
+            path = Path(raw_root) / "plans.json"
+            prepared = module.prepare_vertical_social_plan(
+                path, "PC_PERSONALE", {"project": "ARPHE", "timeline": "ADV_V1", "fps": "30"},
+                [{"action_id": "cut-1", "type": "CUT", "phase": "PROVISIONAL_EDIT",
+                  "range": {"start_frame": 12, "end_frame": 24}, "reason": "pausa"}],
+            )
+            with self.assertRaisesRegex(Exception, "approvato"):
+                module.approved_vertical_social_plan(path, "PC_PERSONALE", prepared.plan_id, prepared.fingerprint)
+            module.approve_vertical_social_plan(path, "PC_PERSONALE", prepared.plan_id, prepared.fingerprint)
+            plan = module.approved_vertical_social_plan(path, "PC_PERSONALE", prepared.plan_id, prepared.fingerprint)
+            self.assertEqual("cut-1", plan.action("cut-1").action_id)
+
+    def test_cut_execution_marks_only_approved_cuts_with_provisional_evidence(self):
+        module = self._module()
+        with tempfile.TemporaryDirectory() as raw_root:
+            path = Path(raw_root) / "plans.json"
+            prepared = module.prepare_vertical_social_plan(
+                path, "PC_PERSONALE", {"project": "ARPHE", "timeline": "ADV_V1", "fps": "30"},
+                [
+                    {"action_id": "cut-1", "type": "CUT", "phase": "PROVISIONAL_EDIT"},
+                    {"action_id": "broll-1", "type": "B_ROLL", "phase": "PROVISIONAL_EDIT"},
+                ],
+            )
+            module.approve_vertical_social_plan(path, "PC_PERSONALE", prepared.plan_id, prepared.fingerprint)
+            final = module.record_vertical_social_cut_execution(
+                path, "PC_PERSONALE", prepared.plan_id, prepared.fingerprint,
+                "__ARPHE_VERTICAL_VERTICAL_123", 60,
+            )
+            self.assertEqual("VERIFIED", final.action("cut-1").state)
+            self.assertEqual("APPROVED", final.action("broll-1").state)
+            self.assertEqual("__ARPHE_VERTICAL_VERTICAL_123", final.action("cut-1").evidence["provisional_timeline"])
             
 
 if __name__ == "__main__":
     unittest.main()
-

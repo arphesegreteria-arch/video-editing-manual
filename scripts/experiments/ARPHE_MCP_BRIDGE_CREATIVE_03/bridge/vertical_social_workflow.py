@@ -78,6 +78,41 @@ def approve_vertical_social_plan(path: Path, workstation_id: str, plan_id: str,
     return _wrapped(path, plan_id)
 
 
+def approved_vertical_social_plan(path: Path, workstation_id: str, plan_id: str,
+                                  fingerprint: str):
+    """Load only the exact plan the editor has explicitly approved for execution."""
+    plan = VerticalSocialPlanStore(path, workstation_id).get(plan_id)
+    wrapped = _wrapped(path, plan_id)
+    if wrapped.state != "APPROVED":
+        raise ValidationError("Piano Vertical Social non approvato")
+    if wrapped.fingerprint != fingerprint or plan_fingerprint(plan) != fingerprint:
+        raise ValidationError("fingerprint piano non corrispondente")
+    return plan
+
+
+def record_vertical_social_cut_execution(path: Path, workstation_id: str, plan_id: str,
+                                         fingerprint: str, provisional_timeline: str,
+                                         final_frames: int):
+    """Persist only CUT evidence after the provisional timeline has passed its read-back."""
+    plan = approved_vertical_social_plan(path, workstation_id, plan_id, fingerprint)
+    if not provisional_timeline.startswith("__ARPHE_VERTICAL_") or final_frames <= 0:
+        raise ValidationError("Evidenza CUT provvisoria non valida")
+    store = VerticalSocialPlanStore(path, workstation_id)
+    evidence = {"provisional_timeline": provisional_timeline, "final_frames": final_frames}
+    for action in plan.actions:
+        if action.action_type != "CUT":
+            continue
+        current = store.get(plan_id).action(action.action_id)
+        if current.state == "APPROVED":
+            transition_action(store, plan_id, action.action_id, "APPROVED", "APPLIED", evidence)
+            current = store.get(plan_id).action(action.action_id)
+        if current.state == "APPLIED":
+            transition_action(store, plan_id, action.action_id, "APPLIED", "VERIFIED", evidence)
+        elif current.state != "VERIFIED":
+            raise ValidationError(f"CUT non eseguibile nello stato {current.state}")
+    return store.get(plan_id)
+
+
 def mark_vertical_social_picture_lock(path: Path, workstation_id: str,
                                       plan_id: str) -> VerticalSocialWorkflowPlan:
     VerticalSocialPlanStore(path, workstation_id).get(plan_id)

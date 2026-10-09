@@ -656,3 +656,9 @@ Principio ancora valido:
 
 - Aggiunti contratto, piano versionato, lifecycle, recupero locale e strumenti MCP chiusi.
 - `CAP_VERTICAL_SOCIAL` resta `false`; PC personale e segreteria mantengono stati separati.
+- Il CUT ha ora un motore proprio: conserva intervallo, motivo, effetto narrativo e dipendenze;
+  genera una timeline provvisoria nominata, verifica il read-back A/V e riusa soltanto una prova
+  già verificata dello stesso piano. Non modifica la timeline sorgente.
+- L'approvazione resta legata a target e istruzioni editoriali; gli stati/evidenze di esecuzione
+  non invalidano un retry idempotente. Test automatici: piano, impronta, range, read-back e resume
+  PASS. Nessun gate Resolve nativo né workstation è stato modificato per questa estensione.

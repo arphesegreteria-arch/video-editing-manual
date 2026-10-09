@@ -40,6 +40,35 @@ class VerticalSocialJobTests(unittest.TestCase):
         )
         self.assertNotEqual(module.plan_fingerprint(first), module.plan_fingerprint(second))
 
+    def test_plan_persists_cut_editorial_parameters(self):
+        module = self._module()
+        plan = module.new_vertical_social_plan(
+            workstation_id="PC_PERSONALE",
+            target={"project": "ARPHE_PROJECT", "timeline": "ADV_V1", "fps": "30"},
+            actions=[{
+                "action_id": "cut-1", "type": "CUT", "phase": "PROVISIONAL_EDIT",
+                "range": {"start_frame": 20, "end_frame": 40},
+                "reason": "ripetizione tecnica", "narrative_effect": "ritmo più netto",
+                "depends_on": ["transcript-1"],
+            }],
+        )
+        action = plan.to_dict()["actions"][0]
+        self.assertEqual({"start_frame": 20, "end_frame": 40}, action["range"])
+        self.assertEqual("ripetizione tecnica", action["reason"])
+        self.assertEqual("ritmo più netto", action["narrative_effect"])
+        self.assertEqual(["transcript-1"], action["depends_on"])
+
+    def test_approval_fingerprint_ignores_execution_state_and_evidence(self):
+        module = self._module()
+        with tempfile.TemporaryDirectory() as raw_root:
+            store = module.VerticalSocialPlanStore(Path(raw_root) / "plans.json", "PC_PERSONALE")
+            plan = store.create(self._plan(module))
+            expected = module.plan_fingerprint(plan)
+            transitioned = module.transition_action(
+                store, plan.plan_id, "cut-1", "APPROVED", "APPLIED", {"timeline": "TEMP"}
+            )
+            self.assertEqual(expected, module.plan_fingerprint(transitioned))
+
     def test_store_enforces_workstation_and_idempotent_transition(self):
         module = self._module()
         with tempfile.TemporaryDirectory() as raw_root:
@@ -79,4 +108,3 @@ class VerticalSocialJobTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

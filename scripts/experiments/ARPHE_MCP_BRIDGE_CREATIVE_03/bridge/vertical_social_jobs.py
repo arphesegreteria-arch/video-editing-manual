@@ -32,10 +32,11 @@ class VerticalSocialAction:
     phase: str
     state: str
     evidence: dict[str, Any]
+    parameters: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return {"action_id": self.action_id, "type": self.action_type, "phase": self.phase,
-                "state": self.state, "evidence": self.evidence}
+                "state": self.state, "evidence": self.evidence, **self.parameters}
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,16 @@ class VerticalSocialPlan:
 
 
 def plan_fingerprint(plan: VerticalSocialPlan) -> str:
-    raw = json.dumps(plan.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    payload = {
+        "plan_id": plan.plan_id, "version": plan.version,
+        "workstation_id": plan.workstation_id, "target": plan.target,
+        "actions": [
+            {"action_id": action.action_id, "type": action.action_type, "phase": action.phase,
+             **action.parameters}
+            for action in plan.actions
+        ],
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -74,10 +84,15 @@ def new_vertical_social_plan(*, workstation_id: str, target: dict[str, Any],
         if not action_id or action_id in seen:
             raise ValidationError("action_id mancante o duplicato")
         seen.add(action_id)
+        parameters = {
+            key: value for key, value in raw.items()
+            if key not in {"action_id", "type", "phase", "state", "evidence"}
+        }
         created.append(VerticalSocialAction(
             action_id=action_id, action_type=str(raw.get("type", "")),
             phase=str(raw.get("phase", "")), state=str(raw.get("state", "APPROVED")),
             evidence=dict(raw.get("evidence", {})),
+            parameters=parameters,
         ))
     return VerticalSocialPlan(plan_id or f"vertical_{uuid4().hex}", int(version), workstation_id,
                               dict(target), tuple(created))
@@ -170,4 +185,3 @@ def next_safe_action(plan: VerticalSocialPlan) -> VerticalSocialAction | None:
         if action.state == "BLOCKED":
             return action
     return next((action for action in plan.actions if action.state == "APPROVED"), None)
-

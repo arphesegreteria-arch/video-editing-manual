@@ -3,7 +3,7 @@
 Ultimo aggiornamento: sessione 2026-10-08.
 
 <a id="editorial-selection-learning"></a>
-## Selezione Reel podcast e apprendimento — CODICE VALIDATO / LIVE 30 FPS PENDING
+## Selezione Reel podcast e apprendimento — CODICE VALIDATO / PC_PERSONALE LIVE PASS
 
 Il workflow `ARPHE_PODCAST_REELS_CTA` propone pochi estratti forti, mette marker `IN/OUT` sulla
 timeline sorgente e applica soltanto una review completa. Ogni Reel conserva la risoluzione della
@@ -15,10 +15,11 @@ poi rispondere una sola volta con `OK`, `MODIFICA` o `RIFIUTA` e un motivo breve
 Recuperi, collisioni, profili condivisi e override restano ad Alessio o a personale tecnico.
 
 Evidenza automatica: bridge `281 PASS / 1 SKIP` ambientale e Windows `55 PASS / 1 SKIP` DPAPI.
-`CAP_EDITORIAL_SELECTION=false` per default. Un gate diagnostico isolato 24/24 sul personale ha
-verificato recovery e cleanup, ma non vale come PASS produttivo: `PC_PERSONALE` resta `PENDING`
-finché il default DaVinci non viene impostato manualmente a 30/30 e il gate viene ripetuto.
-`PC_SEGRETERIA` resta `PENDING` e non è stata toccata. Fonte:
+`CAP_EDITORIAL_SELECTION=false` per default. Il gate definitivo sulla copia installata
+`PC_PERSONALE` è PASS: nuovo progetto nato 30/30, tre proposte con review completa, sei marker,
+due output verificati, failure controllata e resume, marker estraneo preservato, cleanup completo
+e rollback zero-write. Il flag finale è `false`. `PC_SEGRETERIA` resta `PENDING` e non è stata
+toccata. Fonte:
 `validation/editorial-selection-ledger.json`.
 
 <a id="review-readability-guard"></a>

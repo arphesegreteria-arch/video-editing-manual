@@ -15,6 +15,10 @@
   restituisce `PLAYBACK_FPS_ACTION_REQUIRED` prima di marker o tagli.
 - Il gate personale 24/24 ha validato il meccanismo tecnico ma non è promosso a prova produttiva;
   il PASS resta in attesa del default DaVinci 30/30 impostato manualmente e del nuovo gate.
+- Gate definitivo `PC_PERSONALE` 30/30: **PASS** sulla copia installata. Verificati nuovo default,
+  marker, review completa, tagli, limite durata, failure/ripresa senza duplicati, cleanup e rollback
+  zero-write. Artefatti sintetici rimossi, progetto originale preservato, flag finale `false`.
+  `PC_SEGRETERIA` resta `PENDING` e non toccato.
 
 ## 2026-10-08 — Leggibilità misurabile per Reel recensioni
 

@@ -15,13 +15,17 @@ richiedere una sola review motivata riduce ricostruzioni da chat e permette appr
 - isolamento installazione personale/segreteria: PASS;
 - diagnostica live personale 24/24: recovery, resume, cleanup e rollback PASS, ma non valida il
   contratto produttivo; gate 30/30 PENDING su entrambe le workstation.
+- gate definitivo sulla copia installata `PC_PERSONALE`: PASS con nuovo progetto nato 30/30,
+  tre decisioni complete, sei marker, due output, failure controllata, resume, cleanup e rollback;
+  artefatti sintetici rimossi e flag finale spento. `PC_SEGRETERIA` resta PENDING.
 
 ### Decisione
 
 Impostare una volta in DaVinci il default progetto/playback a 30 fps; il bridge lo tratta come
 read-only, lo verifica prima di marker e tagli e restituisce un flag operativo se legge 24.
-Mantenere il flag spento finché ogni PC non supera il proprio gate 30/30. Non inferire mai lo
-stato di segreteria dai test automatici o dal PC personale.
+Il gate personale è validato ma il flag resta spento fino all'uso deliberato. Mantenere il flag
+spento su ogni altro PC finché non supera il proprio gate 30/30. Non inferire mai lo stato di
+segreteria dai test automatici o dal PC personale.
 
 ## 2026-10-02 — E10 Caption Engine shortform mobile
 

@@ -20,19 +20,39 @@
   "workstation_gates": {
     "PC_PERSONALE": {
       "workstation_id": "PC_PERSONALE",
-      "status": "PENDING",
+      "status": "VALIDATED",
       "checks": {
-        "cleanup": "PENDING",
-        "complete_review": "PENDING",
-        "cut_outputs": "PENDING",
-        "duration_limit": "PENDING",
-        "marker_pairs": "PENDING",
-        "partial_failure_resume": "PENDING",
-        "rollback_flag": "PENDING"
+        "cleanup": "PASS",
+        "complete_review": "PASS",
+        "cut_outputs": "PASS",
+        "duration_limit": "PASS",
+        "marker_pairs": "PASS",
+        "partial_failure_resume": "PASS",
+        "rollback_flag": "PASS"
       },
-      "evidence": [],
+      "evidence": [
+        {
+          "evidence_id": "personal-30fps-live-20261009",
+          "workstation_id": "PC_PERSONALE",
+          "observed_at": "2026-10-09T12:05:40+02:00",
+          "result": "PASS",
+          "checks": [
+            "cleanup",
+            "complete_review",
+            "cut_outputs",
+            "duration_limit",
+            "marker_pairs",
+            "partial_failure_resume",
+            "rollback_flag"
+          ],
+          "limitations": [
+            "The live gate used only synthetic disposable inputs and the capability returned to false after rollback.",
+            "PC_SEGRETERIA requires its own independent gate."
+          ]
+        }
+      ],
       "limitations": [
-        "The production 30 FPS live gate is pending the one-time DaVinci project-default change; a coherent 24 FPS diagnostic run is not accepted as production evidence."
+        "Validation covers the installed personal runtime at project, timeline and playback 30 FPS; it does not validate PC_SEGRETERIA."
       ]
     },
     "PC_SEGRETERIA": {

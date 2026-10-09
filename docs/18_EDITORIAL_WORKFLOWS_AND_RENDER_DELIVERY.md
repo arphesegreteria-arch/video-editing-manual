@@ -138,3 +138,13 @@ L'installer conserva il valore locale e i quattro file di stato della workstatio
 fra personale e segreteria. Il ledger `validation/editorial-selection-ledger.json` richiede prove
 separate per marker, review, cut, resume, durata, cleanup e rollback: una macchina non può validare
 l'altra.
+
+### Selezione editoriale — PC_PERSONALE PASS (2026-10-09)
+
+La copia installata ha creato un nuovo progetto direttamente a 30/30 e ha superato marker a
+coppie, review completa con approvazione/modifica/rifiuto, due tagli verificati, limite durata,
+failure controllata e resume senza duplicati, cleanup con marker estraneo preservato e rollback
+zero-write. Il progetto e i file sintetici sono stati rimossi; il progetto originale è rimasto
+aperto e `CAP_EDITORIAL_SELECTION=false` al termine.
+
+`PC_SEGRETERIA` resta `PENDING`: non è stata installata, abilitata o usata per questo gate.

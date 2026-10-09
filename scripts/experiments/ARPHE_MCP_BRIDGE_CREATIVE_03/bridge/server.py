@@ -19,7 +19,44 @@ from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
                                restore_artifact as do_restore_artifact,
                                run_maintenance as do_run_maintenance)
 from .artifact_records import artifact_store_for, load_artifact_policy
+from .audio_provenance import media_fingerprint
 from .config import load_config
+from .carabellese_analysis import (
+    cleanup_candidate_fingerprint,
+    derive_pause_candidates,
+    load_carabellese_inputs,
+    validate_cleanup_candidates,
+)
+from .carabellese_apply import apply_or_resume_carabellese_cleanup as do_apply_carabellese_cleanup
+from .carabellese_checkpoint import (
+    export_timeline_checkpoint as do_export_carabellese_checkpoint,
+    timeline_content_fingerprint as carabellese_timeline_fingerprint,
+)
+from .carabellese_contract import (
+    carabellese_contract_fingerprint,
+    load_carabellese_contract,
+    load_carabellese_preferences,
+)
+from .carabellese_jobs import CarabelleseJobStore, new_carabellese_job
+from .carabellese_learning import (
+    append_carabellese_outcome as do_append_carabellese_outcome,
+    approve_carabellese_profile_proposal as do_approve_carabellese_profile,
+    compile_carabellese_profile_proposal as do_compile_carabellese_profile,
+    inspect_carabellese_metrics as do_inspect_carabellese_metrics,
+)
+from .carabellese_markers import mark_carabellese_review as do_mark_carabellese_review
+from .carabellese_recovery import (
+    close_carabellese_cleanup as do_close_carabellese_cleanup,
+    recover_carabellese_cleanup as do_recover_carabellese_cleanup,
+)
+from .carabellese_review import (
+    carabellese_secretary_instructions,
+    submit_carabellese_review as do_submit_carabellese_review,
+)
+from .carabellese_transcription import (
+    get_carabellese_transcription_job as do_get_carabellese_transcription_job,
+    start_carabellese_transcription as do_start_carabellese_transcription,
+)
 from .creative_tools import (add_end_card as do_add_end_card,
                              animate_element, animate_stack,
                              set_review_highlight as do_set_review_highlight)
@@ -54,6 +91,7 @@ from .feature_flags import report as feature_report, require_capability
 from .fusion_tools import (MAX_AUTOMATIC_FUSION_FRAMES, add_background, add_text,
                            create_composition, retime)
 from .longform_tools import (apply_plan as do_apply_longform_plan,
+                             allowed_media,
                              list_media as do_list_longform_media,
                              transcript_chunk as do_transcript_chunk,
                              transcript_metadata as do_transcript_metadata,
@@ -149,6 +187,290 @@ def _call(operation: Callable[..., dict], *args: Any, **kwargs: Any) -> dict:
 
 EDITORIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "editorial_selection_contract.json"
 EDITORIAL_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "editorial_preferences.json"
+CARABELLESE_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "carabellese_cleanup_contract.json"
+CARABELLESE_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "carabellese_preferences.json"
+
+
+def _carabellese_store(config: Any) -> CarabelleseJobStore:
+    return CarabelleseJobStore(config.carabellese_jobs_path, config.workstation_id)
+
+
+def _require_carabellese(config: Any, manager: Any = None, project: Any = None,
+                          timeline: Any = None, *, resolve_required: bool = False) -> None:
+    if not config.flags.get("CAP_CARABELLESE_CLEANUP", False):
+        raise ValidationError("CAP_CARABELLESE_CLEANUP non attiva nella config locale")
+    if resolve_required:
+        try:
+            require_capability("CAP_CARABELLESE_CLEANUP", config, manager, project, timeline)
+        except RuntimeError as exc:
+            raise ValidationError(str(exc)) from exc
+
+
+def _carabellese_current_timeline(project: Any, job: Any) -> Any:
+    timeline = safe_call(project, "GetCurrentTimeline")
+    if (timeline is None or safe_call(timeline, "GetName") != job.timeline_name
+            or editorial_timeline_identity(timeline) != job.timeline_identity):
+        raise ValidationError("Timeline Carabellese corrente diversa dal job")
+    return timeline
+
+
+def _carabellese_source_fingerprint(timeline: Any, config: Any) -> str:
+    video = safe_call(timeline, "GetItemListInTrack", "video", 1) or []
+    audio = safe_call(timeline, "GetItemListInTrack", "audio", 1) or []
+    if len(video) != 1 or len(audio) != 1:
+        raise ValidationError("La preparazione richiede una singola clip sorgente A/V")
+    video_media = safe_call(video[0], "GetMediaPoolItem")
+    audio_media = safe_call(audio[0], "GetMediaPoolItem")
+    if video_media is None or video_media is not audio_media:
+        raise ValidationError("Le clip A/V non appartengono alla stessa sorgente")
+    selected = allowed_media(str(safe_call(video_media, "GetClipProperty", "File Path") or ""), config)
+    return media_fingerprint(selected)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_carabellese_cleanup() -> dict[str, Any]:
+    """Inspect the fixed Carabellese cleanup contract even while its local gate is disabled."""
+    try:
+        config = load_config()
+        contract = load_carabellese_contract(CARABELLESE_CONTRACT_PATH)
+        preferences = load_carabellese_preferences(CARABELLESE_SHARED_PROFILE_PATH)
+        return {
+            "ok": True, "card_count": 1, "workflow_id": contract.workflow_id,
+            "workflow_version": contract.version, "workstation_id": config.workstation_id,
+            "capability_enabled": bool(config.flags.get("CAP_CARABELLESE_CLEANUP", False)),
+            "frame_rate_mode": contract.frame_rate_mode, "resolution": list(contract.resolution),
+            "residual_pause_seconds": preferences.residual_pause_seconds,
+            "render_included": False, "cta_included": False, "graphics_included": False,
+        }
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def start_carabellese_transcription(media_path: str, expected_source_fingerprint: str,
+                                    model: str = "small", language: str = "it") -> dict[str, Any]:
+    """Start or resume the isolated managed transcription job for one allowed media source."""
+    def operation() -> dict[str, Any]:
+        config = load_config(); _require_carabellese(config)
+        return dict(do_start_carabellese_transcription(
+            config, media_path, expected_source_fingerprint, model=model, language=language))
+    return _call(operation)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_carabellese_transcription_job(job_id: str) -> dict[str, Any]:
+    """Read one workstation-local managed transcription status."""
+    return _call(lambda: dict(do_get_carabellese_transcription_job(load_config(), job_id)))
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def prepare_carabellese_cleanup(transcript_path: str, transcript_fingerprint: str,
+                                source_fingerprint: str, audio_job_id: str,
+                                candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    """Bind source, transcript and cleanup proposals, then add owned review markers."""
+    def operation() -> dict[str, Any]:
+        configured = load_config(); _require_carabellese(configured)
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        del resolve
+        _require_carabellese(config, manager, project, timeline, resolve_required=True)
+        if error: return error
+        if project is None or timeline is None:
+            raise ValidationError("Serve un progetto e una timeline Carabellese aperti")
+        with RESOLVE_ACCESS_LOCK:
+            contract = load_carabellese_contract(CARABELLESE_CONTRACT_PATH)
+            actual_source = _carabellese_source_fingerprint(timeline, config)
+            if actual_source != source_fingerprint:
+                raise ValidationError("La sorgente della timeline non coincide con quella dichiarata")
+            selected_transcript = _allowed_transcript(transcript_path, config)
+            inputs = load_carabellese_inputs(
+                config, selected_transcript, transcript_fingerprint, audio_job_id, source_fingerprint)
+            source = inputs.transcript.get("source")
+            duration = source.get("duration_seconds") if isinstance(source, dict) else None
+            explicit = validate_cleanup_candidates(candidates, inputs.transcript, contract, float(duration))
+            pauses = derive_pause_candidates(inputs.words, inputs.audio.silence_windows, contract)
+            combined = tuple(sorted((*explicit, *pauses), key=lambda item: item.start_seconds))
+            ids = [item.candidate_id for item in combined]
+            if len(ids) != len(set(ids)):
+                raise ValidationError("candidate_id Carabellese duplicato")
+            if any(current.start_seconds < previous.end_seconds
+                   for previous, current in zip(combined, combined[1:])):
+                raise ValidationError("Proposte Carabellese sovrapposte")
+            if not combined:
+                raise ValidationError("Nessuna proposta Carabellese da revisionare")
+            payload = tuple(asdict(item) for item in combined)
+            store = _carabellese_store(config)
+            identity = editorial_timeline_identity(timeline)
+            fingerprint = cleanup_candidate_fingerprint(combined)
+            owner = store.active_for_timeline(identity)
+            if owner is not None:
+                if (owner.source_fingerprint == source_fingerprint
+                        and owner.transcript_fingerprint == transcript_fingerprint
+                        and owner.proposal_fingerprint == fingerprint):
+                    return {"ok": True, "action": "prepare_carabellese_cleanup",
+                            "carabellese_job_id": owner.carabellese_job_id,
+                            "state": owner.state, "candidate_count": len(owner.candidates),
+                            "idempotent": True}
+                raise ValidationError("La timeline ha già un job Carabellese differente non chiuso")
+            job = store.create(new_carabellese_job(
+                workstation_id=config.workstation_id, workflow_version=contract.version,
+                project_name=str(safe_call(project, "GetName")),
+                timeline_name=str(safe_call(timeline, "GetName")), timeline_identity=identity,
+                timeline_fingerprint=carabellese_timeline_fingerprint(timeline),
+                source_fingerprint=source_fingerprint, transcript_fingerprint=transcript_fingerprint,
+                contract_fingerprint=carabellese_contract_fingerprint(contract),
+                proposal_fingerprint=fingerprint, candidates=payload))
+            marked = do_mark_carabellese_review(timeline, store, job, contract)
+            result = {"ok": marked.state == "MARKED", "action": "prepare_carabellese_cleanup",
+                      "carabellese_job_id": marked.carabellese_job_id, "state": marked.state,
+                      "candidate_count": len(marked.candidates), "idempotent": False}
+            if marked.state == "MARKED":
+                result["instructions"] = carabellese_secretary_instructions(marked)
+            return result
+    return _call(operation)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_carabellese_job(carabellese_job_id: str) -> dict[str, Any]:
+    """Return one compact operator card for a workstation-local Carabellese job."""
+    try:
+        config = load_config()
+        job = _carabellese_store(config).get(carabellese_job_id, config.workstation_id)
+        result: dict[str, Any] = {
+            "ok": True, "card_count": 1, "carabellese_job_id": job.carabellese_job_id,
+            "state": job.state, "revision": job.revision, "candidate_count": len(job.candidates),
+            "project": job.project_name, "timeline": job.timeline_name,
+        }
+        if job.state == "MARKED":
+            result["instructions"] = carabellese_secretary_instructions(job)
+            result["next_action"] = "submit_complete_review"
+        elif job.state in {"BLOCKED", "FAILED_RECOVERABLE", "STALE"}:
+            result["next_action"] = "technical_recovery"
+            result["instruction"] = "Non avviare un nuovo job; chiedi il recupero tecnico di questo ID."
+        else:
+            result["next_action"] = {"REVIEWED": "apply_cleanup", "CHECKPOINTED": "apply_cleanup",
+                "APPLYING": "resume_cleanup", "VERIFIED": "close_cleanup",
+                "CLOSED": "complete"}.get(job.state, "wait")
+        return result
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def submit_carabellese_review(carabellese_job_id: str,
+                              boundary_decisions: list[dict[str, Any]],
+                              pause_decision: dict[str, Any],
+                              exception_decisions: list[dict[str, Any]],
+                              transcript_path: str,
+                              transcript_fingerprint: str) -> dict[str, Any]:
+    """Bind the complete one-message review and mandatory reasons to the marked job."""
+    def operation() -> dict[str, Any]:
+        config = load_config(); _require_carabellese(config)
+        store = _carabellese_store(config)
+        job = store.get(carabellese_job_id, config.workstation_id)
+        transcript = load_pinned_transcript(
+            _allowed_transcript(transcript_path, config), transcript_fingerprint)
+        transcript["_pinned_fingerprint"] = transcript_fingerprint
+        reviewed = do_submit_carabellese_review(
+            store, job, boundary_decisions, pause_decision, exception_decisions,
+            load_carabellese_contract(CARABELLESE_CONTRACT_PATH), transcript=transcript)
+        return {"ok": True, "action": "submit_carabellese_review",
+                "carabellese_job_id": reviewed.carabellese_job_id, "state": reviewed.state,
+                "review_fingerprint": reviewed.review_fingerprint,
+                "decision_count": len(reviewed.decisions)}
+    return _call(operation)
+
+
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
+def apply_carabellese_cleanup(carabellese_job_id: str,
+                              expected_review_fingerprint: str) -> dict[str, Any]:
+    """Checkpoint, apply and verify the approved cleanup; never renders or adds graphics."""
+    def operation() -> dict[str, Any]:
+        configured = load_config(); _require_carabellese(configured)
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        _require_carabellese(config, manager, project, timeline, resolve_required=True)
+        if error: return error
+        with RESOLVE_ACCESS_LOCK:
+            store = _carabellese_store(config)
+            job = store.get(carabellese_job_id, config.workstation_id)
+            if job.review_fingerprint != expected_review_fingerprint:
+                raise ValidationError("Review fingerprint Carabellese stale")
+            if job.state == "REVIEWED":
+                target = _carabellese_current_timeline(project, job)
+                job = do_export_carabellese_checkpoint(
+                    resolve, project, target, store, job, config.carabellese_checkpoint_root)
+            result = do_apply_carabellese_cleanup(
+                resolve, manager, config, store, job.carabellese_job_id,
+                expected_review_fingerprint)
+            return {"ok": result.state == "VERIFIED", "action": "apply_carabellese_cleanup",
+                    "carabellese_job_id": result.carabellese_job_id, "state": result.state}
+    return _call(operation)
+
+
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
+def recover_carabellese_cleanup(carabellese_job_id: str) -> dict[str, Any]:
+    """Restore the verified DRT checkpoint after a recoverable apply failure."""
+    def operation() -> dict[str, Any]:
+        configured = load_config(); _require_carabellese(configured)
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        _require_carabellese(config, manager, project, timeline, resolve_required=True)
+        if error: return error
+        job = do_recover_carabellese_cleanup(
+            resolve, manager, config, _carabellese_store(config), carabellese_job_id)
+        return {"ok": job.state == "CHECKPOINTED", "action": "recover_carabellese_cleanup",
+                "carabellese_job_id": job.carabellese_job_id, "state": job.state}
+    return _call(operation)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def close_carabellese_cleanup(carabellese_job_id: str) -> dict[str, Any]:
+    """Remove owned markers, retain checkpoint metadata and record redacted local learning."""
+    def operation() -> dict[str, Any]:
+        configured = load_config(); _require_carabellese(configured)
+        _, manager, project, timeline, config, _, error = _runtime()
+        _require_carabellese(config, manager, project, timeline, resolve_required=True)
+        if error: return error
+        store = _carabellese_store(config)
+        job = store.get(carabellese_job_id, config.workstation_id)
+        if job.state != "CLOSED":
+            target = _carabellese_current_timeline(project, job)
+            job = do_close_carabellese_cleanup(target, store, job)
+        learning = do_append_carabellese_outcome(config, job)
+        return {"ok": True, "action": "close_carabellese_cleanup",
+                "carabellese_job_id": job.carabellese_job_id, "state": job.state,
+                "learning_recorded": learning["recorded"]}
+    return _call(operation)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_carabellese_learning() -> dict[str, Any]:
+    """Inspect privacy-safe local aggregates without returning reasons or transcript content."""
+    try:
+        return {"ok": True, **do_inspect_carabellese_metrics(load_config())}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def compile_carabellese_profile_proposal(minimum_samples: int = 5) -> dict[str, Any]:
+    """Compile a redacted local profile proposal without editing the repository profile."""
+    def operation() -> dict[str, Any]:
+        config = load_config(); _require_carabellese(config)
+        proposal = do_compile_carabellese_profile(
+            config, load_carabellese_preferences(CARABELLESE_SHARED_PROFILE_PATH), minimum_samples)
+        return {"ok": True, "action": "compile_carabellese_profile_proposal", **proposal}
+    return _call(operation)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_carabellese_profile_proposal(proposal_id: str, operator_role: str,
+                                         expected_previous_digest: str) -> dict[str, Any]:
+    """Approve a redacted local Carabellese overlay as Alessio or qualified technical staff."""
+    def operation() -> dict[str, Any]:
+        config = load_config(); _require_carabellese(config)
+        return {"action": "approve_carabellese_profile_proposal",
+                **do_approve_carabellese_profile(
+                    config, proposal_id, operator_role, expected_previous_digest)}
+    return _call(operation)
 
 
 def _editorial_store(config: Any) -> EditorialJobStore:

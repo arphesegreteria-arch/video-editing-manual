@@ -25,6 +25,12 @@ EXPOSED_TOOL_NAMES = (
     "apply_podcast_reel_selection", "close_podcast_reel_selection",
     "inspect_editorial_learning", "compile_editorial_profile_proposal",
     "approve_editorial_profile_proposal",
+    "inspect_carabellese_cleanup", "start_carabellese_transcription",
+    "get_carabellese_transcription_job", "prepare_carabellese_cleanup",
+    "inspect_carabellese_job", "submit_carabellese_review",
+    "apply_carabellese_cleanup", "recover_carabellese_cleanup",
+    "close_carabellese_cleanup", "inspect_carabellese_learning",
+    "compile_carabellese_profile_proposal", "approve_carabellese_profile_proposal",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {

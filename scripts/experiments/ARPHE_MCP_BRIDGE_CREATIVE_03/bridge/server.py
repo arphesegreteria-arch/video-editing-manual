@@ -63,11 +63,14 @@ from .carabellese_transcription import (
 from .vertical_social_contract import load_vertical_social_contract
 from .vertical_social_workflow import (
     advance_vertical_social_action as do_advance_vertical_social_action,
+    approved_vertical_social_plan as do_approved_vertical_social_plan,
     approve_vertical_social_plan as do_approve_vertical_social_plan,
     inspect_vertical_social_plan as do_inspect_vertical_social_plan,
     mark_vertical_social_picture_lock as do_mark_vertical_social_picture_lock,
     prepare_vertical_social_plan as do_prepare_vertical_social_plan,
+    record_vertical_social_cut_execution as do_record_vertical_social_cut_execution,
 )
+from .vertical_social_cuts import create_provisional_cut_timeline as do_create_provisional_cut_timeline
 from .creative_tools import (add_end_card as do_add_end_card,
                              animate_element, animate_stack,
                              set_review_highlight as do_set_review_highlight)
@@ -262,6 +265,43 @@ def advance_vertical_social_action(plan_id: str, action_id: str, next_state: str
         config = load_config(); _require_vertical_social(config)
         plan = do_advance_vertical_social_action(config.vertical_social_plans_path, config.workstation_id, plan_id, action_id, next_state, evidence)
         return {"ok": True, "plan_id": plan.plan_id, "action_id": action_id}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_vertical_social_cuts(plan_id: str, fingerprint: str) -> dict[str, Any]:
+    """Create or resume the verified provisional CUT timeline; never changes its source timeline."""
+    try:
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        _require_vertical_social(config)
+        if error:
+            return error
+        try:
+            require_capability("CAP_VERTICAL_SOCIAL", config, manager, project, timeline)
+        except RuntimeError as exc:
+            raise ValidationError(str(exc)) from exc
+        plan = do_approved_vertical_social_plan(
+            config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint)
+        if (str(safe_call(project, "GetName")) != str(plan.target.get("project"))
+                or str(safe_call(timeline, "GetName")) != str(plan.target.get("timeline"))):
+            raise ValidationError("Target progetto o timeline diverso dal piano approvato")
+        video = safe_call(timeline, "GetItemListInTrack", "video", 1) or []
+        if len(video) != 1:
+            raise ValidationError("CUT Vertical Social richiede una sola clip video sorgente")
+        total_frames = int(safe_call(video[0], "GetDuration") or 0)
+        with RESOLVE_ACCESS_LOCK:
+            provisional = do_create_provisional_cut_timeline(
+                project, timeline, plan.to_dict(), total_frames=total_frames)
+        verified = do_record_vertical_social_cut_execution(
+            config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint,
+            str(safe_call(provisional, "GetName")),
+            sum(int(safe_call(item, "GetDuration") or 0)
+                for item in (safe_call(provisional, "GetItemListInTrack", "video", 1) or [])),
+        )
+        return {"ok": True, "action": "apply_vertical_social_cuts", "plan_id": plan_id,
+                "provisional_timeline": str(safe_call(provisional, "GetName")),
+                "verified_cut_count": sum(item.action_type == "CUT" and item.state == "VERIFIED"
+                                          for item in verified.actions)}
     except Exception as exc: return _error(exc)
 
 

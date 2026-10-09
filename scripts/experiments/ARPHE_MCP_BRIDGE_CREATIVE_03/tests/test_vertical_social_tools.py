@@ -26,7 +26,8 @@ class VerticalSocialToolTests(unittest.TestCase):
     def test_catalog_exposes_closed_vertical_social_surface(self):
         required = {"inspect_vertical_social", "prepare_vertical_social_plan",
                     "approve_vertical_social_plan", "inspect_vertical_social_plan",
-                    "mark_vertical_social_picture_lock", "advance_vertical_social_action"}
+                    "mark_vertical_social_picture_lock", "advance_vertical_social_action",
+                    "apply_vertical_social_cuts"}
         self.assertTrue(required.issubset(EXPOSED_TOOL_NAMES))
         for name in required:
             self.assertTrue(callable(getattr(server, name)))
@@ -46,4 +47,3 @@ class VerticalSocialToolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

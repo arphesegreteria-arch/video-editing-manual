@@ -33,6 +33,7 @@ EXPOSED_TOOL_NAMES = (
     "compile_carabellese_profile_proposal", "approve_carabellese_profile_proposal",
     "inspect_vertical_social", "prepare_vertical_social_plan", "approve_vertical_social_plan",
     "inspect_vertical_social_plan", "mark_vertical_social_picture_lock", "advance_vertical_social_action",
+    "apply_vertical_social_cuts",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {

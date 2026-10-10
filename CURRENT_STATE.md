@@ -524,6 +524,24 @@ finestre sono approvati, mentre i punti di lama finali richiedono ancora il gate
 
 ## Direzione scartata
 
+## Branded Longform Editorial — 2026-10-10
+
+- Workflow multi-brand implementato con profili ARPHE e Studio Carabellese isolati.
+- Supportati input singolo e pacchetto OBS multicamera; `PROGRAM` è l'unico audio finale.
+- Lo strumento read-only `inspect_branded_longform_sources` valida input/fps/guide audio e produce
+  l'impronta sorgente da usare per il job; la struttura della timeline originale è poi vincolata.
+- Timeline originale immutabile; copie `_CLEANUP` e `_EDITORIAL` idempotenti e verificate.
+- Proposte semantiche, card unica, marker, approvazione batch con fingerprint e applicazione
+  Fusion ARPHE implementati nel bridge.
+- Studio Carabellese resta `kit_status=PENDING`: nessuna grafica ARPHE può essere applicata.
+- Gate nativo PC_PERSONALE superato su progetto usa-e-getta: copie cleanup/editorial, marker,
+  grafica Fusion Satoshi e rollback verificati; il progetto precedente è stato ripristinato.
+- `CAP_BRANDED_LONGFORM_EDITORIAL=false`: la validazione non equivale ad attivazione o rollout.
+- PC_SEGRETERIA non è stato modificato e resta `PENDING`.
+
+Prossimo passo operativo: revisione/merge del codice; l'eventuale installazione e attivazione su
+PC_PERSONALE resta un rollout separato. PC_SEGRETERIA richiede comunque un gate indipendente.
+
 La vecchia GUI desktop ARPHE + polling GitHub (`ARPHE Remote Agent V1`) è **SUPERSEDED**. ChatGPT è la UI primaria; il componente locale deve restare un bridge MCP/Resolve.
 
 Dettagli persistenti:

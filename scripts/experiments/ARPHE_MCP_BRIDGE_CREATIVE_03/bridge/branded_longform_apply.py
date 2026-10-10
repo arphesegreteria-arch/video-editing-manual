@@ -16,11 +16,15 @@ def approve_proposal_batch(proposal_fingerprint: str, decisions: list[dict[str, 
         raise ValueError("ruolo non autorizzato all'approvazione")
     approved: list[str] = []
     modified: dict[str, str] = {}
+    seen: set[str] = set()
     for decision in decisions:
         proposal_id = str(decision.get("proposal_id", ""))
         state = str(decision.get("decision", ""))
         if not proposal_id or state not in {"APPROVE", "REJECT", "MODIFY"}:
             raise ValueError("Decisione proposta non valida")
+        if proposal_id in seen:
+            raise ValueError(f"Decisione duplicata per {proposal_id}")
+        seen.add(proposal_id)
         if state in {"APPROVE", "MODIFY"}:
             approved.append(proposal_id)
         if state == "MODIFY":

@@ -688,3 +688,18 @@ Principio ancora valido:
 - Commit `3fa0385` reinstallato sul solo `PC_PERSONALE`: hash della copia runtime corrispondente,
   contratto v5, task e supervisore attivi, `/readyz` HTTP 200. Il flag Vertical Social è rimasto
   disabilitato; nessuna config o runtime di `PC_SEGRETERIA` è stata modificata.
+
+## 2026-10-10 — Branded Longform Editorial
+
+- Sostituito il concetto ARPHE-only con `BRANDED_LONGFORM_EDITORIAL` e profili brand isolati.
+- Aggiunti contratto, input OBS single/multicam, job persistenti per workstation, binding a
+  sorgente/profilo/timeline, cleanup conservativo e proposta editoriale adattiva.
+- Aggiunte timeline derivate `_CLEANUP` e `_EDITORIAL`, marker idempotenti, approvazione batch
+  legata all'impronta e applicazione grafica Fusion sul solo profilo ARPHE ready.
+- Il profilo Carabellese resta pending e blocca le grafiche senza contaminazioni ARPHE.
+- Aggiunti strumenti MCP completi, validatore, ledger e gate nativo con rollback su progetto
+  sintetico PC_PERSONALE. Capability ancora disabilitata; PC_SEGRETERIA non toccato.
+- Gate nativo PC_PERSONALE superato: copie `_CLEANUP`/`_EDITORIAL`, marker, grafica Fusion Satoshi
+  e rollback del progetto sintetico verificati; aggiunti retry idempotente e rollback degli overlay
+  parziali, impronta strutturale della timeline originale e validazione/fingerprint dei pacchetti
+  SINGLE/OBS. Suite completa: 454 test, 1 skip per privilegio symlink Windows.

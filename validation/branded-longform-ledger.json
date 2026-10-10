@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "workflow_id": "BRANDED_LONGFORM_EDITORIAL",
+  "capability_default": false,
+  "automated_evidence": {
+    "result": "PASS",
+    "test_results": [
+      "454 bridge tests passed on 2026-10-10; 1 Windows symlink test skipped for missing host privilege.",
+      "Contract, OBS package, cleanup policy, profile isolation, approval fingerprint, retry/resume persistence, derived timeline lifecycle, proposal markers, partial-overlay rollback and ARPHE Fusion executor covered."
+    ],
+    "limitations": [
+      "Native Resolve gate passed in a disposable PC_PERSONALE project and restored the previously open project; the capability remains disabled by default.",
+      "CARABELLESE_LONGFORM_EDITORIAL remains kit_status=PENDING and blocks every graphic write.",
+      "PC_SEGRETERIA has not been modified or tested for this capability."
+    ]
+  },
+  "workstation_gates": {
+    "PC_PERSONALE": {
+      "workstation_id": "PC_PERSONALE",
+      "status": "VALIDATED",
+      "checks": {
+        "automated_suite": "PASS",
+        "native_cleanup_copy": "PASS",
+        "native_editorial_copy": "PASS",
+        "native_marker": "PASS",
+        "native_graphic": "PASS",
+        "rollback": "PASS"
+      },
+      "evidence": [
+        "2026-10-10 final gate project ARPHE_BRANDED_LONGFORM_NATIVE_GATE_20261010_204043 created and deleted.",
+        "Created __BRANDED_LONGFORM_GATE_ORIGINAL_CLEANUP and __BRANDED_LONGFORM_GATE_ORIGINAL_EDITORIAL; original remained selected after each duplicate.",
+        "Added one proposal marker and one exact [0,30] Fusion graphic ARPHE_LONGFORM_P001 with text_readback=true, text_node_count=1 and font=Satoshi.",
+        "Verified ORIGINAL/CLEANUP/EDITORIAL ownership, deleted temporary timelines/project and restored ARPHE_VERTICAL_CUT_NATIVE_GATE_20261010B."
+      ]
+    },
+    "PC_SEGRETERIA": {
+      "workstation_id": "PC_SEGRETERIA",
+      "status": "PENDING",
+      "checks": {"native_gate": "PENDING"},
+      "evidence": []
+    }
+  }
+}

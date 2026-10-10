@@ -11,7 +11,7 @@ from bridge.branded_longform_jobs import new_branded_longform_job  # noqa: E402
 
 class FakeTimeline:
     def __init__(self, project, name):
-        self.project = project; self.name = name; self.markers = {}
+        self.project = project; self.name = name; self.markers = {}; self.items = []
     def GetName(self): return self.name
     def DuplicateTimeline(self, name):
         duplicate = FakeTimeline(self.project, name); self.project.timelines.append(duplicate); return duplicate
@@ -20,6 +20,15 @@ class FakeTimeline:
         self.markers[frame] = {"color": color, "name": name, "note": note, "duration": duration, "customData": custom}
         return True
     def GetMarkers(self): return dict(self.markers)
+    def GetTrackCount(self, kind): return 1 if kind == "video" else 0
+    def GetItemListInTrack(self, kind, index): return list(self.items)
+
+
+class FakeClip:
+    def __init__(self, start, end, name="clip"): self.start = start; self.end = end; self.name = name
+    def GetStart(self): return self.start
+    def GetEnd(self): return self.end
+    def GetName(self): return self.name
 
 
 class FakeProject:
@@ -55,3 +64,15 @@ class BrandedLongformResolveTests(unittest.TestCase):
         second = add_proposal_markers(project, job, proposals)
         self.assertEqual(1, first["added"])
         self.assertEqual(0, second["added"])
+
+    def test_original_timeline_content_change_invalidates_job(self):
+        from bridge.branded_longform_resolve import timeline_structure_fingerprint, create_cleanup_timeline
+        project = FakeProject(); original = project.current
+        original.items.append(FakeClip(0, 100))
+        fingerprint = timeline_structure_fingerprint(original)
+        job = new_branded_longform_job(
+            "Project", "Original", "source", "profile",
+            original_timeline_fingerprint=fingerprint)
+        original.items[0].end = 101
+        with self.assertRaisesRegex(Exception, "modificata"):
+            create_cleanup_timeline(project, job)

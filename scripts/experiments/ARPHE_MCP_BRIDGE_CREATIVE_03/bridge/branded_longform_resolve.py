@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from .branded_longform_jobs import BrandedLongformJob
@@ -19,6 +21,25 @@ def _find(project: object, name: str) -> object | None:
     return matches[0] if matches else None
 
 
+def timeline_structure_fingerprint(timeline: object) -> str:
+    tracks: list[dict[str, Any]] = []
+    for kind in ("video", "audio"):
+        for index in range(1, int(safe_call(timeline, "GetTrackCount", kind) or 0) + 1):
+            items = []
+            for item in safe_call(timeline, "GetItemListInTrack", kind, index) or []:
+                pool_item = safe_call(item, "GetMediaPoolItem")
+                items.append({
+                    "name": str(safe_call(item, "GetName") or ""),
+                    "start": safe_call(item, "GetStart"),
+                    "end": safe_call(item, "GetEnd"),
+                    "duration": safe_call(item, "GetDuration"),
+                    "media": str(safe_call(pool_item, "GetName") or "") if pool_item else "",
+                })
+            tracks.append({"kind": kind, "index": index, "items": items})
+    payload = {"name": str(safe_call(timeline, "GetName") or ""), "tracks": tracks}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def find_owned_timeline(project: object, job: BrandedLongformJob, name: str) -> object:
     _check_project(project, job)
     if name not in {job.original_timeline, job.cleanup_timeline, job.editorial_timeline}:
@@ -32,6 +53,10 @@ def find_owned_timeline(project: object, job: BrandedLongformJob, name: str) -> 
 def _check_project(project: object, job: BrandedLongformJob) -> None:
     if str(safe_call(project, "GetName") or "") != job.project_name:
         raise ValidationError("Progetto corrente diverso dal job branded longform")
+    if job.original_timeline_fingerprint:
+        original = _find(project, job.original_timeline)
+        if original is None or timeline_structure_fingerprint(original) != job.original_timeline_fingerprint:
+            raise ValidationError("Timeline originale modificata dopo la creazione del job")
 
 
 def _duplicate(project: object, job: BrandedLongformJob, source_name: str, target_name: str) -> dict[str, Any]:

@@ -63,10 +63,14 @@ from .carabellese_transcription import (
 from .vertical_social_contract import load_vertical_social_contract
 from .branded_longform_contract import branded_longform_fingerprint, load_branded_longform_contract
 from .branded_longform_jobs import BrandedLongformJobStore, new_branded_longform_job
+from .branded_longform_media import (build_sync_plan as do_build_branded_sync_plan,
+                                     inspect_longform_sources as do_inspect_branded_sources,
+                                     source_package_fingerprint as do_branded_source_fingerprint)
 from .branded_longform_resolve import (add_proposal_markers as do_add_branded_markers,
                                       create_cleanup_timeline as do_create_branded_cleanup,
                                       create_editorial_timeline as do_create_branded_editorial,
                                       find_owned_timeline as do_find_branded_timeline,
+                                      timeline_structure_fingerprint as do_branded_timeline_fingerprint,
                                       verify_branded_longform_timelines as do_verify_branded_timelines)
 from .branded_longform_graphics import apply_editorial_graphic as do_apply_branded_graphic
 from .branded_longform_workflow import (application_for_job as do_branded_application,
@@ -236,17 +240,37 @@ def _require_vertical_social(config: Any) -> None:
 
 
 @mcp.tool(annotations=READ_ONLY)
-def inspect_branded_longform(profile_id: str = "") -> dict[str, Any]:
+def inspect_branded_longform(profile_id: str = "", source_mode: str = "") -> dict[str, Any]:
     """Inspect the multi-brand longform contract and local rollout gate without editing Resolve."""
     try:
         config = load_config(); contract = load_branded_longform_contract(BRANDED_LONGFORM_CONTRACT_PATH)
         selected = contract.profile(profile_id) if profile_id else None
+        if source_mode and source_mode not in contract.source_modes:
+            raise ValidationError("source_mode branded longform non supportata")
+        _, _, project, timeline, runtime_error = context()
         return {"ok": True, "card_count": 1, "workflow_id": contract.workflow_id,
                 "workflow_version": contract.version, "workstation_id": config.workstation_id,
                 "capability_enabled": bool(config.flags.get("CAP_BRANDED_LONGFORM_EDITORIAL", False)),
                 "source_modes": contract.source_modes,
+                "selected_source_mode": source_mode or "NOT_SELECTED",
+                "selected_project": str(safe_call(project, "GetName") or "") if project else None,
+                "selected_timeline": str(safe_call(timeline, "GetName") or "") if timeline else None,
+                "resolve_status": "AVAILABLE" if runtime_error is None else "UNAVAILABLE",
                 "profiles": {key: value.kit_status for key, value in contract.profiles.items()},
                 "selected_profile": None if selected is None else {"profile_id": selected.profile_id, "kit_status": selected.kit_status}}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_branded_longform_sources(sources: dict[str, Any]) -> dict[str, Any]:
+    """Validate SINGLE or OBS multicamera inputs without editing Resolve."""
+    try:
+        package = do_inspect_branded_sources(sources)
+        sync = do_build_branded_sync_plan(package)
+        return {"ok": True, "source_mode": package.mode,
+                "source_fingerprint": do_branded_source_fingerprint(package),
+                "final_audio_source": package.final_audio_source,
+                "sync": sync}
     except Exception as exc: return _error(exc)
 
 
@@ -257,6 +281,13 @@ def _require_branded_longform(config: Any, manager: Any, project: Any, timeline:
         require_capability("CAP_BRANDED_LONGFORM_EDITORIAL", config, manager, project, timeline)
     except RuntimeError as exc:
         raise ValidationError(str(exc)) from exc
+
+
+def _verify_branded_profile_binding(job: Any) -> None:
+    contract = load_branded_longform_contract(BRANDED_LONGFORM_CONTRACT_PATH)
+    profile = contract.profile(job.profile_id)
+    if branded_longform_fingerprint(contract, profile) != job.profile_fingerprint:
+        raise ValidationError("Contratto o profilo branded longform cambiato dopo la creazione del job")
 
 
 @mcp.tool(annotations=SAFE_WRITE)
@@ -270,12 +301,19 @@ def create_branded_longform_cleanup(profile_id: str, source_fingerprint: str) ->
         profile = contract.profile(profile_id)
         project_name = str(safe_call(project, "GetName") or "")
         timeline_name = str(safe_call(timeline, "GetName") or "")
-        if not project_name or not timeline_name or not source_fingerprint.strip():
+        source_fingerprint = source_fingerprint.strip().lower()
+        if (not project_name or not timeline_name or len(source_fingerprint) != 64
+                or any(char not in "0123456789abcdef" for char in source_fingerprint)):
             raise ValidationError("Progetto, timeline e source_fingerprint sono obbligatori")
         store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
-        job = store.create(new_branded_longform_job(
-            project_name, timeline_name, source_fingerprint,
-            branded_longform_fingerprint(contract, profile), config.workstation_id, profile_id))
+        profile_fingerprint = branded_longform_fingerprint(contract, profile)
+        job = store.find_active(project_name, timeline_name, source_fingerprint,
+                                profile_fingerprint, profile_id)
+        if job is None:
+            job = store.create(new_branded_longform_job(
+                project_name, timeline_name, source_fingerprint,
+                profile_fingerprint, config.workstation_id, profile_id,
+                do_branded_timeline_fingerprint(timeline)))
         with RESOLVE_ACCESS_LOCK:
             result = do_create_branded_cleanup(project, job)
         return {"ok": True, "action": "create_branded_longform_cleanup", "job_id": job.job_id,
@@ -291,6 +329,7 @@ def propose_branded_longform_editorial(job_id: str, segments: list[dict[str, Any
         if error: return error
         _require_branded_longform(config, manager, project, timeline)
         store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        existing = store.get(job_id); _verify_branded_profile_binding(existing)
         job = do_propose_branded_batch(store, job_id, segments)
         with RESOLVE_ACCESS_LOCK:
             marker_result = do_add_branded_markers(project, job, list(job.proposal_card["proposals"]))
@@ -307,6 +346,7 @@ def approve_branded_longform_batch(job_id: str, proposal_fingerprint: str,
         if not config.flags.get("CAP_BRANDED_LONGFORM_EDITORIAL", False):
             raise ValidationError("CAP_BRANDED_LONGFORM_EDITORIAL non attiva nella config locale")
         store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        existing = store.get(job_id); _verify_branded_profile_binding(existing)
         job = do_approve_branded_batch(store, job_id, proposal_fingerprint, decisions, operator_role)
         return {"ok": True, "action": "approve_branded_longform_batch", "job_id": job.job_id,
                 "state": job.state, "approved_ids": job.approval["approved_ids"]}
@@ -322,10 +362,17 @@ def apply_branded_longform_batch(job_id: str) -> dict[str, Any]:
         _require_branded_longform(config, manager, project, timeline)
         store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
         job = store.get(job_id)
+        _verify_branded_profile_binding(job)
         if job.state == "APPLIED":
             return {"ok": True, "action": "apply_branded_longform_batch", "job_id": job_id,
                     "state": job.state, "operations": job.operations, "idempotent": True}
         application = do_branded_application(job)
+        if job.state == "BLOCKED" and not application:
+            blocked_ids = [str(item.get("proposal_id")) for item in job.operations
+                           if item.get("status") == "BLOCKED"]
+            return {"ok": False, "action": "apply_branded_longform_batch", "job_id": job_id,
+                    "state": job.state, "operations": job.operations, "blocked_ids": blocked_ids,
+                    "idempotent": True}
         with RESOLVE_ACCESS_LOCK:
             result = do_create_branded_editorial(project, job)
             editorial = do_find_branded_timeline(project, job, job.editorial_timeline)
@@ -339,11 +386,11 @@ def apply_branded_longform_batch(job_id: str) -> dict[str, Any]:
                                        "operation": "NO_OVERLAY"})
                 else:
                     operations.append(do_apply_branded_graphic(project, editorial, config, job, item))
+                job = store.update(replace(
+                    job, operations=job.operations + (dict(operations[-1]),)), job.revision)
         blocked = [item["proposal_id"] for item in application if not item.get("executable", False)]
         state = "BLOCKED" if blocked else "APPLIED"
-        saved = store.update(replace(job, state=state,
-                                     operations=job.operations + tuple(dict(value) for value in operations)),
-                             job.revision)
+        saved = store.update(replace(job, state=state), job.revision)
         return {"ok": not blocked, "action": "apply_branded_longform_batch", "job_id": job_id,
                 "state": saved.state, "application_plan": application, "operations": operations,
                 "blocked_ids": blocked, **result}

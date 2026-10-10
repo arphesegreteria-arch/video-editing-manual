@@ -35,3 +35,17 @@ class BrandedLongformJobTests(unittest.TestCase):
                 store.update(replace(proposed, state="APPROVED"), 0)
             with self.assertRaisesRegex(Exception, "workstation"):
                 BrandedLongformJobStore(path, "PC_SEGRETERIA")
+
+    def test_store_reuses_active_job_for_same_immutable_binding(self):
+        from bridge.branded_longform_jobs import BrandedLongformJobStore, new_branded_longform_job
+        with tempfile.TemporaryDirectory() as raw:
+            store = BrandedLongformJobStore(Path(raw) / "jobs.json", "PC_PERSONALE")
+            first = store.create(new_branded_longform_job(
+                "Project", "Original", "source-fp", "profile-fp",
+                workstation_id="PC_PERSONALE", profile_id="ARPHE_LONGFORM_EDITORIAL"))
+            self.assertEqual(first, store.find_active(
+                "Project", "Original", "source-fp", "profile-fp",
+                "ARPHE_LONGFORM_EDITORIAL"))
+            self.assertIsNone(store.find_active(
+                "Project", "Original", "changed-source", "profile-fp",
+                "ARPHE_LONGFORM_EDITORIAL"))

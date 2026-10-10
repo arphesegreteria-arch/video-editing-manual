@@ -20,3 +20,24 @@ class BrandedLongformMediaTests(unittest.TestCase):
             inspect_longform_sources({"mode": "OBS_MULTICAM", "cameras": []})
         with self.assertRaisesRegex(Exception, "frame rate"):
             inspect_longform_sources({"mode": "OBS_MULTICAM", "program": {"path": "p", "fps": 30}, "cameras": [{"label": "CAM_A", "path": "a", "fps": 24, "guide_audio": True}]})
+
+    def test_rejects_incomplete_single_and_duplicate_camera_labels(self):
+        from bridge.branded_longform_media import inspect_longform_sources
+        with self.assertRaisesRegex(Exception, "sorgente"):
+            inspect_longform_sources({"mode": "SINGLE", "source": {"path": "", "fps": 30}})
+        with self.assertRaisesRegex(Exception, "duplicata"):
+            inspect_longform_sources({
+                "mode": "OBS_MULTICAM", "program": {"path": "p", "fps": 30},
+                "cameras": [
+                    {"label": "CAM_A", "path": "a", "fps": 30, "guide_audio": True},
+                    {"label": "CAM_A", "path": "b", "fps": 30, "guide_audio": True},
+                ],
+            })
+
+    def test_source_fingerprint_is_deterministic_and_sensitive(self):
+        from bridge.branded_longform_media import inspect_longform_sources, source_package_fingerprint
+        first = inspect_longform_sources({"mode": "SINGLE", "source": {"path": "one.mov", "fps": 30}})
+        same = inspect_longform_sources({"mode": "SINGLE", "source": {"path": "one.mov", "fps": 30}})
+        changed = inspect_longform_sources({"mode": "SINGLE", "source": {"path": "two.mov", "fps": 30}})
+        self.assertEqual(source_package_fingerprint(first), source_package_fingerprint(same))
+        self.assertNotEqual(source_package_fingerprint(first), source_package_fingerprint(changed))

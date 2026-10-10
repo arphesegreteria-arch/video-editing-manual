@@ -12,7 +12,8 @@ class BrandedLongformToolsTests(unittest.TestCase):
         from bridge import server
         from bridge.tool_catalog import EXPOSED_TOOL_NAMES
         expected = {
-            "inspect_branded_longform", "create_branded_longform_cleanup",
+            "inspect_branded_longform", "inspect_branded_longform_sources",
+            "create_branded_longform_cleanup",
             "propose_branded_longform_editorial", "approve_branded_longform_batch",
             "apply_branded_longform_batch", "verify_branded_longform_job",
         }

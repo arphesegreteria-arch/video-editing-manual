@@ -41,11 +41,14 @@ def approve_batch(store: BrandedLongformJobStore, job_id: str, fingerprint: str,
 
 
 def application_for_job(job: BrandedLongformJob) -> tuple[dict[str, Any], ...]:
-    if job.state != "APPROVED" or not isinstance(job.proposal_card, dict) or not isinstance(job.approval, dict):
+    if job.state not in {"APPROVED", "BLOCKED"} or not isinstance(job.proposal_card, dict) or not isinstance(job.approval, dict):
         raise ValidationError("Job branded longform non approvato")
     proposals = {str(item["proposal_id"]): dict(item) for item in job.proposal_card.get("proposals", [])}
     approved_ids = tuple(str(value) for value in job.approval.get("approved_ids", []))
-    plan = list(build_application_plan(proposals, approved_ids))
+    terminal = {str(item.get("proposal_id")) for item in job.operations
+                if item.get("status") in {"VERIFIED", "BLOCKED"}}
+    plan = [item for item in build_application_plan(proposals, approved_ids)
+            if str(item.get("proposal_id")) not in terminal]
     for item in plan:
         replacement = job.approval.get("modified", {}).get(item["proposal_id"])
         if replacement:

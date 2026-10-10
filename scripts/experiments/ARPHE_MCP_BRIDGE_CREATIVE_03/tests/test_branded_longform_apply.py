@@ -22,3 +22,11 @@ class BrandedLongformApplyTests(unittest.TestCase):
         from bridge.branded_longform_apply import approve_proposal_batch
         with self.assertRaisesRegex(Exception, "ruolo"):
             approve_proposal_batch("x", [], "SEGRETERIA")
+
+    def test_duplicate_decision_id_is_rejected(self):
+        from bridge.branded_longform_apply import approve_proposal_batch
+        with self.assertRaisesRegex(Exception, "duplicata"):
+            approve_proposal_batch("x", [
+                {"proposal_id": "P001", "decision": "APPROVE"},
+                {"proposal_id": "P001", "decision": "MODIFY", "replacement": "Titolo"},
+            ], "ALESSIO")

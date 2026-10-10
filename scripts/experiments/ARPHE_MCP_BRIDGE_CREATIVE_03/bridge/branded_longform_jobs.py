@@ -25,15 +25,18 @@ class BrandedLongformJob:
     approval: dict | None = None
     operations: tuple[dict, ...] = ()
     profile_id: str = "ARPHE_LONGFORM_EDITORIAL"
+    original_timeline_fingerprint: str = ""
 
 
 def new_branded_longform_job(project_name: str, original_timeline: str, source_fingerprint: str,
                              profile_fingerprint: str, workstation_id: str = "PC_PERSONALE",
-                             profile_id: str = "ARPHE_LONGFORM_EDITORIAL") -> BrandedLongformJob:
+                             profile_id: str = "ARPHE_LONGFORM_EDITORIAL",
+                             original_timeline_fingerprint: str = "") -> BrandedLongformJob:
     cleanup, editorial = derived_timeline_names(original_timeline)
     return BrandedLongformJob(str(uuid4()), project_name, original_timeline, cleanup, editorial,
                               source_fingerprint, profile_fingerprint, workstation_id=workstation_id,
-                              profile_id=profile_id)
+                              profile_id=profile_id,
+                              original_timeline_fingerprint=original_timeline_fingerprint)
 
 
 def verify_job_binding(job: BrandedLongformJob, project_name: str, original_timeline: str,
@@ -102,6 +105,21 @@ class BrandedLongformJobStore:
             raise ValueError("Job di un'altra workstation")
         return job
 
+    def find_active(self, project_name: str, original_timeline: str,
+                    source_fingerprint: str, profile_fingerprint: str,
+                    profile_id: str) -> BrandedLongformJob | None:
+        binding = (project_name, original_timeline, source_fingerprint,
+                   profile_fingerprint, profile_id)
+        candidates = []
+        for raw in self._read()["jobs"].values():
+            job = self._decode(raw)
+            if job.state not in {"ANALYSED", "PROPOSED", "APPROVED", "BLOCKED"}:
+                continue
+            if (job.project_name, job.original_timeline, job.source_fingerprint,
+                    job.profile_fingerprint, job.profile_id) == binding:
+                candidates.append(job)
+        return max(candidates, key=lambda job: (job.revision, job.job_id)) if candidates else None
+
     def update(self, job: BrandedLongformJob, expected_revision: int) -> BrandedLongformJob:
         data = self._read()
         raw = data["jobs"].get(job.job_id)
@@ -112,7 +130,7 @@ class BrandedLongformJobStore:
             raise ValueError("revision branded longform stale")
         immutable = ("job_id", "workstation_id", "project_name", "original_timeline",
                      "cleanup_timeline", "editorial_timeline", "source_fingerprint",
-                     "profile_fingerprint", "profile_id")
+                     "profile_fingerprint", "profile_id", "original_timeline_fingerprint")
         if any(getattr(current, name) != getattr(job, name) for name in immutable):
             raise ValueError("Identità immutabile del job modificata")
         saved = replace(job, revision=current.revision + 1)

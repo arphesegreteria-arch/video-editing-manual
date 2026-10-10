@@ -1,6 +1,6 @@
 # Branded Longform Editorial — Design
 
-**Date:** 2026-10-10  
+**Date:** 2026-10-10
 **Status:** approved in conversation; implementation plan pending review.
 
 ## Intent

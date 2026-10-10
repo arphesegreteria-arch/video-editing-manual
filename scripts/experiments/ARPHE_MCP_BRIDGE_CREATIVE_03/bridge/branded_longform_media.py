@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+import hashlib
+import json
 from typing import Any
 
 from .safety import ValidationError
@@ -30,13 +32,20 @@ def inspect_longform_sources(raw: dict[str, Any]) -> LongformSourcePackage:
     mode = str(raw.get("mode", ""))
     if mode == "SINGLE":
         source = raw.get("source", {})
-        return LongformSourcePackage(mode, str(source["path"]), float(source["fps"]), ())
+        if not isinstance(source, dict) or not str(source.get("path", "")).strip():
+            raise ValidationError("Pacchetto SINGLE: sorgente obbligatoria")
+        fps = float(source.get("fps", 0))
+        if fps <= 0:
+            raise ValidationError("Pacchetto SINGLE: frame rate non valido")
+        return LongformSourcePackage(mode, str(source["path"]), fps, ())
     if mode != "OBS_MULTICAM":
         raise ValidationError("Modalità sorgente non supportata")
     program = raw.get("program")
     if not isinstance(program, dict) or not program.get("path"):
         raise ValidationError("Pacchetto OBS: PROGRAM obbligatorio")
     fps = float(program.get("fps", 0))
+    if fps <= 0:
+        raise ValidationError("Pacchetto OBS: frame rate PROGRAM non valido")
     cameras: list[CameraSource] = []
     labels: set[str] = set()
     for raw_camera in raw.get("cameras", []):
@@ -48,6 +57,12 @@ def inspect_longform_sources(raw: dict[str, Any]) -> LongformSourcePackage:
         labels.add(camera.label)
         cameras.append(camera)
     return LongformSourcePackage(mode, str(program["path"]), fps, tuple(cameras))
+
+
+def source_package_fingerprint(package: LongformSourcePackage) -> str:
+    payload = json.dumps(asdict(package), ensure_ascii=False, sort_keys=True,
+                         separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def build_sync_plan(package: LongformSourcePackage) -> dict[str, object]:

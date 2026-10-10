@@ -33,16 +33,35 @@ def create_longform_overlay_composition(project: object, timeline: object, confi
     }]) or []
     carrier_item = appended[0] if len(appended) == 1 else None
     if carrier_item is None:
+        if not safe_call(timeline, "DeleteTrack", "video", track):
+            raise ValidationError("Inserimento carrier fallito e rollback traccia incompleto")
         raise ValidationError("Inserimento carrier longform fallito")
-    item = safe_call(timeline, "CreateFusionClip", [carrier_item]) or carrier_item
-    comp = safe_call(item, "AddFusionComp") or safe_call(item, "GetFusionCompByIndex", 1)
-    if comp is None:
-        raise ValidationError("Composizione Fusion longform non disponibile")
-    safe_call(item, "SetName", name)
-    if (safe_call(item, "GetStart") != start or safe_call(item, "GetEnd") != end
-            or safe_call(item, "GetDuration") != duration):
-        raise ValidationError("Read-back range overlay longform non corrispondente")
-    return item, comp
+    item = carrier_item
+    try:
+        fusion_item = safe_call(timeline, "CreateFusionClip", [carrier_item])
+        item = fusion_item or carrier_item
+        added_comp = safe_call(item, "AddFusionComp")
+        indexed_comp = safe_call(item, "GetFusionCompByIndex", 1)
+        comp = added_comp or indexed_comp
+        if comp is None:
+            raise ValidationError(
+                "Composizione Fusion longform non disponibile: "
+                f"create_fusion_clip={fusion_item is not None}, "
+                f"item_name={safe_call(item, 'GetName')}, "
+                f"fusion_count={safe_call(item, 'GetFusionCompCount')}, "
+                f"add_fusion_comp={added_comp is not None}, indexed_comp={indexed_comp is not None}"
+            )
+        safe_call(item, "SetName", name)
+        if (safe_call(item, "GetStart") != start or safe_call(item, "GetEnd") != end
+                or safe_call(item, "GetDuration") != duration):
+            raise ValidationError("Read-back range overlay longform non corrispondente")
+        return item, comp
+    except Exception as exc:
+        clips_deleted = bool(safe_call(timeline, "DeleteClips", [item], False))
+        track_deleted = bool(safe_call(timeline, "DeleteTrack", "video", track))
+        if not clips_deleted or not track_deleted:
+            raise ValidationError("Rollback carrier longform parziale fallito") from exc
+        raise
 
 
 def apply_editorial_graphic(project: object, timeline: object, config: Any,
@@ -55,11 +74,29 @@ def apply_editorial_graphic(project: object, timeline: object, config: Any,
                or proposal.get("rationale") or "").strip()
     if not proposal_id or start < 0 or end <= start or not text:
         raise ValidationError("Proposta grafica longform incompleta")
-    item, comp = create_longform_overlay_composition(
-        project, timeline, config, job.editorial_timeline, start, end,
-        f"ARPHE_LONGFORM_{proposal_id}")
-    action = {"type": "GRAPHIC", "graphic_kind": "TITLE", "text": text,
-              "style_role": "cream"}
-    evidence = build_graphic_graph(comp, action, config.palette)
+    previous = safe_call(project, "GetCurrentTimeline")
+    if previous is None or not safe_call(project, "SetCurrentTimeline", timeline):
+        raise ValidationError("Selezione timeline editoriale longform fallita")
+    item = None
+    track_count_before = int(safe_call(timeline, "GetTrackCount", "video") or 0)
+    try:
+        item, comp = create_longform_overlay_composition(
+            project, timeline, config, job.editorial_timeline, start, end,
+            f"ARPHE_LONGFORM_{proposal_id}")
+        action = {"type": "GRAPHIC", "graphic_kind": "TITLE", "text": text,
+                  "style_role": "cream"}
+        evidence = build_graphic_graph(comp, action, config.palette)
+    except Exception as exc:
+        if item is not None:
+            clips_deleted = bool(safe_call(timeline, "DeleteClips", [item], False))
+            track_count_after = int(safe_call(timeline, "GetTrackCount", "video") or 0)
+            track_deleted = (track_count_after <= track_count_before or
+                             bool(safe_call(timeline, "DeleteTrack", "video", track_count_after)))
+            if not clips_deleted or not track_deleted:
+                raise ValidationError("Rollback overlay longform parziale fallito") from exc
+        raise
+    finally:
+        if not safe_call(project, "SetCurrentTimeline", previous):
+            raise ValidationError("Ripristino timeline dopo overlay longform fallito")
     return {"ok": True, "proposal_id": proposal_id, "timeline": job.editorial_timeline,
             "range": [start, end], "timeline_item": str(safe_call(item, "GetName") or ""), **evidence}

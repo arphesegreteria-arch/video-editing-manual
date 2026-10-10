@@ -180,3 +180,36 @@ personale qualificato gestiscono failure, restore, overlay di apprendimento e so
 ledger `validation/carabellese-cleanup-ledger.json` parte con `PC_PERSONALE=PENDING` e
 `PC_SEGRETERIA=PENDING`: prove automatiche o di un PC non promuovono l'altro. L'installer conserva
 flag, job, journal, overlay, proposte e checkpoint locali senza copiarli tra workstation.
+# Branded longform editorial
+
+`BRANDED_LONGFORM_EDITORIAL` is the shared longform engine. It must always select one explicit
+profile:
+
+- `ARPHE_LONGFORM_EDITORIAL`: Graphic Kit ARPHE ready;
+- `CARABELLESE_LONGFORM_EDITORIAL`: `kit_status=PENDING`, therefore cleanup, multicamera,
+  transcript, markers and proposals are allowed, while every graphic write is blocked.
+
+The original timeline is never modified. The bridge creates `<original>_CLEANUP`, adds the
+proposal markers there, accepts one fingerprint-bound batch decision and creates
+`<original>_EDITORIAL` only after approval. ARPHE graphic proposals use the installed Fusion
+carrier and verify their exact range and Text+ read-back. A retry of an already applied job returns
+the registered operations rather than duplicating overlays.
+
+OBS multicamera input uses `PROGRAM` as the only final audio. `CAM_A`, `CAM_B`, and later cameras
+may carry guide audio solely for synchronization. Missing guide audio or mismatched frame rates
+produce review-required status rather than a claimed sync.
+Call `inspect_branded_longform_sources` first and pass its SHA-256 `source_fingerprint` to cleanup;
+the bridge also binds the original timeline structure so a later source edit invalidates the job.
+
+Normal secretary interaction is one compact card. A valid response can say, for example,
+`approva P001 e P003; rifiuta P002; modifica P004: usa solo la parola fiducia`. The operator must
+not send Resolve commands: ChatGPT converts this answer into the typed batch. Final human review
+remains mandatory.
+
+The capability is `CAP_BRANDED_LONGFORM_EDITORIAL`, default `false`. Native validation is allowed
+only on PC_PERSONALE inside a disposable project named
+`ARPHE_BRANDED_LONGFORM_NATIVE_GATE_*`. PC_SEGRETERIA requires a later independent rollout.
+
+On 2026-10-10 the PC_PERSONALE native gate passed cleanup/editorial duplication, marker insertion,
+one exact-range ARPHE Fusion graphic and complete rollback. This validates the implementation on
+that workstation only; it does not enable the capability and does not validate PC_SEGRETERIA.

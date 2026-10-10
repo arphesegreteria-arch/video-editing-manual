@@ -42,3 +42,18 @@ class BrandedLongformEditorialTests(unittest.TestCase):
         ], "ARPHE_LONGFORM_EDITORIAL"))
         self.assertEqual(1, first["card_count"])
         self.assertNotEqual(proposal_fingerprint(first), proposal_fingerprint(second))
+
+    def test_broll_camera_and_low_confidence_are_explicit_proposals(self):
+        from bridge.branded_longform_editorial import propose_editorial
+        proposals = propose_editorial([
+            {"class": "STORY", "start": 1, "end": 3, "provided_broll": True},
+            {"class": "EXPLAIN", "start": 4, "end": 6, "generated_broll": True},
+            {"class": "ARGUE", "start": 7, "end": 9, "camera_cut_available": True},
+            {"class": "ARGUE", "start": 10, "end": 12, "confidence": 0.4},
+        ], "ARPHE_LONGFORM_EDITORIAL")
+        self.assertEqual(["B_ROLL_PROVIDED", "B_ROLL_GENERATED", "CAMERA_CUT", "REVIEW_ONLY"],
+                         [item.kind for item in proposals])
+        self.assertTrue(proposals[0].executable)
+        self.assertFalse(proposals[1].executable)
+        self.assertFalse(proposals[2].executable)
+        self.assertFalse(proposals[3].executable)

@@ -29,7 +29,16 @@ def propose_editorial(segments: list[dict[str, Any]], profile_id: str) -> tuple[
     proposals: list[EditorialProposal] = []
     for index, segment in enumerate(segments, 1):
         semantic_class = str(segment["class"])
-        if semantic_class == "PERSONAL":
+        confidence = float(segment.get("confidence", 1.0))
+        if confidence < 0.7:
+            kind, rationale = "REVIEW_ONLY", "Confidenza bassa: serve giudizio editoriale"
+        elif segment.get("provided_broll"):
+            kind, rationale = "B_ROLL_PROVIDED", "Esempio concreto: B-roll fornito da verificare"
+        elif segment.get("generated_broll"):
+            kind, rationale = "B_ROLL_GENERATED", "B-roll generato: solo proposta, mai import automatico"
+        elif segment.get("camera_cut_available"):
+            kind, rationale = "CAMERA_CUT", "Cambio camera preferibile a una grafica"
+        elif semantic_class == "PERSONAL":
             kind, rationale = "NO_OVERLAY", "Passaggio personale: preservare il respiro"
         elif semantic_class == "EXPLAIN" and int(segment.get("items", 0)) >= 3:
             kind, rationale = "PROGRESSIVE_LIST", "Elenco di almeno tre elementi"
@@ -37,13 +46,18 @@ def propose_editorial(segments: list[dict[str, Any]], profile_id: str) -> tuple[
             kind, rationale = "CHAPTER_CARD", "Cambio argomento"
         else:
             kind, rationale = "KEYWORD_BOX", "Segnalazione conservativa del concetto"
-        visual = kind != "NO_OVERLAY"
+        visual = kind not in {"NO_OVERLAY", "REVIEW_ONLY", "CAMERA_CUT", "B_ROLL_GENERATED"}
         pending = profile_id == "CARABELLESE_LONGFORM_EDITORIAL" and visual
+        executable = kind not in {"REVIEW_ONLY", "CAMERA_CUT", "B_ROLL_GENERATED"} and not pending
+        blocked_reason = ("KIT_PENDING" if pending else
+                          "LOW_CONFIDENCE" if kind == "REVIEW_ONLY" else
+                          "NATIVE_CAMERA_SWITCH_PENDING" if kind == "CAMERA_CUT" else
+                          "GENERATED_MEDIA_REQUIRES_PROVIDER" if kind == "B_ROLL_GENERATED" else None)
         fps = float(segment.get("fps", 30))
         start, end = float(segment["start"]), float(segment["end"])
         proposals.append(EditorialProposal(
             f"P{index:03d}", kind, start, end, rationale, profile_id,
-            not pending, "KIT_PENDING" if pending else None,
+            executable, blocked_reason,
             round(start * fps), round(end * fps),
         ))
     return tuple(proposals)

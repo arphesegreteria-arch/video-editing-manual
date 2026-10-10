@@ -393,11 +393,15 @@ def apply_branded_longform_batch(job_id: str) -> dict[str, Any]:
                 elif item.get("kind") == "NO_OVERLAY":
                     operations.append({"proposal_id": item["proposal_id"], "status": "VERIFIED",
                                        "operation": "NO_OVERLAY"})
-                else:
+                elif item.get("kind") in {"KEYWORD_BOX", "PROGRESSIVE_LIST", "CHAPTER_CARD"}:
                     operations.append(do_apply_branded_graphic(project, editorial, config, job, item))
+                else:
+                    operations.append({"proposal_id": item["proposal_id"], "status": "BLOCKED",
+                                       "reason": "EXECUTOR_NON_DISPONIBILE"})
                 job = store.update(replace(
                     job, operations=job.operations + (dict(operations[-1]),)), job.revision)
-        blocked = [item["proposal_id"] for item in application if not item.get("executable", False)]
+        blocked = [str(item["proposal_id"]) for item in operations
+                   if item.get("status") == "BLOCKED"]
         state = "BLOCKED" if blocked else "APPLIED"
         saved = store.update(replace(job, state=state), job.revision)
         return {"ok": not blocked, "action": "apply_branded_longform_batch", "job_id": job_id,

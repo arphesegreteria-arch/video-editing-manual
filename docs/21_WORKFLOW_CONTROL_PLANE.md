@@ -20,13 +20,19 @@ Non serve conoscere ID, tool o JSON. Per modifiche editoriali si risponde normal
 - ogni job è locale alla workstation che lo ha creato;
 - il target contiene progetto e timeline espliciti;
 - un piano deve essere approvato con la sua impronta esatta prima di un avanzamento;
+- l'impronta comprende la review o proposta nativa corrente; se cambia, la card diventa `STALE`;
 - una ripetizione restituisce l'evidenza già registrata, non crea un secondo output;
+- un job multi-step può poi avanzare alla diversa operazione successiva senza essere ricreato;
 - una differenza di workstation, progetto o timeline blocca l'operazione;
 - gli FPS di playback sono letti separatamente dagli FPS di timeline e non vengono cambiati dal controllo iniziale.
 
 ## Recupero tecnico
 
 Un job `BLOCKED`, `STALE` o `FAILED_RECOVERABLE` non va corretto manualmente sulla timeline. Aprire la card tecnica, verificare target e impronte, quindi riprendere soltanto l'azione indicata. I registri dei workflow specializzati restano la fonte di verità per marker, checkpoint e operazioni Resolve.
+
+`STALE` richiede sempre un nuovo `prepare_workflow_job` e una nuova approvazione: la precedente
+non viene trasferita al contenuto cambiato. La consegna comune resta indisponibile finché il
+workflow specializzato non produce una prova di delivery verificata.
 
 ## Rollout
 

@@ -1,15 +1,23 @@
 # CHANGELOG
 
-## 2026-10-10 — Workflow Control Plane (prima tranche, non attiva)
+## 2026-10-10 — Workflow Control Plane (codice completo, non attivo)
 
-- Aggiunti registro locale atomico, fingerprint di approvazione e card unica di controllo
-  workstation/Resolve, con FPS timeline e playback distinti.
+- Aggiunti registro locale atomico e card unica di controllo workstation/Resolve, con FPS timeline
+  e playback distinti, capability e lavori attivi.
+- Collegati i quattro registri nativi: Reel podcast, Vertical Social, pulizia Carabellese e
+  longform brandizzato. Il dispatcher richiama soltanto le primitive tipizzate già esistenti.
+- Preparazione e approvazione includono l'impronta corrente della review/proposta nativa. Una
+  modifica successiva produce `STALE` e blocca ogni write fino a un nuovo piano.
+- Gli avanzamenti multi-step usano una chiave operazione persistita: un retry della stessa azione
+  restituisce l'evidenza, mentre il passaggio nativo successivo può proseguire sullo stesso job.
+- La delivery comune resta esplicitamente `not_available` anziché inventare una verifica che i
+  workflow nativi non espongono ancora.
 - Aggiunto `CAP_WORKFLOW_CONTROL_PLANE=false` per default: le scritture vengono rifiutate prima
   del runtime quando il flag è spento.
-- Aggiunti test per isolamento workstation, fingerprint, idempotenza e controllo offline; suite
-  Creative `467 PASS / 1 SKIP`.
-- Questa tranche non installa, abilita o valida `PC_PERSONALE` o `PC_SEGRETERIA`; non tocca progetti
-  Resolve aperti, Python o tunnel. Il binding esecutivo completo ai quattro workflow resta pending.
+- Test completi: Creative `479 PASS / 1 SKIP` ambientale, Windows `58 PASS / 1 SKIP` ambientale;
+  isolamento workstation, fingerprint nativo, staleness, retry, dispatcher e profili coperti.
+- Il codice non installa, abilita o valida `PC_PERSONALE` o `PC_SEGRETERIA`; non tocca progetti
+  Resolve aperti, Python o tunnel. I gate nativi restano separatamente `PENDING`.
 
 ## 2026-10-09 — Workflow Studio Carabellese YouTube cleanup
 

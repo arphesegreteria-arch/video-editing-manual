@@ -1,5 +1,31 @@
 # EXPERIMENT LOG
 
+## 2026-10-10 — Workflow Control Plane: verifica automatica completa
+
+### Ipotesi
+
+Una card comune può coordinare i quattro workflow esistenti senza duplicarne la logica, purché
+ogni esecuzione resti vincolata al target Resolve, all'impronta nativa approvata e a una singola
+operazione riprendibile.
+
+### Risultato automatico
+
+- snapshot offline e registro locale per-workstation: PASS;
+- binding ai quattro registri nativi e dispatcher verso primitive tipizzate: PASS;
+- piano identico idempotente; review/proposta cambiata dopo l'approvazione -> `STALE`: PASS;
+- avanzamento multi-step e retry senza seconda esecuzione della stessa operazione: PASS;
+- input umano mancante e target Resolve cambiato bloccano prima della write: PASS;
+- delivery comune priva di contratto nativo: `not_available`, senza falso positivo;
+- suite Creative: `479 PASS / 1 SKIP` symlink ambientale;
+- suite Windows: `58 PASS / 1 SKIP` DPAPI ambientale;
+- entrambi i profili mantengono `CAP_WORKFLOW_CONTROL_PLANE=false`.
+
+### Decisione
+
+Codice pronto per review e successivo gate isolato sul `PC_PERSONALE`. Non dichiarare un PASS
+nativo: nessun Resolve reale, runtime installato, task, tunnel o progetto aperto è stato toccato.
+`PC_PERSONALE=PENDING`; `PC_SEGRETERIA=PENDING` e resta separato.
+
 ## 2026-10-09 — Studio Carabellese cleanup: gate nativo personale
 
 ### Ipotesi

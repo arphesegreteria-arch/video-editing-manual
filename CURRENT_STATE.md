@@ -1,6 +1,26 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-10-09.
+Ultimo aggiornamento: sessione 2026-10-10.
+
+<a id="workflow-control-plane"></a>
+## Workflow Control Plane — CODICE VALIDATO / ROLLOUT PENDING
+
+Il bridge espone una card iniziale unica con workstation, versione, contesto Resolve, FPS timeline
+e playback, capability e lavori attivi. Un registro locale atomico coordina i quattro workflow
+specializzati (`PODCAST_REELS`, `VERTICAL_SOCIAL`, `CARABELLESE_CLEANUP`,
+`BRANDED_LONGFORM`) senza sostituirne registri, checkpoint o regole native.
+
+Preparazione, approvazione e avanzamento sono legati a workstation, progetto, timeline e impronta
+esatta del piano nativo. Se review o proposta cambiano dopo l'approvazione, il job diventa
+`STALE` e non scrive. Gli avanzamenti multi-step sono riprendibili e idempotenti per singola
+operazione; input umani mancanti restano espliciti. La delivery comune non viene simulata: resta
+`not_available` finché il workflow nativo non espone un contratto di consegna verificata.
+
+Evidenza automatica: Creative `479 PASS / 1 SKIP` ambientale symlink; Windows `58 PASS / 1 SKIP`
+ambientale DPAPI; `git diff --check` PASS. `CAP_WORKFLOW_CONTROL_PLANE=false` nei default e in
+entrambi i profili. Nessuna installazione, abilitazione o prova Resolve nativa è stata eseguita:
+`PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING` e non toccato. Procedura:
+`docs/21_WORKFLOW_CONTROL_PLANE.md`.
 
 <a id="carabellese-youtube-cleanup"></a>
 ## Studio Carabellese YouTube cleanup — PC_PERSONALE LIVE PASS

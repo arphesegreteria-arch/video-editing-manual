@@ -239,4 +239,3 @@
 - [ ] Confirm EXPOSED_TOOL_NAMES contains exactly the six new control-plane tools.
 - [ ] Check status docs contain no claim that PC_SEGRETERIA was installed, enabled or natively validated.
 - [ ] Request code review before a PR. Do not merge or deploy without explicit user authorization.
-

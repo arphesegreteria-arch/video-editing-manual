@@ -1,6 +1,6 @@
 # Workflow Control Plane for the Creative Bridge
 
-Date: 2026-10-10  
+Date: 2026-10-10
 Status: design approved in conversation; implementation plan pending review of this document
 
 ## Purpose

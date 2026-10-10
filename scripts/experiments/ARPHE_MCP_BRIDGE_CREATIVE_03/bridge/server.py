@@ -77,6 +77,12 @@ from .vertical_social_apply import (
     find_provisional_timeline as do_find_vertical_social_provisional,
 )
 from .vertical_social_broll import apply_provided_broll as do_apply_vertical_social_broll
+from .vertical_social_music import apply_music_duck as do_apply_vertical_social_music
+from .vertical_social_overlay import apply_graphic_or_cta as do_apply_vertical_social_overlay
+from .vertical_social_captions import (
+    apply_caption_action as do_apply_vertical_social_captions,
+    timeline_edit_fingerprint as vertical_social_timeline_fingerprint,
+)
 from .creative_tools import (add_end_card as do_add_end_card,
                              animate_element, animate_stack,
                              set_review_highlight as do_set_review_highlight)
@@ -259,9 +265,21 @@ def inspect_vertical_social_plan(plan_id: str) -> dict[str, Any]:
 @mcp.tool(annotations=SAFE_WRITE)
 def mark_vertical_social_picture_lock(plan_id: str) -> dict[str, Any]:
     try:
-        config = load_config(); _require_vertical_social(config)
-        plan = do_mark_vertical_social_picture_lock(config.vertical_social_plans_path, config.workstation_id, plan_id)
-        return {"ok": True, "plan_id": plan.plan_id, "picture_locked": plan.picture_locked}
+        _, manager, project, timeline, config, _, error = _runtime()
+        _require_vertical_social(config)
+        if error:
+            return error
+        try:
+            require_capability("CAP_VERTICAL_SOCIAL", config, manager, project, timeline)
+        except RuntimeError as exc:
+            raise ValidationError(str(exc)) from exc
+        provisional = do_find_vertical_social_provisional(project, plan_id)
+        locked_edit_fingerprint = vertical_social_timeline_fingerprint(provisional)
+        plan = do_mark_vertical_social_picture_lock(
+            config.vertical_social_plans_path, config.workstation_id, plan_id,
+            locked_edit_fingerprint)
+        return {"ok": True, "plan_id": plan.plan_id, "picture_locked": plan.picture_locked,
+                "locked_edit_fingerprint": locked_edit_fingerprint}
     except Exception as exc: return _error(exc)
 
 
@@ -339,6 +357,11 @@ def apply_vertical_social_action(plan_id: str, fingerprint: str, action_id: str)
                     "evidence": action.evidence}
         if action.state != "APPROVED":
             raise ValidationError(f"Azione non eseguibile nello stato {action.state}")
+        if action.action_type == "CAPTIONS":
+            workflow_state = do_inspect_vertical_social_plan(
+                config.vertical_social_plans_path, config.workstation_id, plan_id)
+            if not workflow_state.get("picture_locked"):
+                raise ValidationError("CAPTIONS richiede picture lock")
         total_frames = int(plan.target.get("total_frames") or 0)
         provisional = do_find_vertical_social_provisional(project, plan_id)
         original = timeline
@@ -352,6 +375,27 @@ def apply_vertical_social_action(plan_id: str, fingerprint: str, action_id: str)
                 elif action.action_type == "B_ROLL_PROVIDED":
                     evidence = do_apply_vertical_social_broll(
                         resolve, project, provisional, config, action.to_dict(), total_frames)
+                elif action.action_type == "MUSIC_DUCK":
+                    evidence = do_apply_vertical_social_music(
+                        provisional, action.to_dict(), total_frames)
+                elif action.action_type in {"GRAPHIC", "CTA"}:
+                    evidence = do_apply_vertical_social_overlay(
+                        project, provisional, config, action.to_dict(), total_frames)
+                elif action.action_type == "CAPTIONS":
+                    locked_edit_fingerprint = str(
+                        workflow_state.get("locked_edit_fingerprint") or "")
+                    if vertical_social_timeline_fingerprint(provisional) != locked_edit_fingerprint:
+                        raise ValidationError("Timeline modificata dopo il picture lock")
+                    action_payload = action.to_dict()
+                    requested_fingerprint = str(
+                        action_payload.get("locked_edit_fingerprint") or "")
+                    if requested_fingerprint not in {
+                            "AT_PICTURE_LOCK", locked_edit_fingerprint}:
+                        raise ValidationError(
+                            "CAPTIONS riferite a un picture lock diverso")
+                    action_payload["locked_edit_fingerprint"] = locked_edit_fingerprint
+                    evidence = do_apply_vertical_social_captions(
+                        project, provisional, config, action_payload, total_frames)
                 else:
                     raise ValidationError(
                         f"Esecutore Vertical Social non disponibile per {action.action_type}")

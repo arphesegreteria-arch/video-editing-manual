@@ -108,6 +108,105 @@ class VerticalSocialToolTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertIs(source, project.current)
 
+    def test_action_executor_routes_validated_music_duck_and_graphic(self):
+        class Named:
+            def __init__(self, name): self.name = name
+            def GetName(self): return self.name
+        class Project(Named):
+            def __init__(self, source): super().__init__("ARPHE"); self.current = source
+            def SetCurrentTimeline(self, timeline): self.current = timeline; return True
+        with tempfile.TemporaryDirectory() as raw:
+            cfg = self.config(Path(raw), True)
+            source, provisional = Named("SOURCE"), Named("__ARPHE_VERTICAL_VERTICAL_12345678")
+            project = Project(source)
+            action = SimpleNamespace(action_id="m1", action_type="MUSIC_DUCK", state="APPROVED",
+                                     evidence={}, to_dict=lambda: {"action_id": "m1", "type": "MUSIC_DUCK"})
+            current = [action]
+            plan = SimpleNamespace(target={"project": "ARPHE", "timeline": "SOURCE", "total_frames": 60},
+                                   action=lambda action_id: current[0])
+            with patch("bridge.server._runtime", return_value=(object(), object(), project, source, cfg, object(), None)), \
+                 patch("bridge.server.require_capability"), \
+                 patch("bridge.server.do_approved_vertical_social_plan", return_value=plan), \
+                 patch("bridge.server.do_find_vertical_social_provisional", return_value=provisional), \
+                 patch("bridge.server.do_apply_vertical_social_music", return_value={"ok": True, "action_id": "m1"}) as apply, \
+                 patch("bridge.server.do_apply_vertical_social_overlay", return_value={"ok": True, "action_id": "g1"}) as overlay, \
+                 patch("bridge.server.do_record_vertical_social_action_execution", return_value=plan):
+                result = server.apply_vertical_social_action("vertical_12345678", "fingerprint", "m1")
+                current[0] = SimpleNamespace(action_id="g1", action_type="GRAPHIC", state="APPROVED",
+                                             evidence={}, to_dict=lambda: {"action_id": "g1", "type": "GRAPHIC"})
+                graphic = server.apply_vertical_social_action("vertical_12345678", "fingerprint", "g1")
+            self.assertTrue(result["ok"])
+            self.assertTrue(graphic["ok"])
+            apply.assert_called_once()
+            overlay.assert_called_once()
+            self.assertIs(source, project.current)
+
+    def test_action_executor_requires_picture_lock_before_routing_captions(self):
+        class Named:
+            def __init__(self, name): self.name = name
+            def GetName(self): return self.name
+        class Project(Named):
+            def __init__(self, source): super().__init__("ARPHE"); self.current = source
+            def SetCurrentTimeline(self, timeline): self.current = timeline; return True
+        with tempfile.TemporaryDirectory() as raw:
+            cfg = self.config(Path(raw), True)
+            source, provisional = Named("SOURCE"), Named("__ARPHE_VERTICAL_VERTICAL_12345678")
+            project = Project(source)
+            action = SimpleNamespace(
+                action_id="c1", action_type="CAPTIONS", state="APPROVED", evidence={},
+                to_dict=lambda: {"action_id": "c1", "type": "CAPTIONS",
+                                 "locked_edit_fingerprint": "AT_PICTURE_LOCK"},
+            )
+            plan = SimpleNamespace(
+                target={"project": "ARPHE", "timeline": "SOURCE", "total_frames": 60},
+                action=lambda action_id: action,
+            )
+            lock_state = {"picture_locked": False, "locked_edit_fingerprint": None}
+            current_fingerprint = ["b" * 64]
+            with patch("bridge.server._runtime", return_value=(object(), object(), project, source, cfg, object(), None)), \
+                 patch("bridge.server.require_capability"), \
+                 patch("bridge.server.do_approved_vertical_social_plan", return_value=plan), \
+                 patch("bridge.server.do_inspect_vertical_social_plan", side_effect=lambda *args: lock_state), \
+                 patch("bridge.server.do_find_vertical_social_provisional", return_value=provisional), \
+                 patch("bridge.server.vertical_social_timeline_fingerprint",
+                       side_effect=lambda timeline: current_fingerprint[0]), \
+                 patch("bridge.server.do_apply_vertical_social_captions", create=True,
+                       return_value={"ok": True, "action_id": "c1"}) as apply, \
+                 patch("bridge.server.do_record_vertical_social_action_execution", return_value=plan):
+                blocked = server.apply_vertical_social_action("vertical_12345678", "fingerprint", "c1")
+                self.assertFalse(blocked["ok"])
+                self.assertIn("picture lock", blocked["error"].lower())
+                apply.assert_not_called()
+
+                lock_state.update({"picture_locked": True, "locked_edit_fingerprint": "a" * 64})
+                changed = server.apply_vertical_social_action("vertical_12345678", "fingerprint", "c1")
+                self.assertFalse(changed["ok"])
+                self.assertIn("dopo il picture lock", changed["error"])
+
+                current_fingerprint[0] = "a" * 64
+                result = server.apply_vertical_social_action("vertical_12345678", "fingerprint", "c1")
+            self.assertTrue(result["ok"])
+            apply.assert_called_once()
+            self.assertEqual("a" * 64, apply.call_args.args[3]["locked_edit_fingerprint"])
+            self.assertIs(source, project.current)
+
+    def test_picture_lock_tool_fingerprints_owned_provisional(self):
+        with tempfile.TemporaryDirectory() as raw:
+            cfg = self.config(Path(raw), True)
+            provisional = object()
+            wrapped = SimpleNamespace(plan_id="vertical_12345678", picture_locked=True)
+            with patch("bridge.server.load_config", return_value=cfg), \
+                 patch("bridge.server._runtime", return_value=(object(), object(), object(), object(), cfg, object(), None)), \
+                 patch("bridge.server.require_capability"), \
+                 patch("bridge.server.do_find_vertical_social_provisional", return_value=provisional), \
+                 patch("bridge.server.vertical_social_timeline_fingerprint", return_value="d" * 64), \
+                 patch("bridge.server.do_mark_vertical_social_picture_lock", return_value=wrapped) as mark:
+                result = server.mark_vertical_social_picture_lock("vertical_12345678")
+            self.assertTrue(result["ok"])
+            self.assertEqual("d" * 64, result["locked_edit_fingerprint"])
+            mark.assert_called_once_with(
+                cfg.vertical_social_plans_path, "PC_PERSONALE", "vertical_12345678", "d" * 64)
+
 
 if __name__ == "__main__":
     unittest.main()

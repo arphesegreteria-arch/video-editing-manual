@@ -673,3 +673,15 @@ Principio ancora valido:
   assenti e restano non eseguibili fino al proprio gate Resolve.
 - Test Vertical Social: 43 PASS. Suite completa del bridge: 405 PASS e 1 skip previsto. Gate nativi PC_PERSONALE PASS per CUT, REFRAME e B-roll fornito;
   PC_SEGRETERIA non modificato e ancora PENDING.
+- Contratto v3: `MUSIC_DUCK` usa la proprietà Resolve reale `AudioVolume`, richiede confini clip
+  esatti, limita il guadagno a -30/0 dB e ha superato un gate sintetico reversibile a -12 dB con
+  ripristino a 0 dB sul solo PC_PERSONALE.
+- Contratto v4: GRAPHIC e CTA opzionali hanno un esecutore Fusion su track dedicata, range esatto,
+  palette del Graphic Kit e read-back del testo. Gate nativo su timeline temporanea PASS e rollback
+  completato sul solo PC_PERSONALE.
+- Contratto v5: CAPTIONS è eseguibile soltanto dopo picture lock, con cue non sovrapposte, massimo
+  84 caratteri/due righe, fasce sicure e un solo carrier Fusion. Il lock registra l'impronta reale
+  della timeline provvisoria e blocca qualsiasi esecuzione dopo una modifica. Gate sintetico
+  parametrico PASS; la precedente prova renderizzata reale resta documentata separatamente.
+- Suite completa aggiornata: 419 PASS e 1 skip Windows previsto. `CAP_VERTICAL_SOCIAL=false`,
+  PC_SEGRETERIA non toccato, B-roll generato ancora chiuso.

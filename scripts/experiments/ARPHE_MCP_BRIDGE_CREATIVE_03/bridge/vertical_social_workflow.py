@@ -12,6 +12,8 @@ from .vertical_social_broll import validate_generated_broll, validate_provided_b
 from .vertical_social_graphics import approved_graphic_actions
 from .vertical_social_reframe import validate_reframe_action
 from .vertical_social_qc import final_vertical_social_check
+from .vertical_social_music import validate_music_duck
+from .vertical_social_captions import validate_caption_action
 from .vertical_social_jobs import VerticalSocialPlanStore, new_vertical_social_plan, next_safe_action, plan_fingerprint, transition_action
 
 
@@ -56,7 +58,7 @@ def prepare_vertical_social_plan(path: Path, workstation_id: str, target: dict[s
     total_frames = target.get("total_frames")
     for action in actions:
         action_type = str(action.get("type"))
-        if action_type in {"REFRAME", "B_ROLL_PROVIDED", "GRAPHIC", "CTA"}:
+        if action_type in {"REFRAME", "B_ROLL_PROVIDED", "GRAPHIC", "CTA", "MUSIC_DUCK"}:
             if not isinstance(total_frames, int) or total_frames <= 0:
                 raise ValidationError(f"{action_type} richiede total_frames esplicito nel target")
         if action_type == "REFRAME":
@@ -67,10 +69,20 @@ def prepare_vertical_social_plan(path: Path, workstation_id: str, target: dict[s
             validate_generated_broll(action)
         elif action_type in {"GRAPHIC", "CTA"}:
             approved_graphic_actions({"actions": [action]}, total_frames)
+        elif action_type == "MUSIC_DUCK":
+            validate_music_duck(action, total_frames)
         if action_type == "CAPTIONS":
             spec = contract.action("CAPTIONS")
             if str(action.get("phase")) != spec.phase:
                 raise ValidationError("Fase non consentita per CAPTIONS")
+            if not isinstance(total_frames, int) or total_frames <= 0:
+                raise ValidationError("CAPTIONS richiede total_frames esplicito nel target")
+            caption_plan = validate_caption_action(
+                action, total_frames, allow_picture_lock_placeholder=True)
+            if (caption_plan["locked_edit_fingerprint"] != "AT_PICTURE_LOCK"
+                    and caption_plan["locked_edit_fingerprint"] != str(
+                        target.get("locked_edit_fingerprint", ""))):
+                raise ValidationError("locked edit fingerprint CAPTIONS diverso dal target")
         else:
             validate_action_request(contract, action, False, known)
         known.add(str(action["action_id"]))
@@ -153,13 +165,18 @@ def record_vertical_social_action_execution(path: Path, workstation_id: str, pla
 
 
 def mark_vertical_social_picture_lock(path: Path, workstation_id: str,
-                                      plan_id: str) -> VerticalSocialWorkflowPlan:
+                                      plan_id: str,
+                                      locked_edit_fingerprint: str) -> VerticalSocialWorkflowPlan:
     VerticalSocialPlanStore(path, workstation_id).get(plan_id)
     wrapped = _wrapped(path, plan_id)
     if wrapped.state != "APPROVED":
         raise ValidationError("Picture lock richiede piano approvato")
+    if not isinstance(locked_edit_fingerprint, str) or len(locked_edit_fingerprint) != 64 \
+            or any(character not in "0123456789abcdef" for character in locked_edit_fingerprint):
+        raise ValidationError("locked edit fingerprint non valido")
     meta = _load_meta(path)
     meta[plan_id]["picture_locked"] = True
+    meta[plan_id]["locked_edit_fingerprint"] = locked_edit_fingerprint
     _save_meta(path, meta)
     return _wrapped(path, plan_id)
 
@@ -178,6 +195,8 @@ def advance_vertical_social_action(path: Path, workstation_id: str, plan_id: str
     )
     if not spec.executable:
         raise ValidationError(f"{action.action_type} capability non validata")
+    if next_state in {"APPLIED", "VERIFIED", "READY_FOR_REVIEW"}:
+        raise ValidationError("Lo stato di esecuzione richiede l'esecutore dedicato")
     return transition_action(store, plan_id, action_id, action.state, next_state, evidence)
 
 
@@ -186,6 +205,7 @@ def inspect_vertical_social_plan(path: Path, workstation_id: str, plan_id: str) 
     wrapped = _wrapped(path, plan_id)
     next_action = next_safe_action(plan)
     return {"plan_id": plan_id, "state": wrapped.state, "picture_locked": wrapped.picture_locked,
+            "locked_edit_fingerprint": _load_meta(path).get(plan_id, {}).get("locked_edit_fingerprint"),
             "next_action": None if next_action is None else next_action.action_id,
             "actions": [action.to_dict() for action in plan.actions],
             "final_check": final_vertical_social_check(plan.to_dict(), wrapped.picture_locked)}

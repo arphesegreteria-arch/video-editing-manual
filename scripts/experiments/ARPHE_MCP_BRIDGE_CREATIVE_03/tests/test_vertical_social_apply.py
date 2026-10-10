@@ -38,13 +38,13 @@ class VerticalSocialApplyTests(unittest.TestCase):
         from bridge.vertical_social_apply import apply_reframe_action
         timeline = self.Timeline("__ARPHE_VERTICAL_VERTICAL_ABC12345", [self.Item(0, 40), self.Item(40, 80)])
         action = {"action_id": "r1", "type": "REFRAME", "state": "APPROVED",
-                  "range": {"start_frame": 40, "end_frame": 80},
+                  "range": {"start_frame": 0, "end_frame": 40},
                   "target": {"kind": "person", "label": "speaker"},
                   "anchor": {"x": 0.55, "y": 0.5}, "reason": "mantieni volto"}
         with patch("bridge.vertical_social_apply.apply_fusion_reframe", return_value=True) as apply:
             result = apply_reframe_action(timeline, action, 80)
         self.assertEqual("r1", result["action_id"])
-        self.assertEqual([40, 80], result["range"])
+        self.assertEqual([0, 40], result["range"])
         apply.assert_called_once()
 
     def test_reframe_rejects_partial_clip_geometry(self):
@@ -56,4 +56,3 @@ class VerticalSocialApplyTests(unittest.TestCase):
                   "anchor": {"x": 0.5, "y": 0.5}, "reason": "mantieni volto"}
         with self.assertRaisesRegex(Exception, "confini di una clip"):
             apply_reframe_action(timeline, action, 80)
-

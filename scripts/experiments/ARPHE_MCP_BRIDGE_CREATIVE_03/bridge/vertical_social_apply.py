@@ -33,8 +33,8 @@ def find_provisional_timeline(project: object, plan_id: str) -> object:
 def _exact_video_item(timeline: object, start: int, end: int) -> object:
     matches = [
         item for item in (safe_call(timeline, "GetItemListInTrack", "video", 1) or [])
-        if int(safe_call(item, "GetStart") or -1) == start
-        and int(safe_call(item, "GetEnd") or -1) == end
+        if safe_call(item, "GetStart") == start
+        and safe_call(item, "GetEnd") == end
     ]
     if len(matches) != 1:
         raise ValidationError("REFRAME deve coincidere con i confini di una clip provvisoria")

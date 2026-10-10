@@ -4,18 +4,22 @@
   "capability_default": false,
   "automated_evidence": {
     "result": "PASS",
-    "test_results": ["43 Vertical Social contract, store, lifecycle, adapter and MCP-surface tests pass on 2026-10-10."],
-    "limitations": ["GRAPHIC, CTA, MUSIC_DUCK and CAPTIONS remain non-executable until their own native gates."]
+    "test_results": ["419 bridge tests pass on 2026-10-10; 1 Windows symlink test skipped for missing host privilege."],
+    "limitations": ["B_ROLL_GENERATED remains unavailable until a provider is selected and validated.", "CAP_VERTICAL_SOCIAL remains disabled pending an operator-approved end-to-end rollout."]
   },
   "workstation_gates": {
     "PC_PERSONALE": {
       "workstation_id": "PC_PERSONALE",
       "status": "PENDING",
-      "checks": {"CUT": "PASS", "REFRAME": "PASS", "B_ROLL_PROVIDED": "PASS", "GRAPHIC_CTA": "PENDING", "MUSIC_DUCK": "PENDING", "CAPTIONS": "PENDING"},
+      "checks": {"CUT": "PASS", "REFRAME": "PASS", "B_ROLL_PROVIDED": "PASS", "GRAPHIC_CTA": "PASS", "MUSIC_DUCK": "PASS", "CAPTIONS": "PASS"},
       "evidence": [
         "Synthetic provisional timeline: CUT read-back verified without modifying the source.",
         "Synthetic provisional timeline: MediaIn -> Transform -> MediaOut REFRAME read-back verified.",
-        "Synthetic provisional timeline: 60-frame supplied B-roll inserted on dedicated video track and duration read back."
+        "Synthetic provisional timeline: 60-frame supplied B-roll inserted on dedicated video track and duration read back.",
+        "Synthetic provisional timeline: MUSIC_DUCK AudioVolume set to -12 dB, read back, then restored to 0 dB.",
+        "Temporary synthetic timeline: optional GRAPHIC and CTA Fusion graphs created on exact ranges, text read back, then timeline deleted.",
+        "Temporary synthetic timeline: one full-length CAPTIONS Fusion carrier created with two cues and a preserved gap; Satoshi Bold and text read-back verified, then timeline deleted.",
+        "CAPTIONS execution records timing, settings and opaque media-source identities at picture lock and rejects any later edit or source replacement before writing."
       ]
     },
     "PC_SEGRETERIA": {"workstation_id": "PC_SEGRETERIA", "status": "PENDING", "checks": {"native_gate": "PENDING"}, "evidence": []}

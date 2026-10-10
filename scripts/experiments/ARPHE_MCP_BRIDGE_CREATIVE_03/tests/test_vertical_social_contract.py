@@ -32,15 +32,18 @@ class VerticalSocialContractTests(unittest.TestCase):
         _, contract = self._load()
 
         self.assertEqual("ARPHE_VERTICAL_SOCIAL", contract.workflow_id)
-        self.assertEqual(2, contract.version)
+        self.assertEqual(5, contract.version)
         self.assertEqual(("ANALYSE", "PROPOSE", "PROVISIONAL_EDIT", "PICTURE_LOCK", "POST_LOCK", "REVIEW"),
                          contract.phases)
-        self.assertEqual("PARTIAL", contract.action("CAPTIONS").capability_status)
-        self.assertFalse(contract.action("CAPTIONS").executable)
+        self.assertEqual("VALIDATED", contract.action("CAPTIONS").capability_status)
+        self.assertTrue(contract.action("CAPTIONS").executable)
         self.assertEqual("CAP_VERTICAL_SOCIAL", contract.action("CUT").required_capability)
         self.assertTrue(contract.action("CUT").executable)
         self.assertTrue(contract.action("REFRAME").executable)
         self.assertTrue(contract.action("B_ROLL_PROVIDED").executable)
+        self.assertTrue(contract.action("MUSIC_DUCK").executable)
+        self.assertTrue(contract.action("GRAPHIC").executable)
+        self.assertTrue(contract.action("CTA").executable)
         self.assertFalse(contract.action("B_ROLL_GENERATED").executable)
 
     def test_loader_rejects_unknown_key_and_duplicate_action(self):
@@ -79,10 +82,10 @@ class VerticalSocialContractTests(unittest.TestCase):
             module.validate_action_request(
                 contract, {"action_id": "a1", "type": "CAPTIONS", "phase": "POST_LOCK"}, False
             )
-        with self.assertRaisesRegex(Exception, "non validata"):
-            module.validate_action_request(
-                contract, {"action_id": "a1", "type": "CAPTIONS", "phase": "POST_LOCK"}, True
-            )
+        caption = module.validate_action_request(
+            contract, {"action_id": "a1", "type": "CAPTIONS", "phase": "POST_LOCK"}, True
+        )
+        self.assertTrue(caption.executable)
 
     def test_config_keeps_vertical_social_state_local_and_disabled(self):
         from bridge.config import load_config

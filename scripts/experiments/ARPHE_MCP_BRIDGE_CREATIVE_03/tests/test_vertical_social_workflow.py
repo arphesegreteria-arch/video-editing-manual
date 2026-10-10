@@ -41,28 +41,55 @@ class VerticalSocialWorkflowTests(unittest.TestCase):
             )
             self.assertEqual("APPROVED", approved.state)
 
-    def test_picture_lock_blocks_caption_without_validated_capability_and_resume_is_local(self):
+    def test_picture_lock_blocks_caption_until_locked_and_resume_is_local(self):
         module = self._module()
         with tempfile.TemporaryDirectory() as raw_root:
             path = Path(raw_root) / "plans.json"
             prepared = module.prepare_vertical_social_plan(
                 path, "PC_PERSONALE", {"project": "ARPHE", "timeline": "ADV_V1", "fps": "30",
-                                           "total_frames": 60},
+                                       "total_frames": 60, "locked_edit_fingerprint": "a" * 64},
                 [
                     {"action_id": "cut-1", "type": "CUT", "phase": "PROVISIONAL_EDIT"},
-                    {"action_id": "caption-1", "type": "CAPTIONS", "phase": "POST_LOCK"},
+                    {"action_id": "caption-1", "type": "CAPTIONS", "phase": "POST_LOCK",
+                     "state": "APPROVED", "locked_edit_fingerprint": "a" * 64,
+                     "reason": "caption approvate", "cues": [
+                         {"cue_id": "c1", "start_frame": 0, "end_frame": 30,
+                          "text": "Testo", "position": "LOWER"}]},
                 ],
             )
             approved = module.approve_vertical_social_plan(path, "PC_PERSONALE", prepared.plan_id, prepared.fingerprint)
             with self.assertRaisesRegex(Exception, "picture lock"):
                 module.advance_vertical_social_action(path, "PC_PERSONALE", approved.plan_id, "caption-1", "APPLIED", {})
-            locked = module.mark_vertical_social_picture_lock(path, "PC_PERSONALE", approved.plan_id)
-            with self.assertRaisesRegex(Exception, "non validata"):
+            locked = module.mark_vertical_social_picture_lock(
+                path, "PC_PERSONALE", approved.plan_id, "a" * 64)
+            with self.assertRaisesRegex(Exception, "esecutore dedicato"):
                 module.advance_vertical_social_action(path, "PC_PERSONALE", locked.plan_id, "caption-1", "APPLIED", {})
             blocked = module.advance_vertical_social_action(
                 path, "PC_PERSONALE", locked.plan_id, "cut-1", "BLOCKED", {"reason": "edit decision"}
             )
             self.assertEqual("cut-1", module.inspect_vertical_social_plan(path, "PC_PERSONALE", blocked.plan_id)["next_action"])
+
+    def test_picture_lock_records_exact_edit_fingerprint_for_pending_captions(self):
+        module = self._module()
+        with tempfile.TemporaryDirectory() as raw_root:
+            path = Path(raw_root) / "plans.json"
+            prepared = module.prepare_vertical_social_plan(
+                path, "PC_PERSONALE",
+                {"project": "ARPHE", "timeline": "ADV_V1", "fps": "30", "total_frames": 60},
+                [{"action_id": "caption-1", "type": "CAPTIONS", "phase": "POST_LOCK",
+                  "state": "APPROVED", "locked_edit_fingerprint": "AT_PICTURE_LOCK",
+                  "reason": "caption approvate", "cues": [
+                      {"cue_id": "c1", "start_frame": 0, "end_frame": 30,
+                       "text": "Testo", "position": "LOWER"}]}],
+            )
+            module.approve_vertical_social_plan(
+                path, "PC_PERSONALE", prepared.plan_id, prepared.fingerprint)
+            locked = module.mark_vertical_social_picture_lock(
+                path, "PC_PERSONALE", prepared.plan_id, "b" * 64)
+            inspected = module.inspect_vertical_social_plan(
+                path, "PC_PERSONALE", locked.plan_id)
+            self.assertTrue(inspected["picture_locked"])
+            self.assertEqual("b" * 64, inspected["locked_edit_fingerprint"])
 
     def test_execution_lookup_requires_exact_approved_fingerprint(self):
         module = self._module()
@@ -173,7 +200,7 @@ class VerticalSocialWorkflowTests(unittest.TestCase):
             self.assertIn("final_check", inspected)
             self.assertFalse(inspected["final_check"]["ready_for_human_review"])
 
-    def test_generic_advance_cannot_forge_unvalidated_graphic_execution(self):
+    def test_generic_advance_cannot_forge_graphic_execution(self):
         module = self._module()
         with tempfile.TemporaryDirectory() as raw_root:
             path = Path(raw_root) / "plans.json"
@@ -187,9 +214,21 @@ class VerticalSocialWorkflowTests(unittest.TestCase):
             )
             module.approve_vertical_social_plan(path, "PC_PERSONALE", prepared.plan_id,
                                                 prepared.fingerprint)
-            with self.assertRaisesRegex(Exception, "capability non validata"):
+            with self.assertRaisesRegex(Exception, "esecutore dedicato"):
                 module.advance_vertical_social_action(
                     path, "PC_PERSONALE", prepared.plan_id, "g", "APPLIED", {"claimed": True})
+
+    def test_prepare_validates_music_duck_against_exact_target_duration(self):
+        module = self._module()
+        with tempfile.TemporaryDirectory() as raw_root:
+            with self.assertRaisesRegex(Exception, "gain_db"):
+                module.prepare_vertical_social_plan(
+                    Path(raw_root) / "plans.json", "PC_PERSONALE",
+                    {"project": "ARPHE", "timeline": "ADV", "fps": "30", "total_frames": 60},
+                    [{"action_id": "m", "type": "MUSIC_DUCK", "phase": "PROVISIONAL_EDIT",
+                      "state": "APPROVED", "range": {"start_frame": 0, "end_frame": 60},
+                      "audio_track": 2, "gain_db": -80, "reason": "voce"}],
+                )
             
 
 if __name__ == "__main__":

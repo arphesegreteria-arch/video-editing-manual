@@ -157,21 +157,23 @@ aperto e `CAP_EDITORIAL_SELECTION=false` al termine.
 legata all'impronta → timeline provvisoria → autocontrollo → review umana. Le azioni sono
 semantiche e chiuse; richieste non supportate restano bloccate con un motivo, senza accesso
 arbitrario a Resolve. Caption e sottotitoli restano post-picture-lock e non vengono applicati
-finché la capability locale non è validata. Il contratto v2 separa `B_ROLL_PROVIDED` da
+finché non esiste un picture lock con impronta della timeline. Il contratto v5 separa `B_ROLL_PROVIDED` da
 `B_ROLL_GENERATED`: il primo usa soltanto file espliciti e allowlistati, il secondo resta bloccato
 finché non viene scelto e validato un provider generativo.
 
 Il flag `CAP_VERTICAL_SOCIAL` parte sempre `false`. Job, journal e prove restano locali alla
 workstation. Il ledger `validation/vertical-social-ledger.json` conserva gate indipendenti:
 `PC_PERSONALE=PENDING` e `PC_SEGRETERIA=PENDING` finché ciascun PC non supera la propria prova.
-Sul personale i sottogate nativi CUT, REFRAME e B-roll fornito sono PASS; questo non abilita né
-modifica Segreteria.
+Sul personale i sottogate nativi CUT, REFRAME, B-roll fornito, MUSIC_DUCK, GRAPHIC/CTA e CAPTIONS
+sono PASS; questo non abilita né modifica Segreteria.
 
 Grafiche e CTA sono opzionali: assenza nel piano significa zero scritture. Se richieste, il piano
-deve indicare range, testo, motivo e ruolo colore canonico del Graphic Kit. La validazione è
-attiva, mentre l'esecuzione Resolve resta chiusa fino al gate nativo specifico. Il tool
-`apply_vertical_social_action` esegue per ora soltanto REFRAME e `B_ROLL_PROVIDED` sulla timeline
-provvisoria posseduta dal piano, registra il read-back e ripristina sempre la timeline sorgente.
+deve indicare range, testo, motivo e ruolo colore canonico del Graphic Kit. Il tool
+`apply_vertical_social_action` esegue REFRAME, `B_ROLL_PROVIDED`, MUSIC_DUCK, GRAPHIC, CTA e
+CAPTIONS soltanto sulla timeline provvisoria posseduta dal piano, registra il read-back e
+ripristina sempre la timeline sorgente. CAPTIONS accetta nel piano il placeholder
+`AT_PICTURE_LOCK`: al lock il bridge calcola e conserva l'impronta reale della timeline; se il
+montaggio cambia prima dei sottotitoli, l'esecuzione si blocca senza scrivere.
 
 La segreteria deve ascoltare i marker e rispondere una volta sola, senza spostarli. Alessio o
 personale qualificato gestiscono failure, restore, overlay di apprendimento e soglie tecniche. Il

@@ -141,14 +141,16 @@ WRITE restano `PENDING` separatamente su ciascun PC.
 
 ## Shortform caption mobile — PARTIAL / render verificato
 
-## Vertical Social Assistant — contract v2 / rollout parziale controllato
+## Vertical Social Assistant — contract v5 / rollout parziale controllato
 
 Il contratto, il piano versionato, l'approvazione con impronta, il picture lock, il recupero
-locale e la superficie MCP chiusa sono implementati e testati. Il contratto v2 rende eseguibili
-CUT, REFRAME e B-roll fornito; il B-roll generato resta esplicitamente bloccato. Sul personale i
-tre sottogate nativi sono PASS su progetto sintetico. `CAP_VERTICAL_SOCIAL` resta disabilitato a
-fine prova e Segreteria non è stata toccata. GRAPHIC/CTA sono validati come richieste opzionali ma
-non ancora eseguibili; MUSIC_DUCK e CAPTIONS restano chiusi.
+locale e la superficie MCP chiusa sono implementati e testati. Il contratto v5 rende eseguibili
+CUT, REFRAME, B-roll fornito, MUSIC_DUCK, GRAPHIC, CTA e CAPTIONS; il B-roll generato resta
+esplicitamente bloccato. Sul personale i sottogate nativi sono PASS su progetto sintetico o
+timeline temporanee. GRAPHIC e CTA restano strettamente opzionali: se non compaiono nel piano non
+viene scritto nulla. CAPTIONS resta post-picture-lock e lega l'esecuzione all'impronta reale della
+timeline provvisoria, rifiutando modifiche successive al lock. `CAP_VERTICAL_SOCIAL` resta
+disabilitato a fine prova e Segreteria non è stata toccata.
 
 Sul `PC_PERSONALE` è stato completato un probe reale sulla timeline verticale
 `ARPHE_SHORTFORM_MASTER_V4`: creazione subtitle nativa, conversione logica in un unico layer

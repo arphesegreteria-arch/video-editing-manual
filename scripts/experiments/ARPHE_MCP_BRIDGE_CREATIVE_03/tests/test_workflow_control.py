@@ -152,6 +152,20 @@ class WorkflowControlTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "identità"):
             native_binding(job, replacement)
 
+    def test_vertical_plan_with_approved_action_is_executable_in_common_card(self):
+        from bridge.vertical_social_jobs import new_vertical_social_plan
+        native = new_vertical_social_plan(
+            workstation_id="PC_PERSONALE", target={"project": "ARPHE", "timeline": "MASTER"},
+            actions=[{"action_id": "cut-1", "type": "CUT", "phase": "PROVISIONAL_EDIT"}],
+        )
+        from bridge.vertical_social_jobs import plan_fingerprint
+        fingerprint = control_plan_fingerprint("PC_PERSONALE", "VERTICAL_SOCIAL", native.plan_id,
+                                               {"project_name": "ARPHE", "timeline_name": "MASTER"}, native)
+        job = new_workflow_job("PC_PERSONALE", "VERTICAL_SOCIAL", native.plan_id,
+                               {"project_name": "ARPHE", "timeline_name": "MASTER"}, fingerprint)
+        card = workflow_job_card(replace(job, approved_plan_fingerprint=fingerprint), native)
+        self.assertEqual("EXECUTE", card["next_safe_action"])
+
     def test_card_marks_changed_native_plan_stale(self):
         native = SimpleNamespace(workstation_id="PC_PERSONALE", state="REVIEWED",
                                  project_name="ARPHE", timeline_name="MASTER",

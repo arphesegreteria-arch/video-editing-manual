@@ -114,6 +114,16 @@ class WorkflowControlToolTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         close.assert_called_once_with("carabellese_1")
 
+    def test_native_dispatch_routes_blocked_podcast_to_guarded_resume(self):
+        job = SimpleNamespace(workflow_family="PODCAST_REELS", native_reference="editorial_1")
+        native = SimpleNamespace(state="BLOCKED", editorial_job_id="editorial_1",
+                                 review_fingerprint="b" * 64)
+        with patch("bridge.server.apply_podcast_reel_selection",
+                   return_value={"ok": True, "state": "VERIFIED"}) as apply:
+            result = server._dispatch_control_native(job, native)
+        self.assertTrue(result["ok"])
+        apply.assert_called_once_with("editorial_1", "b" * 64)
+
     def test_native_dispatch_routes_approved_branded_to_apply(self):
         job = SimpleNamespace(workflow_family="BRANDED_LONGFORM", native_reference="job-1")
         native = SimpleNamespace(state="APPROVED", job_id="job-1")

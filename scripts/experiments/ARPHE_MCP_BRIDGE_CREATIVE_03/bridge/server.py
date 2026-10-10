@@ -1447,7 +1447,7 @@ def _dispatch_control_native(job: Any, native: Any, config: Any = None) -> dict[
         if state == "MARKED":
             return {"ok": False, "state": state, "next_safe_action": "SUBMIT_REVIEW",
                     "error": "Serve la review completa prima dell'applicazione."}
-        if state in {"REVIEWED", "CUT", "FAILED_RECOVERABLE"}:
+        if state in {"REVIEWED", "CUT", "FAILED_RECOVERABLE", "BLOCKED"}:
             if not native.review_fingerprint:
                 return {"ok": False, "state": state, "next_safe_action": "SUBMIT_REVIEW",
                         "error": "Review fingerprint mancante."}
@@ -1459,7 +1459,7 @@ def _dispatch_control_native(job: Any, native: Any, config: Any = None) -> dict[
         if state == "MARKED":
             return {"ok": False, "state": state, "next_safe_action": "SUBMIT_REVIEW",
                     "error": "Serve la review completa prima dell'applicazione."}
-        if state in {"REVIEWED", "CHECKPOINTED", "APPLYING", "FAILED_RECOVERABLE"}:
+        if state in {"REVIEWED", "CHECKPOINTED", "APPLYING", "FAILED_RECOVERABLE", "BLOCKED"}:
             if not native.review_fingerprint:
                 return {"ok": False, "state": state, "next_safe_action": "SUBMIT_REVIEW",
                         "error": "Review fingerprint mancante."}

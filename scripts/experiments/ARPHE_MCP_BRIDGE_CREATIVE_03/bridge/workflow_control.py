@@ -88,6 +88,15 @@ def native_binding(job: WorkflowJob, native: object) -> dict[str, object]:
     if expected_source is not None and native_source != expected_source:
         raise ValidationError("sorgente nativa non corrispondente")
     state = str(getattr(native, "state", ""))
+    if job.workflow_family == "VERTICAL_SOCIAL":
+        actions = tuple(getattr(native, "actions", ()))
+        action_states = {str(getattr(action, "state", "")) for action in actions}
+        if "BLOCKED" in action_states:
+            state = "BLOCKED"
+        elif action_states & {"APPROVED", "APPLIED"}:
+            state = "APPROVED"
+        elif actions and action_states <= {"VERIFIED", "READY_FOR_REVIEW"}:
+            state = "VERIFIED"
     fingerprint = (getattr(native, "candidate_fingerprint", None) or getattr(native, "proposal_fingerprint", None)
                    or getattr(native, "source_fingerprint", None))
     return {"state": state, "fingerprint": fingerprint, "project_name": project, "timeline_name": timeline,

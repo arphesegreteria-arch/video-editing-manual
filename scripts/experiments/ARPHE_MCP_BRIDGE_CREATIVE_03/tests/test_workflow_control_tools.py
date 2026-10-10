@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bridge.config import DEFAULT_FLAGS  # noqa: E402
+from bridge.control_plane import WorkflowJobStore, new_workflow_job  # noqa: E402
 import bridge.server as server  # noqa: E402
 
 
@@ -59,6 +60,23 @@ class WorkflowControlToolTests(unittest.TestCase):
             "workflow_0123456789abcdef", "a" * 64, "SECRETARY")
         self.assertFalse(delivery["ok"])
         self.assertIn("CAP_WORKFLOW_CONTROL_PLANE", delivery["error"])
+
+    def test_delivery_rejects_non_hex_fingerprint(self):
+        with tempfile.TemporaryDirectory() as raw:
+            flags = dict(DEFAULT_FLAGS)
+            flags["CAP_WORKFLOW_CONTROL_PLANE"] = True
+            path = Path(raw) / "jobs.json"
+            job = new_workflow_job(
+                "PC_PERSONALE", "PODCAST_REELS", "editorial_1",
+                {"project_name": "ARPHE", "timeline_name": "MASTER"}, "a" * 64)
+            WorkflowJobStore(path, "PC_PERSONALE").create(job)
+            cfg = SimpleNamespace(workstation_id="PC_PERSONALE", flags=flags,
+                                  workflow_control_jobs_path=path)
+            with patch("bridge.server.load_config", return_value=cfg):
+                result = server.approve_workflow_delivery(
+                    job.workflow_job_id, "z" * 64, "SECRETARY")
+            self.assertFalse(result["ok"])
+            self.assertIn("non valida", result["error"])
 
     def test_inspect_job_is_read_only_and_approve_is_flag_gated(self):
         cfg = SimpleNamespace(workstation_id="PC_PERSONALE", flags=dict(DEFAULT_FLAGS),

@@ -14,7 +14,7 @@
   workflow nativi non espongono ancora.
 - Aggiunto `CAP_WORKFLOW_CONTROL_PLANE=false` per default: le scritture vengono rifiutate prima
   del runtime quando il flag è spento.
-- Test completi: Creative `479 PASS / 1 SKIP` ambientale, Windows `58 PASS / 1 SKIP` ambientale;
+- Test completi: Creative `480 PASS / 1 SKIP` ambientale, Windows `58 PASS / 1 SKIP` ambientale;
   isolamento workstation, fingerprint nativo, staleness, retry, dispatcher e profili coperti.
 - Il codice non installa, abilita o valida `PC_PERSONALE` o `PC_SEGRETERIA`; non tocca progetti
   Resolve aperti, Python o tunnel. I gate nativi restano separatamente `PENDING`.

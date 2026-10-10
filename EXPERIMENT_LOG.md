@@ -16,7 +16,7 @@ operazione riprendibile.
 - avanzamento multi-step e retry senza seconda esecuzione della stessa operazione: PASS;
 - input umano mancante e target Resolve cambiato bloccano prima della write: PASS;
 - delivery comune priva di contratto nativo: `not_available`, senza falso positivo;
-- suite Creative: `479 PASS / 1 SKIP` symlink ambientale;
+- suite Creative: `480 PASS / 1 SKIP` symlink ambientale;
 - suite Windows: `58 PASS / 1 SKIP` DPAPI ambientale;
 - entrambi i profili mantengono `CAP_WORKFLOW_CONTROL_PLANE=false`.
 

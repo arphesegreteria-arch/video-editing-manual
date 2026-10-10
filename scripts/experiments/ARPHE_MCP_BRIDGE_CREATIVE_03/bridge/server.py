@@ -1544,7 +1544,8 @@ def approve_workflow_delivery(workflow_job_id: str, approved_delivery_fingerprin
         config = load_config()
         _require_control_plane(config)
         job = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id).get(workflow_job_id)
-        if not operator_role.strip() or len(approved_delivery_fingerprint) != 64:
+        if (not operator_role.strip() or len(approved_delivery_fingerprint) != 64
+                or any(char not in "0123456789abcdef" for char in approved_delivery_fingerprint)):
             raise ValidationError("Approvazione delivery non valida")
         return {"ok": False, "workflow_job_id": job.workflow_job_id, "stage": "delivery",
                 "status": "not_available",

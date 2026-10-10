@@ -16,7 +16,7 @@ esatta del piano nativo. Se review o proposta cambiano dopo l'approvazione, il j
 operazione; input umani mancanti restano espliciti. La delivery comune non viene simulata: resta
 `not_available` finché il workflow nativo non espone un contratto di consegna verificata.
 
-Evidenza automatica: Creative `479 PASS / 1 SKIP` ambientale symlink; Windows `58 PASS / 1 SKIP`
+Evidenza automatica: Creative `480 PASS / 1 SKIP` ambientale symlink; Windows `58 PASS / 1 SKIP`
 ambientale DPAPI; `git diff --check` PASS. `CAP_WORKFLOW_CONTROL_PLANE=false` nei default e in
 entrambi i profili. Nessuna installazione, abilitazione o prova Resolve nativa è stata eseguita:
 `PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING` e non toccato. Procedura:

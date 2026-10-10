@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import multiprocessing
 from pathlib import Path
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +15,24 @@ sys.path.insert(0, str(ROOT))
 
 from bridge.control_plane import (WorkflowJobStore, approve_workflow_job, new_workflow_job)  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
+
+
+def _create_delayed_job_in_process(path_text: str, native_reference: str, fingerprint: str,
+                                   start: object, output: object) -> None:
+    """Spawn-safe helper: force a read/write overlap unless the registry locks cross-process."""
+    store = WorkflowJobStore(Path(path_text), "PC_PERSONALE")
+    original_read = store._read
+
+    def delayed_read():
+        data = original_read()
+        time.sleep(0.15)
+        return data
+
+    store._read = delayed_read  # type: ignore[method-assign]
+    start.wait(5)
+    job = new_workflow_job("PC_PERSONALE", "PODCAST_REELS", native_reference,
+                           {"project_name": "ARPHE", "timeline_name": "MASTER"}, fingerprint)
+    output.put(store.create(job).workflow_job_id)
 
 
 class ControlPlaneTests(unittest.TestCase):
@@ -90,6 +110,29 @@ class ControlPlaneTests(unittest.TestCase):
             self.assertEqual({first.workflow_job_id, second.workflow_job_id}, {
                 job.workflow_job_id for job in WorkflowJobStore(path, "PC_PERSONALE").active()
             })
+
+    def test_independent_processes_preserve_both_jobs(self):
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "jobs.json"
+            context = multiprocessing.get_context("spawn")
+            start, output = context.Event(), context.Queue()
+            processes = [
+                context.Process(target=_create_delayed_job_in_process,
+                                args=(str(path), native_reference, fingerprint, start, output))
+                for native_reference, fingerprint in (
+                    ("editorial_process_one", "a" * 64),
+                    ("editorial_process_two", "b" * 64),
+                )
+            ]
+            for process in processes:
+                process.start()
+            start.set()
+            for process in processes:
+                process.join(10)
+                self.assertEqual(0, process.exitcode)
+            created_ids = {output.get(timeout=2), output.get(timeout=2)}
+            self.assertEqual(2, len(created_ids))
+            self.assertEqual(2, len(WorkflowJobStore(path, "PC_PERSONALE").active()))
 
 
 if __name__ == "__main__":

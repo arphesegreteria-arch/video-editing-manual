@@ -79,13 +79,14 @@ def native_binding(job: WorkflowJob, native: object) -> dict[str, object]:
                 or (getattr(native, "target", {}) or {}).get("timeline"))
     if project != job.target.get("project_name") or timeline != job.target.get("timeline_name"):
         raise ValidationError("target nativo non corrispondente")
-    native_identity = getattr(native, "timeline_identity", None)
+    native_target = getattr(native, "target", {}) or {}
+    native_identity = getattr(native, "timeline_identity", None) or native_target.get("timeline_identity")
     expected_identity = job.target.get("timeline_identity")
-    if expected_identity is not None and native_identity != expected_identity:
+    if native_identity is not None and expected_identity is not None and native_identity != expected_identity:
         raise ValidationError("identità timeline nativa non corrispondente")
-    native_source = getattr(native, "source_fingerprint", None)
+    native_source = getattr(native, "source_fingerprint", None) or native_target.get("source_fingerprint")
     expected_source = job.target.get("source_fingerprint")
-    if expected_source is not None and native_source != expected_source:
+    if native_source is not None and expected_source is not None and native_source != expected_source:
         raise ValidationError("sorgente nativa non corrispondente")
     state = str(getattr(native, "state", ""))
     if job.workflow_family == "VERTICAL_SOCIAL":

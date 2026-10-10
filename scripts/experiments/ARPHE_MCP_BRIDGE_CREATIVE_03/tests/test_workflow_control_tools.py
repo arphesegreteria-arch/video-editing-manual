@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bridge.config import DEFAULT_FLAGS  # noqa: E402
-from bridge.control_plane import WorkflowJobStore, new_workflow_job  # noqa: E402
+from bridge.control_plane import WorkflowJobStore, approve_workflow_job, new_workflow_job  # noqa: E402
 import bridge.server as server  # noqa: E402
 
 
@@ -25,6 +25,7 @@ class WorkflowControlToolTests(unittest.TestCase):
             target = {"project_name": "ARPHE", "timeline_name": "MASTER"}
             native = SimpleNamespace(workstation_id="PC_PERSONALE", state="REVIEWED",
                                      project_name="ARPHE", timeline_name="MASTER",
+                                     timeline_identity="resolve:master-1",
                                      candidate_fingerprint="b" * 64, review_fingerprint="c" * 64)
             with patch("bridge.server.load_config", return_value=cfg), \
                  patch("bridge.server.load_native_binding", return_value=native):
@@ -37,6 +38,63 @@ class WorkflowControlToolTests(unittest.TestCase):
             self.assertEqual(first["workflow_job_id"], same["workflow_job_id"])
             self.assertNotEqual(first["plan_fingerprint"], changed["plan_fingerprint"])
             self.assertNotEqual(first["workflow_job_id"], changed["workflow_job_id"])
+
+    def test_prepare_vertical_binds_live_timeline_identity_and_source(self):
+        """A same-name source replacement must not be executable through the envelope."""
+        from bridge.vertical_social_jobs import new_vertical_social_plan
+        with tempfile.TemporaryDirectory() as raw:
+            flags = dict(DEFAULT_FLAGS)
+            flags["CAP_WORKFLOW_CONTROL_PLANE"] = True
+            cfg = SimpleNamespace(workstation_id="PC_PERSONALE", flags=flags,
+                                  workflow_control_jobs_path=Path(raw) / "jobs.json")
+            native = new_vertical_social_plan(
+                workstation_id="PC_PERSONALE",
+                target={"project": "ARPHE", "timeline": "MASTER"},
+                actions=[{"action_id": "cut-1", "type": "CUT", "phase": "PROVISIONAL_EDIT"}],
+            )
+            project = SimpleNamespace(GetName=lambda: "ARPHE")
+            timeline = SimpleNamespace(GetName=lambda: "MASTER")
+            with patch("bridge.server.load_config", return_value=cfg), \
+                 patch("bridge.server.load_native_binding", return_value=native), \
+                 patch("bridge.server._runtime", return_value=(None, None, project, timeline, cfg, None, None)), \
+                 patch("bridge.server.editorial_timeline_identity", return_value="resolve:source-1"), \
+                 patch("bridge.server.vertical_social_timeline_fingerprint", return_value="a" * 64):
+                result = server.prepare_workflow_job(
+                    "VERTICAL_SOCIAL", native.plan_id,
+                    {"project_name": "ARPHE", "timeline_name": "MASTER"})
+            self.assertTrue(result["ok"])
+            job = WorkflowJobStore(cfg.workflow_control_jobs_path, "PC_PERSONALE").get(
+                result["workflow_job_id"])
+            self.assertEqual("resolve:source-1", job.target["timeline_identity"])
+            self.assertEqual("a" * 64, job.target["source_fingerprint"])
+
+    def test_advance_vertical_rejects_changed_source_before_dispatch(self):
+        with tempfile.TemporaryDirectory() as raw:
+            flags = dict(DEFAULT_FLAGS)
+            flags["CAP_WORKFLOW_CONTROL_PLANE"] = True
+            path = Path(raw) / "jobs.json"
+            initial = new_workflow_job(
+                "PC_PERSONALE", "VERTICAL_SOCIAL", "vertical_1",
+                {"project_name": "ARPHE", "timeline_name": "MASTER",
+                 "timeline_identity": "resolve:source-1", "source_fingerprint": "a" * 64},
+                "b" * 64)
+            store = WorkflowJobStore(path, "PC_PERSONALE")
+            approved = approve_workflow_job(
+                store, store.create(initial).workflow_job_id, "b" * 64, "SECRETARY")
+            cfg = SimpleNamespace(workstation_id="PC_PERSONALE", flags=flags,
+                                  workflow_control_jobs_path=path)
+            project = SimpleNamespace(GetName=lambda: "ARPHE")
+            timeline = SimpleNamespace(GetName=lambda: "MASTER")
+            with patch("bridge.server.load_config", return_value=cfg), \
+                 patch("bridge.server._runtime", return_value=(None, None, project, timeline, cfg, None, None)), \
+                 patch("bridge.server.editorial_timeline_identity", return_value="resolve:source-1"), \
+                 patch("bridge.server.vertical_social_timeline_fingerprint", return_value="c" * 64), \
+                 patch("bridge.server.load_native_binding", side_effect=AssertionError("must not dispatch")):
+                result = server.advance_workflow_job(
+                    approved.workflow_job_id, "b" * 64)
+            self.assertFalse(result["ok"])
+            self.assertEqual("target_revalidation", result["stage"])
+            self.assertIn("Contenuto sorgente", result["error"])
 
     def test_snapshot_is_useful_offline_and_performs_no_write(self):
         with tempfile.TemporaryDirectory() as raw:

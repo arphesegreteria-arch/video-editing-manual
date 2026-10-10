@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import tempfile
 import threading
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -26,13 +27,81 @@ ACTIVE_STATES = frozenset({"PROPOSED", "AWAITING_APPROVAL", "EXECUTING", "REVIEW
                            "DELIVERY_AWAITING_APPROVAL"})
 _PATH_LOCKS: dict[str, threading.RLock] = {}
 _PATH_LOCKS_GUARD = threading.Lock()
+_LOCK_TIMEOUT_SECONDS = 5.0
+_STALE_LOCK_SECONDS = 30.0
 
 
 def _path_lock(path: Path) -> threading.RLock:
-    """Return the process-local transaction lock for one profile-local registry."""
+    """Return the in-process half of a re-entrant registry transaction lock."""
     key = str(path.resolve())
     with _PATH_LOCKS_GUARD:
         return _PATH_LOCKS.setdefault(key, threading.RLock())
+
+
+class _RegistryLock:
+    """Serialize one registry across threads and independently started bridge processes."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._thread_lock = _path_lock(path)
+        self._local = threading.local()
+
+    def __enter__(self) -> "_RegistryLock":
+        self._thread_lock.acquire()
+        depth = int(getattr(self._local, "depth", 0))
+        if depth == 0:
+            self._acquire_file_lock()
+        self._local.depth = depth + 1
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        depth = int(getattr(self._local, "depth", 1)) - 1
+        self._local.depth = depth
+        try:
+            if depth == 0:
+                self._release_file_lock()
+        finally:
+            self._thread_lock.release()
+
+    @property
+    def _lock_path(self) -> Path:
+        return self.path.with_suffix(self.path.suffix + ".lock")
+
+    def _acquire_file_lock(self) -> None:
+        lock_path = self._lock_path
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        token = uuid4().hex
+        deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                descriptor = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+                    handle.write(token)
+                self._local.token = token
+                return
+            except FileExistsError:
+                try:
+                    age = time.time() - lock_path.stat().st_mtime
+                    if age > _STALE_LOCK_SECONDS:
+                        lock_path.unlink(missing_ok=True)
+                        continue
+                except OSError:
+                    continue
+                if time.monotonic() >= deadline:
+                    raise ValidationError("Registro control plane occupato da un altro processo")
+                time.sleep(0.02)
+
+    def _release_file_lock(self) -> None:
+        lock_path = self._lock_path
+        token = getattr(self._local, "token", None)
+        try:
+            if token and lock_path.read_text(encoding="ascii") == token:
+                lock_path.unlink(missing_ok=True)
+        except OSError:
+            # The atomic data write has completed; a later stale-lock recovery is safe.
+            pass
+        finally:
+            self._local.token = None
 
 
 def _now() -> str:
@@ -105,7 +174,7 @@ class WorkflowJobStore:
         if not WORKSTATION.fullmatch(workstation_id):
             raise ValidationError("workstation_id store non valido")
         self.path, self.workstation_id = path, workstation_id
-        self._lock = _path_lock(path)
+        self._lock = _RegistryLock(path)
         if path.is_file() and self._read()["workstation_id"] != workstation_id:
             raise ValidationError("Registro appartenente a un'altra workstation")
 

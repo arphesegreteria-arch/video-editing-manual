@@ -16,6 +16,11 @@ _REVIEW_STATES = {"MARKED", "REVIEWED", "VERIFIED", "CUT", "APPLYING", "CHECKPOI
 _RECOVERABLE = {"BLOCKED", "FAILED_RECOVERABLE"}
 
 
+def _fingerprint_payload(value: object) -> str:
+    raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def native_plan_fingerprint(workflow_family: str, native: object) -> str:
     """Return the immutable native content fingerprint that the operator approves."""
     if workflow_family == "PODCAST_REELS":
@@ -24,8 +29,15 @@ def native_plan_fingerprint(workflow_family: str, native: object) -> str:
         value = getattr(native, "review_fingerprint", None) or getattr(native, "proposal_fingerprint", None)
     elif workflow_family == "BRANDED_LONGFORM":
         card = getattr(native, "proposal_card", None)
-        value = card.get("fingerprint") if isinstance(card, dict) else None
-        value = value or getattr(native, "source_fingerprint", None)
+        proposal = card.get("fingerprint") if isinstance(card, dict) else None
+        approval = getattr(native, "approval", None)
+        value = _fingerprint_payload({
+            "proposal_fingerprint": proposal,
+            "approval": approval if isinstance(approval, dict) else None,
+            "source_fingerprint": getattr(native, "source_fingerprint", None),
+            "profile_fingerprint": getattr(native, "profile_fingerprint", None),
+            "original_timeline_fingerprint": getattr(native, "original_timeline_fingerprint", None),
+        }) if proposal else getattr(native, "source_fingerprint", None)
     elif workflow_family == "VERTICAL_SOCIAL":
         from .vertical_social_jobs import plan_fingerprint
         value = plan_fingerprint(native)
@@ -67,10 +79,19 @@ def native_binding(job: WorkflowJob, native: object) -> dict[str, object]:
                 or (getattr(native, "target", {}) or {}).get("timeline"))
     if project != job.target.get("project_name") or timeline != job.target.get("timeline_name"):
         raise ValidationError("target nativo non corrispondente")
+    native_identity = getattr(native, "timeline_identity", None)
+    expected_identity = job.target.get("timeline_identity")
+    if expected_identity is not None and native_identity != expected_identity:
+        raise ValidationError("identità timeline nativa non corrispondente")
+    native_source = getattr(native, "source_fingerprint", None)
+    expected_source = job.target.get("source_fingerprint")
+    if expected_source is not None and native_source != expected_source:
+        raise ValidationError("sorgente nativa non corrispondente")
     state = str(getattr(native, "state", ""))
     fingerprint = (getattr(native, "candidate_fingerprint", None) or getattr(native, "proposal_fingerprint", None)
                    or getattr(native, "source_fingerprint", None))
-    return {"state": state, "fingerprint": fingerprint, "project_name": project, "timeline_name": timeline}
+    return {"state": state, "fingerprint": fingerprint, "project_name": project, "timeline_name": timeline,
+            "timeline_identity": native_identity, "source_fingerprint": native_source}
 
 
 def next_safe_action(workflow_family: str, native_state: str, approved: bool) -> str:

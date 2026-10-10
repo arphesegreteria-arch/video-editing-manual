@@ -127,6 +127,31 @@ class WorkflowControlTests(unittest.TestCase):
             {"project_name": "ARPHE", "timeline_name": "MASTER"}, reviewed)
         self.assertNotEqual(before, after)
 
+    def test_branded_approval_change_invalidates_control_fingerprint(self):
+        before = SimpleNamespace(workstation_id="PC_PERSONALE", state="APPROVED",
+                                 project_name="ARPHE", original_timeline="MASTER",
+                                 source_fingerprint="a" * 64, profile_fingerprint="b" * 64,
+                                 proposal_card={"fingerprint": "c" * 64},
+                                 approval={"approved_ids": ["P001"], "modified": {}})
+        after = SimpleNamespace(**{**before.__dict__, "approval": {
+            "approved_ids": ["P002"], "modified": {"P002": "testo aggiornato"},
+        }})
+        target = {"project_name": "ARPHE", "timeline_name": "MASTER"}
+        self.assertNotEqual(
+            control_plan_fingerprint("PC_PERSONALE", "BRANDED_LONGFORM", "job-1", target, before),
+            control_plan_fingerprint("PC_PERSONALE", "BRANDED_LONGFORM", "job-1", target, after),
+        )
+
+    def test_native_binding_rejects_same_name_different_timeline_identity(self):
+        job = replace(self.job, target={
+            "project_name": "ARPHE", "timeline_name": "MASTER", "timeline_identity": "resolve:old",
+        })
+        replacement = SimpleNamespace(workstation_id="PC_PERSONALE", state="REVIEWED",
+                                      project_name="ARPHE", timeline_name="MASTER",
+                                      timeline_identity="resolve:replacement", candidate_fingerprint="b" * 64)
+        with self.assertRaisesRegex(ValidationError, "identità"):
+            native_binding(job, replacement)
+
     def test_card_marks_changed_native_plan_stale(self):
         native = SimpleNamespace(workstation_id="PC_PERSONALE", state="REVIEWED",
                                  project_name="ARPHE", timeline_name="MASTER",

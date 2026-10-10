@@ -19,6 +19,16 @@
 - Il codice non installa, abilita o valida `PC_PERSONALE` o `PC_SEGRETERIA`; non tocca progetti
   Resolve aperti, Python o tunnel. I gate nativi restano separatamente `PENDING`.
 
+### Addendum — gate personale parziale
+
+- Runtime personale aggiornato con hash dei file Control Plane uguali alla repository; segreto,
+  tunnel e flag persistente conservati.
+- Su progetto disposable Vertical Social: snapshot 30/30, approval fingerprint, blocco del target
+  errato e avanzamento del piano già verificato PASS; timeline iniziale ripristinata.
+- Flag acceso soltanto in config temporanea e rimosso a fine prova. La prova non copre ancora
+  interruption/resume nativo né delivery: `CAP_WORKFLOW_CONTROL_PLANE` resta `false` e `PENDING`.
+- `PC_SEGRETERIA` non è stata toccata.
+
 ## 2026-10-09 — Workflow Studio Carabellese YouTube cleanup
 
 - Aggiunto il flusso isolato trascrizione → proposte/marker → review con motivi → checkpoint DRT →

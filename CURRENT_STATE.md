@@ -22,6 +22,15 @@ entrambi i profili. Nessuna installazione, abilitazione o prova Resolve nativa �
 `PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING` e non toccato. Procedura:
 `docs/21_WORKFLOW_CONTROL_PLANE.md`.
 
+Gate nativo personale del 2026-10-10: **PARTIAL PASS** sul progetto disposable
+`ARPHE_VERTICAL_CUT_NATIVE_GATE_20261010B`. La card ha letto Resolve Studio 21.1.1.10,
+1080×1920 e 30/30; ha creato il job `workflow_1e1420861fdc4892`, vincolato al piano verticale
+già verificato e alla relativa impronta; ha bloccato il target diverso senza write e ha poi
+registrato correttamente l'avanzamento con target `SOURCE`. Timeline provvisoria iniziale
+ripristinata e flag reale nuovamente `false`. Mancano ancora una failure recuperabile/resume
+reale e una delivery nativa verificata: lo stato capability resta `PENDING`. `PC_SEGRETERIA`
+non è stata coinvolta.
+
 <a id="carabellese-youtube-cleanup"></a>
 ## Studio Carabellese YouTube cleanup — PC_PERSONALE LIVE PASS
 

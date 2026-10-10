@@ -26,6 +26,24 @@ Codice pronto per review e successivo gate isolato sul `PC_PERSONALE`. Non dichi
 nativo: nessun Resolve reale, runtime installato, task, tunnel o progetto aperto è stato toccato.
 `PC_PERSONALE=PENDING`; `PC_SEGRETERIA=PENDING` e resta separato.
 
+### Addendum — gate nativo PC_PERSONALE (2026-10-10)
+
+- runtime personale aggiornato preservando il segreto e confrontato con la repository: hash di
+  entrypoint, server, control plane, adapter e catalogo corrispondenti;
+- card read-only reale: Resolve Studio `21.1.1.10`, progetto disposable
+  `ARPHE_VERTICAL_CUT_NATIVE_GATE_20261010B`, timeline/progetto 1080×1920 a 30/30;
+- job `workflow_1e1420861fdc4892` preparato e approvato con impronta
+  `60ad11917d38aa5c628c64cf6b22413133e1879222d49c8f33d1ddf439b1d719`;
+- con timeline diversa il bridge ha restituito `target_revalidation` prima di ogni write;
+- con target `SOURCE` corretto ha registrato l'avanzamento di un piano Vertical Social già
+  verificato, senza rigenerare tagli; timeline provvisoria iniziale ripristinata;
+- il flag è stato attivato soltanto in una copia temporanea della config, poi rimossa; config
+  persistente `CAP_WORKFLOW_CONTROL_PLANE=false` e Segreteria non toccata.
+
+Esito: `PARTIAL PASS`. Non sono stati ancora provocati e recuperati una failure nativa né una
+delivery verificata; la capability rimane `PENDING` finché quei due casi non vengono provati su
+un target personale dedicato.
+
 ## 2026-10-09 — Studio Carabellese cleanup: gate nativo personale
 
 ### Ipotesi

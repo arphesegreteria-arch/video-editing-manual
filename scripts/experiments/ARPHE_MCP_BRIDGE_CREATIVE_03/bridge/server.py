@@ -1397,7 +1397,7 @@ def prepare_workflow_job(workflow_family: str, native_reference: str, target: di
         job = new_workflow_job(config.workstation_id, workflow_family, native_reference, target, fingerprint)
         native_binding(job, native)
         store = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id)
-        stored = store.find_binding(workflow_family, native_reference, target, fingerprint) or store.create(job)
+        stored = store.find_or_create_binding(job)
         return {"ok": True, "card_count": 1, "plan_fingerprint": stored.plan_fingerprint,
                 "idempotent": stored.workflow_job_id != job.workflow_job_id,
                 **workflow_job_card(stored, native)}

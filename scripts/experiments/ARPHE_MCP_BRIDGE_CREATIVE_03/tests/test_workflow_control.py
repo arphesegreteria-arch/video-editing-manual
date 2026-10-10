@@ -87,6 +87,30 @@ class WorkflowControlTests(unittest.TestCase):
             self.assertEqual(second, repeated)
             self.assertEqual([True], calls)
 
+    def test_interrupted_executing_job_becomes_recoverable_before_resume(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as raw:
+            store = WorkflowJobStore(Path(raw) / "jobs.json", "PC_PERSONALE")
+            job = approve_workflow_job(store, store.create(self.job).workflow_job_id, "a" * 64, "SECRETARY")
+            with self.assertRaises(KeyboardInterrupt):
+                advance_workflow_job(
+                    store, job.workflow_job_id, "a" * 64,
+                    lambda: (_ for _ in ()).throw(KeyboardInterrupt("process stopped")),
+                    operation_key="PODCAST_REELS:REVIEWED:EXECUTE",
+                )
+            recovered = advance_workflow_job(
+                store, job.workflow_job_id, "a" * 64,
+                lambda: self.fail("must not rerun while recovery is being recorded"),
+                operation_key="PODCAST_REELS:REVIEWED:EXECUTE",
+            )
+            self.assertEqual("FAILED_RECOVERABLE", recovered["state"])
+            resumed = advance_workflow_job(
+                store, job.workflow_job_id, "a" * 64,
+                lambda: {"native": "reconciled"},
+                operation_key="PODCAST_REELS:REVIEWED:EXECUTE",
+            )
+            self.assertEqual("REVIEW_READY", resumed["state"])
+
     def test_native_review_changes_control_plan_fingerprint(self):
         marked = SimpleNamespace(workstation_id="PC_PERSONALE", state="MARKED",
                                  project_name="ARPHE", timeline_name="MASTER",

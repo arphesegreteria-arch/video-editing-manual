@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import threading
 from typing import Any
 from uuid import uuid4
 
@@ -23,6 +24,15 @@ STATES = frozenset({"PROPOSED", "AWAITING_APPROVAL", "EXECUTING", "REVIEW_READY"
                     "FAILED_RECOVERABLE"})
 ACTIVE_STATES = frozenset({"PROPOSED", "AWAITING_APPROVAL", "EXECUTING", "REVIEW_READY",
                            "DELIVERY_AWAITING_APPROVAL"})
+_PATH_LOCKS: dict[str, threading.RLock] = {}
+_PATH_LOCKS_GUARD = threading.Lock()
+
+
+def _path_lock(path: Path) -> threading.RLock:
+    """Return the process-local transaction lock for one profile-local registry."""
+    key = str(path.resolve())
+    with _PATH_LOCKS_GUARD:
+        return _PATH_LOCKS.setdefault(key, threading.RLock())
 
 
 def _now() -> str:
@@ -95,6 +105,7 @@ class WorkflowJobStore:
         if not WORKSTATION.fullmatch(workstation_id):
             raise ValidationError("workstation_id store non valido")
         self.path, self.workstation_id = path, workstation_id
+        self._lock = _path_lock(path)
         if path.is_file() and self._read()["workstation_id"] != workstation_id:
             raise ValidationError("Registro appartenente a un'altra workstation")
 
@@ -134,52 +145,65 @@ class WorkflowJobStore:
         return job
 
     def create(self, job: WorkflowJob) -> WorkflowJob:
-        _validate(job)
-        if job.workstation_id != self.workstation_id:
-            raise ValidationError("Job di un'altra workstation")
-        data = self._read()
-        raw = data["jobs"].get(job.workflow_job_id)
-        if raw is not None:
-            existing = self._decode(raw)
-            if existing != job:
-                raise ValidationError("job_id esistente con contenuto differente")
-            return existing
-        data["jobs"][job.workflow_job_id] = asdict(job)
-        self._save(data)
-        return job
+        with self._lock:
+            _validate(job)
+            if job.workstation_id != self.workstation_id:
+                raise ValidationError("Job di un'altra workstation")
+            data = self._read()
+            raw = data["jobs"].get(job.workflow_job_id)
+            if raw is not None:
+                existing = self._decode(raw)
+                if existing != job:
+                    raise ValidationError("job_id esistente con contenuto differente")
+                return existing
+            data["jobs"][job.workflow_job_id] = asdict(job)
+            self._save(data)
+            return job
 
     def get(self, workflow_job_id: str) -> WorkflowJob:
-        raw = self._read()["jobs"].get(workflow_job_id)
-        if raw is None:
-            raise ValidationError("Workflow job sconosciuto")
-        return self._decode(raw)
+        with self._lock:
+            raw = self._read()["jobs"].get(workflow_job_id)
+            if raw is None:
+                raise ValidationError("Workflow job sconosciuto")
+            return self._decode(raw)
 
     def active(self) -> tuple[WorkflowJob, ...]:
-        jobs = tuple(self._decode(raw) for raw in self._read()["jobs"].values())
-        return tuple(sorted((job for job in jobs if job.state not in {"CLOSED", "STALE"}),
-                            key=lambda job: (job.updated_at, job.workflow_job_id), reverse=True))
+        with self._lock:
+            jobs = tuple(self._decode(raw) for raw in self._read()["jobs"].values())
+            return tuple(sorted((job for job in jobs if job.state not in {"CLOSED", "STALE"}),
+                                key=lambda job: (job.updated_at, job.workflow_job_id), reverse=True))
 
     def find_binding(self, workflow_family: str, native_reference: str,
                      target: dict[str, object], plan_fingerprint: str) -> WorkflowJob | None:
-        for job in self.active():
-            if (job.workflow_family == workflow_family and job.native_reference == native_reference
-                    and job.target == target and job.plan_fingerprint == plan_fingerprint):
-                return job
-        return None
+        with self._lock:
+            for job in self.active():
+                if (job.workflow_family == workflow_family and job.native_reference == native_reference
+                        and job.target == target and job.plan_fingerprint == plan_fingerprint):
+                    return job
+            return None
+
+    def find_or_create_binding(self, job: WorkflowJob) -> WorkflowJob:
+        """Atomically return an equivalent envelope or persist this new one."""
+        with self._lock:
+            existing = self.find_binding(
+                job.workflow_family, job.native_reference, job.target, job.plan_fingerprint,
+            )
+            return existing if existing is not None else self.create(job)
 
     def save(self, job: WorkflowJob, expected_revision: int) -> WorkflowJob:
-        current = self.get(job.workflow_job_id)
-        if current.revision != expected_revision:
-            raise ValidationError("revision workflow job stale")
-        immutable = ("workflow_job_id", "workstation_id", "workflow_family", "native_reference", "target", "plan_fingerprint", "created_at")
-        if any(getattr(current, field) != getattr(job, field) for field in immutable):
-            raise ValidationError("Identità immutabile del workflow job modificata")
-        saved = replace(job, revision=current.revision + 1, updated_at=_now())
-        _validate(saved)
-        data = self._read()
-        data["jobs"][saved.workflow_job_id] = asdict(saved)
-        self._save(data)
-        return saved
+        with self._lock:
+            current = self.get(job.workflow_job_id)
+            if current.revision != expected_revision:
+                raise ValidationError("revision workflow job stale")
+            immutable = ("workflow_job_id", "workstation_id", "workflow_family", "native_reference", "target", "plan_fingerprint", "created_at")
+            if any(getattr(current, field) != getattr(job, field) for field in immutable):
+                raise ValidationError("Identità immutabile del workflow job modificata")
+            saved = replace(job, revision=current.revision + 1, updated_at=_now())
+            _validate(saved)
+            data = self._read()
+            data["jobs"][saved.workflow_job_id] = asdict(saved)
+            self._save(data)
+            return saved
 
 
 def approve_workflow_job(store: WorkflowJobStore, workflow_job_id: str, plan_fingerprint: str,

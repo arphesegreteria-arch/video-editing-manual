@@ -119,6 +119,15 @@ def advance_workflow_job(store: WorkflowJobStore, workflow_job_id: str,
     job = store.get(workflow_job_id)
     if job.approved_plan_fingerprint != approved_plan_fingerprint:
         raise ValidationError("approvazione del piano non corrispondente")
+    if job.state == "EXECUTING":
+        recovered = transition_workflow_job(
+            store, job.workflow_job_id, job.revision, "FAILED_RECOVERABLE",
+            {"_operation_key": job.evidence.get("_operation_key"),
+             "recovery": "interrupted_execution_requires_native_reconciliation"},
+            "AWAITING_APPROVAL",
+        )
+        return {"workflow_job_id": recovered.workflow_job_id, "state": recovered.state,
+                "next_safe_action": "RESUME", "evidence": dict(recovered.evidence)}
     recorded_key = job.evidence.get("_operation_key")
     if job.state == "CLOSED" or (job.state in {"REVIEW_READY", "DELIVERY_AWAITING_APPROVAL"}
                                  and operation_key is None) or (
@@ -129,7 +138,8 @@ def advance_workflow_job(store: WorkflowJobStore, workflow_job_id: str,
     if job.state not in {"AWAITING_APPROVAL", "REVIEW_READY", "DELIVERY_AWAITING_APPROVAL",
                           "FAILED_RECOVERABLE", "BLOCKED"}:
         raise ValidationError("avanzamento non consentito nello stato corrente")
-    executing = transition_workflow_job(store, job.workflow_job_id, job.revision, "EXECUTING", {}, None)
+    claim = {"_operation_key": operation_key} if operation_key is not None else {}
+    executing = transition_workflow_job(store, job.workflow_job_id, job.revision, "EXECUTING", claim, None)
     try:
         if not callable(delegate):
             raise ValidationError("delegate workflow non valido")

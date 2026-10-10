@@ -4,7 +4,9 @@ from dataclasses import replace
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -58,6 +60,36 @@ class ControlPlaneTests(unittest.TestCase):
             found = store.find_binding("PODCAST_REELS", job.native_reference, job.target, job.plan_fingerprint)
             self.assertEqual(job.workflow_job_id, found.workflow_job_id)
             self.assertEqual([job.workflow_job_id], [item.workflow_job_id for item in store.active()])
+
+    def test_concurrent_binding_creation_preserves_both_jobs(self):
+        """A second MCP worker cannot replace an unrelated job's registry update."""
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "jobs.json"
+            first = new_workflow_job("PC_PERSONALE", "PODCAST_REELS", "editorial_first",
+                                     {"project_name": "ARPHE", "timeline_name": "MASTER"}, "a" * 64)
+            second = new_workflow_job("PC_PERSONALE", "PODCAST_REELS", "editorial_second",
+                                      {"project_name": "ARPHE", "timeline_name": "MASTER"}, "b" * 64)
+            entered = threading.Event()
+            original_read = WorkflowJobStore._read
+
+            def delayed_first_read(store):
+                data = original_read(store)
+                if not entered.is_set():
+                    entered.set()
+                    threading.Event().wait(0.15)
+                return data
+
+            results = []
+            with patch.object(WorkflowJobStore, "_read", delayed_first_read):
+                threads = [threading.Thread(target=lambda job=job: results.append(
+                    WorkflowJobStore(path, "PC_PERSONALE").create(job)
+                )) for job in (first, second)]
+                for thread in threads: thread.start()
+                for thread in threads: thread.join()
+            self.assertEqual(2, len(results))
+            self.assertEqual({first.workflow_job_id, second.workflow_job_id}, {
+                job.workflow_job_id for job in WorkflowJobStore(path, "PC_PERSONALE").active()
+            })
 
 
 if __name__ == "__main__":

@@ -15,10 +15,16 @@
   nativi; il nome della timeline provvisoria usa l'ID completo del piano.
 - Tutte le API pubbliche di cambio progetto/timeline rilevate dalla review sono serializzate con il
   lock Resolve. L'installer include anche il contratto longform brandizzato.
-- Regressioni: Creative `490 PASS / 1 SKIP` ambientale e Windows `58 PASS / 1 SKIP` ambientale.
+- Regressioni: Creative `491 PASS / 1 SKIP` ambientale e Windows `58 PASS / 1 SKIP` ambientale.
   Il nuovo test multiprocessing riproduce la race precedente con due processi reali.
-- Questa è evidenza automatica sulla branch isolata, non un nuovo gate nativo: flag persistente
-  spento, `PC_PERSONALE` da riallineare e `PC_SEGRETERIA` ancora intatta e `PENDING`.
+- L'installer migra esplicitamente `CAP_WORKFLOW_CONTROL_PLANE=false` nei config esistenti e
+  conserva qualunque valore già presente.
+- Corretto inoltre il selettore timeline: riconosce solo timeline provvisorie Vertical Social
+  ricostruibili da un piano locale della stessa workstation e progetto; non amplia la regola a
+  nomi arbitrari con prefisso `__ARPHE_`.
+- Il gate di riesame personale è PASS su progetto disposable: target errato bloccato, binding,
+  approval e advance corretti, timeline iniziale ripristinata. Flag e allowlist persistenti restano
+  spenti; `PC_SEGRETERIA` ancora intatta e `PENDING`.
 
 - Aggiunti registro locale atomico e card unica di controllo workstation/Resolve, con FPS timeline
   e playback distinti, capability e lavori attivi.

@@ -68,6 +68,20 @@ perché nessun workflow nativo espone ancora una prova verificata; `PC_SEGRETERI
 Decisione: il codice hardening deve essere riallineato e sottoposto a un nuovo gate isolato su
 `PC_PERSONALE` prima di qualsiasi rollout. Non è stato installato né provato su `PC_SEGRETERIA`.
 
+### Completamento gate hardening PC_PERSONALE
+
+- runtime aggiornato con gli hash Control Plane e selettore timeline corrispondenti alla branch;
+  `/readyz=ready`, task personale attivo, restart count 0;
+- sul progetto disposable `ARPHE_VERTICAL_CUT_NATIVE_GATE_20261010B`, timeline provvisoria
+  iniziale, il target `SOURCE` ha dato `target_revalidation` senza write;
+- `SOURCE` è stata ammessa soltanto nella config in memoria del gate; prepare, approval e advance
+  del piano Vertical già verificato sono PASS con stato `REVIEW_READY`, senza nuovi cut;
+- restore della timeline provvisoria PASS. A fine processo il flag persistente Control Plane è
+  `false` e `SOURCE` non compare nelle allowlist persistenti.
+
+Decisione aggiornata: hardening validato su `PC_PERSONALE` nel perimetro già supportato.
+`PC_SEGRETERIA` resta non letta, non installata e `PENDING` per rollout autonomo futuro.
+
 ## 2026-10-09 — Studio Carabellese cleanup: gate nativo personale
 
 ### Ipotesi

@@ -19,7 +19,7 @@ espliciti. La delivery comune non viene simulata: resta `not_available` finché 
 non espone un contratto di consegna verificata.
 
 Il registro è serializzato sia fra thread sia fra processi indipendenti, con file lock locale e
-recovery prudente di un lock ormai inattivo. Evidenza automatica: Creative `490 PASS / 1 SKIP`
+recovery prudente di un lock ormai inattivo. Evidenza automatica: Creative `491 PASS / 1 SKIP`
 ambientale symlink; Windows `58 PASS / 1 SKIP` ambientale DPAPI; `git diff --check` PASS.
 `CAP_WORKFLOW_CONTROL_PLANE=false` nei default e in
 entrambi i profili. Procedura: `docs/21_WORKFLOW_CONTROL_PLANE.md`.
@@ -34,6 +34,14 @@ Vertical Social spento, poi resume riuscito sullo stesso piano: due CUT verifica
 timeline provvisoria posseduta. Timeline iniziale ripristinata e flag reali nuovamente `false`.
 La delivery comune resta correttamente `not_available` finché un workflow nativo non ne espone
 una prova verificata; non è un PASS fittizio. `PC_SEGRETERIA=PENDING` e non è stata coinvolta.
+
+Riesame hardening del 2026-10-10: **PASS** sullo stesso progetto disposable, usando flag e
+allowlist esclusivamente in memoria. Con timeline provvisoria aperta il Control Plane ha bloccato
+il target `SOURCE` prima di una write; sulla `SOURCE` corretta ha creato/bindato il job,
+registrato approvazione e avanzamento `REVIEW_READY`, quindi ha ripristinato la timeline
+provvisoria. Nessun nuovo cut è stato generato. La config persistente conserva
+`CAP_WORKFLOW_CONTROL_PLANE=false` e non aggiunge `SOURCE` alle allowlist; `PC_SEGRETERIA` non è
+stata letta né toccata.
 
 <a id="carabellese-youtube-cleanup"></a>
 ## Studio Carabellese YouTube cleanup — PC_PERSONALE LIVE PASS

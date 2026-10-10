@@ -1,5 +1,60 @@
 # EXPERIMENT LOG
 
+## 2026-10-10 — Workflow Control Plane: verifica automatica completa
+
+### Ipotesi
+
+Una card comune può coordinare i quattro workflow esistenti senza duplicarne la logica, purché
+ogni esecuzione resti vincolata al target Resolve, all'impronta nativa approvata e a una singola
+operazione riprendibile.
+
+### Risultato automatico
+
+- snapshot offline e registro locale per-workstation: PASS;
+- binding ai quattro registri nativi e dispatcher verso primitive tipizzate: PASS;
+- piano identico idempotente; review/proposta cambiata dopo l'approvazione -> `STALE`: PASS;
+- avanzamento multi-step e retry senza seconda esecuzione della stessa operazione: PASS;
+- input umano mancante e target Resolve cambiato bloccano prima della write: PASS;
+- delivery comune priva di contratto nativo: `not_available`, senza falso positivo;
+- suite Creative: `480 PASS / 1 SKIP` symlink ambientale;
+- suite Windows: `58 PASS / 1 SKIP` DPAPI ambientale;
+- entrambi i profili mantengono `CAP_WORKFLOW_CONTROL_PLANE=false`.
+
+### Decisione
+
+Codice pronto per review e successivo gate isolato sul `PC_PERSONALE`. Non dichiarare un PASS
+nativo: nessun Resolve reale, runtime installato, task, tunnel o progetto aperto è stato toccato.
+`PC_PERSONALE=PENDING`; `PC_SEGRETERIA=PENDING` e resta separato.
+
+## 2026-10-09 — Studio Carabellese cleanup: gate nativo personale
+
+### Ipotesi
+
+Il flusso a timeline unica può applicare una pulizia moderata e riprendibile su Resolve reale,
+con review completa prima dei tagli e checkpoint `.drt` verificato prima di ogni write distruttiva.
+
+### Risultato
+
+- suite complete: bridge `362 PASS / 1 SKIP`, Windows `58 PASS / 1 SKIP`, validatore e diff PASS;
+- probe e gate nativo `PC_PERSONALE`: PASS con 6 candidati, inclusi 2 intervalli pausa;
+- failure di staging provocata prima della rimozione originale, restore DRT e seconda applicazione:
+  PASS; una sola timeline finale e marker estraneo conservato;
+- emerse e corrette differenze dell'API reale: oggetti wrapper distinti, import DRT che ignora il
+  nome richiesto e eredita il playback 30 dal progetto, `endFrame` esclusivo e revisione job stale
+  in caso di fallimento della verifica finale;
+- progetto originario riaperto esattamente, progetto/file sintetici eliminati, 62 file installati
+  con hash uguale alla repository, runtime personale `Running` e `/readyz=ready`;
+- round-trip del flag PASS; valore finale `CAP_CARABELLESE_CLEANUP=false`.
+- review integrale: binding A/V pubblico con wrapper distinti, rollback della promozione DRT e
+  replay idempotenti di review/recovery coperti da regressioni; gate nativo ripetuto PASS.
+
+### Decisione
+
+Promuovere `PC_PERSONALE` a `VALIDATED`, lasciando la capability spenta fino al primo uso
+deliberato. Non trasferire l'esito a `PC_SEGRETERIA`: resta `PENDING` e richiede installazione e
+gate indipendenti quando il lavoro aperto sul PC lo consente. La prova non valida CTA, grafiche,
+Graphic Kit o render, che restano fuori dalla v1.
+
 ## 2026-10-08 — Selezione Reel podcast: validazione automatica
 
 ### Ipotesi

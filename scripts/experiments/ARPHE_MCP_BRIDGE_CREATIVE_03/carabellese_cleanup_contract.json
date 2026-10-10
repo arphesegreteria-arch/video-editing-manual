@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "workflow_id": "CARABELLESE_YOUTUBE_CLEANUP",
+  "version": 1,
+  "resolution": [1920, 1080],
+  "frame_rate_mode": "source",
+  "retain_below_seconds": 0.7,
+  "contextual_through_seconds": 1.5,
+  "residual_min_seconds": 0.6,
+  "residual_max_seconds": 0.8,
+  "protected_silence_handle_seconds": 0.1,
+  "cue_review_required": true,
+  "transcript_schema": "ARPHE_TRANSCRIPT_V1",
+  "marker_color": "Cyan"
+}

@@ -1,6 +1,49 @@
 # CURRENT STATE
 
-Ultimo aggiornamento: sessione 2026-10-09.
+Ultimo aggiornamento: sessione 2026-10-10.
+
+<a id="workflow-control-plane"></a>
+## Workflow Control Plane — CODICE VALIDATO / ROLLOUT PENDING
+
+Il bridge espone una card iniziale unica con workstation, versione, contesto Resolve, FPS timeline
+e playback, capability e lavori attivi. Un registro locale atomico coordina i quattro workflow
+specializzati (`PODCAST_REELS`, `VERTICAL_SOCIAL`, `CARABELLESE_CLEANUP`,
+`BRANDED_LONGFORM`) senza sostituirne registri, checkpoint o regole native.
+
+Preparazione, approvazione e avanzamento sono legati a workstation, progetto, timeline e impronta
+esatta del piano nativo. Se review o proposta cambiano dopo l'approvazione, il job diventa
+`STALE` e non scrive. Gli avanzamenti multi-step sono riprendibili e idempotenti per singola
+operazione; input umani mancanti restano espliciti. La delivery comune non viene simulata: resta
+`not_available` finché il workflow nativo non espone un contratto di consegna verificata.
+
+Evidenza automatica: Creative `480 PASS / 1 SKIP` ambientale symlink; Windows `58 PASS / 1 SKIP`
+ambientale DPAPI; `git diff --check` PASS. `CAP_WORKFLOW_CONTROL_PLANE=false` nei default e in
+entrambi i profili. Nessuna installazione, abilitazione o prova Resolve nativa è stata eseguita:
+`PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING` e non toccato. Procedura:
+`docs/21_WORKFLOW_CONTROL_PLANE.md`.
+
+<a id="carabellese-youtube-cleanup"></a>
+## Studio Carabellese YouTube cleanup — PC_PERSONALE LIVE PASS
+
+Il workflow `CARABELLESE_YOUTUBE_CLEANUP` conserva una sola timeline 1920×1080 agli FPS della
+sorgente, con playback coincidente. Propone inizio/fine reali, pause da ridurre e indicazioni
+editoriali parlate; richiede una review completa con motivi, crea un `.drt` prima dei tagli e può
+ripristinarlo dopo una failure. La v1 non comprende CTA, Graphic Kit, grafiche o render.
+
+Stato locale, journal, checkpoint e apprendimento sono separati per workstation;
+`CAP_CARABELLESE_CLEANUP=false` per default. Suite: bridge `362 PASS / 1 SKIP` ambientale,
+Windows `58 PASS / 1 SKIP` ambientale, validatore e diff PASS.
+
+`PC_PERSONALE`: gate nativo PASS su progetto usa-e-getta a 30/30. Verificati sei candidati,
+review completa e motivata, checkpoint/restore `.drt`, failure parziale con ripresa, una sola
+timeline finale, binding sorgente e conservazione di marker estranei. Il test ha corretto le
+semantiche reali di wrapper Resolve, import DRT ed `endFrame` esclusivo. Progetto originario
+ripristinato, artefatti sintetici rimossi, 62 hash installati corrispondenti, task `Running`,
+supervisore vivo, `/readyz=ready`, restart count 0 e flag finale `false`.
+La review integrale ha inoltre chiuso il binding A/V del wrapper pubblico, il rollback di una
+promozione DRT interrotta e i replay duplicati di review/recovery.
+`PC_SEGRETERIA` resta `PENDING` e non è stato toccato. Fonte:
+`validation/carabellese-cleanup-ledger.json`.
 
 <a id="editorial-selection-learning"></a>
 ## Selezione Reel podcast e apprendimento — CODICE VALIDATO / PC_PERSONALE LIVE PASS
@@ -117,6 +160,21 @@ Resolve reale è stato modificato durante questa migrazione. Preflight, installa
 WRITE restano `PENDING` separatamente su ciascun PC.
 
 ## Shortform caption mobile — PARTIAL / render verificato
+
+## Vertical Social Assistant — contract v5 / rollout parziale controllato
+
+Il contratto, il piano versionato, l'approvazione con impronta, il picture lock, il recupero
+locale e la superficie MCP chiusa sono implementati e testati. Il contratto v5 rende eseguibili
+CUT, REFRAME, B-roll fornito, MUSIC_DUCK, GRAPHIC, CTA e CAPTIONS; il B-roll generato resta
+esplicitamente bloccato. Sul personale i sottogate nativi sono PASS su progetto sintetico o
+timeline temporanee. GRAPHIC e CTA restano strettamente opzionali: se non compaiono nel piano non
+viene scritto nulla. CAPTIONS resta post-picture-lock e lega l'esecuzione all'impronta reale della
+timeline provvisoria, rifiutando modifiche successive al lock. `CAP_VERTICAL_SOCIAL` resta
+disabilitato a fine prova e Segreteria non è stata toccata.
+
+Il commit `3fa0385` è installato sul runtime `PC_PERSONALE`: copia codice verificata tramite hash,
+contratto v5, task/supervisore Running e `/readyz` HTTP 200. Il flag resta `false`, quindi questa
+installazione non autorizza ancora lavorazioni Vertical Social reali.
 
 Sul `PC_PERSONALE` è stato completato un probe reale sulla timeline verticale
 `ARPHE_SHORTFORM_MASTER_V4`: creazione subtitle nativa, conversione logica in un unico layer
@@ -485,6 +543,38 @@ ricostruito dalla memoria della chat. Lo stato `APPROVED_ROUGH_BOUNDARIES` indic
 finestre sono approvati, mentre i punti di lama finali richiedono ancora il gate audiovisivo.
 
 ## Direzione scartata
+
+## Workflow Control Plane — 2026-10-10
+
+- Prima tranche implementata e coperta da suite: registro atomico locale, binding di approvazione,
+  card read-only del contesto workstation/Resolve e gate `CAP_WORKFLOW_CONTROL_PLANE=false`.
+- Il controllo legge separatamente timeline FPS e playback FPS e non modifica né progetto, timeline
+  né configurazione.
+- I registri nativi Podcast, Vertical Social, Carabellese e Branded Longform restano fonti di
+  verità; l'adattatore non li migra né li cancella.
+- La preparazione/esecuzione completa attraverso tutti e quattro gli adattatori non è ancora
+  completata: la capability resta disattivata e nessun PC è stato installato, attivato o validato.
+- Suite Creative sul ramo: `467 PASS / 1 SKIP`; `PC_SEGRETERIA` invariato e `PENDING`.
+
+## Branded Longform Editorial — 2026-10-10
+
+- Workflow multi-brand implementato con profili ARPHE e Studio Carabellese isolati.
+- Supportati input singolo e pacchetto OBS multicamera; `PROGRAM` è l'unico audio finale.
+- Lo strumento read-only `inspect_branded_longform_sources` valida input/fps/guide audio e produce
+  l'impronta sorgente da usare per il job; la struttura della timeline originale è poi vincolata.
+- Timeline originale immutabile; copie `_CLEANUP` e `_EDITORIAL` idempotenti e verificate.
+- Per le sorgenti A/V singole il cleanup high-confidence ricostruisce davvero `_CLEANUP` dai range
+  approvati automaticamente; multicam/timeline complesse restano in review e non subiscono tagli.
+- Proposte semantiche, card unica, marker, approvazione batch con fingerprint e applicazione
+  Fusion ARPHE implementati nel bridge.
+- Studio Carabellese resta `kit_status=PENDING`: nessuna grafica ARPHE può essere applicata.
+- Gate nativo PC_PERSONALE superato su progetto usa-e-getta: copie cleanup/editorial, marker,
+  grafica Fusion Satoshi e rollback verificati; il progetto precedente è stato ripristinato.
+- `CAP_BRANDED_LONGFORM_EDITORIAL=false`: la validazione non equivale ad attivazione o rollout.
+- PC_SEGRETERIA non è stato modificato e resta `PENDING`.
+
+Prossimo passo operativo: revisione/merge del codice; l'eventuale installazione e attivazione su
+PC_PERSONALE resta un rollout separato. PC_SEGRETERIA richiede comunque un gate indipendente.
 
 La vecchia GUI desktop ARPHE + polling GitHub (`ARPHE Remote Agent V1`) è **SUPERSEDED**. ChatGPT è la UI primaria; il componente locale deve restare un bridge MCP/Resolve.
 

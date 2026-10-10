@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "workflow_id": "BRANDED_LONGFORM_EDITORIAL",
+  "version": 1,
+  "source_modes": ["SINGLE", "OBS_MULTICAM"],
+  "semantic_classes": ["EXPLAIN", "ARGUE", "STORY", "PERSONAL", "TRANSITION"],
+  "profiles": [
+    {
+      "profile_id": "ARPHE_LONGFORM_EDITORIAL",
+      "kit_status": "READY",
+      "allowed_operations": ["CLEANUP", "MULTICAM", "GRAPHIC", "CARD", "B_ROLL_PROVIDED"],
+      "allowed_asset_classes": ["GRAPHIC_KIT", "USER_PROVIDED"]
+    },
+    {
+      "profile_id": "CARABELLESE_LONGFORM_EDITORIAL",
+      "kit_status": "PENDING",
+      "allowed_operations": ["CLEANUP", "MULTICAM", "MARKER", "PROPOSAL"],
+      "allowed_asset_classes": []
+    }
+  ]
+}

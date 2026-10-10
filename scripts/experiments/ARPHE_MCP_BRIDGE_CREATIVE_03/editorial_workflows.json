@@ -48,6 +48,18 @@
       "format_contract": {"resolution_mode": "explicit", "frame_rate_mode": "explicit"},
       "allowed_profiles": ["LONGFORM_REVIEW_H264", "LONGFORM_MASTER_PRORES", "LONGFORM_PUBLISH_H264"],
       "technical_override_roles": ["TECNICO", "ALESSIO"]
+    },
+    {
+      "workflow_id": "BRANDED_LONGFORM_EDITORIAL",
+      "version": 1,
+      "label": "Longform editoriale multi-brand",
+      "purpose": "Pulizia conservativa e proposte editoriali per profilo grafico.",
+      "recognition_hints": ["longform", "multicamera", "OBS"],
+      "automation_level": "EDITOR_LED",
+      "questions": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+      "format_contract": {"resolution_mode": "source", "frame_rate_mode": "source"},
+      "allowed_profiles": ["LONGFORM_REVIEW_H264", "LONGFORM_MASTER_PRORES", "LONGFORM_PUBLISH_H264"],
+      "technical_override_roles": ["TECNICO", "ALESSIO"]
     }
   ]
 }

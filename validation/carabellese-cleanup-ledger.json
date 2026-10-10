@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "workflow_id": "CARABELLESE_YOUTUBE_CLEANUP",
+  "capability_default": false,
+  "automated_evidence": {
+    "result": "PASS",
+    "observed_at": "2026-10-09T17:28:25+02:00",
+    "repository_commit": "91c3918c8f8cada45a770aa49082ac4b7c22385b",
+    "contract_digest": "64882dad173d9359b2724de344d02892e345c08dc8dc5c90f5c39eb75bfd712f",
+    "test_results": [
+      "Bridge automated suite passed 362 tests with one documented environment skip after final review fixes.",
+      "Windows automated suite passed 58 tests with one documented environment skip after native-gate hardening.",
+      "The rollout validator and repository diff check passed."
+    ],
+    "limitations": [
+      "Automated evidence alone does not validate Resolve behavior; workstation evidence is recorded separately.",
+      "Environment skips cover platform-specific cases already documented by their test suites."
+    ]
+  },
+  "workstation_gates": {
+    "PC_PERSONALE": {
+      "workstation_id": "PC_PERSONALE",
+      "status": "VALIDATED",
+      "checks": {
+        "capability_probe": "PASS",
+        "source_binding": "PASS",
+        "complete_review": "PASS",
+        "checkpoint_restore": "PASS",
+        "single_timeline": "PASS",
+        "partial_failure_recovery": "PASS",
+        "foreign_marker_preservation": "PASS",
+        "rollback_flag": "PASS"
+      },
+      "evidence": [
+        {
+          "evidence_id": "personal-native-gate-20261009",
+          "workstation_id": "PC_PERSONALE",
+          "observed_at": "2026-10-09T17:28:25+02:00",
+          "result": "PASS",
+          "checks": [
+            "capability_probe",
+            "source_binding",
+            "complete_review",
+            "checkpoint_restore",
+            "single_timeline",
+            "partial_failure_recovery",
+            "foreign_marker_preservation",
+            "rollback_flag"
+          ],
+          "limitations": [
+            "The native gate used short synthetic dialogue and did not assess production footage, graphics, CTA or delivery render.",
+            "The capability was returned to disabled after validation."
+          ]
+        }
+      ],
+      "limitations": [
+        "Validation covers the isolated personal runtime only; each other workstation requires its own gate.",
+        "The capability remains disabled until a deliberate production rollout."
+      ]
+    },
+    "PC_SEGRETERIA": {
+      "workstation_id": "PC_SEGRETERIA",
+      "status": "PENDING",
+      "checks": {
+        "capability_probe": "PENDING",
+        "source_binding": "PENDING",
+        "complete_review": "PENDING",
+        "checkpoint_restore": "PENDING",
+        "single_timeline": "PENDING",
+        "partial_failure_recovery": "PENDING",
+        "foreign_marker_preservation": "PENDING",
+        "rollback_flag": "PENDING"
+      },
+      "evidence": [],
+      "limitations": [
+        "PC_SEGRETERIA and its open Resolve work were not touched; no result is inferred from personal evidence."
+      ]
+    }
+  }
+}

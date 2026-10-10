@@ -25,6 +25,21 @@ EXPOSED_TOOL_NAMES = (
     "apply_podcast_reel_selection", "close_podcast_reel_selection",
     "inspect_editorial_learning", "compile_editorial_profile_proposal",
     "approve_editorial_profile_proposal",
+    "inspect_carabellese_cleanup", "start_carabellese_transcription",
+    "get_carabellese_transcription_job", "prepare_carabellese_cleanup",
+    "inspect_carabellese_job", "submit_carabellese_review",
+    "apply_carabellese_cleanup", "recover_carabellese_cleanup",
+    "close_carabellese_cleanup", "inspect_carabellese_learning",
+    "compile_carabellese_profile_proposal", "approve_carabellese_profile_proposal",
+    "inspect_vertical_social", "prepare_vertical_social_plan", "approve_vertical_social_plan",
+    "inspect_vertical_social_plan", "mark_vertical_social_picture_lock", "advance_vertical_social_action",
+    "apply_vertical_social_cuts", "apply_vertical_social_action",
+    "inspect_branded_longform", "inspect_branded_longform_sources",
+    "create_branded_longform_cleanup",
+    "propose_branded_longform_editorial", "approve_branded_longform_batch",
+    "apply_branded_longform_batch", "verify_branded_longform_job",
+    "inspect_workstation_control_plane", "prepare_workflow_job", "inspect_workflow_job",
+    "approve_workflow_job", "advance_workflow_job", "approve_workflow_delivery",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {

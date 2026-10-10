@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "workflow_id": "ARPHE_VERTICAL_SOCIAL",
+  "capability_default": false,
+  "automated_evidence": {
+    "result": "PASS",
+    "test_results": ["419 bridge tests pass on 2026-10-10; 1 Windows symlink test skipped for missing host privilege."],
+    "limitations": ["B_ROLL_GENERATED remains unavailable until a provider is selected and validated.", "CAP_VERTICAL_SOCIAL remains disabled pending an operator-approved end-to-end rollout."]
+  },
+  "workstation_gates": {
+    "PC_PERSONALE": {
+      "workstation_id": "PC_PERSONALE",
+      "status": "PENDING",
+      "checks": {"CUT": "PASS", "REFRAME": "PASS", "B_ROLL_PROVIDED": "PASS", "GRAPHIC_CTA": "PASS", "MUSIC_DUCK": "PASS", "CAPTIONS": "PASS"},
+      "evidence": [
+        "Synthetic provisional timeline: CUT read-back verified without modifying the source.",
+        "Synthetic provisional timeline: MediaIn -> Transform -> MediaOut REFRAME read-back verified.",
+        "Synthetic provisional timeline: 60-frame supplied B-roll inserted on dedicated video track and duration read back.",
+        "Synthetic provisional timeline: MUSIC_DUCK AudioVolume set to -12 dB, read back, then restored to 0 dB.",
+        "Temporary synthetic timeline: optional GRAPHIC and CTA Fusion graphs created on exact ranges, text read back, then timeline deleted.",
+        "Temporary synthetic timeline: one full-length CAPTIONS Fusion carrier created with two cues and a preserved gap; Satoshi Bold and text read-back verified, then timeline deleted.",
+        "CAPTIONS execution records timing, settings and opaque media-source identities at picture lock and rejects any later edit or source replacement before writing.",
+        "Commit 3fa0385 installed on PC_PERSONALE: installed server hash matches repository, contract v5, task/supervisor running and /readyz HTTP 200; CAP_VERTICAL_SOCIAL remains false."
+      ]
+    },
+    "PC_SEGRETERIA": {"workstation_id": "PC_SEGRETERIA", "status": "PENDING", "checks": {"native_gate": "PENDING"}, "evidence": []}
+  }
+}

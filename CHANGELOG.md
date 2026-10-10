@@ -1,5 +1,43 @@
 # CHANGELOG
 
+## 2026-10-10 — Workflow Control Plane (codice completo, non attivo)
+
+- Aggiunti registro locale atomico e card unica di controllo workstation/Resolve, con FPS timeline
+  e playback distinti, capability e lavori attivi.
+- Collegati i quattro registri nativi: Reel podcast, Vertical Social, pulizia Carabellese e
+  longform brandizzato. Il dispatcher richiama soltanto le primitive tipizzate già esistenti.
+- Preparazione e approvazione includono l'impronta corrente della review/proposta nativa. Una
+  modifica successiva produce `STALE` e blocca ogni write fino a un nuovo piano.
+- Gli avanzamenti multi-step usano una chiave operazione persistita: un retry della stessa azione
+  restituisce l'evidenza, mentre il passaggio nativo successivo può proseguire sullo stesso job.
+- La delivery comune resta esplicitamente `not_available` anziché inventare una verifica che i
+  workflow nativi non espongono ancora.
+- Aggiunto `CAP_WORKFLOW_CONTROL_PLANE=false` per default: le scritture vengono rifiutate prima
+  del runtime quando il flag è spento.
+- Test completi: Creative `480 PASS / 1 SKIP` ambientale, Windows `58 PASS / 1 SKIP` ambientale;
+  isolamento workstation, fingerprint nativo, staleness, retry, dispatcher e profili coperti.
+- Il codice non installa, abilita o valida `PC_PERSONALE` o `PC_SEGRETERIA`; non tocca progetti
+  Resolve aperti, Python o tunnel. I gate nativi restano separatamente `PENDING`.
+
+## 2026-10-09 — Workflow Studio Carabellese YouTube cleanup
+
+- Aggiunto il flusso isolato trascrizione → proposte/marker → review con motivi → checkpoint DRT →
+  applicazione verificata → recovery/chiusura, mantenendo una sola timeline canonica.
+- La v1 esegue soltanto pulizia editoriale: niente CTA, Graphic Kit, grafiche o render.
+- Aggiunti journal riprendibile, restore vincolato a fingerprint, marker di proprietà, apprendimento
+  redatto e strumenti pubblici chiusi con una sola card per la segreteria.
+- Installer e flag preservano stato e valore locali e rifiutano file di un'altra workstation;
+  `CAP_CARABELLESE_CLEANUP=false` per default.
+- Gate nativo `PC_PERSONALE`: PASS su media e progetto sintetici. Verificati review, checkpoint,
+  failure/ripresa, timeline unica, marker estranei, pulizia e rollback del flag.
+- Il gate ha corretto quattro differenze dell'API reale: wrapper Python non stabili, nome e playback
+  ereditato nell'import DRT, `endFrame` esclusivo e salvataggio recuperabile dopo verifica finale.
+- La review finale ha unificato il binding A/V anche nel wrapper pubblico, reso completo il rollback
+  se la promozione DRT si interrompe e reso idempotente il doppio invio di review/recovery.
+- Runtime personale riallineato: 62 hash uguali, task `Running`, `/readyz=ready`, restart count 0,
+  progetto originario ripristinato, artefatti sintetici rimossi e flag finale `false`.
+  `PC_SEGRETERIA=PENDING` e non toccato.
+
 ## 2026-10-09 — Chiusura gate personale e hardening del preflight
 
 - Il gate live definitivo `PC_PERSONALE` resta PASS a progetto, timeline e playback 30 fps;
@@ -633,3 +671,58 @@ Principio ancora valido:
 - tracking sempre limitato al range utile;
 - tracking anchor separato dal centro estetico;
 - ogni passaggio manuale spiegato click-per-click.
+## 2026-10-09 — Vertical Social Assistant foundation
+
+- Aggiunti contratto, piano versionato, lifecycle, recupero locale e strumenti MCP chiusi.
+- `CAP_VERTICAL_SOCIAL` resta `false`; PC personale e segreteria mantengono stati separati.
+- Il CUT ha ora un motore proprio: conserva intervallo, motivo, effetto narrativo e dipendenze;
+  genera una timeline provvisoria nominata, verifica il read-back A/V e riusa soltanto una prova
+  già verificata dello stesso piano. Non modifica la timeline sorgente.
+- L'approvazione resta legata a target e istruzioni editoriali; gli stati/evidenze di esecuzione
+  non invalidano un retry idempotente. Test automatici: piano, impronta, range, read-back e resume
+  PASS. Nessun gate Resolve nativo né workstation è stato modificato per questa estensione.
+
+## 2026-10-10 — Vertical Social contract v2 e primi esecutori
+
+- Separati `B_ROLL_PROVIDED` e `B_ROLL_GENERATED`: il primo richiede asset, range sorgente,
+  range timeline e motivo; il secondo fallisce chiuso finché manca un provider validato.
+- Aggiunto l'esecutore MCP idempotente per REFRAME e B-roll fornito sulla sola timeline provvisoria
+  del piano, con target esplicito, read-back, journal e ripristino della timeline sorgente.
+- Grafiche e CTA sono opzionali e validate contro ruoli colore canonici; non vengono applicate se
+  assenti e restano non eseguibili fino al proprio gate Resolve.
+- Test Vertical Social: 43 PASS. Suite completa del bridge: 405 PASS e 1 skip previsto. Gate nativi PC_PERSONALE PASS per CUT, REFRAME e B-roll fornito;
+  PC_SEGRETERIA non modificato e ancora PENDING.
+- Contratto v3: `MUSIC_DUCK` usa la proprietà Resolve reale `AudioVolume`, richiede confini clip
+  esatti, limita il guadagno a -30/0 dB e ha superato un gate sintetico reversibile a -12 dB con
+  ripristino a 0 dB sul solo PC_PERSONALE.
+- Contratto v4: GRAPHIC e CTA opzionali hanno un esecutore Fusion su track dedicata, range esatto,
+  palette del Graphic Kit e read-back del testo. Gate nativo su timeline temporanea PASS e rollback
+  completato sul solo PC_PERSONALE.
+- Contratto v5: CAPTIONS è eseguibile soltanto dopo picture lock, con cue non sovrapposte, massimo
+  84 caratteri/due righe, fasce sicure e un solo carrier Fusion. Il lock registra l'impronta reale
+  della timeline provvisoria e blocca qualsiasi esecuzione dopo una modifica. Gate sintetico
+  parametrico PASS; la precedente prova renderizzata reale resta documentata separatamente.
+- Suite completa aggiornata: 419 PASS e 1 skip Windows previsto. `CAP_VERTICAL_SOCIAL=false`,
+  PC_SEGRETERIA non toccato, B-roll generato ancora chiuso.
+- Commit `3fa0385` reinstallato sul solo `PC_PERSONALE`: hash della copia runtime corrispondente,
+  contratto v5, task e supervisore attivi, `/readyz` HTTP 200. Il flag Vertical Social è rimasto
+  disabilitato; nessuna config o runtime di `PC_SEGRETERIA` è stata modificata.
+
+## 2026-10-10 — Branded Longform Editorial
+
+- Sostituito il concetto ARPHE-only con `BRANDED_LONGFORM_EDITORIAL` e profili brand isolati.
+- Aggiunti contratto, input OBS single/multicam, job persistenti per workstation, binding a
+  sorgente/profilo/timeline, cleanup conservativo e proposta editoriale adattiva.
+- Aggiunte timeline derivate `_CLEANUP` e `_EDITORIAL`, marker idempotenti, approvazione batch
+  legata all'impronta e applicazione grafica Fusion sul solo profilo ARPHE ready.
+- Il profilo Carabellese resta pending e blocca le grafiche senza contaminazioni ARPHE.
+- Aggiunti strumenti MCP completi, validatore, ledger e gate nativo con rollback su progetto
+  sintetico PC_PERSONALE. Capability ancora disabilitata; PC_SEGRETERIA non toccato.
+- Gate nativo PC_PERSONALE superato: copie `_CLEANUP`/`_EDITORIAL`, marker, grafica Fusion Satoshi
+  e rollback del progetto sintetico verificati; aggiunti retry idempotente e rollback degli overlay
+  parziali, impronta strutturale della timeline originale e validazione/fingerprint dei pacchetti
+  SINGLE/OBS. Suite completa: 457 test, 1 skip per privilegio symlink Windows.
+- Il cleanup high-confidence ora ricostruisce fisicamente `_CLEANUP` dalla sorgente A/V singola,
+  preservando l'originale; timeline complesse e multicam restano fail-closed in revisione.
+- Il B-roll fornito con asset e range sorgente espliciti è applicabile solo su `_EDITORIAL`; B-roll
+  generato e cambio camera restano proposte non automatiche.

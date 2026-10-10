@@ -21,6 +21,7 @@ from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
 from .artifact_records import artifact_store_for, load_artifact_policy
 from .audio_provenance import media_fingerprint
 from .config import load_config
+from .control_plane import WorkflowJobStore
 from .carabellese_analysis import (
     cleanup_candidate_fingerprint,
     derive_pause_candidates,
@@ -1331,6 +1332,50 @@ def list_longform_media() -> dict[str, Any]:
     try:
         return _call(do_list_longform_media, load_config())
     except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_workstation_control_plane() -> dict[str, Any]:
+    """Return one compact, read-only workstation and Resolve context card."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            config = load_config()
+            resolve, manager, project, timeline, _, _, error = _runtime()
+            resolve_card = {"connected": not bool(error), "error": error.get("error") if error else None,
+                            "version": None, "project_name": None, "timeline_name": None,
+                            "resolution": {"width": None, "height": None}, "timeline_fps": None,
+                            "playback_fps": None}
+            if not error:
+                resolve_card.update({
+                    "version": safe_call(resolve, "GetVersionString") or safe_call(resolve, "GetVersion"),
+                    "project_name": safe_call(project, "GetName") if project else None,
+                    "timeline_name": safe_call(timeline, "GetName") if timeline else None,
+                    "resolution": {"width": safe_call(timeline, "GetSetting", "timelineResolutionWidth") if timeline else None,
+                                   "height": safe_call(timeline, "GetSetting", "timelineResolutionHeight") if timeline else None},
+                    "timeline_fps": safe_call(timeline, "GetSetting", "timelineFrameRate") if timeline else None,
+                    "playback_fps": safe_call(timeline, "GetSetting", "timelinePlaybackFrameRate") if timeline else None,
+                })
+            return {"ok": True, "bridge": "ARPHE_MCP_BRIDGE_CREATIVE_03", "workstation_id": config.workstation_id,
+                    "resolve": resolve_card, "capabilities": feature_report(config, manager, project, timeline),
+                    "active_jobs": []}
+        except Exception as exc:
+            return _error(exc)
+
+
+def _require_control_plane(config: Any) -> None:
+    if not bool(config.flags.get("CAP_WORKFLOW_CONTROL_PLANE", False)):
+        raise RuntimeError("CAP_WORKFLOW_CONTROL_PLANE non attiva")
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_workflow_job(workflow_family: str, native_reference: str, target: dict[str, Any]) -> dict[str, Any]:
+    """Reserve the control-plane surface; specialized workflows remain authoritative."""
+    try:
+        config = load_config()
+        _require_control_plane(config)
+        return {"ok": False, "stage": "prepare", "error": "Il binding nativo va preparato dal workflow specializzato."}
+    except Exception as exc:
+        return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)

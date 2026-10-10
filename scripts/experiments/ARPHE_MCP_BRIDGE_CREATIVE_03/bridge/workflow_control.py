@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .control_plane import WorkflowJob
+from .control_plane import WorkflowJob, WorkflowJobStore, transition_workflow_job
 from .safety import ValidationError
 
 
@@ -50,3 +50,39 @@ def workflow_job_card(job: WorkflowJob, native: object) -> dict[str, object]:
             "next_safe_action": next_safe_action(job.workflow_family, native_state,
                                                    job.approved_plan_fingerprint is not None),
             "target": dict(job.target), "native_fingerprint": binding["fingerprint"]}
+
+
+def advance_workflow_job(store: WorkflowJobStore, workflow_job_id: str,
+                         approved_plan_fingerprint: str, delegate: object) -> dict[str, object]:
+    """Execute one already-approved typed adapter action exactly once.
+
+    The server supplies a private typed delegate after it has revalidated Resolve context.
+    Keeping the callback explicit makes the idempotency boundary testable without Resolve.
+    """
+    job = store.get(workflow_job_id)
+    if job.approved_plan_fingerprint != approved_plan_fingerprint:
+        raise ValidationError("approvazione del piano non corrispondente")
+    if job.state in {"REVIEW_READY", "DELIVERY_AWAITING_APPROVAL", "CLOSED"}:
+        return {"workflow_job_id": job.workflow_job_id, "state": job.state,
+                "next_safe_action": "NONE", "evidence": dict(job.evidence)}
+    if job.state not in {"AWAITING_APPROVAL", "FAILED_RECOVERABLE", "BLOCKED"}:
+        raise ValidationError("avanzamento non consentito nello stato corrente")
+    executing = transition_workflow_job(store, job.workflow_job_id, job.revision, "EXECUTING", {}, None)
+    try:
+        if not callable(delegate):
+            raise ValidationError("delegate workflow non valido")
+        evidence = delegate()
+        if not isinstance(evidence, dict):
+            raise ValidationError("evidence nativa non valida")
+        finished = transition_workflow_job(store, executing.workflow_job_id, executing.revision,
+                                           "REVIEW_READY", evidence, None)
+        return {"workflow_job_id": finished.workflow_job_id, "state": finished.state,
+                "next_safe_action": "NONE", "evidence": dict(finished.evidence)}
+    except Exception as exc:
+        failed = transition_workflow_job(store, executing.workflow_job_id, executing.revision,
+                                         "FAILED_RECOVERABLE", {"error_type": type(exc).__name__},
+                                         "AWAITING_APPROVAL")
+        if isinstance(exc, ValidationError):
+            raise exc
+        return {"workflow_job_id": failed.workflow_job_id, "state": failed.state,
+                "next_safe_action": "RESUME", "evidence": dict(failed.evidence)}

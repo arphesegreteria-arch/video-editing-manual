@@ -8,8 +8,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from bridge.control_plane import new_workflow_job  # noqa: E402
-from bridge.workflow_control import native_binding, workflow_job_card  # noqa: E402
+from bridge.control_plane import WorkflowJobStore, approve_workflow_job, new_workflow_job  # noqa: E402
+from bridge.workflow_control import advance_workflow_job, native_binding, workflow_job_card  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 
 
@@ -41,6 +41,28 @@ class WorkflowControlTests(unittest.TestCase):
         card = workflow_job_card(self.job, native)
         self.assertEqual("REVIEW_READY", card["state"])
         self.assertEqual("NONE", card["next_safe_action"])
+
+    def test_advance_requires_persisted_approval_before_delegate(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as raw:
+            store = WorkflowJobStore(Path(raw) / "jobs.json", "PC_PERSONALE")
+            job = store.create(self.job)
+            calls = []
+            with self.assertRaisesRegex(ValidationError, "approvazione"):
+                advance_workflow_job(store, job.workflow_job_id, "a" * 64, lambda: calls.append(True))
+            self.assertEqual([], calls)
+
+    def test_repeated_advance_returns_recorded_evidence_without_second_delegate(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as raw:
+            store = WorkflowJobStore(Path(raw) / "jobs.json", "PC_PERSONALE")
+            job = approve_workflow_job(store, store.create(self.job).workflow_job_id, "a" * 64, "SECRETARY")
+            calls = []
+            first = advance_workflow_job(store, job.workflow_job_id, "a" * 64, lambda: {"native": "done"})
+            second = advance_workflow_job(store, job.workflow_job_id, "a" * 64, lambda: calls.append(True))
+            self.assertEqual({"native": "done"}, first["evidence"])
+            self.assertEqual(first, second)
+            self.assertEqual([], calls)
 
 
 if __name__ == "__main__":

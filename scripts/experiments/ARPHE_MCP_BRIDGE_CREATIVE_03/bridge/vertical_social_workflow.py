@@ -8,6 +8,7 @@ from typing import Any
 
 from .safety import ValidationError
 from .vertical_social_contract import load_vertical_social_contract, validate_action_request
+from .vertical_social_reframe import validate_reframe_action
 from .vertical_social_jobs import VerticalSocialPlanStore, new_vertical_social_plan, next_safe_action, plan_fingerprint, transition_action
 
 
@@ -49,7 +50,12 @@ def prepare_vertical_social_plan(path: Path, workstation_id: str, target: dict[s
                                  actions: list[dict[str, Any]]) -> VerticalSocialWorkflowPlan:
     contract = load_vertical_social_contract(CONTRACT_PATH)
     known: set[str] = set()
+    total_frames = target.get("total_frames")
     for action in actions:
+        if str(action.get("type")) == "REFRAME":
+            if not isinstance(total_frames, int) or total_frames <= 0:
+                raise ValidationError("REFRAME richiede total_frames esplicito nel target")
+            validate_reframe_action(action, total_frames)
         if str(action.get("type")) == "CAPTIONS":
             spec = contract.action("CAPTIONS")
             if str(action.get("phase")) != spec.phase:

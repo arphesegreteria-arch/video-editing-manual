@@ -23,6 +23,7 @@ CAPABILITY_STATUS = {
     "CAP_EDITORIAL_SELECTION": "PENDING",
     "CAP_CARABELLESE_CLEANUP": "PENDING",
     "CAP_VERTICAL_SOCIAL": "EXPERIMENTAL",
+    "CAP_BRANDED_LONGFORM_EDITORIAL": "PENDING",
 }
 
 
@@ -128,6 +129,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_EDITORIAL_SELECTION": _editorial_selection_available(project, timeline),
         "CAP_CARABELLESE_CLEANUP": _carabellese_cleanup_available(),
         "CAP_VERTICAL_SOCIAL": _editorial_selection_available(project, timeline),
+        "CAP_BRANDED_LONGFORM_EDITORIAL": False,
     }
 
 

@@ -21,7 +21,7 @@ from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
 from .artifact_records import artifact_store_for, load_artifact_policy
 from .audio_provenance import media_fingerprint
 from .config import load_config
-from .control_plane import WorkflowJobStore, new_workflow_job
+from .control_plane import WorkflowJobStore, approve_workflow_job as do_approve_workflow_job, new_workflow_job
 from .workflow_control import load_native_binding, native_binding, workflow_job_card
 from .carabellese_analysis import (
     cleanup_candidate_fingerprint,
@@ -1384,6 +1384,34 @@ def prepare_workflow_job(workflow_family: str, native_reference: str, target: di
         stored = store.create(job)
         return {"ok": True, "card_count": 1, "plan_fingerprint": stored.plan_fingerprint,
                 **workflow_job_card(stored, native)}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_workflow_job(workflow_job_id: str) -> dict[str, Any]:
+    """Read one control-plane job and its native current state without a Resolve write."""
+    try:
+        config = load_config()
+        store = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id)
+        job = store.get(workflow_job_id)
+        native = load_native_binding(config, job.workflow_family, job.native_reference)
+        return {"ok": True, "card_count": 1, **workflow_job_card(job, native)}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_workflow_job(workflow_job_id: str, plan_fingerprint: str, operator_role: str) -> dict[str, Any]:
+    """Persist approval of one exact prepared job fingerprint; never writes Resolve."""
+    try:
+        config = load_config()
+        _require_control_plane(config)
+        store = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id)
+        job = do_approve_workflow_job(store, workflow_job_id, plan_fingerprint, operator_role)
+        native = load_native_binding(config, job.workflow_family, job.native_reference)
+        return {"ok": True, "approved_plan_fingerprint": job.approved_plan_fingerprint,
+                **workflow_job_card(job, native)}
     except Exception as exc:
         return _error(exc)
 

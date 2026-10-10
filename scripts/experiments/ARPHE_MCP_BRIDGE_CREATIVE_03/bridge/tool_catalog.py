@@ -38,7 +38,8 @@ EXPOSED_TOOL_NAMES = (
     "create_branded_longform_cleanup",
     "propose_branded_longform_editorial", "approve_branded_longform_batch",
     "apply_branded_longform_batch", "verify_branded_longform_job",
-    "inspect_workstation_control_plane", "prepare_workflow_job",
+    "inspect_workstation_control_plane", "prepare_workflow_job", "inspect_workflow_job",
+    "approve_workflow_job",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {

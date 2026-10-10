@@ -61,6 +61,7 @@ from .carabellese_transcription import (
     start_carabellese_transcription as do_start_carabellese_transcription,
 )
 from .vertical_social_contract import load_vertical_social_contract
+from .branded_longform_contract import load_branded_longform_contract
 from .vertical_social_workflow import (
     advance_vertical_social_action as do_advance_vertical_social_action,
     approved_vertical_social_plan as do_approved_vertical_social_plan,
@@ -216,11 +217,27 @@ EDITORIAL_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "editorial
 CARABELLESE_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "carabellese_cleanup_contract.json"
 CARABELLESE_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "carabellese_preferences.json"
 VERTICAL_SOCIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "vertical_social_contract.json"
+BRANDED_LONGFORM_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "branded_longform_contract.json"
 
 
 def _require_vertical_social(config: Any) -> None:
     if not config.flags.get("CAP_VERTICAL_SOCIAL", False):
         raise ValidationError("CAP_VERTICAL_SOCIAL non attiva nella config locale")
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_branded_longform(profile_id: str = "") -> dict[str, Any]:
+    """Inspect the multi-brand longform contract and local rollout gate without editing Resolve."""
+    try:
+        config = load_config(); contract = load_branded_longform_contract(BRANDED_LONGFORM_CONTRACT_PATH)
+        selected = contract.profile(profile_id) if profile_id else None
+        return {"ok": True, "card_count": 1, "workflow_id": contract.workflow_id,
+                "workflow_version": contract.version, "workstation_id": config.workstation_id,
+                "capability_enabled": bool(config.flags.get("CAP_BRANDED_LONGFORM_EDITORIAL", False)),
+                "source_modes": contract.source_modes,
+                "profiles": {key: value.kit_status for key, value in contract.profiles.items()},
+                "selected_profile": None if selected is None else {"profile_id": selected.profile_id, "kit_status": selected.kit_status}}
+    except Exception as exc: return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)

@@ -69,8 +69,14 @@ from .vertical_social_workflow import (
     mark_vertical_social_picture_lock as do_mark_vertical_social_picture_lock,
     prepare_vertical_social_plan as do_prepare_vertical_social_plan,
     record_vertical_social_cut_execution as do_record_vertical_social_cut_execution,
+    record_vertical_social_action_execution as do_record_vertical_social_action_execution,
 )
 from .vertical_social_cuts import create_provisional_cut_timeline as do_create_provisional_cut_timeline
+from .vertical_social_apply import (
+    apply_reframe_action as do_apply_vertical_social_reframe,
+    find_provisional_timeline as do_find_vertical_social_provisional,
+)
+from .vertical_social_broll import apply_provided_broll as do_apply_vertical_social_broll
 from .creative_tools import (add_end_card as do_add_end_card,
                              animate_element, animate_stack,
                              set_review_highlight as do_set_review_highlight)
@@ -303,6 +309,59 @@ def apply_vertical_social_cuts(plan_id: str, fingerprint: str) -> dict[str, Any]
                 "verified_cut_count": sum(item.action_type == "CUT" and item.state == "VERIFIED"
                                           for item in verified.actions)}
     except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_vertical_social_action(plan_id: str, fingerprint: str, action_id: str) -> dict[str, Any]:
+    """Apply one approved semantic action on its bridge-owned provisional timeline."""
+    try:
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        _require_vertical_social(config)
+        if error:
+            return error
+        try:
+            require_capability("CAP_VERTICAL_SOCIAL", config, manager, project, timeline)
+        except RuntimeError as exc:
+            raise ValidationError(str(exc)) from exc
+        plan = do_approved_vertical_social_plan(
+            config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint)
+        if (str(safe_call(project, "GetName") or "") != str(plan.target.get("project"))
+                or str(safe_call(timeline, "GetName") or "") != str(plan.target.get("timeline"))):
+            raise ValidationError("Target progetto o timeline diverso dal piano approvato")
+        action = plan.action(action_id)
+        if action.state == "VERIFIED":
+            return {"ok": True, "action": "apply_vertical_social_action", "plan_id": plan_id,
+                    "action_id": action_id, "state": "VERIFIED", "idempotent": True,
+                    "evidence": action.evidence}
+        if action.state != "APPROVED":
+            raise ValidationError(f"Azione non eseguibile nello stato {action.state}")
+        total_frames = int(plan.target.get("total_frames") or 0)
+        provisional = do_find_vertical_social_provisional(project, plan_id)
+        original = timeline
+        with RESOLVE_ACCESS_LOCK:
+            if not safe_call(project, "SetCurrentTimeline", provisional):
+                raise ValidationError("Selezione timeline provvisoria fallita")
+            try:
+                if action.action_type == "REFRAME":
+                    evidence = do_apply_vertical_social_reframe(
+                        provisional, action.to_dict(), total_frames)
+                elif action.action_type == "B_ROLL_PROVIDED":
+                    evidence = do_apply_vertical_social_broll(
+                        resolve, project, provisional, config, action.to_dict(), total_frames)
+                else:
+                    raise ValidationError(
+                        f"Esecutore Vertical Social non disponibile per {action.action_type}")
+            finally:
+                if not safe_call(project, "SetCurrentTimeline", original):
+                    raise ValidationError("Ripristino timeline sorgente fallito")
+        verified = do_record_vertical_social_action_execution(
+            config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint,
+            action_id, action.action_type, evidence)
+        return {"ok": True, "action": "apply_vertical_social_action", "plan_id": plan_id,
+                "action_id": action_id, "state": verified.action(action_id).state,
+                "evidence": evidence}
+    except Exception as exc:
+        return _error(exc)
 
 
 def _carabellese_store(config: Any) -> CarabelleseJobStore:

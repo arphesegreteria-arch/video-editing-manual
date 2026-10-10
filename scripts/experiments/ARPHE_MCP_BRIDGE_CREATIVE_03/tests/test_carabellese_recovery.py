@@ -18,7 +18,7 @@ from bridge.carabellese_recovery import (  # noqa: E402
     recover_carabellese_cleanup,
 )
 from bridge.safety import ValidationError  # noqa: E402
-from scripts.experiments.ARPHE_MCP_BRIDGE_CREATIVE_03.tests.test_carabellese_apply import (  # noqa: E402
+from tests.test_carabellese_apply import (  # noqa: E402
     Resolve,
     setup,
 )

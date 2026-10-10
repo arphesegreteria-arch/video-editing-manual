@@ -141,11 +141,14 @@ WRITE restano `PENDING` separatamente su ciascun PC.
 
 ## Shortform caption mobile — PARTIAL / render verificato
 
-## Vertical Social Assistant — AUTOMATED PASS / native gate pending
+## Vertical Social Assistant — contract v2 / rollout parziale controllato
 
 Il contratto, il piano versionato, l'approvazione con impronta, il picture lock, il recupero
-locale e la superficie MCP chiusa sono implementati e testati. `CAP_VERTICAL_SOCIAL` resta
-disabilitato su ogni workstation; non sono ancora state applicate azioni creative in Resolve.
+locale e la superficie MCP chiusa sono implementati e testati. Il contratto v2 rende eseguibili
+CUT, REFRAME e B-roll fornito; il B-roll generato resta esplicitamente bloccato. Sul personale i
+tre sottogate nativi sono PASS su progetto sintetico. `CAP_VERTICAL_SOCIAL` resta disabilitato a
+fine prova e Segreteria non è stata toccata. GRAPHIC/CTA sono validati come richieste opzionali ma
+non ancora eseguibili; MUSIC_DUCK e CAPTIONS restano chiusi.
 
 Sul `PC_PERSONALE` è stato completato un probe reale sulla timeline verticale
 `ARPHE_SHORTFORM_MASTER_V4`: creazione subtitle nativa, conversione logica in un unico layer

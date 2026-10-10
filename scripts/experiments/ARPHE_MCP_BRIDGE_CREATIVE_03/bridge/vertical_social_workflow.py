@@ -8,7 +8,10 @@ from typing import Any
 
 from .safety import ValidationError
 from .vertical_social_contract import load_vertical_social_contract, validate_action_request
+from .vertical_social_broll import validate_generated_broll, validate_provided_broll
+from .vertical_social_graphics import approved_graphic_actions
 from .vertical_social_reframe import validate_reframe_action
+from .vertical_social_qc import final_vertical_social_check
 from .vertical_social_jobs import VerticalSocialPlanStore, new_vertical_social_plan, next_safe_action, plan_fingerprint, transition_action
 
 
@@ -52,11 +55,19 @@ def prepare_vertical_social_plan(path: Path, workstation_id: str, target: dict[s
     known: set[str] = set()
     total_frames = target.get("total_frames")
     for action in actions:
-        if str(action.get("type")) == "REFRAME":
+        action_type = str(action.get("type"))
+        if action_type in {"REFRAME", "B_ROLL_PROVIDED", "GRAPHIC", "CTA"}:
             if not isinstance(total_frames, int) or total_frames <= 0:
-                raise ValidationError("REFRAME richiede total_frames esplicito nel target")
+                raise ValidationError(f"{action_type} richiede total_frames esplicito nel target")
+        if action_type == "REFRAME":
             validate_reframe_action(action, total_frames)
-        if str(action.get("type")) == "CAPTIONS":
+        elif action_type == "B_ROLL_PROVIDED":
+            validate_provided_broll(action, total_frames)
+        elif action_type == "B_ROLL_GENERATED":
+            validate_generated_broll(action)
+        elif action_type in {"GRAPHIC", "CTA"}:
+            approved_graphic_actions({"actions": [action]}, total_frames)
+        if action_type == "CAPTIONS":
             spec = contract.action("CAPTIONS")
             if str(action.get("phase")) != spec.phase:
                 raise ValidationError("Fase non consentita per CAPTIONS")
@@ -119,6 +130,28 @@ def record_vertical_social_cut_execution(path: Path, workstation_id: str, plan_i
     return store.get(plan_id)
 
 
+def record_vertical_social_action_execution(path: Path, workstation_id: str, plan_id: str,
+                                            fingerprint: str, action_id: str,
+                                            expected_type: str, evidence: dict[str, Any]):
+    """Record one executor's verified read-back without advancing unrelated actions."""
+    plan = approved_vertical_social_plan(path, workstation_id, plan_id, fingerprint)
+    action = plan.action(action_id)
+    if action.action_type != expected_type:
+        raise ValidationError("Tipo azione diverso dall'esecutore richiesto")
+    if not isinstance(evidence, dict) or not evidence:
+        raise ValidationError("Evidenza esecuzione azione mancante")
+    store = VerticalSocialPlanStore(path, workstation_id)
+    current = store.get(plan_id).action(action_id)
+    if current.state == "APPROVED":
+        transition_action(store, plan_id, action_id, "APPROVED", "APPLIED", evidence)
+        current = store.get(plan_id).action(action_id)
+    if current.state == "APPLIED":
+        transition_action(store, plan_id, action_id, "APPLIED", "VERIFIED", evidence)
+    elif current.state != "VERIFIED":
+        raise ValidationError(f"{expected_type} non eseguibile nello stato {current.state}")
+    return store.get(plan_id)
+
+
 def mark_vertical_social_picture_lock(path: Path, workstation_id: str,
                                       plan_id: str) -> VerticalSocialWorkflowPlan:
     VerticalSocialPlanStore(path, workstation_id).get(plan_id)
@@ -154,7 +187,8 @@ def inspect_vertical_social_plan(path: Path, workstation_id: str, plan_id: str) 
     next_action = next_safe_action(plan)
     return {"plan_id": plan_id, "state": wrapped.state, "picture_locked": wrapped.picture_locked,
             "next_action": None if next_action is None else next_action.action_id,
-            "actions": [action.to_dict() for action in plan.actions]}
+            "actions": [action.to_dict() for action in plan.actions],
+            "final_check": final_vertical_social_check(plan.to_dict(), wrapped.picture_locked)}
 
 
 def compact_vertical_social_card(plan: VerticalSocialWorkflowPlan) -> dict[str, Any]:

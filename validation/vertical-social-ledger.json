@@ -4,12 +4,20 @@
   "capability_default": false,
   "automated_evidence": {
     "result": "PASS",
-    "test_results": ["Contract, plan store, lifecycle and MCP-surface tests pass before native rollout."],
-    "limitations": ["Automated evidence does not validate Resolve on either workstation."]
+    "test_results": ["41 Vertical Social contract, store, lifecycle, adapter and MCP-surface tests pass on 2026-10-10."],
+    "limitations": ["GRAPHIC, CTA, MUSIC_DUCK and CAPTIONS remain non-executable until their own native gates."]
   },
   "workstation_gates": {
-    "PC_PERSONALE": {"workstation_id": "PC_PERSONALE", "status": "PENDING", "checks": {"native_gate": "PENDING"}, "evidence": []},
+    "PC_PERSONALE": {
+      "workstation_id": "PC_PERSONALE",
+      "status": "PENDING",
+      "checks": {"CUT": "PASS", "REFRAME": "PASS", "B_ROLL_PROVIDED": "PASS", "GRAPHIC_CTA": "PENDING", "MUSIC_DUCK": "PENDING", "CAPTIONS": "PENDING"},
+      "evidence": [
+        "Synthetic provisional timeline: CUT read-back verified without modifying the source.",
+        "Synthetic provisional timeline: MediaIn -> Transform -> MediaOut REFRAME read-back verified.",
+        "Synthetic provisional timeline: 60-frame supplied B-roll inserted on dedicated video track and duration read back."
+      ]
+    },
     "PC_SEGRETERIA": {"workstation_id": "PC_SEGRETERIA", "status": "PENDING", "checks": {"native_gate": "PENDING"}, "evidence": []}
   }
 }
-

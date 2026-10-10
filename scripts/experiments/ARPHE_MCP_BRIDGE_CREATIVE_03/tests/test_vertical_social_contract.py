@@ -32,12 +32,16 @@ class VerticalSocialContractTests(unittest.TestCase):
         _, contract = self._load()
 
         self.assertEqual("ARPHE_VERTICAL_SOCIAL", contract.workflow_id)
-        self.assertEqual(1, contract.version)
+        self.assertEqual(2, contract.version)
         self.assertEqual(("ANALYSE", "PROPOSE", "PROVISIONAL_EDIT", "PICTURE_LOCK", "POST_LOCK", "REVIEW"),
                          contract.phases)
         self.assertEqual("PARTIAL", contract.action("CAPTIONS").capability_status)
         self.assertFalse(contract.action("CAPTIONS").executable)
         self.assertEqual("CAP_VERTICAL_SOCIAL", contract.action("CUT").required_capability)
+        self.assertTrue(contract.action("CUT").executable)
+        self.assertTrue(contract.action("REFRAME").executable)
+        self.assertTrue(contract.action("B_ROLL_PROVIDED").executable)
+        self.assertFalse(contract.action("B_ROLL_GENERATED").executable)
 
     def test_loader_rejects_unknown_key_and_duplicate_action(self):
         module, _ = self._load()

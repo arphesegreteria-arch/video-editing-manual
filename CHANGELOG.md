@@ -662,3 +662,14 @@ Principio ancora valido:
 - L'approvazione resta legata a target e istruzioni editoriali; gli stati/evidenze di esecuzione
   non invalidano un retry idempotente. Test automatici: piano, impronta, range, read-back e resume
   PASS. Nessun gate Resolve nativo né workstation è stato modificato per questa estensione.
+
+## 2026-10-10 — Vertical Social contract v2 e primi esecutori
+
+- Separati `B_ROLL_PROVIDED` e `B_ROLL_GENERATED`: il primo richiede asset, range sorgente,
+  range timeline e motivo; il secondo fallisce chiuso finché manca un provider validato.
+- Aggiunto l'esecutore MCP idempotente per REFRAME e B-roll fornito sulla sola timeline provvisoria
+  del piano, con target esplicito, read-back, journal e ripristino della timeline sorgente.
+- Grafiche e CTA sono opzionali e validate contro ruoli colore canonici; non vengono applicate se
+  assenti e restano non eseguibili fino al proprio gate Resolve.
+- Test Vertical Social: 41 PASS. Suite completa del bridge: 403 PASS e 1 skip previsto. Gate nativi PC_PERSONALE PASS per CUT, REFRAME e B-roll fornito;
+  PC_SEGRETERIA non modificato e ancora PENDING.

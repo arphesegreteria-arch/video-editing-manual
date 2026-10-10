@@ -1,12 +1,13 @@
 {
   "schema_version": 1,
   "workflow_id": "ARPHE_VERTICAL_SOCIAL",
-  "version": 1,
+  "version": 2,
   "phases": ["ANALYSE", "PROPOSE", "PROVISIONAL_EDIT", "PICTURE_LOCK", "POST_LOCK", "REVIEW"],
   "actions": [
-    {"type": "CUT", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "EXPERIMENTAL", "executable": false},
-    {"type": "REFRAME", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "EXPERIMENTAL", "executable": false},
-    {"type": "B_ROLL", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "EXPERIMENTAL", "executable": false},
+    {"type": "CUT", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "REFRAME", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "B_ROLL_PROVIDED", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "B_ROLL_GENERATED", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "UNAVAILABLE", "executable": false},
     {"type": "GRAPHIC", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "EXPERIMENTAL", "executable": false},
     {"type": "CTA", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "EXPERIMENTAL", "executable": false},
     {"type": "MUSIC_DUCK", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "EXPERIMENTAL", "executable": false},
@@ -14,4 +15,3 @@
     {"type": "GENERATIVE_SHOT", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "UNAVAILABLE", "executable": false}
   ]
 }
-

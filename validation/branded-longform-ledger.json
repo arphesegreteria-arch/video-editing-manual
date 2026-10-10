@@ -27,7 +27,7 @@
         "rollback": "PASS"
       },
       "evidence": [
-        "2026-10-10 final gate project ARPHE_BRANDED_LONGFORM_NATIVE_GATE_20261010_204043 created and deleted.",
+        "2026-10-10 final gate project ARPHE_BRANDED_LONGFORM_NATIVE_GATE_20261010_205008 created and deleted.",
         "Created __BRANDED_LONGFORM_GATE_ORIGINAL_CLEANUP and __BRANDED_LONGFORM_GATE_ORIGINAL_EDITORIAL; original remained selected after each duplicate.",
         "Added one proposal marker and one exact [0,30] Fusion graphic ARPHE_LONGFORM_P001 with text_readback=true, text_node_count=1 and font=Satoshi.",
         "Verified ORIGINAL/CLEANUP/EDITORIAL ownership, deleted temporary timelines/project and restored ARPHE_VERTICAL_CUT_NATIVE_GATE_20261010B."

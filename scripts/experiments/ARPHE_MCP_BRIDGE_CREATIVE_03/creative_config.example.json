@@ -27,6 +27,7 @@
   "carabellese_checkpoint_root": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/carabellese-checkpoints",
   "vertical_social_plans_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/vertical_social_plans.json",
   "vertical_social_journal_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/vertical_social_journal.jsonl",
+  "workflow_control_jobs_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/workflow_control_jobs.json",
   "allowed_projects": [],
   "allowed_timelines": [],
   "feature_flags": {
@@ -44,7 +45,8 @@
     "CAP_READABILITY_GUARD": false,
     "CAP_EDITORIAL_SELECTION": false,
     "CAP_CARABELLESE_CLEANUP": false,
-    "CAP_VERTICAL_SOCIAL": false
+    "CAP_VERTICAL_SOCIAL": false,
+    "CAP_WORKFLOW_CONTROL_PLANE": false
   },
   "palette": {
     "ivory": "#F7F2E8",

@@ -24,6 +24,7 @@ CAPABILITY_STATUS = {
     "CAP_CARABELLESE_CLEANUP": "PENDING",
     "CAP_VERTICAL_SOCIAL": "EXPERIMENTAL",
     "CAP_BRANDED_LONGFORM_EDITORIAL": "PENDING",
+    "CAP_WORKFLOW_CONTROL_PLANE": "PENDING",
 }
 
 
@@ -133,6 +134,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
             project is not None and timeline is not None
             and _method(timeline, "DuplicateTimeline") and _method(timeline, "AddMarker")
         ),
+        "CAP_WORKFLOW_CONTROL_PLANE": bool(project is not None and timeline is not None),
     }
 
 

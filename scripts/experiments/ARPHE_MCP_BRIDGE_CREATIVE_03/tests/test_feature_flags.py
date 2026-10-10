@@ -58,6 +58,9 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertTrue(capabilities["CAP_CARABELLESE_CLEANUP"]["technically_available"])
         self.assertFalse(DEFAULT_FLAGS["CAP_BRANDED_LONGFORM_EDITORIAL"])
         self.assertTrue(capabilities["CAP_BRANDED_LONGFORM_EDITORIAL"]["technically_available"])
+        self.assertFalse(DEFAULT_FLAGS["CAP_WORKFLOW_CONTROL_PLANE"])
+        self.assertFalse(capabilities["CAP_WORKFLOW_CONTROL_PLANE"]["active"])
+        self.assertTrue(capabilities["CAP_WORKFLOW_CONTROL_PLANE"]["implemented"])
 
 
 if __name__ == "__main__":

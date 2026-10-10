@@ -17,7 +17,7 @@ CAPABILITY_NAMES = (
     "CAP_EDITORIAL_SELECTION",
     "CAP_CARABELLESE_CLEANUP",
     "CAP_VERTICAL_SOCIAL",
-    "CAP_BRANDED_LONGFORM_EDITORIAL",
+    "CAP_BRANDED_LONGFORM_EDITORIAL", "CAP_WORKFLOW_CONTROL_PLANE",
 )
 
 DEFAULT_PALETTE = {
@@ -48,6 +48,7 @@ DEFAULT_FLAGS = {
     "CAP_CARABELLESE_CLEANUP": False,
     "CAP_VERTICAL_SOCIAL": False,
     "CAP_BRANDED_LONGFORM_EDITORIAL": False,
+    "CAP_WORKFLOW_CONTROL_PLANE": False,
 }
 
 ALLOWED_RENDER_PAIRS = {("mp4", "H264"), ("mov", "ProRes422HQ")}
@@ -98,6 +99,7 @@ class CreativeConfig:
     vertical_social_journal_path: Path = Path("vertical_social_journal.jsonl")
     branded_longform_jobs_path: Path = Path("branded_longform_jobs.json")
     branded_longform_journal_path: Path = Path("branded_longform_journal.jsonl")
+    workflow_control_jobs_path: Path = Path("workflow_control_jobs.json")
 
 
 def _path(value: str, base: Path) -> Path:
@@ -215,5 +217,8 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         ),
         branded_longform_journal_path=_path(
             str(raw.get("branded_longform_journal_path", "")), editorial_root / "branded_longform_journal.jsonl"
+        ),
+        workflow_control_jobs_path=_path(
+            str(raw.get("workflow_control_jobs_path", "")), editorial_root / "workflow_control_jobs.json"
         ),
     )

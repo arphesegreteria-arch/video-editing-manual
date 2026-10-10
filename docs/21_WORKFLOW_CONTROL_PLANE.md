@@ -18,12 +18,14 @@ Non serve conoscere ID, tool o JSON. Per modifiche editoriali si risponde normal
 ## Garanzie tecniche
 
 - ogni job è locale alla workstation che lo ha creato;
-- il target contiene progetto e timeline espliciti;
+- il target contiene progetto, timeline e identità Resolve espliciti; Vertical Social lega anche
+  l'impronta della sorgente viva;
 - un piano deve essere approvato con la sua impronta esatta prima di un avanzamento;
 - l'impronta comprende la review o proposta nativa corrente; se cambia, la card diventa `STALE`;
 - una ripetizione restituisce l'evidenza già registrata, non crea un secondo output;
 - un job multi-step può poi avanzare alla diversa operazione successiva senza essere ricreato;
-- una differenza di workstation, progetto o timeline blocca l'operazione;
+- una differenza di workstation, progetto, timeline, identità o sorgente blocca l'operazione;
+- il registro del controllo è serializzato anche se due processi del bridge partono insieme;
 - gli FPS di playback sono letti separatamente dagli FPS di timeline e non vengono cambiati dal controllo iniziale.
 
 ## Recupero tecnico

@@ -55,6 +55,19 @@ Esito finale: `PC_PERSONALE LIVE PASS` per card, approval binding, target block,
 recoverable failure/resume e restore. La delivery comune resta intenzionalmente `not_available`
 perché nessun workflow nativo espone ancora una prova verificata; `PC_SEGRETERIA` resta `PENDING`.
 
+### Addendum — hardening da review indipendente (codice, non gate nativo)
+
+- riprodotti e chiusi: perdita di update fra processi concorrenti, job bloccato dopo interruzione,
+  fingerprint longform incompleta, lookup Vertical con ID troncato, dispatcher senza resume
+  `BLOCKED`, contratto longform assente nell'installer e cambio contesto legacy non serializzato;
+- binding Control Plane esteso a identità timeline; Vertical Social acquisisce e ricontrolla anche
+  il fingerprint del contenuto sorgente, quindi un rimpiazzo omonimo si ferma prima del dispatcher;
+- suite Creative dopo le regressioni: `490 PASS / 1 SKIP` ambientale; suite Windows: `58 PASS / 1
+  SKIP` ambientale. Inclusa prova con due processi Python indipendenti sullo stesso registro.
+
+Decisione: il codice hardening deve essere riallineato e sottoposto a un nuovo gate isolato su
+`PC_PERSONALE` prima di qualsiasi rollout. Non è stato installato né provato su `PC_SEGRETERIA`.
+
 ## 2026-10-09 — Studio Carabellese cleanup: gate nativo personale
 
 ### Ipotesi

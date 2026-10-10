@@ -152,6 +152,10 @@ viene scritto nulla. CAPTIONS resta post-picture-lock e lega l'esecuzione all'im
 timeline provvisoria, rifiutando modifiche successive al lock. `CAP_VERTICAL_SOCIAL` resta
 disabilitato a fine prova e Segreteria non è stata toccata.
 
+Il commit `3fa0385` è installato sul runtime `PC_PERSONALE`: copia codice verificata tramite hash,
+contratto v5, task/supervisore Running e `/readyz` HTTP 200. Il flag resta `false`, quindi questa
+installazione non autorizza ancora lavorazioni Vertical Social reali.
+
 Sul `PC_PERSONALE` è stato completato un probe reale sulla timeline verticale
 `ARPHE_SHORTFORM_MASTER_V4`: creazione subtitle nativa, conversione logica in un unico layer
 Fusion con 12 Text+ temporizzati, stile Satoshi Bold bianco su bordeaux, size 0.050, fascia bassa

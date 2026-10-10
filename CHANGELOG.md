@@ -685,3 +685,6 @@ Principio ancora valido:
   parametrico PASS; la precedente prova renderizzata reale resta documentata separatamente.
 - Suite completa aggiornata: 419 PASS e 1 skip Windows previsto. `CAP_VERTICAL_SOCIAL=false`,
   PC_SEGRETERIA non toccato, B-roll generato ancora chiuso.
+- Commit `3fa0385` reinstallato sul solo `PC_PERSONALE`: hash della copia runtime corrispondente,
+  contratto v5, task e supervisore attivi, `/readyz` HTTP 200. Il flag Vertical Social è rimasto
+  disabilitato; nessuna config o runtime di `PC_SEGRETERIA` è stata modificata.

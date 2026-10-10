@@ -18,6 +18,9 @@ class EditorialProposal:
     blocked_reason: str | None
     start_frame: int
     end_frame: int
+    asset_path: str | None = None
+    source_start_frame: int | None = None
+    source_end_frame: int | None = None
 
 
 def validate_proposal(profile_id: str, kind: str) -> None:
@@ -55,10 +58,17 @@ def propose_editorial(segments: list[dict[str, Any]], profile_id: str) -> tuple[
                           "GENERATED_MEDIA_REQUIRES_PROVIDER" if kind == "B_ROLL_GENERATED" else None)
         fps = float(segment.get("fps", 30))
         start, end = float(segment["start"]), float(segment["end"])
+        broll = segment.get("provided_broll")
+        asset_path = str(broll.get("asset_path", "")).strip() if isinstance(broll, dict) else None
+        source_start = int(broll["source_start_frame"]) if isinstance(broll, dict) and "source_start_frame" in broll else None
+        source_end = int(broll["source_end_frame"]) if isinstance(broll, dict) and "source_end_frame" in broll else None
+        if kind == "B_ROLL_PROVIDED" and (not asset_path or source_start is None or source_end is None):
+            executable, blocked_reason = False, "BROLL_ASSET_REQUIRED"
         proposals.append(EditorialProposal(
             f"P{index:03d}", kind, start, end, rationale, profile_id,
             executable, blocked_reason,
             round(start * fps), round(end * fps),
+            asset_path, source_start, source_end,
         ))
     return tuple(proposals)
 

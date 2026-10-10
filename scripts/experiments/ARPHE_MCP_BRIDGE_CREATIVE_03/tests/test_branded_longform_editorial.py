@@ -46,7 +46,8 @@ class BrandedLongformEditorialTests(unittest.TestCase):
     def test_broll_camera_and_low_confidence_are_explicit_proposals(self):
         from bridge.branded_longform_editorial import propose_editorial
         proposals = propose_editorial([
-            {"class": "STORY", "start": 1, "end": 3, "provided_broll": True},
+            {"class": "STORY", "start": 1, "end": 3, "provided_broll": {
+                "asset_path": "broll.mov", "source_start_frame": 10, "source_end_frame": 70}},
             {"class": "EXPLAIN", "start": 4, "end": 6, "generated_broll": True},
             {"class": "ARGUE", "start": 7, "end": 9, "camera_cut_available": True},
             {"class": "ARGUE", "start": 10, "end": 12, "confidence": 0.4},
@@ -57,3 +58,4 @@ class BrandedLongformEditorialTests(unittest.TestCase):
         self.assertFalse(proposals[1].executable)
         self.assertFalse(proposals[2].executable)
         self.assertFalse(proposals[3].executable)
+        self.assertEqual("broll.mov", proposals[0].asset_path)

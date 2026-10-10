@@ -74,6 +74,7 @@ from .branded_longform_resolve import (add_proposal_markers as do_add_branded_ma
                                       timeline_structure_fingerprint as do_branded_timeline_fingerprint,
                                       verify_branded_longform_timelines as do_verify_branded_timelines)
 from .branded_longform_graphics import apply_editorial_graphic as do_apply_branded_graphic
+from .branded_longform_broll import apply_provided_broll as do_apply_branded_broll
 from .branded_longform_workflow import (application_for_job as do_branded_application,
                                        approve_batch as do_approve_branded_batch,
                                        propose_batch as do_propose_branded_batch)
@@ -296,7 +297,7 @@ def create_branded_longform_cleanup(profile_id: str, source_fingerprint: str,
                                     cleanup_events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Create or recover the derived CLEANUP timeline; never mutates the original."""
     try:
-        _, manager, project, timeline, config, _, error = _runtime()
+        resolve, manager, project, timeline, config, _, error = _runtime()
         if error: return error
         _require_branded_longform(config, manager, project, timeline)
         contract = load_branded_longform_contract(BRANDED_LONGFORM_CONTRACT_PATH)
@@ -366,7 +367,7 @@ def approve_branded_longform_batch(job_id: str, proposal_fingerprint: str,
 def apply_branded_longform_batch(job_id: str) -> dict[str, Any]:
     """Create the EDITORIAL timeline and apply only the exact approved action plan."""
     try:
-        _, manager, project, timeline, config, _, error = _runtime()
+        resolve, manager, project, timeline, config, _, error = _runtime()
         if error: return error
         _require_branded_longform(config, manager, project, timeline)
         store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
@@ -395,6 +396,8 @@ def apply_branded_longform_batch(job_id: str) -> dict[str, Any]:
                                        "operation": "NO_OVERLAY"})
                 elif item.get("kind") in {"KEYWORD_BOX", "PROGRESSIVE_LIST", "CHAPTER_CARD"}:
                     operations.append(do_apply_branded_graphic(project, editorial, config, job, item))
+                elif item.get("kind") == "B_ROLL_PROVIDED":
+                    operations.append(do_apply_branded_broll(resolve, project, editorial, config, job, item))
                 else:
                     operations.append({"proposal_id": item["proposal_id"], "status": "BLOCKED",
                                        "reason": "EXECUTOR_NON_DISPONIBILE"})

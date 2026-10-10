@@ -148,3 +148,77 @@ zero-write. Il progetto e i file sintetici sono stati rimossi; il progetto origi
 aperto e `CAP_EDITORIAL_SELECTION=false` al termine.
 
 `PC_SEGRETERIA` resta `PENDING`: non è stata installata, abilitata o usata per questo gate.
+
+## Gate separato per la pulizia YouTube Studio Carabellese
+
+## Vertical Social Assistant — pianificazione sicura
+
+`ARPHE_VERTICAL_SOCIAL` usa una card unica: richiesta libera → piano versionato → approvazione
+legata all'impronta → timeline provvisoria → autocontrollo → review umana. Le azioni sono
+semantiche e chiuse; richieste non supportate restano bloccate con un motivo, senza accesso
+arbitrario a Resolve. Caption e sottotitoli restano post-picture-lock e non vengono applicati
+finché non esiste un picture lock con impronta della timeline. Il contratto v5 separa `B_ROLL_PROVIDED` da
+`B_ROLL_GENERATED`: il primo usa soltanto file espliciti e allowlistati, il secondo resta bloccato
+finché non viene scelto e validato un provider generativo.
+
+Il flag `CAP_VERTICAL_SOCIAL` parte sempre `false`. Job, journal e prove restano locali alla
+workstation. Il ledger `validation/vertical-social-ledger.json` conserva gate indipendenti:
+`PC_PERSONALE=PENDING` e `PC_SEGRETERIA=PENDING` finché ciascun PC non supera la propria prova.
+Sul personale i sottogate nativi CUT, REFRAME, B-roll fornito, MUSIC_DUCK, GRAPHIC/CTA e CAPTIONS
+sono PASS; questo non abilita né modifica Segreteria.
+
+Grafiche e CTA sono opzionali: assenza nel piano significa zero scritture. Se richieste, il piano
+deve indicare range, testo, motivo e ruolo colore canonico del Graphic Kit. Il tool
+`apply_vertical_social_action` esegue REFRAME, `B_ROLL_PROVIDED`, MUSIC_DUCK, GRAPHIC, CTA e
+CAPTIONS soltanto sulla timeline provvisoria posseduta dal piano, registra il read-back e
+ripristina sempre la timeline sorgente. CAPTIONS accetta nel piano il placeholder
+`AT_PICTURE_LOCK`: al lock il bridge calcola e conserva l'impronta reale della timeline; se il
+montaggio cambia prima dei sottotitoli, l'esecuzione si blocca senza scrivere.
+
+La segreteria deve ascoltare i marker e rispondere una volta sola, senza spostarli. Alessio o
+personale qualificato gestiscono failure, restore, overlay di apprendimento e soglie tecniche. Il
+ledger `validation/carabellese-cleanup-ledger.json` parte con `PC_PERSONALE=PENDING` e
+`PC_SEGRETERIA=PENDING`: prove automatiche o di un PC non promuovono l'altro. L'installer conserva
+flag, job, journal, overlay, proposte e checkpoint locali senza copiarli tra workstation.
+# Branded longform editorial
+
+`BRANDED_LONGFORM_EDITORIAL` is the shared longform engine. It must always select one explicit
+profile:
+
+- `ARPHE_LONGFORM_EDITORIAL`: Graphic Kit ARPHE ready;
+- `CARABELLESE_LONGFORM_EDITORIAL`: `kit_status=PENDING`, therefore cleanup, multicamera,
+  transcript, markers and proposals are allowed, while every graphic write is blocked.
+
+The original timeline is never modified. The bridge creates `<original>_CLEANUP`, adds the
+proposal markers there, accepts one fingerprint-bound batch decision and creates
+`<original>_EDITORIAL` only after approval. ARPHE graphic proposals use the installed Fusion
+carrier and verify their exact range and Text+ read-back. A retry of an already applied job returns
+the registered operations rather than duplicating overlays.
+
+When high-confidence cleanup events are supplied for a single synchronized A/V source, the bridge
+rebuilds `_CLEANUP` from the kept ranges and never edits the original. Multicam or complex timelines
+are deliberately rejected from automatic cutting and returned for review until native sync/camera
+selection is available.
+
+An approved `B_ROLL_PROVIDED` proposal must carry an allowlisted asset path plus exact source and
+editorial ranges of equal duration. It is imported only onto the owned `_EDITORIAL` timeline. Generated
+B-roll and camera cuts remain explicit proposals, not automatic operations.
+
+OBS multicamera input uses `PROGRAM` as the only final audio. `CAM_A`, `CAM_B`, and later cameras
+may carry guide audio solely for synchronization. Missing guide audio or mismatched frame rates
+produce review-required status rather than a claimed sync.
+Call `inspect_branded_longform_sources` first and pass its SHA-256 `source_fingerprint` to cleanup;
+the bridge also binds the original timeline structure so a later source edit invalidates the job.
+
+Normal secretary interaction is one compact card. A valid response can say, for example,
+`approva P001 e P003; rifiuta P002; modifica P004: usa solo la parola fiducia`. The operator must
+not send Resolve commands: ChatGPT converts this answer into the typed batch. Final human review
+remains mandatory.
+
+The capability is `CAP_BRANDED_LONGFORM_EDITORIAL`, default `false`. Native validation is allowed
+only on PC_PERSONALE inside a disposable project named
+`ARPHE_BRANDED_LONGFORM_NATIVE_GATE_*`. PC_SEGRETERIA requires a later independent rollout.
+
+On 2026-10-10 the PC_PERSONALE native gate passed cleanup/editorial duplication, marker insertion,
+one exact-range ARPHE Fusion graphic and complete rollback. This validates the implementation on
+that workstation only; it does not enable the capability and does not validate PC_SEGRETERIA.

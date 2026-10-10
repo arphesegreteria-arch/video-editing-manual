@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "workflow_id": "ARPHE_VERTICAL_SOCIAL",
+  "version": 5,
+  "phases": ["ANALYSE", "PROPOSE", "PROVISIONAL_EDIT", "PICTURE_LOCK", "POST_LOCK", "REVIEW"],
+  "actions": [
+    {"type": "CUT", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "REFRAME", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "B_ROLL_PROVIDED", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "B_ROLL_GENERATED", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "UNAVAILABLE", "executable": false},
+    {"type": "GRAPHIC", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "CTA", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "MUSIC_DUCK", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "CAPTIONS", "phase": "POST_LOCK", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "VALIDATED", "executable": true},
+    {"type": "GENERATIVE_SHOT", "phase": "PROVISIONAL_EDIT", "required_capability": "CAP_VERTICAL_SOCIAL", "capability_status": "UNAVAILABLE", "executable": false}
+  ]
+}

@@ -391,6 +391,16 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertIn(str(creative_config), result.stdout)
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_feature_flag_accepts_carabellese_cleanup_gate(self):
+        creative_config, _command = self.write_profile_runtime_config()
+        config = json.loads(creative_config.read_text(encoding="utf-8"))
+        config["feature_flags"]["CAP_CARABELLESE_CLEANUP"] = False
+        creative_config.write_text(json.dumps(config), encoding="utf-8")
+        result = self.run_feature_flag_dry_run("CAP_CARABELLESE_CLEANUP")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("CAP_CARABELLESE_CLEANUP", result.stdout)
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_keeps_state_and_audit_inside_profile_directory(self):
         config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
         result = self.run_creative_install(config_path)
@@ -407,7 +417,8 @@ class ProfileInstallerTests(unittest.TestCase):
         destination = self.root / "creative-install"
         for name in ("editorial_workflows.json", "render_profiles.json", "artifact_retention.json",
                      "review_readability_contract.json", "editorial_selection_contract.json",
-                     "editorial_preferences.json"):
+                     "editorial_preferences.json", "carabellese_cleanup_contract.json",
+                     "carabellese_preferences.json"):
             self.assertEqual(
                 (CREATIVE_INSTALLER.parent / name).read_bytes(),
                 (destination / name).read_bytes(),
@@ -432,12 +443,23 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertFalse(config["feature_flags"]["CAP_RESOLVE_RETIREMENT"])
         self.assertFalse(config["feature_flags"]["CAP_READABILITY_GUARD"])
         self.assertFalse(config["feature_flags"]["CAP_EDITORIAL_SELECTION"])
+        self.assertFalse(config["feature_flags"]["CAP_CARABELLESE_CLEANUP"])
         self.assertEqual(config_path.parent / "editorial_jobs.json", Path(config["editorial_jobs_path"]))
         self.assertEqual(config_path.parent / "editorial_journal.jsonl", Path(config["editorial_journal_path"]))
         self.assertEqual(config_path.parent / "editorial_profile_overlay.json",
                          Path(config["editorial_profile_overlay_path"]))
         self.assertEqual(config_path.parent / "editorial_profile_proposals.json",
                          Path(config["editorial_profile_proposals_path"]))
+        self.assertEqual(config_path.parent / "carabellese_jobs.json",
+                         Path(config["carabellese_jobs_path"]))
+        self.assertEqual(config_path.parent / "carabellese_journal.jsonl",
+                         Path(config["carabellese_journal_path"]))
+        self.assertEqual(config_path.parent / "carabellese_profile_overlay.json",
+                         Path(config["carabellese_profile_overlay_path"]))
+        self.assertEqual(config_path.parent / "carabellese_profile_proposals.json",
+                         Path(config["carabellese_profile_proposals_path"]))
+        self.assertEqual(config_path.parent / "carabellese-checkpoints",
+                         Path(config["carabellese_checkpoint_root"]))
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_defaults_readability_guard_off_for_both_workstations(self):
@@ -524,6 +546,44 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("PC_SEGRETERIA", result.stderr)
         self.assertFalse((self.root / "creative-foreign-editorial").exists())
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_upgrade_preserves_carabellese_flag_and_state_for_true_and_false(self):
+        for enabled in (True, False):
+            with self.subTest(enabled=enabled):
+                config_path = self.root / f"carabellese-{enabled}" / "PC_PERSONALE" / "creative_config.json"
+                config_path.parent.mkdir(parents=True)
+                jobs = config_path.parent / "carabellese_jobs.json"
+                jobs.write_text(json.dumps({"schema": "ARPHE_CARABELLESE_JOBS_V1",
+                                            "workstation_id": "PC_PERSONALE", "jobs": {}}),
+                                encoding="utf-8")
+                before = jobs.read_bytes()
+                config_path.write_text(json.dumps({
+                    "workstation_id": "PC_PERSONALE",
+                    "state_path": str(config_path.parent / "creative_state.json"),
+                    "audit_log_path": str(config_path.parent / "audit.jsonl"),
+                    "carabellese_jobs_path": str(jobs),
+                    "feature_flags": {"CAP_CARABELLESE_CLEANUP": enabled},
+                }), encoding="utf-8")
+                result = self.run_creative_install(
+                    config_path, destination=self.root / f"creative-carabellese-{enabled}")
+                self.assertEqual(0, result.returncode, result.stderr)
+                updated = json.loads(config_path.read_text(encoding="utf-8"))
+                self.assertEqual(enabled, updated["feature_flags"]["CAP_CARABELLESE_CLEANUP"])
+                self.assertEqual(before, jobs.read_bytes())
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_creative_install_rejects_foreign_carabellese_state_before_writes(self):
+        config_path = self.root / "foreign-carabellese" / "PC_PERSONALE" / "creative_config.json"
+        config_path.parent.mkdir(parents=True)
+        jobs = config_path.parent / "carabellese_jobs.json"
+        jobs.write_text(json.dumps({"schema": "ARPHE_CARABELLESE_JOBS_V1",
+                                    "workstation_id": "PC_SEGRETERIA", "jobs": {}}), encoding="utf-8")
+        destination = self.root / "creative-foreign-carabellese"
+        result = self.run_creative_install(config_path, destination=destination)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("PC_SEGRETERIA", result.stderr)
+        self.assertFalse(destination.exists())
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_rejects_foreign_artifact_registry_before_writes(self):

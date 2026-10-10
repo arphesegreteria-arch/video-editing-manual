@@ -119,6 +119,20 @@ risponde una volta con decisione e motivo per tutti i candidati. Stati `BLOCKED`
 `FAILED_RECOVERABLE` o `STALE` richiedono assistenza tecnica; non avviare un secondo job sulla
 stessa timeline. Il profilo condiviso può cambiare soltanto dopo approvazione `ALESSIO` e revisione
 esplicita della patch; motivi, trascrizioni e percorsi restano locali.
+
+## Pulizia YouTube Studio Carabellese
+
+`CARABELLESE_YOUTUBE_CLEANUP` lavora sulla sola timeline originale 1920×1080 agli FPS della
+sorgente, con playback uguale agli FPS timeline. La v1 non aggiunge CTA, Graphic Kit, grafiche o
+render: individua inizio/fine reali, riduce pause lunghe e segnala indicazioni editoriali parlate.
+`CAP_CARABELLESE_CLEANUP` parte `false` e resta separata su ogni PC.
+
+La segreteria ascolta i marker e risponde in un solo messaggio: una decisione con motivo per ogni
+boundary e indicazione, più una decisione batch con motivo per le pause. Non sposta i marker e non
+avvia un secondo job. Dopo l'approvazione, il bridge esporta il checkpoint `.drt`, applica e
+verifica sulla stessa timeline; stati `BLOCKED`, `FAILED_RECOVERABLE` o `STALE` passano ad Alessio
+o a personale tecnico. Le soglie possono essere descritte in modo più semplice durante la
+calibrazione, ma i valori eseguiti restano quelli del contratto versionato.
 # Render batch sicuri
 
 I render nuovi seguono il percorso chiuso `validate_editorial_brief` →

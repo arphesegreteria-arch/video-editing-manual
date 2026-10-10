@@ -28,13 +28,14 @@ class EditorialWorkflowRegistryTests(unittest.TestCase):
         self.workflows = load_workflow_registry(WORKFLOWS)
         self.profiles = load_render_profile_registry(PROFILES)
 
-    def test_four_workflows_load_with_unique_ids_and_required_questions(self):
+    def test_five_workflows_load_with_unique_ids_and_required_questions(self):
         self.assertEqual(
             {
                 "ARPHE_PODCAST_REELS_CTA",
                 "ARPHE_VERTICAL_SOCIAL",
                 "CARABELLESE_YOUTUBE_CLEANUP",
                 "ARPHE_LONGFORM_EDITORIAL",
+                "BRANDED_LONGFORM_EDITORIAL",
             },
             set(self.workflows.workflows),
         )

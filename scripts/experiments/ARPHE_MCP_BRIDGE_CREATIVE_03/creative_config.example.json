@@ -20,6 +20,13 @@
   "editorial_journal_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/editorial_journal.jsonl",
   "editorial_profile_overlay_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/editorial_profile_overlay.json",
   "editorial_profile_proposals_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/editorial_profile_proposals.json",
+  "carabellese_jobs_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/carabellese_jobs.json",
+  "carabellese_journal_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/carabellese_journal.jsonl",
+  "carabellese_profile_overlay_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/carabellese_profile_overlay.json",
+  "carabellese_profile_proposals_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/carabellese_profile_proposals.json",
+  "carabellese_checkpoint_root": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/carabellese-checkpoints",
+  "vertical_social_plans_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/vertical_social_plans.json",
+  "vertical_social_journal_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/vertical_social_journal.jsonl",
   "allowed_projects": [],
   "allowed_timelines": [],
   "feature_flags": {
@@ -35,7 +42,9 @@
     "CAP_ARTIFACT_MAINTENANCE": false,
     "CAP_RESOLVE_RETIREMENT": false,
     "CAP_READABILITY_GUARD": false,
-    "CAP_EDITORIAL_SELECTION": false
+    "CAP_EDITORIAL_SELECTION": false,
+    "CAP_CARABELLESE_CLEANUP": false,
+    "CAP_VERTICAL_SOCIAL": false
   },
   "palette": {
     "ivory": "#F7F2E8",

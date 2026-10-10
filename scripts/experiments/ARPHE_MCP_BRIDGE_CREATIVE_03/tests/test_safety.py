@@ -329,8 +329,10 @@ class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
     async def test_tools_are_closed_world_and_destructive_tools_are_explicit(self):
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         self.assertEqual(set(EXPOSED_TOOL_NAMES), set(tools))
+        destructive = {"run_artifact_maintenance", "execute_resolve_retirement",
+                       "apply_carabellese_cleanup", "recover_carabellese_cleanup"}
         for tool in tools.values():
-            self.assertEqual(tool.name in {"run_artifact_maintenance", "execute_resolve_retirement"},
+            self.assertEqual(tool.name in destructive,
                              tool.annotations.destructive_hint, tool.name)
             self.assertFalse(tool.annotations.open_world_hint, tool.name)
         self.assertTrue(tools["run_artifact_maintenance"].annotations.idempotent_hint)

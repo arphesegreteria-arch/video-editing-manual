@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
@@ -19,7 +19,87 @@ from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
                                restore_artifact as do_restore_artifact,
                                run_maintenance as do_run_maintenance)
 from .artifact_records import artifact_store_for, load_artifact_policy
+from .audio_provenance import media_fingerprint
 from .config import load_config
+from .carabellese_analysis import (
+    cleanup_candidate_fingerprint,
+    derive_pause_candidates,
+    load_carabellese_inputs,
+    validate_cleanup_candidates,
+)
+from .carabellese_apply import (
+    apply_or_resume_carabellese_cleanup as do_apply_carabellese_cleanup,
+    media_source_identity as carabellese_media_source_identity,
+)
+from .carabellese_checkpoint import (
+    export_timeline_checkpoint as do_export_carabellese_checkpoint,
+    timeline_content_fingerprint as carabellese_timeline_fingerprint,
+)
+from .carabellese_contract import (
+    carabellese_contract_fingerprint,
+    load_carabellese_contract,
+    load_carabellese_preferences,
+)
+from .carabellese_jobs import CarabelleseJobStore, new_carabellese_job
+from .carabellese_learning import (
+    append_carabellese_outcome as do_append_carabellese_outcome,
+    approve_carabellese_profile_proposal as do_approve_carabellese_profile,
+    compile_carabellese_profile_proposal as do_compile_carabellese_profile,
+    inspect_carabellese_metrics as do_inspect_carabellese_metrics,
+)
+from .carabellese_markers import mark_carabellese_review as do_mark_carabellese_review
+from .carabellese_recovery import (
+    close_carabellese_cleanup as do_close_carabellese_cleanup,
+    recover_carabellese_cleanup as do_recover_carabellese_cleanup,
+)
+from .carabellese_review import (
+    carabellese_secretary_instructions,
+    submit_carabellese_review as do_submit_carabellese_review,
+)
+from .carabellese_transcription import (
+    get_carabellese_transcription_job as do_get_carabellese_transcription_job,
+    start_carabellese_transcription as do_start_carabellese_transcription,
+)
+from .vertical_social_contract import load_vertical_social_contract
+from .branded_longform_contract import branded_longform_fingerprint, load_branded_longform_contract
+from .branded_longform_jobs import BrandedLongformJobStore, new_branded_longform_job
+from .branded_longform_media import (build_sync_plan as do_build_branded_sync_plan,
+                                     inspect_longform_sources as do_inspect_branded_sources,
+                                     source_package_fingerprint as do_branded_source_fingerprint)
+from .branded_longform_cleanup import cleanup_cut_ranges, plan_cleanup
+from .branded_longform_resolve import (add_proposal_markers as do_add_branded_markers,
+                                      create_cleanup_timeline as do_create_branded_cleanup,
+                                      create_editorial_timeline as do_create_branded_editorial,
+                                      find_owned_timeline as do_find_branded_timeline,
+                                      timeline_structure_fingerprint as do_branded_timeline_fingerprint,
+                                      verify_branded_longform_timelines as do_verify_branded_timelines)
+from .branded_longform_graphics import apply_editorial_graphic as do_apply_branded_graphic
+from .branded_longform_broll import apply_provided_broll as do_apply_branded_broll
+from .branded_longform_workflow import (application_for_job as do_branded_application,
+                                       approve_batch as do_approve_branded_batch,
+                                       propose_batch as do_propose_branded_batch)
+from .vertical_social_workflow import (
+    advance_vertical_social_action as do_advance_vertical_social_action,
+    approved_vertical_social_plan as do_approved_vertical_social_plan,
+    approve_vertical_social_plan as do_approve_vertical_social_plan,
+    inspect_vertical_social_plan as do_inspect_vertical_social_plan,
+    mark_vertical_social_picture_lock as do_mark_vertical_social_picture_lock,
+    prepare_vertical_social_plan as do_prepare_vertical_social_plan,
+    record_vertical_social_cut_execution as do_record_vertical_social_cut_execution,
+    record_vertical_social_action_execution as do_record_vertical_social_action_execution,
+)
+from .vertical_social_cuts import create_provisional_cut_timeline as do_create_provisional_cut_timeline
+from .vertical_social_apply import (
+    apply_reframe_action as do_apply_vertical_social_reframe,
+    find_provisional_timeline as do_find_vertical_social_provisional,
+)
+from .vertical_social_broll import apply_provided_broll as do_apply_vertical_social_broll
+from .vertical_social_music import apply_music_duck as do_apply_vertical_social_music
+from .vertical_social_overlay import apply_graphic_or_cta as do_apply_vertical_social_overlay
+from .vertical_social_captions import (
+    apply_caption_action as do_apply_vertical_social_captions,
+    timeline_edit_fingerprint as vertical_social_timeline_fingerprint,
+)
 from .creative_tools import (add_end_card as do_add_end_card,
                              animate_element, animate_stack,
                              set_review_highlight as do_set_review_highlight)
@@ -54,6 +134,7 @@ from .feature_flags import report as feature_report, require_capability
 from .fusion_tools import (MAX_AUTOMATIC_FUSION_FRAMES, add_background, add_text,
                            create_composition, retime)
 from .longform_tools import (apply_plan as do_apply_longform_plan,
+                             allowed_media,
                              list_media as do_list_longform_media,
                              transcript_chunk as do_transcript_chunk,
                              transcript_metadata as do_transcript_metadata,
@@ -149,6 +230,676 @@ def _call(operation: Callable[..., dict], *args: Any, **kwargs: Any) -> dict:
 
 EDITORIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "editorial_selection_contract.json"
 EDITORIAL_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "editorial_preferences.json"
+CARABELLESE_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "carabellese_cleanup_contract.json"
+CARABELLESE_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "carabellese_preferences.json"
+VERTICAL_SOCIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "vertical_social_contract.json"
+BRANDED_LONGFORM_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "branded_longform_contract.json"
+
+
+def _require_vertical_social(config: Any) -> None:
+    if not config.flags.get("CAP_VERTICAL_SOCIAL", False):
+        raise ValidationError("CAP_VERTICAL_SOCIAL non attiva nella config locale")
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_branded_longform(profile_id: str = "", source_mode: str = "") -> dict[str, Any]:
+    """Inspect the multi-brand longform contract and local rollout gate without editing Resolve."""
+    try:
+        config = load_config(); contract = load_branded_longform_contract(BRANDED_LONGFORM_CONTRACT_PATH)
+        selected = contract.profile(profile_id) if profile_id else None
+        if source_mode and source_mode not in contract.source_modes:
+            raise ValidationError("source_mode branded longform non supportata")
+        _, _, project, timeline, runtime_error = context()
+        return {"ok": True, "card_count": 1, "workflow_id": contract.workflow_id,
+                "workflow_version": contract.version, "workstation_id": config.workstation_id,
+                "capability_enabled": bool(config.flags.get("CAP_BRANDED_LONGFORM_EDITORIAL", False)),
+                "source_modes": contract.source_modes,
+                "selected_source_mode": source_mode or "NOT_SELECTED",
+                "selected_project": str(safe_call(project, "GetName") or "") if project else None,
+                "selected_timeline": str(safe_call(timeline, "GetName") or "") if timeline else None,
+                "resolve_status": "AVAILABLE" if runtime_error is None else "UNAVAILABLE",
+                "profiles": {key: value.kit_status for key, value in contract.profiles.items()},
+                "selected_profile": None if selected is None else {"profile_id": selected.profile_id, "kit_status": selected.kit_status}}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_branded_longform_sources(sources: dict[str, Any]) -> dict[str, Any]:
+    """Validate SINGLE or OBS multicamera inputs without editing Resolve."""
+    try:
+        package = do_inspect_branded_sources(sources)
+        sync = do_build_branded_sync_plan(package)
+        return {"ok": True, "source_mode": package.mode,
+                "source_fingerprint": do_branded_source_fingerprint(package),
+                "final_audio_source": package.final_audio_source,
+                "sync": sync}
+    except Exception as exc: return _error(exc)
+
+
+def _require_branded_longform(config: Any, manager: Any, project: Any, timeline: Any) -> None:
+    if not config.flags.get("CAP_BRANDED_LONGFORM_EDITORIAL", False):
+        raise ValidationError("CAP_BRANDED_LONGFORM_EDITORIAL non attiva nella config locale")
+    try:
+        require_capability("CAP_BRANDED_LONGFORM_EDITORIAL", config, manager, project, timeline)
+    except RuntimeError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+def _verify_branded_profile_binding(job: Any) -> None:
+    contract = load_branded_longform_contract(BRANDED_LONGFORM_CONTRACT_PATH)
+    profile = contract.profile(job.profile_id)
+    if branded_longform_fingerprint(contract, profile) != job.profile_fingerprint:
+        raise ValidationError("Contratto o profilo branded longform cambiato dopo la creazione del job")
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def create_branded_longform_cleanup(profile_id: str, source_fingerprint: str,
+                                    cleanup_events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Create or recover the derived CLEANUP timeline; never mutates the original."""
+    try:
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        if error: return error
+        _require_branded_longform(config, manager, project, timeline)
+        contract = load_branded_longform_contract(BRANDED_LONGFORM_CONTRACT_PATH)
+        profile = contract.profile(profile_id)
+        project_name = str(safe_call(project, "GetName") or "")
+        timeline_name = str(safe_call(timeline, "GetName") or "")
+        source_fingerprint = source_fingerprint.strip().lower()
+        if (not project_name or not timeline_name or len(source_fingerprint) != 64
+                or any(char not in "0123456789abcdef" for char in source_fingerprint)):
+            raise ValidationError("Progetto, timeline e source_fingerprint sono obbligatori")
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        profile_fingerprint = branded_longform_fingerprint(contract, profile)
+        job = store.find_active(project_name, timeline_name, source_fingerprint,
+                                profile_fingerprint, profile_id)
+        if job is None:
+            job = store.create(new_branded_longform_job(
+                project_name, timeline_name, source_fingerprint,
+                profile_fingerprint, config.workstation_id, profile_id,
+                do_branded_timeline_fingerprint(timeline)))
+        candidates = plan_cleanup(cleanup_events or [])
+        fps = float(safe_call(timeline, "GetSetting", "timelineFrameRate") or 0)
+        total = int(safe_call((safe_call(timeline, "GetItemListInTrack", "video", 1) or [None])[0], "GetDuration") or 0)
+        cleanup_cuts = cleanup_cut_ranges(candidates, fps, total) if candidates else ()
+        with RESOLVE_ACCESS_LOCK:
+            result = do_create_branded_cleanup(project, job, cleanup_cuts)
+        return {"ok": True, "action": "create_branded_longform_cleanup", "job_id": job.job_id,
+                "profile_id": profile_id, "kit_status": profile.kit_status,
+                "cleanup": {"auto_cut_ranges": cleanup_cuts,
+                            "review_candidates": [candidate.__dict__ for candidate in candidates if candidate.review_required]},
+                **result}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def propose_branded_longform_editorial(job_id: str, segments: list[dict[str, Any]]) -> dict[str, Any]:
+    """Create one proposal card and matching CLEANUP markers."""
+    try:
+        _, manager, project, timeline, config, _, error = _runtime()
+        if error: return error
+        _require_branded_longform(config, manager, project, timeline)
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        existing = store.get(job_id); _verify_branded_profile_binding(existing)
+        job = do_propose_branded_batch(store, job_id, segments)
+        with RESOLVE_ACCESS_LOCK:
+            marker_result = do_add_branded_markers(project, job, list(job.proposal_card["proposals"]))
+        return {"ok": True, "action": "propose_branded_longform_editorial",
+                "card": job.proposal_card, "markers": marker_result}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_branded_longform_batch(job_id: str, proposal_fingerprint: str,
+                                   decisions: list[dict[str, Any]], operator_role: str) -> dict[str, Any]:
+    try:
+        config = load_config()
+        if not config.flags.get("CAP_BRANDED_LONGFORM_EDITORIAL", False):
+            raise ValidationError("CAP_BRANDED_LONGFORM_EDITORIAL non attiva nella config locale")
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        existing = store.get(job_id); _verify_branded_profile_binding(existing)
+        job = do_approve_branded_batch(store, job_id, proposal_fingerprint, decisions, operator_role)
+        return {"ok": True, "action": "approve_branded_longform_batch", "job_id": job.job_id,
+                "state": job.state, "approved_ids": job.approval["approved_ids"]}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_branded_longform_batch(job_id: str) -> dict[str, Any]:
+    """Create the EDITORIAL timeline and apply only the exact approved action plan."""
+    try:
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        if error: return error
+        _require_branded_longform(config, manager, project, timeline)
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        job = store.get(job_id)
+        _verify_branded_profile_binding(job)
+        if job.state == "APPLIED":
+            return {"ok": True, "action": "apply_branded_longform_batch", "job_id": job_id,
+                    "state": job.state, "operations": job.operations, "idempotent": True}
+        application = do_branded_application(job)
+        if job.state == "BLOCKED" and not application:
+            blocked_ids = [str(item.get("proposal_id")) for item in job.operations
+                           if item.get("status") == "BLOCKED"]
+            return {"ok": False, "action": "apply_branded_longform_batch", "job_id": job_id,
+                    "state": job.state, "operations": job.operations, "blocked_ids": blocked_ids,
+                    "idempotent": True}
+        with RESOLVE_ACCESS_LOCK:
+            result = do_create_branded_editorial(project, job)
+            editorial = do_find_branded_timeline(project, job, job.editorial_timeline)
+            operations = []
+            for item in application:
+                if not item.get("executable", False):
+                    operations.append({"proposal_id": item["proposal_id"], "status": "BLOCKED",
+                                       "reason": item.get("blocked_reason") or "NOT_EXECUTABLE"})
+                elif item.get("kind") == "NO_OVERLAY":
+                    operations.append({"proposal_id": item["proposal_id"], "status": "VERIFIED",
+                                       "operation": "NO_OVERLAY"})
+                elif item.get("kind") in {"KEYWORD_BOX", "PROGRESSIVE_LIST", "CHAPTER_CARD"}:
+                    operations.append(do_apply_branded_graphic(project, editorial, config, job, item))
+                elif item.get("kind") == "B_ROLL_PROVIDED":
+                    operations.append(do_apply_branded_broll(resolve, project, editorial, config, job, item))
+                else:
+                    operations.append({"proposal_id": item["proposal_id"], "status": "BLOCKED",
+                                       "reason": "EXECUTOR_NON_DISPONIBILE"})
+                job = store.update(replace(
+                    job, operations=job.operations + (dict(operations[-1]),)), job.revision)
+        blocked = [str(item["proposal_id"]) for item in operations
+                   if item.get("status") == "BLOCKED"]
+        state = "BLOCKED" if blocked else "APPLIED"
+        saved = store.update(replace(job, state=state), job.revision)
+        return {"ok": not blocked, "action": "apply_branded_longform_batch", "job_id": job_id,
+                "state": saved.state, "application_plan": application, "operations": operations,
+                "blocked_ids": blocked, **result}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def verify_branded_longform_job(job_id: str) -> dict[str, Any]:
+    try:
+        _, manager, project, timeline, config, _, error = _runtime()
+        if error: return error
+        _require_branded_longform(config, manager, project, timeline)
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        job = store.get(job_id)
+        result = do_verify_branded_timelines(project, job)
+        return {"ok": True, "job_id": job_id, "state": job.state, **result}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_vertical_social() -> dict[str, Any]:
+    """Read the Vertical Social contract and local gate without editing Resolve."""
+    try:
+        config = load_config(); contract = load_vertical_social_contract(VERTICAL_SOCIAL_CONTRACT_PATH)
+        return {"ok": True, "card_count": 1, "workflow_id": contract.workflow_id,
+                "workflow_version": contract.version, "workstation_id": config.workstation_id,
+                "capability_enabled": bool(config.flags.get("CAP_VERTICAL_SOCIAL", False)),
+                "actions": {name: spec.capability_status for name, spec in contract.actions.items()}}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_vertical_social_plan(target: dict[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
+    try:
+        config = load_config(); _require_vertical_social(config)
+        plan = do_prepare_vertical_social_plan(config.vertical_social_plans_path, config.workstation_id, target, actions)
+        return {"ok": True, "action": "prepare_vertical_social_plan", "plan_id": plan.plan_id,
+                "fingerprint": plan.fingerprint, "state": plan.state}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_vertical_social_plan(plan_id: str, fingerprint: str) -> dict[str, Any]:
+    try:
+        config = load_config(); _require_vertical_social(config)
+        plan = do_approve_vertical_social_plan(config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint)
+        return {"ok": True, "plan_id": plan.plan_id, "state": plan.state}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_vertical_social_plan(plan_id: str) -> dict[str, Any]:
+    try:
+        config = load_config()
+        return {"ok": True, **do_inspect_vertical_social_plan(config.vertical_social_plans_path, config.workstation_id, plan_id)}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def mark_vertical_social_picture_lock(plan_id: str) -> dict[str, Any]:
+    try:
+        _, manager, project, timeline, config, _, error = _runtime()
+        _require_vertical_social(config)
+        if error:
+            return error
+        try:
+            require_capability("CAP_VERTICAL_SOCIAL", config, manager, project, timeline)
+        except RuntimeError as exc:
+            raise ValidationError(str(exc)) from exc
+        provisional = do_find_vertical_social_provisional(project, plan_id)
+        locked_edit_fingerprint = vertical_social_timeline_fingerprint(provisional)
+        plan = do_mark_vertical_social_picture_lock(
+            config.vertical_social_plans_path, config.workstation_id, plan_id,
+            locked_edit_fingerprint)
+        return {"ok": True, "plan_id": plan.plan_id, "picture_locked": plan.picture_locked,
+                "locked_edit_fingerprint": locked_edit_fingerprint}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def advance_vertical_social_action(plan_id: str, action_id: str, next_state: str, evidence: dict[str, Any]) -> dict[str, Any]:
+    try:
+        config = load_config(); _require_vertical_social(config)
+        plan = do_advance_vertical_social_action(config.vertical_social_plans_path, config.workstation_id, plan_id, action_id, next_state, evidence)
+        return {"ok": True, "plan_id": plan.plan_id, "action_id": action_id}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_vertical_social_cuts(plan_id: str, fingerprint: str) -> dict[str, Any]:
+    """Create or resume the verified provisional CUT timeline; never changes its source timeline."""
+    try:
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        _require_vertical_social(config)
+        if error:
+            return error
+        try:
+            require_capability("CAP_VERTICAL_SOCIAL", config, manager, project, timeline)
+        except RuntimeError as exc:
+            raise ValidationError(str(exc)) from exc
+        plan = do_approved_vertical_social_plan(
+            config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint)
+        if (str(safe_call(project, "GetName")) != str(plan.target.get("project"))
+                or str(safe_call(timeline, "GetName")) != str(plan.target.get("timeline"))):
+            raise ValidationError("Target progetto o timeline diverso dal piano approvato")
+        video = safe_call(timeline, "GetItemListInTrack", "video", 1) or []
+        if len(video) != 1:
+            raise ValidationError("CUT Vertical Social richiede una sola clip video sorgente")
+        total_frames = int(safe_call(video[0], "GetDuration") or 0)
+        with RESOLVE_ACCESS_LOCK:
+            try:
+                provisional = do_create_provisional_cut_timeline(
+                    project, timeline, plan.to_dict(), total_frames=total_frames)
+            finally:
+                if not safe_call(project, "SetCurrentTimeline", timeline):
+                    raise ValidationError("Ripristino timeline sorgente dopo CUT fallito")
+        verified = do_record_vertical_social_cut_execution(
+            config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint,
+            str(safe_call(provisional, "GetName")),
+            sum(int(safe_call(item, "GetDuration") or 0)
+                for item in (safe_call(provisional, "GetItemListInTrack", "video", 1) or [])),
+        )
+        return {"ok": True, "action": "apply_vertical_social_cuts", "plan_id": plan_id,
+                "provisional_timeline": str(safe_call(provisional, "GetName")),
+                "verified_cut_count": sum(item.action_type == "CUT" and item.state == "VERIFIED"
+                                          for item in verified.actions)}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_vertical_social_action(plan_id: str, fingerprint: str, action_id: str) -> dict[str, Any]:
+    """Apply one approved semantic action on its bridge-owned provisional timeline."""
+    try:
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        _require_vertical_social(config)
+        if error:
+            return error
+        try:
+            require_capability("CAP_VERTICAL_SOCIAL", config, manager, project, timeline)
+        except RuntimeError as exc:
+            raise ValidationError(str(exc)) from exc
+        plan = do_approved_vertical_social_plan(
+            config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint)
+        if (str(safe_call(project, "GetName") or "") != str(plan.target.get("project"))
+                or str(safe_call(timeline, "GetName") or "") != str(plan.target.get("timeline"))):
+            raise ValidationError("Target progetto o timeline diverso dal piano approvato")
+        action = plan.action(action_id)
+        if action.state == "VERIFIED":
+            return {"ok": True, "action": "apply_vertical_social_action", "plan_id": plan_id,
+                    "action_id": action_id, "state": "VERIFIED", "idempotent": True,
+                    "evidence": action.evidence}
+        if action.state != "APPROVED":
+            raise ValidationError(f"Azione non eseguibile nello stato {action.state}")
+        if action.action_type == "CAPTIONS":
+            workflow_state = do_inspect_vertical_social_plan(
+                config.vertical_social_plans_path, config.workstation_id, plan_id)
+            if not workflow_state.get("picture_locked"):
+                raise ValidationError("CAPTIONS richiede picture lock")
+        total_frames = int(plan.target.get("total_frames") or 0)
+        provisional = do_find_vertical_social_provisional(project, plan_id)
+        original = timeline
+        with RESOLVE_ACCESS_LOCK:
+            if not safe_call(project, "SetCurrentTimeline", provisional):
+                raise ValidationError("Selezione timeline provvisoria fallita")
+            try:
+                if action.action_type == "REFRAME":
+                    evidence = do_apply_vertical_social_reframe(
+                        provisional, action.to_dict(), total_frames)
+                elif action.action_type == "B_ROLL_PROVIDED":
+                    evidence = do_apply_vertical_social_broll(
+                        resolve, project, provisional, config, action.to_dict(), total_frames)
+                elif action.action_type == "MUSIC_DUCK":
+                    evidence = do_apply_vertical_social_music(
+                        provisional, action.to_dict(), total_frames)
+                elif action.action_type in {"GRAPHIC", "CTA"}:
+                    evidence = do_apply_vertical_social_overlay(
+                        project, provisional, config, action.to_dict(), total_frames)
+                elif action.action_type == "CAPTIONS":
+                    locked_edit_fingerprint = str(
+                        workflow_state.get("locked_edit_fingerprint") or "")
+                    if vertical_social_timeline_fingerprint(provisional) != locked_edit_fingerprint:
+                        raise ValidationError("Timeline modificata dopo il picture lock")
+                    action_payload = action.to_dict()
+                    requested_fingerprint = str(
+                        action_payload.get("locked_edit_fingerprint") or "")
+                    if requested_fingerprint not in {
+                            "AT_PICTURE_LOCK", locked_edit_fingerprint}:
+                        raise ValidationError(
+                            "CAPTIONS riferite a un picture lock diverso")
+                    action_payload["locked_edit_fingerprint"] = locked_edit_fingerprint
+                    evidence = do_apply_vertical_social_captions(
+                        project, provisional, config, action_payload, total_frames)
+                else:
+                    raise ValidationError(
+                        f"Esecutore Vertical Social non disponibile per {action.action_type}")
+            finally:
+                if not safe_call(project, "SetCurrentTimeline", original):
+                    raise ValidationError("Ripristino timeline sorgente fallito")
+        verified = do_record_vertical_social_action_execution(
+            config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint,
+            action_id, action.action_type, evidence)
+        return {"ok": True, "action": "apply_vertical_social_action", "plan_id": plan_id,
+                "action_id": action_id, "state": verified.action(action_id).state,
+                "evidence": evidence}
+    except Exception as exc:
+        return _error(exc)
+
+
+def _carabellese_store(config: Any) -> CarabelleseJobStore:
+    return CarabelleseJobStore(config.carabellese_jobs_path, config.workstation_id)
+
+
+def _require_carabellese(config: Any, manager: Any = None, project: Any = None,
+                          timeline: Any = None, *, resolve_required: bool = False) -> None:
+    if not config.flags.get("CAP_CARABELLESE_CLEANUP", False):
+        raise ValidationError("CAP_CARABELLESE_CLEANUP non attiva nella config locale")
+    if resolve_required:
+        try:
+            require_capability("CAP_CARABELLESE_CLEANUP", config, manager, project, timeline)
+        except RuntimeError as exc:
+            raise ValidationError(str(exc)) from exc
+
+
+def _carabellese_current_timeline(project: Any, job: Any) -> Any:
+    timeline = safe_call(project, "GetCurrentTimeline")
+    if (timeline is None or safe_call(timeline, "GetName") != job.timeline_name
+            or editorial_timeline_identity(timeline) != job.timeline_identity):
+        raise ValidationError("Timeline Carabellese corrente diversa dal job")
+    return timeline
+
+
+def _carabellese_source_fingerprint(timeline: Any, config: Any) -> str:
+    video = safe_call(timeline, "GetItemListInTrack", "video", 1) or []
+    audio = safe_call(timeline, "GetItemListInTrack", "audio", 1) or []
+    if len(video) != 1 or len(audio) != 1:
+        raise ValidationError("La preparazione richiede una singola clip sorgente A/V")
+    video_media = safe_call(video[0], "GetMediaPoolItem")
+    audio_media = safe_call(audio[0], "GetMediaPoolItem")
+    video_identity = carabellese_media_source_identity(video_media) \
+        if video_media is not None else None
+    audio_identity = carabellese_media_source_identity(audio_media) \
+        if audio_media is not None else None
+    if (video_media is None or audio_media is None or video_identity is None
+            or video_identity != audio_identity):
+        raise ValidationError("Le clip A/V non appartengono alla stessa sorgente")
+    selected = allowed_media(str(safe_call(video_media, "GetClipProperty", "File Path") or ""), config)
+    return media_fingerprint(selected)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_carabellese_cleanup() -> dict[str, Any]:
+    """Inspect the fixed Carabellese cleanup contract even while its local gate is disabled."""
+    try:
+        config = load_config()
+        contract = load_carabellese_contract(CARABELLESE_CONTRACT_PATH)
+        preferences = load_carabellese_preferences(CARABELLESE_SHARED_PROFILE_PATH)
+        return {
+            "ok": True, "card_count": 1, "workflow_id": contract.workflow_id,
+            "workflow_version": contract.version, "workstation_id": config.workstation_id,
+            "capability_enabled": bool(config.flags.get("CAP_CARABELLESE_CLEANUP", False)),
+            "frame_rate_mode": contract.frame_rate_mode, "resolution": list(contract.resolution),
+            "residual_pause_seconds": preferences.residual_pause_seconds,
+            "render_included": False, "cta_included": False, "graphics_included": False,
+        }
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def start_carabellese_transcription(media_path: str, expected_source_fingerprint: str,
+                                    model: str = "small", language: str = "it") -> dict[str, Any]:
+    """Start or resume the isolated managed transcription job for one allowed media source."""
+    def operation() -> dict[str, Any]:
+        config = load_config(); _require_carabellese(config)
+        return dict(do_start_carabellese_transcription(
+            config, media_path, expected_source_fingerprint, model=model, language=language))
+    return _call(operation)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def get_carabellese_transcription_job(job_id: str) -> dict[str, Any]:
+    """Read one workstation-local managed transcription status."""
+    return _call(lambda: dict(do_get_carabellese_transcription_job(load_config(), job_id)))
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def prepare_carabellese_cleanup(transcript_path: str, transcript_fingerprint: str,
+                                source_fingerprint: str, audio_job_id: str,
+                                candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    """Bind source, transcript and cleanup proposals, then add owned review markers."""
+    def operation() -> dict[str, Any]:
+        configured = load_config(); _require_carabellese(configured)
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        del resolve
+        _require_carabellese(config, manager, project, timeline, resolve_required=True)
+        if error: return error
+        if project is None or timeline is None:
+            raise ValidationError("Serve un progetto e una timeline Carabellese aperti")
+        with RESOLVE_ACCESS_LOCK:
+            contract = load_carabellese_contract(CARABELLESE_CONTRACT_PATH)
+            actual_source = _carabellese_source_fingerprint(timeline, config)
+            if actual_source != source_fingerprint:
+                raise ValidationError("La sorgente della timeline non coincide con quella dichiarata")
+            selected_transcript = _allowed_transcript(transcript_path, config)
+            inputs = load_carabellese_inputs(
+                config, selected_transcript, transcript_fingerprint, audio_job_id, source_fingerprint)
+            source = inputs.transcript.get("source")
+            duration = source.get("duration_seconds") if isinstance(source, dict) else None
+            explicit = validate_cleanup_candidates(candidates, inputs.transcript, contract, float(duration))
+            pauses = derive_pause_candidates(inputs.words, inputs.audio.silence_windows, contract)
+            combined = tuple(sorted((*explicit, *pauses), key=lambda item: item.start_seconds))
+            ids = [item.candidate_id for item in combined]
+            if len(ids) != len(set(ids)):
+                raise ValidationError("candidate_id Carabellese duplicato")
+            if any(current.start_seconds < previous.end_seconds
+                   for previous, current in zip(combined, combined[1:])):
+                raise ValidationError("Proposte Carabellese sovrapposte")
+            if not combined:
+                raise ValidationError("Nessuna proposta Carabellese da revisionare")
+            payload = tuple(asdict(item) for item in combined)
+            store = _carabellese_store(config)
+            identity = editorial_timeline_identity(timeline)
+            fingerprint = cleanup_candidate_fingerprint(combined)
+            owner = store.active_for_timeline(identity)
+            if owner is not None:
+                if (owner.source_fingerprint == source_fingerprint
+                        and owner.transcript_fingerprint == transcript_fingerprint
+                        and owner.proposal_fingerprint == fingerprint):
+                    return {"ok": True, "action": "prepare_carabellese_cleanup",
+                            "carabellese_job_id": owner.carabellese_job_id,
+                            "state": owner.state, "candidate_count": len(owner.candidates),
+                            "idempotent": True}
+                raise ValidationError("La timeline ha già un job Carabellese differente non chiuso")
+            job = store.create(new_carabellese_job(
+                workstation_id=config.workstation_id, workflow_version=contract.version,
+                project_name=str(safe_call(project, "GetName")),
+                timeline_name=str(safe_call(timeline, "GetName")), timeline_identity=identity,
+                timeline_fingerprint=carabellese_timeline_fingerprint(timeline),
+                source_fingerprint=source_fingerprint, transcript_fingerprint=transcript_fingerprint,
+                contract_fingerprint=carabellese_contract_fingerprint(contract),
+                proposal_fingerprint=fingerprint, candidates=payload))
+            marked = do_mark_carabellese_review(timeline, store, job, contract)
+            result = {"ok": marked.state == "MARKED", "action": "prepare_carabellese_cleanup",
+                      "carabellese_job_id": marked.carabellese_job_id, "state": marked.state,
+                      "candidate_count": len(marked.candidates), "idempotent": False}
+            if marked.state == "MARKED":
+                result["instructions"] = carabellese_secretary_instructions(marked)
+            return result
+    return _call(operation)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_carabellese_job(carabellese_job_id: str) -> dict[str, Any]:
+    """Return one compact operator card for a workstation-local Carabellese job."""
+    try:
+        config = load_config()
+        job = _carabellese_store(config).get(carabellese_job_id, config.workstation_id)
+        result: dict[str, Any] = {
+            "ok": True, "card_count": 1, "carabellese_job_id": job.carabellese_job_id,
+            "state": job.state, "revision": job.revision, "candidate_count": len(job.candidates),
+            "project": job.project_name, "timeline": job.timeline_name,
+        }
+        if job.state == "MARKED":
+            result["instructions"] = carabellese_secretary_instructions(job)
+            result["next_action"] = "submit_complete_review"
+        elif job.state in {"BLOCKED", "FAILED_RECOVERABLE", "STALE"}:
+            result["next_action"] = "technical_recovery"
+            result["instruction"] = "Non avviare un nuovo job; chiedi il recupero tecnico di questo ID."
+        else:
+            result["next_action"] = {"REVIEWED": "apply_cleanup", "CHECKPOINTED": "apply_cleanup",
+                "APPLYING": "resume_cleanup", "VERIFIED": "close_cleanup",
+                "CLOSED": "complete"}.get(job.state, "wait")
+        return result
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def submit_carabellese_review(carabellese_job_id: str,
+                              boundary_decisions: list[dict[str, Any]],
+                              pause_decision: dict[str, Any],
+                              exception_decisions: list[dict[str, Any]],
+                              transcript_path: str,
+                              transcript_fingerprint: str) -> dict[str, Any]:
+    """Bind the complete one-message review and mandatory reasons to the marked job."""
+    def operation() -> dict[str, Any]:
+        config = load_config(); _require_carabellese(config)
+        store = _carabellese_store(config)
+        job = store.get(carabellese_job_id, config.workstation_id)
+        transcript = load_pinned_transcript(
+            _allowed_transcript(transcript_path, config), transcript_fingerprint)
+        transcript["_pinned_fingerprint"] = transcript_fingerprint
+        reviewed = do_submit_carabellese_review(
+            store, job, boundary_decisions, pause_decision, exception_decisions,
+            load_carabellese_contract(CARABELLESE_CONTRACT_PATH), transcript=transcript)
+        return {"ok": True, "action": "submit_carabellese_review",
+                "carabellese_job_id": reviewed.carabellese_job_id, "state": reviewed.state,
+                "review_fingerprint": reviewed.review_fingerprint,
+                "decision_count": len(reviewed.decisions)}
+    return _call(operation)
+
+
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
+def apply_carabellese_cleanup(carabellese_job_id: str,
+                              expected_review_fingerprint: str) -> dict[str, Any]:
+    """Checkpoint, apply and verify the approved cleanup; never renders or adds graphics."""
+    def operation() -> dict[str, Any]:
+        configured = load_config(); _require_carabellese(configured)
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        _require_carabellese(config, manager, project, timeline, resolve_required=True)
+        if error: return error
+        with RESOLVE_ACCESS_LOCK:
+            store = _carabellese_store(config)
+            job = store.get(carabellese_job_id, config.workstation_id)
+            if job.review_fingerprint != expected_review_fingerprint:
+                raise ValidationError("Review fingerprint Carabellese stale")
+            if job.state == "REVIEWED":
+                target = _carabellese_current_timeline(project, job)
+                job = do_export_carabellese_checkpoint(
+                    resolve, project, target, store, job, config.carabellese_checkpoint_root)
+            result = do_apply_carabellese_cleanup(
+                resolve, manager, config, store, job.carabellese_job_id,
+                expected_review_fingerprint)
+            return {"ok": result.state == "VERIFIED", "action": "apply_carabellese_cleanup",
+                    "carabellese_job_id": result.carabellese_job_id, "state": result.state}
+    return _call(operation)
+
+
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
+def recover_carabellese_cleanup(carabellese_job_id: str) -> dict[str, Any]:
+    """Restore the verified DRT checkpoint after a recoverable apply failure."""
+    def operation() -> dict[str, Any]:
+        configured = load_config(); _require_carabellese(configured)
+        resolve, manager, project, timeline, config, _, error = _runtime()
+        _require_carabellese(config, manager, project, timeline, resolve_required=True)
+        if error: return error
+        job = do_recover_carabellese_cleanup(
+            resolve, manager, config, _carabellese_store(config), carabellese_job_id)
+        return {"ok": job.state == "CHECKPOINTED", "action": "recover_carabellese_cleanup",
+                "carabellese_job_id": job.carabellese_job_id, "state": job.state}
+    return _call(operation)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def close_carabellese_cleanup(carabellese_job_id: str) -> dict[str, Any]:
+    """Remove owned markers, retain checkpoint metadata and record redacted local learning."""
+    def operation() -> dict[str, Any]:
+        configured = load_config(); _require_carabellese(configured)
+        _, manager, project, timeline, config, _, error = _runtime()
+        _require_carabellese(config, manager, project, timeline, resolve_required=True)
+        if error: return error
+        store = _carabellese_store(config)
+        job = store.get(carabellese_job_id, config.workstation_id)
+        if job.state != "CLOSED":
+            target = _carabellese_current_timeline(project, job)
+            job = do_close_carabellese_cleanup(target, store, job)
+        learning = do_append_carabellese_outcome(config, job)
+        return {"ok": True, "action": "close_carabellese_cleanup",
+                "carabellese_job_id": job.carabellese_job_id, "state": job.state,
+                "learning_recorded": learning["recorded"]}
+    return _call(operation)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_carabellese_learning() -> dict[str, Any]:
+    """Inspect privacy-safe local aggregates without returning reasons or transcript content."""
+    try:
+        return {"ok": True, **do_inspect_carabellese_metrics(load_config())}
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def compile_carabellese_profile_proposal(minimum_samples: int = 5) -> dict[str, Any]:
+    """Compile a redacted local profile proposal without editing the repository profile."""
+    def operation() -> dict[str, Any]:
+        config = load_config(); _require_carabellese(config)
+        proposal = do_compile_carabellese_profile(
+            config, load_carabellese_preferences(CARABELLESE_SHARED_PROFILE_PATH), minimum_samples)
+        return {"ok": True, "action": "compile_carabellese_profile_proposal", **proposal}
+    return _call(operation)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_carabellese_profile_proposal(proposal_id: str, operator_role: str,
+                                         expected_previous_digest: str) -> dict[str, Any]:
+    """Approve a redacted local Carabellese overlay as Alessio or qualified technical staff."""
+    def operation() -> dict[str, Any]:
+        config = load_config(); _require_carabellese(config)
+        return {"action": "approve_carabellese_profile_proposal",
+                **do_approve_carabellese_profile(
+                    config, proposal_id, operator_role, expected_previous_digest)}
+    return _call(operation)
 
 
 def _editorial_store(config: Any) -> EditorialJobStore:

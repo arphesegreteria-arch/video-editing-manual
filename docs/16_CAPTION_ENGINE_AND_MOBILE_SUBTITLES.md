@@ -4,6 +4,18 @@ Stato: **PARTIAL / TESTED SU UN PROGETTO REALE**
 
 Ultimo test: 2026-10-02, `PC_PERSONALE`, Resolve Studio `21.0.4.5`.
 
+Aggiornamento bridge: 2026-10-10, contratto Vertical Social v5. L'adattatore parametrico crea un
+solo carrier Fusion lungo quanto la timeline, limita ogni cue a 84 caratteri e due righe, conserva
+i gap, usa soltanto le fasce `LOWER`/`UPPER` e verifica il testo via read-back. Il gate nativo
+sintetico su `PC_PERSONALE` è PASS; la timeline temporanea è stata eliminata. Questo gate non è
+un nuovo render: la prova renderizzata resta quella reale del 2026-10-02 descritta sotto.
+
+Nel workflow completo CAPTIONS è post-picture-lock. Il tool di lock calcola l'impronta della
+timeline provvisoria, includendo timing, impostazioni e identità opache delle sorgenti, e
+l'esecutore la ricalcola subito prima della scrittura: una modifica del
+montaggio dopo il lock blocca i sottotitoli. Il piano usa `AT_PICTURE_LOCK`, sostituito internamente
+con l'impronta reale; la segreteria non deve calcolare o copiare hash.
+
 ## Risultato verificato
 
 Sul progetto `ARPHE_SHORTFORM_PROVA_EDITING_V1`, timeline

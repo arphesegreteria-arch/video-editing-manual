@@ -28,6 +28,7 @@ class VerifiedAudio:
     output_sha256: str
     output_duration_seconds: float
     sync_delta_seconds: float
+    silence_windows: tuple[tuple[float, float], ...]
 
 
 def file_sha256(path: Path) -> str:
@@ -97,6 +98,20 @@ def verify_audio_manifest(config: CreativeConfig, audio_job_id: str,
         raise ValidationError("Audio fuori sincronizzazione oltre 1/30 di secondo")
     if manifest.get("sample_rate") != 48000 or manifest.get("channels") != 2:
         raise ValidationError("Formato WAV editoriale non supportato")
+    raw_windows = manifest.get("silence_windows", [])
+    if not isinstance(raw_windows, list):
+        raise ValidationError("silence_windows deve essere una lista")
+    silence_windows: list[tuple[float, float]] = []
+    for raw in raw_windows:
+        if not isinstance(raw, dict) or set(raw) != {"start", "end"}:
+            raise ValidationError("silence_windows contiene un intervallo non valido")
+        start = _finite_number(raw["start"], "silence.start")
+        end = _finite_number(raw["end"], "silence.end")
+        if end <= start or end > output_duration:
+            raise ValidationError("silence window vuota o oltre la durata audio")
+        if silence_windows and start < silence_windows[-1][1]:
+            raise ValidationError("silence windows sovrapposte o non ordinate")
+        silence_windows.append((start, end))
     preset = manifest.get("preset")
     if not isinstance(preset, str) or not preset:
         raise ValidationError("Preset audio mancante")
@@ -108,4 +123,5 @@ def verify_audio_manifest(config: CreativeConfig, audio_job_id: str,
         output_sha256=recorded_hash,
         output_duration_seconds=output_duration,
         sync_delta_seconds=sync_delta,
+        silence_windows=tuple(silence_windows),
     )

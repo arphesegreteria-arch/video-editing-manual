@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 2026-10-10 — Workflow Control Plane (prima tranche, non attiva)
+
+- Aggiunti registro locale atomico, fingerprint di approvazione e card unica di controllo
+  workstation/Resolve, con FPS timeline e playback distinti.
+- Aggiunto `CAP_WORKFLOW_CONTROL_PLANE=false` per default: le scritture vengono rifiutate prima
+  del runtime quando il flag è spento.
+- Aggiunti test per isolamento workstation, fingerprint, idempotenza e controllo offline; suite
+  Creative `467 PASS / 1 SKIP`.
+- Questa tranche non installa, abilita o valida `PC_PERSONALE` o `PC_SEGRETERIA`; non tocca progetti
+  Resolve aperti, Python o tunnel. Il binding esecutivo completo ai quattro workflow resta pending.
+
 ## 2026-10-09 — Workflow Studio Carabellese YouTube cleanup
 
 - Aggiunto il flusso isolato trascrizione → proposte/marker → review con motivi → checkpoint DRT →

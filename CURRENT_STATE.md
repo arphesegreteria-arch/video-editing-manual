@@ -524,6 +524,18 @@ finestre sono approvati, mentre i punti di lama finali richiedono ancora il gate
 
 ## Direzione scartata
 
+## Workflow Control Plane — 2026-10-10
+
+- Prima tranche implementata e coperta da suite: registro atomico locale, binding di approvazione,
+  card read-only del contesto workstation/Resolve e gate `CAP_WORKFLOW_CONTROL_PLANE=false`.
+- Il controllo legge separatamente timeline FPS e playback FPS e non modifica né progetto, timeline
+  né configurazione.
+- I registri nativi Podcast, Vertical Social, Carabellese e Branded Longform restano fonti di
+  verità; l'adattatore non li migra né li cancella.
+- La preparazione/esecuzione completa attraverso tutti e quattro gli adattatori non è ancora
+  completata: la capability resta disattivata e nessun PC è stato installato, attivato o validato.
+- Suite Creative sul ramo: `467 PASS / 1 SKIP`; `PC_SEGRETERIA` invariato e `PENDING`.
+
 ## Branded Longform Editorial — 2026-10-10
 
 - Workflow multi-brand implementato con profili ARPHE e Studio Carabellese isolati.

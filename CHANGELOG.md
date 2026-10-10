@@ -16,17 +16,20 @@
   del runtime quando il flag è spento.
 - Test completi: Creative `480 PASS / 1 SKIP` ambientale, Windows `58 PASS / 1 SKIP` ambientale;
   isolamento workstation, fingerprint nativo, staleness, retry, dispatcher e profili coperti.
-- Il codice non installa, abilita o valida `PC_PERSONALE` o `PC_SEGRETERIA`; non tocca progetti
-  Resolve aperti, Python o tunnel. I gate nativi restano separatamente `PENDING`.
+- L'implementazione non abilita automaticamente nessuna workstation né tocca tunnel o Segreteria;
+  i gate nativi restano sempre separati per PC.
 
-### Addendum — gate personale parziale
+### Addendum — gate personale
 
 - Runtime personale aggiornato con hash dei file Control Plane uguali alla repository; segreto,
   tunnel e flag persistente conservati.
 - Su progetto disposable Vertical Social: snapshot 30/30, approval fingerprint, blocco del target
   errato e avanzamento del piano già verificato PASS; timeline iniziale ripristinata.
-- Flag acceso soltanto in config temporanea e rimosso a fine prova. La prova non copre ancora
-  interruption/resume nativo né delivery: `CAP_WORKFLOW_CONTROL_PLANE` resta `false` e `PENDING`.
+- Provata anche una failure deliberata senza write e il resume sullo stesso job: due CUT verificati
+  nella sola timeline provvisoria posseduta, con ripristino del contesto Resolve.
+- Flag acceso soltanto in config temporanea e rimosso a fine prova. `CAP_WORKFLOW_CONTROL_PLANE`
+  resta `false` dopo il gate; delivery comune rimane esplicitamente `not_available` finché non
+  esiste una prova nativa di consegna verificata.
 - `PC_SEGRETERIA` non è stata toccata.
 
 ## 2026-10-09 — Workflow Studio Carabellese YouTube cleanup

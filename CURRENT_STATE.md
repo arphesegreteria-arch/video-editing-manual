@@ -18,18 +18,18 @@ operazione; input umani mancanti restano espliciti. La delivery comune non viene
 
 Evidenza automatica: Creative `480 PASS / 1 SKIP` ambientale symlink; Windows `58 PASS / 1 SKIP`
 ambientale DPAPI; `git diff --check` PASS. `CAP_WORKFLOW_CONTROL_PLANE=false` nei default e in
-entrambi i profili. Nessuna installazione, abilitazione o prova Resolve nativa è stata eseguita:
-`PC_PERSONALE=PENDING`, `PC_SEGRETERIA=PENDING` e non toccato. Procedura:
-`docs/21_WORKFLOW_CONTROL_PLANE.md`.
+entrambi i profili. Procedura: `docs/21_WORKFLOW_CONTROL_PLANE.md`.
 
-Gate nativo personale del 2026-10-10: **PARTIAL PASS** sul progetto disposable
+Gate nativo personale del 2026-10-10: **PASS nel perimetro supportato** sul progetto disposable
 `ARPHE_VERTICAL_CUT_NATIVE_GATE_20261010B`. La card ha letto Resolve Studio 21.1.1.10,
 1080×1920 e 30/30; ha creato il job `workflow_1e1420861fdc4892`, vincolato al piano verticale
 già verificato e alla relativa impronta; ha bloccato il target diverso senza write e ha poi
-registrato correttamente l'avanzamento con target `SOURCE`. Timeline provvisoria iniziale
-ripristinata e flag reale nuovamente `false`. Mancano ancora una failure recuperabile/resume
-reale e una delivery nativa verificata: lo stato capability resta `PENDING`. `PC_SEGRETERIA`
-non è stata coinvolta.
+registrato correttamente l'avanzamento con target `SOURCE`. Il secondo job
+`workflow_beb51856d8f54370` ha attraversato intenzionalmente `FAILED_RECOVERABLE` con gate
+Vertical Social spento, poi resume riuscito sullo stesso piano: due CUT verificati e una sola
+timeline provvisoria posseduta. Timeline iniziale ripristinata e flag reali nuovamente `false`.
+La delivery comune resta correttamente `not_available` finché un workflow nativo non ne espone
+una prova verificata; non è un PASS fittizio. `PC_SEGRETERIA=PENDING` e non è stata coinvolta.
 
 <a id="carabellese-youtube-cleanup"></a>
 ## Studio Carabellese YouTube cleanup — PC_PERSONALE LIVE PASS

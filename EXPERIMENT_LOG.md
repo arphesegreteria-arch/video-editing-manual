@@ -40,9 +40,20 @@ nativo: nessun Resolve reale, runtime installato, task, tunnel o progetto aperto
 - il flag è stato attivato soltanto in una copia temporanea della config, poi rimossa; config
   persistente `CAP_WORKFLOW_CONTROL_PLANE=false` e Segreteria non toccata.
 
-Esito: `PARTIAL PASS`. Non sono stati ancora provocati e recuperati una failure nativa né una
-delivery verificata; la capability rimane `PENDING` finché quei due casi non vengono provati su
-un target personale dedicato.
+### Completamento del gate — recovery/resume
+
+- secondo job `workflow_beb51856d8f54370` preparato e approvato sul piano CUT
+  `vertical_c8273e5a7ad34da9838a5f21dae00196`;
+- gate Vertical Social spento soltanto nella config temporanea: il dispatcher è entrato in
+  `FAILED_RECOVERABLE` senza write sulla timeline;
+- stesso job ripreso dopo riabilitazione della sola config temporanea: create/verificate due CUT
+  e la sola timeline owned `__ARPHE_VERTICAL_VERTICAL_C8273E5A7AD34DA9838A5F21DAE00196`;
+- contesto Resolve ripristinato alla timeline iniziale, config temporanea rimossa, entrambi i
+  flag persistenti spenti; snapshot finale read-only senza warning di registry.
+
+Esito finale: `PC_PERSONALE LIVE PASS` per card, approval binding, target block, advance,
+recoverable failure/resume e restore. La delivery comune resta intenzionalmente `not_available`
+perché nessun workflow nativo espone ancora una prova verificata; `PC_SEGRETERIA` resta `PENDING`.
 
 ## 2026-10-09 — Studio Carabellese cleanup: gate nativo personale
 

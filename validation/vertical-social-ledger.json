@@ -4,7 +4,7 @@
   "capability_default": false,
   "automated_evidence": {
     "result": "PASS",
-    "test_results": ["41 Vertical Social contract, store, lifecycle, adapter and MCP-surface tests pass on 2026-10-10."],
+    "test_results": ["43 Vertical Social contract, store, lifecycle, adapter and MCP-surface tests pass on 2026-10-10."],
     "limitations": ["GRAPHIC, CTA, MUSIC_DUCK and CAPTIONS remain non-executable until their own native gates."]
   },
   "workstation_gates": {

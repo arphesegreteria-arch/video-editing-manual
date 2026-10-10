@@ -176,8 +176,8 @@ def advance_vertical_social_action(path: Path, workstation_id: str, plan_id: str
         {"action_id": action.action_id, "type": action.action_type, "phase": action.phase},
         wrapped.picture_locked,
     )
-    if not spec.executable and action.action_type == "CAPTIONS":
-        raise ValidationError("CAPTIONS capability non validata")
+    if not spec.executable:
+        raise ValidationError(f"{action.action_type} capability non validata")
     return transition_action(store, plan_id, action_id, action.state, next_state, evidence)
 
 

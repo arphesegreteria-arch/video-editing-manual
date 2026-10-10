@@ -296,8 +296,12 @@ def apply_vertical_social_cuts(plan_id: str, fingerprint: str) -> dict[str, Any]
             raise ValidationError("CUT Vertical Social richiede una sola clip video sorgente")
         total_frames = int(safe_call(video[0], "GetDuration") or 0)
         with RESOLVE_ACCESS_LOCK:
-            provisional = do_create_provisional_cut_timeline(
-                project, timeline, plan.to_dict(), total_frames=total_frames)
+            try:
+                provisional = do_create_provisional_cut_timeline(
+                    project, timeline, plan.to_dict(), total_frames=total_frames)
+            finally:
+                if not safe_call(project, "SetCurrentTimeline", timeline):
+                    raise ValidationError("Ripristino timeline sorgente dopo CUT fallito")
         verified = do_record_vertical_social_cut_execution(
             config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint,
             str(safe_call(provisional, "GetName")),

@@ -77,6 +77,37 @@ class VerticalSocialToolTests(unittest.TestCase):
             self.assertTrue(result["ok"])
             self.assertIs(source, project.current)
 
+    def test_cut_executor_restores_source_after_creating_provisional(self):
+        class Clip:
+            def GetDuration(self): return 60
+        class Timeline:
+            def __init__(self, name): self.name = name
+            def GetName(self): return self.name
+            def GetItemListInTrack(self, kind, index): return [Clip()]
+        class Project:
+            def __init__(self, source): self.source, self.current = source, source
+            def GetName(self): return "ARPHE"
+            def SetCurrentTimeline(self, timeline): self.current = timeline; return True
+
+        with tempfile.TemporaryDirectory() as raw:
+            cfg = self.config(Path(raw), True)
+            source, provisional = Timeline("SOURCE"), Timeline("__ARPHE_VERTICAL_VERTICAL_12345678")
+            project = Project(source)
+            plan = SimpleNamespace(target={"project": "ARPHE", "timeline": "SOURCE"},
+                                   to_dict=lambda: {"plan_id": "vertical_12345678", "actions": []})
+            verified = SimpleNamespace(actions=())
+            def create(*args, **kwargs):
+                project.current = provisional
+                return provisional
+            with patch("bridge.server._runtime", return_value=(object(), object(), project, source, cfg, object(), None)), \
+                 patch("bridge.server.require_capability"), \
+                 patch("bridge.server.do_approved_vertical_social_plan", return_value=plan), \
+                 patch("bridge.server.do_create_provisional_cut_timeline", side_effect=create), \
+                 patch("bridge.server.do_record_vertical_social_cut_execution", return_value=verified):
+                result = server.apply_vertical_social_cuts("vertical_12345678", "fingerprint")
+            self.assertTrue(result["ok"])
+            self.assertIs(source, project.current)
+
 
 if __name__ == "__main__":
     unittest.main()

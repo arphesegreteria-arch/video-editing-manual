@@ -671,5 +671,5 @@ Principio ancora valido:
   del piano, con target esplicito, read-back, journal e ripristino della timeline sorgente.
 - Grafiche e CTA sono opzionali e validate contro ruoli colore canonici; non vengono applicate se
   assenti e restano non eseguibili fino al proprio gate Resolve.
-- Test Vertical Social: 41 PASS. Suite completa del bridge: 403 PASS e 1 skip previsto. Gate nativi PC_PERSONALE PASS per CUT, REFRAME e B-roll fornito;
+- Test Vertical Social: 43 PASS. Suite completa del bridge: 405 PASS e 1 skip previsto. Gate nativi PC_PERSONALE PASS per CUT, REFRAME e B-roll fornito;
   PC_SEGRETERIA non modificato e ancora PENDING.

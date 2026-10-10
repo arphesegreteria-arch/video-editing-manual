@@ -172,6 +172,24 @@ class VerticalSocialWorkflowTests(unittest.TestCase):
             inspected = module.inspect_vertical_social_plan(path, "PC_PERSONALE", prepared.plan_id)
             self.assertIn("final_check", inspected)
             self.assertFalse(inspected["final_check"]["ready_for_human_review"])
+
+    def test_generic_advance_cannot_forge_unvalidated_graphic_execution(self):
+        module = self._module()
+        with tempfile.TemporaryDirectory() as raw_root:
+            path = Path(raw_root) / "plans.json"
+            prepared = module.prepare_vertical_social_plan(
+                path, "PC_PERSONALE",
+                {"project": "ARPHE", "timeline": "ADV", "fps": "30", "total_frames": 60},
+                [{"action_id": "g", "type": "GRAPHIC", "phase": "PROVISIONAL_EDIT",
+                  "state": "APPROVED", "graphic_kind": "TITLE", "text": "Titolo",
+                  "style_role": "cream", "range": {"start_frame": 0, "end_frame": 30},
+                  "reason": "richiesta editor"}],
+            )
+            module.approve_vertical_social_plan(path, "PC_PERSONALE", prepared.plan_id,
+                                                prepared.fingerprint)
+            with self.assertRaisesRegex(Exception, "capability non validata"):
+                module.advance_vertical_social_action(
+                    path, "PC_PERSONALE", prepared.plan_id, "g", "APPLIED", {"claimed": True})
             
 
 if __name__ == "__main__":

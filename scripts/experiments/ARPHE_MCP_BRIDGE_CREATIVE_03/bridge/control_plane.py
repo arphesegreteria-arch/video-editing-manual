@@ -154,6 +154,19 @@ class WorkflowJobStore:
             raise ValidationError("Workflow job sconosciuto")
         return self._decode(raw)
 
+    def active(self) -> tuple[WorkflowJob, ...]:
+        jobs = tuple(self._decode(raw) for raw in self._read()["jobs"].values())
+        return tuple(sorted((job for job in jobs if job.state not in {"CLOSED", "STALE"}),
+                            key=lambda job: (job.updated_at, job.workflow_job_id), reverse=True))
+
+    def find_binding(self, workflow_family: str, native_reference: str,
+                     target: dict[str, object], plan_fingerprint: str) -> WorkflowJob | None:
+        for job in self.active():
+            if (job.workflow_family == workflow_family and job.native_reference == native_reference
+                    and job.target == target and job.plan_fingerprint == plan_fingerprint):
+                return job
+        return None
+
     def save(self, job: WorkflowJob, expected_revision: int) -> WorkflowJob:
         current = self.get(job.workflow_job_id)
         if current.revision != expected_revision:

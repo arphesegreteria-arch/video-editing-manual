@@ -60,6 +60,8 @@ class ProfileConfigTests(unittest.TestCase):
         self.assertEqual("PC_PERSONALE", personal["workstation_id"])
         self.assertEqual("PC_SEGRETERIA", office["workstation_id"])
         self.assertNotEqual(personal["tunnel_name"], office["tunnel_name"])
+        self.assertIs(False, personal["feature_flags"]["CAP_WORKFLOW_CONTROL_PLANE"])
+        self.assertIs(False, office["feature_flags"]["CAP_WORKFLOW_CONTROL_PLANE"])
 
     def test_personal_profile_rejects_legacy_office_tunnel(self):
         module = load_profile_module()

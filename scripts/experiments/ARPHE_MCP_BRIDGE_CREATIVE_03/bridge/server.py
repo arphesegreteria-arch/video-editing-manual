@@ -22,7 +22,9 @@ from .artifact_records import artifact_store_for, load_artifact_policy
 from .audio_provenance import media_fingerprint
 from .config import load_config
 from .control_plane import WorkflowJobStore, approve_workflow_job as do_approve_workflow_job, new_workflow_job
-from .workflow_control import load_native_binding, native_binding, workflow_job_card
+from .workflow_control import (advance_workflow_job as do_advance_control_job,
+                               control_plan_fingerprint, load_native_binding, native_binding,
+                               workflow_job_card)
 from .carabellese_analysis import (
     cleanup_candidate_fingerprint,
     derive_pause_candidates,
@@ -1356,9 +1358,24 @@ def inspect_workstation_control_plane() -> dict[str, Any]:
                     "timeline_fps": safe_call(timeline, "GetSetting", "timelineFrameRate") if timeline else None,
                     "playback_fps": safe_call(timeline, "GetSetting", "timelinePlaybackFrameRate") if timeline else None,
                 })
+            active_cards = []
+            registry_warning = None
+            try:
+                store = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id)
+                for job in store.active():
+                    try:
+                        native = load_native_binding(config, job.workflow_family, job.native_reference)
+                        active_cards.append(workflow_job_card(job, native))
+                    except Exception as exc:
+                        active_cards.append({"workflow_job_id": job.workflow_job_id,
+                                             "workflow_family": job.workflow_family,
+                                             "state": "BLOCKED", "next_safe_action": "TECHNICAL_RECOVERY",
+                                             "error_type": type(exc).__name__})
+            except Exception as exc:
+                registry_warning = type(exc).__name__
             return {"ok": True, "bridge": "ARPHE_MCP_BRIDGE_CREATIVE_03", "workstation_id": config.workstation_id,
                     "resolve": resolve_card, "capabilities": feature_report(config, manager, project, timeline),
-                    "active_jobs": []}
+                    "active_jobs": active_cards, "registry_warning": registry_warning}
         except Exception as exc:
             return _error(exc)
 
@@ -1375,14 +1392,14 @@ def prepare_workflow_job(workflow_family: str, native_reference: str, target: di
         config = load_config()
         _require_control_plane(config)
         native = load_native_binding(config, workflow_family, native_reference)
-        payload = {"workflow_family": workflow_family, "native_reference": native_reference, "target": target,
-                   "workstation_id": config.workstation_id}
-        fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        fingerprint = control_plan_fingerprint(
+            config.workstation_id, workflow_family, native_reference, target, native)
         job = new_workflow_job(config.workstation_id, workflow_family, native_reference, target, fingerprint)
         native_binding(job, native)
         store = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id)
-        stored = store.create(job)
+        stored = store.find_binding(workflow_family, native_reference, target, fingerprint) or store.create(job)
         return {"ok": True, "card_count": 1, "plan_fingerprint": stored.plan_fingerprint,
+                "idempotent": stored.workflow_job_id != job.workflow_job_id,
                 **workflow_job_card(stored, native)}
     except Exception as exc:
         return _error(exc)
@@ -1408,12 +1425,72 @@ def approve_workflow_job(workflow_job_id: str, plan_fingerprint: str, operator_r
         config = load_config()
         _require_control_plane(config)
         store = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id)
+        pending = store.get(workflow_job_id)
+        native = load_native_binding(config, pending.workflow_family, pending.native_reference)
+        current = control_plan_fingerprint(
+            pending.workstation_id, pending.workflow_family, pending.native_reference,
+            pending.target, native)
+        if current != pending.plan_fingerprint:
+            raise ValidationError("piano nativo cambiato: preparare un nuovo workflow job")
         job = do_approve_workflow_job(store, workflow_job_id, plan_fingerprint, operator_role)
-        native = load_native_binding(config, job.workflow_family, job.native_reference)
         return {"ok": True, "approved_plan_fingerprint": job.approved_plan_fingerprint,
                 **workflow_job_card(job, native)}
     except Exception as exc:
         return _error(exc)
+
+
+def _dispatch_control_native(job: Any, native: Any, config: Any = None) -> dict[str, Any]:
+    """Route only native states whose human inputs are already persisted."""
+    family, state = str(job.workflow_family), str(getattr(native, "state", ""))
+    if family == "PODCAST_REELS":
+        native_id = str(native.editorial_job_id)
+        if state == "MARKED":
+            return {"ok": False, "state": state, "next_safe_action": "SUBMIT_REVIEW",
+                    "error": "Serve la review completa prima dell'applicazione."}
+        if state in {"REVIEWED", "CUT", "FAILED_RECOVERABLE"}:
+            if not native.review_fingerprint:
+                return {"ok": False, "state": state, "next_safe_action": "SUBMIT_REVIEW",
+                        "error": "Review fingerprint mancante."}
+            return apply_podcast_reel_selection(native_id, native.review_fingerprint)
+        if state == "VERIFIED":
+            return close_podcast_reel_selection(native_id)
+    elif family == "CARABELLESE_CLEANUP":
+        native_id = str(native.carabellese_job_id)
+        if state == "MARKED":
+            return {"ok": False, "state": state, "next_safe_action": "SUBMIT_REVIEW",
+                    "error": "Serve la review completa prima dell'applicazione."}
+        if state in {"REVIEWED", "CHECKPOINTED", "APPLYING", "FAILED_RECOVERABLE"}:
+            if not native.review_fingerprint:
+                return {"ok": False, "state": state, "next_safe_action": "SUBMIT_REVIEW",
+                        "error": "Review fingerprint mancante."}
+            return apply_carabellese_cleanup(native_id, native.review_fingerprint)
+        if state == "VERIFIED":
+            return close_carabellese_cleanup(native_id)
+    elif family == "BRANDED_LONGFORM":
+        if state in {"APPROVED", "BLOCKED"}:
+            return apply_branded_longform_batch(str(native.job_id))
+        if state == "APPLIED":
+            return verify_branded_longform_job(str(native.job_id))
+        return {"ok": False, "state": state, "next_safe_action": "APPROVE_PLAN",
+                "error": "La proposta branded non è ancora approvata."}
+    elif family == "VERTICAL_SOCIAL":
+        if config is None:
+            return {"ok": False, "state": state, "next_safe_action": "TECHNICAL_RECOVERY",
+                    "error": "Config Vertical Social mancante."}
+        inspection = do_inspect_vertical_social_plan(
+            config.vertical_social_plans_path, config.workstation_id, str(native.plan_id))
+        action_id = inspection.get("next_action")
+        if not action_id:
+            return {"ok": True, "state": "REVIEW_READY", "next_safe_action": "NONE",
+                    "evidence": inspection}
+        action = native.action(str(action_id))
+        from .vertical_social_jobs import plan_fingerprint
+        fingerprint = plan_fingerprint(native)
+        if action.action_type == "CUT":
+            return apply_vertical_social_cuts(str(native.plan_id), fingerprint)
+        return apply_vertical_social_action(str(native.plan_id), fingerprint, str(action_id))
+    return {"ok": False, "state": state, "next_safe_action": "TECHNICAL_RECOVERY",
+            "error": "Stato nativo non avanzabile automaticamente."}
 
 
 @mcp.tool(annotations=SAFE_WRITE)
@@ -1435,10 +1512,45 @@ def advance_workflow_job(workflow_job_id: str, approved_plan_fingerprint: str) -
             if project_name != job.target.get("project_name") or timeline_name != job.target.get("timeline_name"):
                 return {"ok": False, "stage": "target_revalidation", "error": "Target Resolve diverso dal job; nessuna write eseguita."}
             native = load_native_binding(config, job.workflow_family, job.native_reference)
-            return {"ok": False, "stage": "native_dispatch", "error": "Il dispatcher specifico della linea non è ancora abilitato.",
-                    **workflow_job_card(job, native)}
+            card = workflow_job_card(job, native)
+            if card["state"] == "STALE":
+                return {"ok": False, "stage": "plan_revalidation", **card,
+                        "error": "Il piano nativo è cambiato dopo l'approvazione; nessuna write eseguita."}
+            if card["next_safe_action"] in {"SUBMIT_REVIEW", "APPROVE_PLAN"}:
+                return {"ok": False, "stage": "human_input", **card,
+                        "error": "Manca un input umano già previsto dal workflow."}
+            def delegate() -> dict[str, Any]:
+                result = _dispatch_control_native(job, native, config)
+                if not result.get("ok"):
+                    raise ValidationError(str(result.get("error") or "Dispatcher nativo fallito"))
+                return result
+            operation_key = f"{job.workflow_family}:{getattr(native, 'state', '')}:{card['next_safe_action']}"
+            if job.workflow_family == "VERTICAL_SOCIAL":
+                inspection = do_inspect_vertical_social_plan(
+                    config.vertical_social_plans_path, config.workstation_id, str(native.plan_id))
+                operation_key += f":{inspection.get('next_action') or 'COMPLETE'}"
+            return {"ok": True, **do_advance_control_job(
+                store, workflow_job_id, approved_plan_fingerprint, delegate,
+                operation_key=operation_key)}
         except Exception as exc:
             return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_workflow_delivery(workflow_job_id: str, approved_delivery_fingerprint: str,
+                              operator_role: str) -> dict[str, Any]:
+    """Approve delivery only when a native verified delivery contract exists."""
+    try:
+        config = load_config()
+        _require_control_plane(config)
+        job = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id).get(workflow_job_id)
+        if not operator_role.strip() or len(approved_delivery_fingerprint) != 64:
+            raise ValidationError("Approvazione delivery non valida")
+        return {"ok": False, "workflow_job_id": job.workflow_job_id, "stage": "delivery",
+                "status": "not_available",
+                "error": "Il workflow nativo non espone ancora una delivery verificata approvabile."}
+    except Exception as exc:
+        return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)

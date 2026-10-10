@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+from dataclasses import replace
 from types import SimpleNamespace
 import unittest
 
@@ -9,8 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bridge.control_plane import WorkflowJobStore, approve_workflow_job, new_workflow_job  # noqa: E402
-from bridge.workflow_control import (advance_workflow_job, load_native_binding, native_binding,
-                                     workflow_job_card)  # noqa: E402
+from bridge.workflow_control import (advance_workflow_job, control_plan_fingerprint,
+                                     load_native_binding, native_binding,
+                                     native_plan_fingerprint, workflow_job_card)  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 
 
@@ -64,6 +66,50 @@ class WorkflowControlTests(unittest.TestCase):
             self.assertEqual({"native": "done"}, first["evidence"])
             self.assertEqual(first, second)
             self.assertEqual([], calls)
+
+    def test_new_native_operation_can_advance_after_review_ready(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as raw:
+            store = WorkflowJobStore(Path(raw) / "jobs.json", "PC_PERSONALE")
+            job = approve_workflow_job(store, store.create(self.job).workflow_job_id, "a" * 64, "SECRETARY")
+            first = advance_workflow_job(
+                store, job.workflow_job_id, "a" * 64,
+                lambda: {"native": "verified"}, operation_key="REVIEWED:EXECUTE")
+            calls = []
+            second = advance_workflow_job(
+                store, job.workflow_job_id, "a" * 64,
+                lambda: calls.append(True) or {"state": "CLOSED"}, operation_key="VERIFIED:CLOSE")
+            repeated = advance_workflow_job(
+                store, job.workflow_job_id, "a" * 64,
+                lambda: calls.append(False), operation_key="VERIFIED:CLOSE")
+            self.assertEqual("REVIEW_READY", first["state"])
+            self.assertEqual("CLOSED", second["state"])
+            self.assertEqual(second, repeated)
+            self.assertEqual([True], calls)
+
+    def test_native_review_changes_control_plan_fingerprint(self):
+        marked = SimpleNamespace(workstation_id="PC_PERSONALE", state="MARKED",
+                                 project_name="ARPHE", timeline_name="MASTER",
+                                 candidate_fingerprint="b" * 64, review_fingerprint=None)
+        reviewed = SimpleNamespace(workstation_id="PC_PERSONALE", state="REVIEWED",
+                                   project_name="ARPHE", timeline_name="MASTER",
+                                   candidate_fingerprint="b" * 64, review_fingerprint="c" * 64)
+        self.assertEqual("b" * 64, native_plan_fingerprint("PODCAST_REELS", marked))
+        before = control_plan_fingerprint(
+            "PC_PERSONALE", "PODCAST_REELS", "editorial_0123456789abcdef",
+            {"project_name": "ARPHE", "timeline_name": "MASTER"}, marked)
+        after = control_plan_fingerprint(
+            "PC_PERSONALE", "PODCAST_REELS", "editorial_0123456789abcdef",
+            {"project_name": "ARPHE", "timeline_name": "MASTER"}, reviewed)
+        self.assertNotEqual(before, after)
+
+    def test_card_marks_changed_native_plan_stale(self):
+        native = SimpleNamespace(workstation_id="PC_PERSONALE", state="REVIEWED",
+                                 project_name="ARPHE", timeline_name="MASTER",
+                                 candidate_fingerprint="b" * 64, review_fingerprint="c" * 64)
+        card = workflow_job_card(replace(self.job, approved_plan_fingerprint="a" * 64), native)
+        self.assertEqual("STALE", card["state"])
+        self.assertEqual("PREPARE_NEW_PLAN", card["next_safe_action"])
 
     def test_load_native_binding_uses_editorial_store_and_rejects_unknown_family(self):
         from bridge.editorial_jobs import EditorialJobStore, new_editorial_job

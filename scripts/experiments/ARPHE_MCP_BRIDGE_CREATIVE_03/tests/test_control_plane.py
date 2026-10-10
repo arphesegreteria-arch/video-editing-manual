@@ -49,6 +49,16 @@ class ControlPlaneTests(unittest.TestCase):
             with self.assertRaisesRegex(ValidationError, "non leggibile"):
                 store.get(job.workflow_job_id)
 
+    def test_find_binding_and_active_list_do_not_create_duplicates(self):
+        with tempfile.TemporaryDirectory() as raw:
+            store = WorkflowJobStore(Path(raw) / "jobs.json", "PC_PERSONALE")
+            job = store.create(new_workflow_job(
+                "PC_PERSONALE", "PODCAST_REELS", "editorial_0123456789abcdef",
+                {"project_name": "ARPHE", "timeline_name": "MASTER"}, "a" * 64))
+            found = store.find_binding("PODCAST_REELS", job.native_reference, job.target, job.plan_fingerprint)
+            self.assertEqual(job.workflow_job_id, found.workflow_job_id)
+            self.assertEqual([job.workflow_job_id], [item.workflow_job_id for item in store.active()])
+
 
 if __name__ == "__main__":
     unittest.main()

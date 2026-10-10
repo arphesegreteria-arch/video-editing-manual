@@ -16,6 +16,7 @@
   "venv_root": "C:/ARPHE/MCP/runtimes/PC_SEGRETERIA/venv",
   "feature_flags": {
     "CAP_PROJECT": true,
-    "CAP_TIMELINE": true
+    "CAP_TIMELINE": true,
+    "CAP_WORKFLOW_CONTROL_PLANE": false
   }
 }

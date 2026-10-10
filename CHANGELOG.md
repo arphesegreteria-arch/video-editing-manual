@@ -703,3 +703,5 @@ Principio ancora valido:
   e rollback del progetto sintetico verificati; aggiunti retry idempotente e rollback degli overlay
   parziali, impronta strutturale della timeline originale e validazione/fingerprint dei pacchetti
   SINGLE/OBS. Suite completa: 454 test, 1 skip per privilegio symlink Windows.
+- Il cleanup high-confidence ora ricostruisce fisicamente `_CLEANUP` dalla sorgente A/V singola,
+  preservando l'originale; timeline complesse e multicam restano fail-closed in revisione.

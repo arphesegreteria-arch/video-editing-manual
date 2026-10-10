@@ -195,6 +195,11 @@ proposal markers there, accepts one fingerprint-bound batch decision and creates
 carrier and verify their exact range and Text+ read-back. A retry of an already applied job returns
 the registered operations rather than duplicating overlays.
 
+When high-confidence cleanup events are supplied for a single synchronized A/V source, the bridge
+rebuilds `_CLEANUP` from the kept ranges and never edits the original. Multicam or complex timelines
+are deliberately rejected from automatic cutting and returned for review until native sync/camera
+selection is available.
+
 OBS multicamera input uses `PROGRAM` as the only final audio. `CAM_A`, `CAM_B`, and later cameras
 may carry guide audio solely for synchronization. Missing guide audio or mismatched frame rates
 produce review-required status rather than a claimed sync.

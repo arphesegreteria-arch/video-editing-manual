@@ -531,6 +531,8 @@ finestre sono approvati, mentre i punti di lama finali richiedono ancora il gate
 - Lo strumento read-only `inspect_branded_longform_sources` valida input/fps/guide audio e produce
   l'impronta sorgente da usare per il job; la struttura della timeline originale è poi vincolata.
 - Timeline originale immutabile; copie `_CLEANUP` e `_EDITORIAL` idempotenti e verificate.
+- Per le sorgenti A/V singole il cleanup high-confidence ricostruisce davvero `_CLEANUP` dai range
+  approvati automaticamente; multicam/timeline complesse restano in review e non subiscono tagli.
 - Proposte semantiche, card unica, marker, approvazione batch con fingerprint e applicazione
   Fusion ARPHE implementati nel bridge.
 - Studio Carabellese resta `kit_status=PENDING`: nessuna grafica ARPHE può essere applicata.

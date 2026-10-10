@@ -82,7 +82,80 @@ def _duplicate(project: object, job: BrandedLongformJob, source_name: str, targe
             raise ValidationError("Ripristino timeline originale fallito")
 
 
-def create_cleanup_timeline(project: object, job: BrandedLongformJob) -> dict[str, Any]:
+def _keep_ranges(total: int, cuts: tuple[tuple[int, int], ...]) -> tuple[tuple[int, int], ...]:
+    cursor, keep = 0, []
+    for start, end in cuts:
+        if start < cursor or end <= start or end > total:
+            raise ValidationError("Range cleanup non validi o sovrapposti")
+        if start > cursor:
+            keep.append((cursor, start))
+        cursor = end
+    if cursor < total:
+        keep.append((cursor, total))
+    if not keep:
+        raise ValidationError("Cleanup rimuoverebbe l'intera sorgente")
+    return tuple(keep)
+
+
+def _create_cut_cleanup(project: object, job: BrandedLongformJob,
+                        cleanup_cuts: tuple[tuple[int, int], ...]) -> dict[str, Any]:
+    _check_project(project, job)
+    original = safe_call(project, "GetCurrentTimeline")
+    source = _find(project, job.original_timeline)
+    if source is None or original is None:
+        raise ValidationError("Timeline originale non disponibile per cleanup")
+    if _find(project, job.cleanup_timeline) is not None:
+        return {"ok": True, "created_timeline": job.cleanup_timeline, "existing": True,
+                "returned_to_original": True, "cleanup_cuts": len(cleanup_cuts)}
+    video = safe_call(source, "GetItemListInTrack", "video", 1) or []
+    audio = safe_call(source, "GetItemListInTrack", "audio", 1) or []
+    if (int(safe_call(source, "GetTrackCount", "video") or 0) != 1
+            or int(safe_call(source, "GetTrackCount", "audio") or 0) != 1
+            or len(video) != 1 or len(audio) != 1):
+        raise ValidationError("Cleanup automatico richiede una sorgente A/V singola; usa review per multicam o timeline complessa")
+    media_video, media_audio = safe_call(video[0], "GetMediaPoolItem"), safe_call(audio[0], "GetMediaPoolItem")
+    video_id, audio_id = safe_call(media_video, "GetUniqueId"), safe_call(media_audio, "GetUniqueId")
+    same_media = media_video is media_audio or (video_id and audio_id and video_id == audio_id)
+    if media_video is None or media_audio is None or not same_media:
+        raise ValidationError("Cleanup automatico richiede video e audio dalla stessa sorgente")
+    total = int(safe_call(video[0], "GetDuration") or 0)
+    keep = _keep_ranges(total, cleanup_cuts)
+    source_offset = int(safe_call(video[0], "GetLeftOffset") or 0)
+    pool = safe_call(project, "GetMediaPool")
+    cleanup = None
+    try:
+        cleanup = safe_call(pool, "CreateEmptyTimeline", job.cleanup_timeline) if pool else None
+        if cleanup is None or str(safe_call(cleanup, "GetName") or "") != job.cleanup_timeline:
+            raise ValidationError("Creazione timeline CLEANUP fallita")
+        if not safe_call(project, "SetCurrentTimeline", cleanup):
+            raise ValidationError("Selezione timeline CLEANUP fallita")
+        record = 0
+        for start, end in keep:
+            for media_type in (1, 2):
+                appended = safe_call(pool, "AppendToTimeline", [{
+                    "mediaPoolItem": media_video, "startFrame": source_offset + start,
+                    "endFrame": source_offset + end, "recordFrame": record,
+                    "mediaType": media_type,
+                }])
+                if not appended:
+                    raise ValidationError(f"Append cleanup fallito: {start}-{end}")
+            record += end - start
+        return {"ok": True, "created_timeline": job.cleanup_timeline, "existing": False,
+                "returned_to_original": True, "cleanup_cuts": len(cleanup_cuts),
+                "kept_frames": record}
+    except Exception:
+        if cleanup is not None:
+            safe_call(pool, "DeleteTimelines", [cleanup])
+        raise
+    finally:
+        if not safe_call(project, "SetCurrentTimeline", original):
+            raise ValidationError("Ripristino timeline originale fallito")
+
+
+def create_cleanup_timeline(project: object, job: BrandedLongformJob,
+                            cleanup_cuts: tuple[tuple[int, int], ...] = ()) -> dict[str, Any]:
+    if cleanup_cuts:
+        return _create_cut_cleanup(project, job, cleanup_cuts)
     return _duplicate(project, job, job.original_timeline, job.cleanup_timeline)
 
 

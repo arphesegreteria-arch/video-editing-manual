@@ -66,6 +66,7 @@ from .branded_longform_jobs import BrandedLongformJobStore, new_branded_longform
 from .branded_longform_media import (build_sync_plan as do_build_branded_sync_plan,
                                      inspect_longform_sources as do_inspect_branded_sources,
                                      source_package_fingerprint as do_branded_source_fingerprint)
+from .branded_longform_cleanup import cleanup_cut_ranges, plan_cleanup
 from .branded_longform_resolve import (add_proposal_markers as do_add_branded_markers,
                                       create_cleanup_timeline as do_create_branded_cleanup,
                                       create_editorial_timeline as do_create_branded_editorial,
@@ -291,7 +292,8 @@ def _verify_branded_profile_binding(job: Any) -> None:
 
 
 @mcp.tool(annotations=SAFE_WRITE)
-def create_branded_longform_cleanup(profile_id: str, source_fingerprint: str) -> dict[str, Any]:
+def create_branded_longform_cleanup(profile_id: str, source_fingerprint: str,
+                                    cleanup_events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Create or recover the derived CLEANUP timeline; never mutates the original."""
     try:
         _, manager, project, timeline, config, _, error = _runtime()
@@ -314,10 +316,17 @@ def create_branded_longform_cleanup(profile_id: str, source_fingerprint: str) ->
                 project_name, timeline_name, source_fingerprint,
                 profile_fingerprint, config.workstation_id, profile_id,
                 do_branded_timeline_fingerprint(timeline)))
+        candidates = plan_cleanup(cleanup_events or [])
+        fps = float(safe_call(timeline, "GetSetting", "timelineFrameRate") or 0)
+        total = int(safe_call((safe_call(timeline, "GetItemListInTrack", "video", 1) or [None])[0], "GetDuration") or 0)
+        cleanup_cuts = cleanup_cut_ranges(candidates, fps, total) if candidates else ()
         with RESOLVE_ACCESS_LOCK:
-            result = do_create_branded_cleanup(project, job)
+            result = do_create_branded_cleanup(project, job, cleanup_cuts)
         return {"ok": True, "action": "create_branded_longform_cleanup", "job_id": job.job_id,
-                "profile_id": profile_id, "kit_status": profile.kit_status, **result}
+                "profile_id": profile_id, "kit_status": profile.kit_status,
+                "cleanup": {"auto_cut_ranges": cleanup_cuts,
+                            "review_candidates": [candidate.__dict__ for candidate in candidates if candidate.review_required]},
+                **result}
     except Exception as exc: return _error(exc)
 
 

@@ -200,6 +200,10 @@ rebuilds `_CLEANUP` from the kept ranges and never edits the original. Multicam 
 are deliberately rejected from automatic cutting and returned for review until native sync/camera
 selection is available.
 
+An approved `B_ROLL_PROVIDED` proposal must carry an allowlisted asset path plus exact source and
+editorial ranges of equal duration. It is imported only onto the owned `_EDITORIAL` timeline. Generated
+B-roll and camera cuts remain explicit proposals, not automatic operations.
+
 OBS multicamera input uses `PROGRAM` as the only final audio. `CAM_A`, `CAM_B`, and later cameras
 may carry guide audio solely for synchronization. Missing guide audio or mismatched frame rates
 produce review-required status rather than a claimed sync.

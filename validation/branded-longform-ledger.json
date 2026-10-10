@@ -5,8 +5,8 @@
   "automated_evidence": {
     "result": "PASS",
     "test_results": [
-      "454 bridge tests passed on 2026-10-10; 1 Windows symlink test skipped for missing host privilege.",
-      "Contract, OBS package, cleanup policy, profile isolation, approval fingerprint, retry/resume persistence, derived timeline lifecycle, proposal markers, partial-overlay rollback and ARPHE Fusion executor covered."
+      "457 bridge tests passed on 2026-10-10; 1 Windows symlink test skipped for missing host privilege.",
+      "Contract, OBS package, cleanup policy and reconstruction, profile isolation, approval fingerprint, retry/resume persistence, derived timeline lifecycle, proposal markers, partial-overlay rollback, supplied B-roll executor and ARPHE Fusion executor covered."
     ],
     "limitations": [
       "Native Resolve gate passed in a disposable PC_PERSONALE project and restored the previously open project; the capability remains disabled by default.",

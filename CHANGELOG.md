@@ -702,6 +702,8 @@ Principio ancora valido:
 - Gate nativo PC_PERSONALE superato: copie `_CLEANUP`/`_EDITORIAL`, marker, grafica Fusion Satoshi
   e rollback del progetto sintetico verificati; aggiunti retry idempotente e rollback degli overlay
   parziali, impronta strutturale della timeline originale e validazione/fingerprint dei pacchetti
-  SINGLE/OBS. Suite completa: 454 test, 1 skip per privilegio symlink Windows.
+  SINGLE/OBS. Suite completa: 457 test, 1 skip per privilegio symlink Windows.
 - Il cleanup high-confidence ora ricostruisce fisicamente `_CLEANUP` dalla sorgente A/V singola,
   preservando l'originale; timeline complesse e multicam restano fail-closed in revisione.
+- Il B-roll fornito con asset e range sorgente espliciti è applicabile solo su `_EDITORIAL`; B-roll
+  generato e cambio camera restano proposte non automatiche.

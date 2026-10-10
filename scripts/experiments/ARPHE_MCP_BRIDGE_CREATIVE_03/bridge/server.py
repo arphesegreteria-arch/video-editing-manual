@@ -1416,6 +1416,31 @@ def approve_workflow_job(workflow_job_id: str, plan_fingerprint: str, operator_r
         return _error(exc)
 
 
+@mcp.tool(annotations=SAFE_WRITE)
+def advance_workflow_job(workflow_job_id: str, approved_plan_fingerprint: str) -> dict[str, Any]:
+    """Preflight an approved job against the live Resolve target; native execution stays typed."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            config = load_config()
+            _require_control_plane(config)
+            _, _, project, timeline, _, _, error = _runtime()
+            if error:
+                return error
+            store = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id)
+            job = store.get(workflow_job_id)
+            if job.approved_plan_fingerprint != approved_plan_fingerprint:
+                raise RuntimeError("fingerprint approvazione non corrispondente")
+            project_name = safe_call(project, "GetName") if project else None
+            timeline_name = safe_call(timeline, "GetName") if timeline else None
+            if project_name != job.target.get("project_name") or timeline_name != job.target.get("timeline_name"):
+                return {"ok": False, "stage": "target_revalidation", "error": "Target Resolve diverso dal job; nessuna write eseguita."}
+            native = load_native_binding(config, job.workflow_family, job.native_reference)
+            return {"ok": False, "stage": "native_dispatch", "error": "Il dispatcher specifico della linea non è ancora abilitato.",
+                    **workflow_job_card(job, native)}
+        except Exception as exc:
+            return _error(exc)
+
+
 @mcp.tool(annotations=READ_ONLY)
 def get_transcript_metadata(transcript_path: str) -> dict[str, Any]:
     """Read metadata and counts from one allowlisted ARPHE_TRANSCRIPT_V1 JSON."""

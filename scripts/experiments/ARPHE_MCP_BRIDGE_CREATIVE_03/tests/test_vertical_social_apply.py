@@ -30,13 +30,19 @@ class VerticalSocialApplyTests(unittest.TestCase):
 
     def test_finds_one_owned_provisional_timeline(self):
         from bridge.vertical_social_apply import find_provisional_timeline
-        expected = self.Timeline("__ARPHE_VERTICAL_VERTICAL_ABC12345", [])
+        expected = self.Timeline("__ARPHE_VERTICAL_VERTICAL_ABC12345ABC12345ABC12345ABC12345", [])
         project = self.Project([self.Timeline("SOURCE", []), expected])
-        self.assertIs(expected, find_provisional_timeline(project, "vertical_abc12345"))
+        self.assertIs(expected, find_provisional_timeline(project, "vertical_abc12345abc12345abc12345abc12345"))
+
+    def test_finds_timeline_created_for_full_generated_plan_id(self):
+        from bridge.vertical_social_apply import find_provisional_timeline
+        plan_id = "vertical_0123456789abcdef0123456789abcdef"
+        expected = self.Timeline("__ARPHE_VERTICAL_VERTICAL_0123456789ABCDEF0123456789ABCDEF", [])
+        self.assertIs(expected, find_provisional_timeline(self.Project([expected]), plan_id))
 
     def test_reframe_requires_one_exact_clip_and_reads_back_fusion(self):
         from bridge.vertical_social_apply import apply_reframe_action
-        timeline = self.Timeline("__ARPHE_VERTICAL_VERTICAL_ABC12345", [self.Item(0, 40), self.Item(40, 80)])
+        timeline = self.Timeline("__ARPHE_VERTICAL_VERTICAL_ABC12345ABC12345ABC12345ABC12345", [self.Item(0, 40), self.Item(40, 80)])
         action = {"action_id": "r1", "type": "REFRAME", "state": "APPROVED",
                   "range": {"start_frame": 0, "end_frame": 40},
                   "target": {"kind": "person", "label": "speaker"},
@@ -49,7 +55,7 @@ class VerticalSocialApplyTests(unittest.TestCase):
 
     def test_reframe_rejects_partial_clip_geometry(self):
         from bridge.vertical_social_apply import apply_reframe_action
-        timeline = self.Timeline("__ARPHE_VERTICAL_VERTICAL_ABC12345", [self.Item(0, 80)])
+        timeline = self.Timeline("__ARPHE_VERTICAL_VERTICAL_ABC12345ABC12345ABC12345ABC12345", [self.Item(0, 80)])
         action = {"action_id": "r1", "type": "REFRAME", "state": "APPROVED",
                   "range": {"start_frame": 20, "end_frame": 60},
                   "target": {"kind": "person", "label": "speaker"},

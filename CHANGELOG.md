@@ -2,6 +2,30 @@
 
 ## 2026-10-10 — Workflow Control Plane (codice completo, non attivo)
 
+### Hardening successivo alla review indipendente
+
+- Il registro Control Plane usa ora una transazione re-entrante con lock locale anche fra processi
+  distinti; una race non può più perdere un job estraneo durante due create concorrenti.
+- Un'interruzione in `EXECUTING` diventa `FAILED_RECOVERABLE`, conserva l'operazione reclamata e
+  richiede prima una riconciliazione, senza rieseguire implicitamente la write incerta.
+- La fingerprint longform include l'approvazione effettiva (ID e modifiche), non soltanto la card
+  proposta. Target Resolve è legato anche a identità timeline; Vertical Social aggiunge l'impronta
+  viva della sorgente e rifiuta sostituzioni omonime o contenuto cambiato prima del dispatcher.
+- Il dispatcher ricava lo stato Vertical dalle sue azioni e gestisce i resume `BLOCKED` dei workflow
+  nativi; il nome della timeline provvisoria usa l'ID completo del piano.
+- Tutte le API pubbliche di cambio progetto/timeline rilevate dalla review sono serializzate con il
+  lock Resolve. L'installer include anche il contratto longform brandizzato.
+- Regressioni: Creative `491 PASS / 1 SKIP` ambientale e Windows `58 PASS / 1 SKIP` ambientale.
+  Il nuovo test multiprocessing riproduce la race precedente con due processi reali.
+- L'installer migra esplicitamente `CAP_WORKFLOW_CONTROL_PLANE=false` nei config esistenti e
+  conserva qualunque valore già presente.
+- Corretto inoltre il selettore timeline: riconosce solo timeline provvisorie Vertical Social
+  ricostruibili da un piano locale della stessa workstation e progetto; non amplia la regola a
+  nomi arbitrari con prefisso `__ARPHE_`.
+- Il gate di riesame personale è PASS su progetto disposable: target errato bloccato, binding,
+  approval e advance corretti, timeline iniziale ripristinata. Flag e allowlist persistenti restano
+  spenti; `PC_SEGRETERIA` ancora intatta e `PENDING`.
+
 - Aggiunti registro locale atomico e card unica di controllo workstation/Resolve, con FPS timeline
   e playback distinti, capability e lavori attivi.
 - Collegati i quattro registri nativi: Reel podcast, Vertical Social, pulizia Carabellese e

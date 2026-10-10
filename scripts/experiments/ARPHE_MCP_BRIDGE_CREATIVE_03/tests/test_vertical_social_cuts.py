@@ -83,7 +83,7 @@ class VerticalSocialCutPolicyTests(unittest.TestCase):
         project = Project(pool)
         source = SourceTimeline(media)
         result = module.create_provisional_cut_timeline(project, source, {
-            "plan_id": "vertical_12345678",
+            "plan_id": "vertical_12345678123456781234567812345678",
             "actions": [
                 {"type": "CUT", "state": "APPROVED", "reason": "pausa",
                  "range": {"start_frame": 20, "end_frame": 40}},
@@ -92,7 +92,7 @@ class VerticalSocialCutPolicyTests(unittest.TestCase):
             ],
         }, total_frames=100)
 
-        self.assertEqual("__ARPHE_VERTICAL_VERTICAL_12345678", result.GetName())
+        self.assertEqual("__ARPHE_VERTICAL_VERTICAL_12345678123456781234567812345678", result.GetName())
         self.assertIs(project.current, result)
         self.assertEqual(6, len(result.appended))
         self.assertEqual([(0, 20), (40, 60), (80, 100)], [
@@ -128,11 +128,11 @@ class VerticalSocialCutPolicyTests(unittest.TestCase):
             def SetCurrentTimeline(self, timeline): self.current = timeline; return True
 
         media = object()
-        existing = Timeline("__ARPHE_VERTICAL_VERTICAL_12345678", media, [20, 20, 20])
+        existing = Timeline("__ARPHE_VERTICAL_VERTICAL_12345678123456781234567812345678", media, [20, 20, 20])
         project = Project(Pool(), existing)
         source = Timeline("ORIGINAL", media, [100])
         result = module.create_provisional_cut_timeline(project, source, {
-            "plan_id": "vertical_12345678",
+            "plan_id": "vertical_12345678123456781234567812345678",
             "actions": [
                 {"type": "CUT", "state": "APPROVED", "reason": "pausa", "range": {"start_frame": 20, "end_frame": 40}},
                 {"type": "CUT", "state": "APPROVED", "reason": "ripetizione", "range": {"start_frame": 60, "end_frame": 80}},

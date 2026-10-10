@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any
 from .safety import ValidationError
+from .vertical_social_apply import provisional_timeline_name
 
 
 def _resolve_call(target: object, method: str, *args: object) -> Any:
@@ -103,7 +104,7 @@ def create_provisional_cut_timeline(project: object, source_timeline: object, pl
     keep = _keep_ranges(total_frames, cuts)
     media = _single_synced_av_source(source_timeline)
     pool = _resolve_call(project, "GetMediaPool")
-    name = f"__ARPHE_VERTICAL_{plan_id.upper()}"
+    name = provisional_timeline_name(plan_id)
     expected_frames = sum(end - start for start, end in keep)
     provisional = _existing_timeline(project, name)
     if provisional is not None:

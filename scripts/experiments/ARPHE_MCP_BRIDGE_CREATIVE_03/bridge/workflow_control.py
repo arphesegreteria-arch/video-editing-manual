@@ -16,6 +16,11 @@ _REVIEW_STATES = {"MARKED", "REVIEWED", "VERIFIED", "CUT", "APPLYING", "CHECKPOI
 _RECOVERABLE = {"BLOCKED", "FAILED_RECOVERABLE"}
 
 
+def _fingerprint_payload(value: object) -> str:
+    raw = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def native_plan_fingerprint(workflow_family: str, native: object) -> str:
     """Return the immutable native content fingerprint that the operator approves."""
     if workflow_family == "PODCAST_REELS":
@@ -24,8 +29,15 @@ def native_plan_fingerprint(workflow_family: str, native: object) -> str:
         value = getattr(native, "review_fingerprint", None) or getattr(native, "proposal_fingerprint", None)
     elif workflow_family == "BRANDED_LONGFORM":
         card = getattr(native, "proposal_card", None)
-        value = card.get("fingerprint") if isinstance(card, dict) else None
-        value = value or getattr(native, "source_fingerprint", None)
+        proposal = card.get("fingerprint") if isinstance(card, dict) else None
+        approval = getattr(native, "approval", None)
+        value = _fingerprint_payload({
+            "proposal_fingerprint": proposal,
+            "approval": approval if isinstance(approval, dict) else None,
+            "source_fingerprint": getattr(native, "source_fingerprint", None),
+            "profile_fingerprint": getattr(native, "profile_fingerprint", None),
+            "original_timeline_fingerprint": getattr(native, "original_timeline_fingerprint", None),
+        }) if proposal else getattr(native, "source_fingerprint", None)
     elif workflow_family == "VERTICAL_SOCIAL":
         from .vertical_social_jobs import plan_fingerprint
         value = plan_fingerprint(native)
@@ -67,10 +79,29 @@ def native_binding(job: WorkflowJob, native: object) -> dict[str, object]:
                 or (getattr(native, "target", {}) or {}).get("timeline"))
     if project != job.target.get("project_name") or timeline != job.target.get("timeline_name"):
         raise ValidationError("target nativo non corrispondente")
+    native_target = getattr(native, "target", {}) or {}
+    native_identity = getattr(native, "timeline_identity", None) or native_target.get("timeline_identity")
+    expected_identity = job.target.get("timeline_identity")
+    if native_identity is not None and expected_identity is not None and native_identity != expected_identity:
+        raise ValidationError("identità timeline nativa non corrispondente")
+    native_source = getattr(native, "source_fingerprint", None) or native_target.get("source_fingerprint")
+    expected_source = job.target.get("source_fingerprint")
+    if native_source is not None and expected_source is not None and native_source != expected_source:
+        raise ValidationError("sorgente nativa non corrispondente")
     state = str(getattr(native, "state", ""))
+    if job.workflow_family == "VERTICAL_SOCIAL":
+        actions = tuple(getattr(native, "actions", ()))
+        action_states = {str(getattr(action, "state", "")) for action in actions}
+        if "BLOCKED" in action_states:
+            state = "BLOCKED"
+        elif action_states & {"APPROVED", "APPLIED"}:
+            state = "APPROVED"
+        elif actions and action_states <= {"VERIFIED", "READY_FOR_REVIEW"}:
+            state = "VERIFIED"
     fingerprint = (getattr(native, "candidate_fingerprint", None) or getattr(native, "proposal_fingerprint", None)
                    or getattr(native, "source_fingerprint", None))
-    return {"state": state, "fingerprint": fingerprint, "project_name": project, "timeline_name": timeline}
+    return {"state": state, "fingerprint": fingerprint, "project_name": project, "timeline_name": timeline,
+            "timeline_identity": native_identity, "source_fingerprint": native_source}
 
 
 def next_safe_action(workflow_family: str, native_state: str, approved: bool) -> str:
@@ -119,6 +150,15 @@ def advance_workflow_job(store: WorkflowJobStore, workflow_job_id: str,
     job = store.get(workflow_job_id)
     if job.approved_plan_fingerprint != approved_plan_fingerprint:
         raise ValidationError("approvazione del piano non corrispondente")
+    if job.state == "EXECUTING":
+        recovered = transition_workflow_job(
+            store, job.workflow_job_id, job.revision, "FAILED_RECOVERABLE",
+            {"_operation_key": job.evidence.get("_operation_key"),
+             "recovery": "interrupted_execution_requires_native_reconciliation"},
+            "AWAITING_APPROVAL",
+        )
+        return {"workflow_job_id": recovered.workflow_job_id, "state": recovered.state,
+                "next_safe_action": "RESUME", "evidence": dict(recovered.evidence)}
     recorded_key = job.evidence.get("_operation_key")
     if job.state == "CLOSED" or (job.state in {"REVIEW_READY", "DELIVERY_AWAITING_APPROVAL"}
                                  and operation_key is None) or (
@@ -129,7 +169,8 @@ def advance_workflow_job(store: WorkflowJobStore, workflow_job_id: str,
     if job.state not in {"AWAITING_APPROVAL", "REVIEW_READY", "DELIVERY_AWAITING_APPROVAL",
                           "FAILED_RECOVERABLE", "BLOCKED"}:
         raise ValidationError("avanzamento non consentito nello stato corrente")
-    executing = transition_workflow_job(store, job.workflow_job_id, job.revision, "EXECUTING", {}, None)
+    claim = {"_operation_key": operation_key} if operation_key is not None else {}
+    executing = transition_workflow_job(store, job.workflow_job_id, job.revision, "EXECUTING", claim, None)
     try:
         if not callable(delegate):
             raise ValidationError("delegate workflow non valido")

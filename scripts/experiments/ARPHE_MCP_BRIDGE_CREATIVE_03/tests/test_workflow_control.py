@@ -87,6 +87,30 @@ class WorkflowControlTests(unittest.TestCase):
             self.assertEqual(second, repeated)
             self.assertEqual([True], calls)
 
+    def test_interrupted_executing_job_becomes_recoverable_before_resume(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as raw:
+            store = WorkflowJobStore(Path(raw) / "jobs.json", "PC_PERSONALE")
+            job = approve_workflow_job(store, store.create(self.job).workflow_job_id, "a" * 64, "SECRETARY")
+            with self.assertRaises(KeyboardInterrupt):
+                advance_workflow_job(
+                    store, job.workflow_job_id, "a" * 64,
+                    lambda: (_ for _ in ()).throw(KeyboardInterrupt("process stopped")),
+                    operation_key="PODCAST_REELS:REVIEWED:EXECUTE",
+                )
+            recovered = advance_workflow_job(
+                store, job.workflow_job_id, "a" * 64,
+                lambda: self.fail("must not rerun while recovery is being recorded"),
+                operation_key="PODCAST_REELS:REVIEWED:EXECUTE",
+            )
+            self.assertEqual("FAILED_RECOVERABLE", recovered["state"])
+            resumed = advance_workflow_job(
+                store, job.workflow_job_id, "a" * 64,
+                lambda: {"native": "reconciled"},
+                operation_key="PODCAST_REELS:REVIEWED:EXECUTE",
+            )
+            self.assertEqual("REVIEW_READY", resumed["state"])
+
     def test_native_review_changes_control_plan_fingerprint(self):
         marked = SimpleNamespace(workstation_id="PC_PERSONALE", state="MARKED",
                                  project_name="ARPHE", timeline_name="MASTER",
@@ -102,6 +126,45 @@ class WorkflowControlTests(unittest.TestCase):
             "PC_PERSONALE", "PODCAST_REELS", "editorial_0123456789abcdef",
             {"project_name": "ARPHE", "timeline_name": "MASTER"}, reviewed)
         self.assertNotEqual(before, after)
+
+    def test_branded_approval_change_invalidates_control_fingerprint(self):
+        before = SimpleNamespace(workstation_id="PC_PERSONALE", state="APPROVED",
+                                 project_name="ARPHE", original_timeline="MASTER",
+                                 source_fingerprint="a" * 64, profile_fingerprint="b" * 64,
+                                 proposal_card={"fingerprint": "c" * 64},
+                                 approval={"approved_ids": ["P001"], "modified": {}})
+        after = SimpleNamespace(**{**before.__dict__, "approval": {
+            "approved_ids": ["P002"], "modified": {"P002": "testo aggiornato"},
+        }})
+        target = {"project_name": "ARPHE", "timeline_name": "MASTER"}
+        self.assertNotEqual(
+            control_plan_fingerprint("PC_PERSONALE", "BRANDED_LONGFORM", "job-1", target, before),
+            control_plan_fingerprint("PC_PERSONALE", "BRANDED_LONGFORM", "job-1", target, after),
+        )
+
+    def test_native_binding_rejects_same_name_different_timeline_identity(self):
+        job = replace(self.job, target={
+            "project_name": "ARPHE", "timeline_name": "MASTER", "timeline_identity": "resolve:old",
+        })
+        replacement = SimpleNamespace(workstation_id="PC_PERSONALE", state="REVIEWED",
+                                      project_name="ARPHE", timeline_name="MASTER",
+                                      timeline_identity="resolve:replacement", candidate_fingerprint="b" * 64)
+        with self.assertRaisesRegex(ValidationError, "identità"):
+            native_binding(job, replacement)
+
+    def test_vertical_plan_with_approved_action_is_executable_in_common_card(self):
+        from bridge.vertical_social_jobs import new_vertical_social_plan
+        native = new_vertical_social_plan(
+            workstation_id="PC_PERSONALE", target={"project": "ARPHE", "timeline": "MASTER"},
+            actions=[{"action_id": "cut-1", "type": "CUT", "phase": "PROVISIONAL_EDIT"}],
+        )
+        from bridge.vertical_social_jobs import plan_fingerprint
+        fingerprint = control_plan_fingerprint("PC_PERSONALE", "VERTICAL_SOCIAL", native.plan_id,
+                                               {"project_name": "ARPHE", "timeline_name": "MASTER"}, native)
+        job = new_workflow_job("PC_PERSONALE", "VERTICAL_SOCIAL", native.plan_id,
+                               {"project_name": "ARPHE", "timeline_name": "MASTER"}, fingerprint)
+        card = workflow_job_card(replace(job, approved_plan_fingerprint=fingerprint), native)
+        self.assertEqual("EXECUTE", card["next_safe_action"])
 
     def test_card_marks_changed_native_plan_stale(self):
         native = SimpleNamespace(workstation_id="PC_PERSONALE", state="REVIEWED",

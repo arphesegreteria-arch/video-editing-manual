@@ -27,7 +27,26 @@ def find_timeline(project: Any, name: str) -> Any:
 
 
 def _timeline_allowed(project_name: str, timeline_name: str, config: CreativeConfig, registry: Registry) -> bool:
-    return timeline_name.startswith("ARPHE_") or timeline_name in config.allowed_timelines or registry.timeline_allowed(project_name, timeline_name)
+    if (timeline_name.startswith("ARPHE_") or timeline_name in config.allowed_timelines
+            or registry.timeline_allowed(project_name, timeline_name)):
+        return True
+    # Vertical Social owns its provisional timeline by the complete plan id.  It
+    # begins with "__" to stay visually distinct, so it cannot use the generic
+    # ARPHE_ prefix rule; permit only a name reconstructed from a local plan for
+    # this workstation and project, never an arbitrary __ARPHE_* timeline.
+    if not timeline_name.startswith("__ARPHE_VERTICAL_VERTICAL_"):
+        return False
+    try:
+        from .vertical_social_apply import provisional_timeline_name
+        from .vertical_social_jobs import VerticalSocialPlanStore
+        store = VerticalSocialPlanStore(config.vertical_social_plans_path, config.workstation_id)
+        return any(
+            plan.target.get("project") == project_name
+            and provisional_timeline_name(plan.plan_id) == timeline_name
+            for plan in store._plans().values()
+        )
+    except (OSError, ValidationError):
+        return False
 
 
 def create_timeline(project: Any, config: CreativeConfig, registry: Registry,

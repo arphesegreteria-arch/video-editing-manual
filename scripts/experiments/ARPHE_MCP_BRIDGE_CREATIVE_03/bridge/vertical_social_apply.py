@@ -12,8 +12,8 @@ from .vertical_social_reframe import (
 
 
 def provisional_timeline_name(plan_id: str) -> str:
-    suffix = str(plan_id).replace("vertical_", "", 1)[:8].upper()
-    if len(suffix) != 8 or not suffix.isalnum():
+    suffix = str(plan_id).replace("vertical_", "", 1).upper()
+    if len(suffix) != 32 or not suffix.isalnum():
         raise ValidationError("plan_id Vertical Social non valido")
     return f"__ARPHE_VERTICAL_VERTICAL_{suffix}"
 

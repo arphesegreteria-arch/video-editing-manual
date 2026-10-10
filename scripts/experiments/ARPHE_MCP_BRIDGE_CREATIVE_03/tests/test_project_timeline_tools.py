@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 import sys
 import tempfile
@@ -13,7 +14,9 @@ from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa
 from bridge.project_tools import create_project  # noqa: E402
 from bridge.registry import Registry  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
-from bridge.timeline_tools import create_timeline  # noqa: E402
+from bridge.timeline_tools import _timeline_allowed, create_timeline  # noqa: E402
+from bridge.vertical_social_apply import provisional_timeline_name  # noqa: E402
+from bridge.vertical_social_jobs import VerticalSocialPlanStore, new_vertical_social_plan  # noqa: E402
 from bridge.creative_tools import (_frame_to_timecode, _sequence_boundaries,
                                    _sequence_windows, _automatic_sequence_windows,
                                    _fixed_readability_windows,
@@ -185,6 +188,23 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 create_timeline(project, config_for(root), registry, "ARPHE_TEST", 720, 1280, 30)
             self.assertEqual(0, project.pool.create_calls)
+
+    def test_owned_vertical_provisional_timeline_is_selectable_without_global_allowlist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = replace(config_for(root), workstation_id="PC_PERSONALE",
+                             vertical_social_plans_path=root / "vertical_plans.json")
+            plan = new_vertical_social_plan(
+                workstation_id="PC_PERSONALE",
+                target={"project": "ARPHE_PROJECT", "timeline": "SOURCE"},
+                actions=[{"action_id": "cut-1", "type": "CUT", "phase": "PROVISIONAL_EDIT"}],
+            )
+            VerticalSocialPlanStore(config.vertical_social_plans_path, "PC_PERSONALE").create(plan)
+            registry = Registry(root / "state.json")
+            self.assertTrue(_timeline_allowed(
+                "ARPHE_PROJECT", provisional_timeline_name(plan.plan_id), config, registry))
+            self.assertFalse(_timeline_allowed(
+                "ARPHE_PROJECT", "__ARPHE_VERTICAL_VERTICAL_UNKNOWN", config, registry))
 
     def test_project_defaults_are_set_before_timeline_creation(self):
         with tempfile.TemporaryDirectory() as directory:

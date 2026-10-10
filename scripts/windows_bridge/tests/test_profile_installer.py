@@ -645,6 +645,7 @@ class ProfileInstallerTests(unittest.TestCase):
         migrated = json.loads(config_path.read_text(encoding="utf-8"))
         self.assertTrue(migrated["feature_flags"]["CAP_MOTION"])
         self.assertFalse(migrated["feature_flags"]["CAP_READABILITY_GUARD"])
+        self.assertFalse(migrated["feature_flags"]["CAP_WORKFLOW_CONTROL_PLANE"])
         self.assertEqual('{"legacy": true}', (config_path.parent / "creative_state.json").read_text(encoding="utf-8"))
         self.assertTrue((config_path.parent / "audit.jsonl").is_file())
         self.assertTrue(self.legacy_creative_config_path.is_file())

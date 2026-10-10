@@ -176,6 +176,9 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_VERTICAL_SOCIAL']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_VERTICAL_SOCIAL -NotePropertyValue $false
     }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_WORKFLOW_CONTROL_PLANE']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_WORKFLOW_CONTROL_PLANE -NotePropertyValue $false
+    }
     if ($null -ne $legacyConfig) {
         foreach ($migration in @(
             @{ Source = $legacyStatePath; Destination = [string]$config.state_path },
@@ -287,6 +290,10 @@ if (-not (Test-Path -LiteralPath $configPath)) {
     }
     if ($null -eq $config.feature_flags.PSObject.Properties['CAP_VERTICAL_SOCIAL']) {
         $config.feature_flags | Add-Member -NotePropertyName CAP_VERTICAL_SOCIAL -NotePropertyValue $false
+        $changed = $true
+    }
+    if ($null -eq $config.feature_flags.PSObject.Properties['CAP_WORKFLOW_CONTROL_PLANE']) {
+        $config.feature_flags | Add-Member -NotePropertyName CAP_WORKFLOW_CONTROL_PLANE -NotePropertyValue $false
         $changed = $true
     }
     if ($changed) {

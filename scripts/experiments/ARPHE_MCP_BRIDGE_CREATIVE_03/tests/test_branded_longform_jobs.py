@@ -1,7 +1,9 @@
 from __future__ import annotations
 from pathlib import Path
 import sys
+import tempfile
 import unittest
+from dataclasses import replace
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -15,3 +17,21 @@ class BrandedLongformJobTests(unittest.TestCase):
         verify_job_binding(job, "Project", "Original", "source-fp", "profile-fp")
         with self.assertRaisesRegex(Exception, "sorgente"):
             verify_job_binding(job, "Project", "Original", "changed", "profile-fp")
+
+    def test_store_is_workstation_scoped_and_idempotent(self):
+        from bridge.branded_longform_jobs import BrandedLongformJobStore, new_branded_longform_job
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "jobs.json"
+            store = BrandedLongformJobStore(path, "PC_PERSONALE")
+            job = new_branded_longform_job("Project", "Original", "source-fp", "profile-fp",
+                                           workstation_id="PC_PERSONALE")
+            self.assertEqual(job, store.create(job))
+            self.assertEqual(job, store.create(job))
+            self.assertEqual(job, store.get(job.job_id))
+            proposed = store.update(replace(job, state="PROPOSED", proposal_card={"card_count": 1}), 0)
+            self.assertEqual(1, proposed.revision)
+            self.assertEqual("PROPOSED", store.get(job.job_id).state)
+            with self.assertRaisesRegex(Exception, "revision"):
+                store.update(replace(proposed, state="APPROVED"), 0)
+            with self.assertRaisesRegex(Exception, "workstation"):
+                BrandedLongformJobStore(path, "PC_SEGRETERIA")

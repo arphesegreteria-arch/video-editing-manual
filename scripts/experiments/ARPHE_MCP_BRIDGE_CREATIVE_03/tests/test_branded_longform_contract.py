@@ -40,6 +40,21 @@ class BrandedLongformContractTests(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "duplicato"):
                 module.load_branded_longform_contract(duplicate_path)
 
+    def test_config_keeps_branded_longform_state_workstation_local(self):
+        from bridge.config import load_config
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps({
+                "runtime_id": "ARPHE_MCP_BRIDGE_CREATIVE_03",
+                "workstation_id": "PC_PERSONALE",
+                "state_path": str(root / "state" / "creative.json"),
+                "feature_flags": {},
+            }), encoding="utf-8")
+            config = load_config(config_path)
+        self.assertEqual(root / "state" / "branded_longform_jobs.json", config.branded_longform_jobs_path)
+        self.assertEqual(root / "state" / "branded_longform_journal.jsonl", config.branded_longform_journal_path)
+
 
 if __name__ == "__main__":
     unittest.main()

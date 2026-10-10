@@ -24,6 +24,7 @@ class Fake:
                     "AppendToTimeline", "InsertFusionCompositionIntoTimeline",
                     "GetRootFolder", "GetClipList", "GetSubFolderList", "AddMarker",
                     "GetMarkers", "DeleteMarkerAtFrame", "GetUniqueId", "GetItemListInTrack",
+                    "DuplicateTimeline",
                     "SetCurrentRenderFormatAndCodec", "SetRenderSettings", "AddRenderJob", "StartRendering"}:
             return lambda *_args: True
         raise AttributeError(name)
@@ -55,6 +56,8 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertFalse(DEFAULT_FLAGS["CAP_CARABELLESE_CLEANUP"])
         self.assertFalse(capabilities["CAP_CARABELLESE_CLEANUP"]["active"])
         self.assertTrue(capabilities["CAP_CARABELLESE_CLEANUP"]["technically_available"])
+        self.assertFalse(DEFAULT_FLAGS["CAP_BRANDED_LONGFORM_EDITORIAL"])
+        self.assertTrue(capabilities["CAP_BRANDED_LONGFORM_EDITORIAL"]["technically_available"])
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
@@ -61,7 +61,17 @@ from .carabellese_transcription import (
     start_carabellese_transcription as do_start_carabellese_transcription,
 )
 from .vertical_social_contract import load_vertical_social_contract
-from .branded_longform_contract import load_branded_longform_contract
+from .branded_longform_contract import branded_longform_fingerprint, load_branded_longform_contract
+from .branded_longform_jobs import BrandedLongformJobStore, new_branded_longform_job
+from .branded_longform_resolve import (add_proposal_markers as do_add_branded_markers,
+                                      create_cleanup_timeline as do_create_branded_cleanup,
+                                      create_editorial_timeline as do_create_branded_editorial,
+                                      find_owned_timeline as do_find_branded_timeline,
+                                      verify_branded_longform_timelines as do_verify_branded_timelines)
+from .branded_longform_graphics import apply_editorial_graphic as do_apply_branded_graphic
+from .branded_longform_workflow import (application_for_job as do_branded_application,
+                                       approve_batch as do_approve_branded_batch,
+                                       propose_batch as do_propose_branded_batch)
 from .vertical_social_workflow import (
     advance_vertical_social_action as do_advance_vertical_social_action,
     approved_vertical_social_plan as do_approved_vertical_social_plan,
@@ -237,6 +247,119 @@ def inspect_branded_longform(profile_id: str = "") -> dict[str, Any]:
                 "source_modes": contract.source_modes,
                 "profiles": {key: value.kit_status for key, value in contract.profiles.items()},
                 "selected_profile": None if selected is None else {"profile_id": selected.profile_id, "kit_status": selected.kit_status}}
+    except Exception as exc: return _error(exc)
+
+
+def _require_branded_longform(config: Any, manager: Any, project: Any, timeline: Any) -> None:
+    if not config.flags.get("CAP_BRANDED_LONGFORM_EDITORIAL", False):
+        raise ValidationError("CAP_BRANDED_LONGFORM_EDITORIAL non attiva nella config locale")
+    try:
+        require_capability("CAP_BRANDED_LONGFORM_EDITORIAL", config, manager, project, timeline)
+    except RuntimeError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def create_branded_longform_cleanup(profile_id: str, source_fingerprint: str) -> dict[str, Any]:
+    """Create or recover the derived CLEANUP timeline; never mutates the original."""
+    try:
+        _, manager, project, timeline, config, _, error = _runtime()
+        if error: return error
+        _require_branded_longform(config, manager, project, timeline)
+        contract = load_branded_longform_contract(BRANDED_LONGFORM_CONTRACT_PATH)
+        profile = contract.profile(profile_id)
+        project_name = str(safe_call(project, "GetName") or "")
+        timeline_name = str(safe_call(timeline, "GetName") or "")
+        if not project_name or not timeline_name or not source_fingerprint.strip():
+            raise ValidationError("Progetto, timeline e source_fingerprint sono obbligatori")
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        job = store.create(new_branded_longform_job(
+            project_name, timeline_name, source_fingerprint,
+            branded_longform_fingerprint(contract, profile), config.workstation_id, profile_id))
+        with RESOLVE_ACCESS_LOCK:
+            result = do_create_branded_cleanup(project, job)
+        return {"ok": True, "action": "create_branded_longform_cleanup", "job_id": job.job_id,
+                "profile_id": profile_id, "kit_status": profile.kit_status, **result}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def propose_branded_longform_editorial(job_id: str, segments: list[dict[str, Any]]) -> dict[str, Any]:
+    """Create one proposal card and matching CLEANUP markers."""
+    try:
+        _, manager, project, timeline, config, _, error = _runtime()
+        if error: return error
+        _require_branded_longform(config, manager, project, timeline)
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        job = do_propose_branded_batch(store, job_id, segments)
+        with RESOLVE_ACCESS_LOCK:
+            marker_result = do_add_branded_markers(project, job, list(job.proposal_card["proposals"]))
+        return {"ok": True, "action": "propose_branded_longform_editorial",
+                "card": job.proposal_card, "markers": marker_result}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_branded_longform_batch(job_id: str, proposal_fingerprint: str,
+                                   decisions: list[dict[str, Any]], operator_role: str) -> dict[str, Any]:
+    try:
+        config = load_config()
+        if not config.flags.get("CAP_BRANDED_LONGFORM_EDITORIAL", False):
+            raise ValidationError("CAP_BRANDED_LONGFORM_EDITORIAL non attiva nella config locale")
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        job = do_approve_branded_batch(store, job_id, proposal_fingerprint, decisions, operator_role)
+        return {"ok": True, "action": "approve_branded_longform_batch", "job_id": job.job_id,
+                "state": job.state, "approved_ids": job.approval["approved_ids"]}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_branded_longform_batch(job_id: str) -> dict[str, Any]:
+    """Create the EDITORIAL timeline and apply only the exact approved action plan."""
+    try:
+        _, manager, project, timeline, config, _, error = _runtime()
+        if error: return error
+        _require_branded_longform(config, manager, project, timeline)
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        job = store.get(job_id)
+        if job.state == "APPLIED":
+            return {"ok": True, "action": "apply_branded_longform_batch", "job_id": job_id,
+                    "state": job.state, "operations": job.operations, "idempotent": True}
+        application = do_branded_application(job)
+        with RESOLVE_ACCESS_LOCK:
+            result = do_create_branded_editorial(project, job)
+            editorial = do_find_branded_timeline(project, job, job.editorial_timeline)
+            operations = []
+            for item in application:
+                if not item.get("executable", False):
+                    operations.append({"proposal_id": item["proposal_id"], "status": "BLOCKED",
+                                       "reason": item.get("blocked_reason") or "NOT_EXECUTABLE"})
+                elif item.get("kind") == "NO_OVERLAY":
+                    operations.append({"proposal_id": item["proposal_id"], "status": "VERIFIED",
+                                       "operation": "NO_OVERLAY"})
+                else:
+                    operations.append(do_apply_branded_graphic(project, editorial, config, job, item))
+        blocked = [item["proposal_id"] for item in application if not item.get("executable", False)]
+        state = "BLOCKED" if blocked else "APPLIED"
+        saved = store.update(replace(job, state=state,
+                                     operations=job.operations + tuple(dict(value) for value in operations)),
+                             job.revision)
+        return {"ok": not blocked, "action": "apply_branded_longform_batch", "job_id": job_id,
+                "state": saved.state, "application_plan": application, "operations": operations,
+                "blocked_ids": blocked, **result}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def verify_branded_longform_job(job_id: str) -> dict[str, Any]:
+    try:
+        _, manager, project, timeline, config, _, error = _runtime()
+        if error: return error
+        _require_branded_longform(config, manager, project, timeline)
+        store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
+        job = store.get(job_id)
+        result = do_verify_branded_timelines(project, job)
+        return {"ok": True, "job_id": job_id, "state": job.state, **result}
     except Exception as exc: return _error(exc)
 
 

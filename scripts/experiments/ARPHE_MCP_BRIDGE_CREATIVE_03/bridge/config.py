@@ -96,6 +96,8 @@ class CreativeConfig:
     carabellese_checkpoint_root: Path = Path("carabellese-checkpoints")
     vertical_social_plans_path: Path = Path("vertical_social_plans.json")
     vertical_social_journal_path: Path = Path("vertical_social_journal.jsonl")
+    branded_longform_jobs_path: Path = Path("branded_longform_jobs.json")
+    branded_longform_journal_path: Path = Path("branded_longform_journal.jsonl")
 
 
 def _path(value: str, base: Path) -> Path:
@@ -207,5 +209,11 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         ),
         vertical_social_journal_path=_path(
             str(raw.get("vertical_social_journal_path", "")), editorial_root / "vertical_social_journal.jsonl"
+        ),
+        branded_longform_jobs_path=_path(
+            str(raw.get("branded_longform_jobs_path", "")), editorial_root / "branded_longform_jobs.json"
+        ),
+        branded_longform_journal_path=_path(
+            str(raw.get("branded_longform_journal_path", "")), editorial_root / "branded_longform_journal.jsonl"
         ),
     )

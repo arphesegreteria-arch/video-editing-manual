@@ -34,7 +34,9 @@ EXPOSED_TOOL_NAMES = (
     "inspect_vertical_social", "prepare_vertical_social_plan", "approve_vertical_social_plan",
     "inspect_vertical_social_plan", "mark_vertical_social_picture_lock", "advance_vertical_social_action",
     "apply_vertical_social_cuts", "apply_vertical_social_action",
-    "inspect_branded_longform",
+    "inspect_branded_longform", "create_branded_longform_cleanup",
+    "propose_branded_longform_editorial", "approve_branded_longform_batch",
+    "apply_branded_longform_batch", "verify_branded_longform_job",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {

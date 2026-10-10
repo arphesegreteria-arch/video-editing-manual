@@ -129,7 +129,10 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_EDITORIAL_SELECTION": _editorial_selection_available(project, timeline),
         "CAP_CARABELLESE_CLEANUP": _carabellese_cleanup_available(),
         "CAP_VERTICAL_SOCIAL": _editorial_selection_available(project, timeline),
-        "CAP_BRANDED_LONGFORM_EDITORIAL": False,
+        "CAP_BRANDED_LONGFORM_EDITORIAL": bool(
+            project is not None and timeline is not None
+            and _method(timeline, "DuplicateTimeline") and _method(timeline, "AddMarker")
+        ),
     }
 
 

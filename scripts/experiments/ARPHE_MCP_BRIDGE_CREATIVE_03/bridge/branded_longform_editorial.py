@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+import hashlib
+import json
 from typing import Any
 
 
@@ -11,6 +13,11 @@ class EditorialProposal:
     start: float
     end: float
     rationale: str
+    profile_id: str
+    executable: bool
+    blocked_reason: str | None
+    start_frame: int
+    end_frame: int
 
 
 def validate_proposal(profile_id: str, kind: str) -> None:
@@ -30,7 +37,23 @@ def propose_editorial(segments: list[dict[str, Any]], profile_id: str) -> tuple[
             kind, rationale = "CHAPTER_CARD", "Cambio argomento"
         else:
             kind, rationale = "KEYWORD_BOX", "Segnalazione conservativa del concetto"
-        if kind != "NO_OVERLAY":
-            validate_proposal(profile_id, "CARD")
-        proposals.append(EditorialProposal(f"P{index:03d}", kind, float(segment["start"]), float(segment["end"]), rationale))
+        visual = kind != "NO_OVERLAY"
+        pending = profile_id == "CARABELLESE_LONGFORM_EDITORIAL" and visual
+        fps = float(segment.get("fps", 30))
+        start, end = float(segment["start"]), float(segment["end"])
+        proposals.append(EditorialProposal(
+            f"P{index:03d}", kind, start, end, rationale, profile_id,
+            not pending, "KIT_PENDING" if pending else None,
+            round(start * fps), round(end * fps),
+        ))
     return tuple(proposals)
+
+
+def proposal_card(job_id: str, proposals: tuple[EditorialProposal, ...]) -> dict[str, Any]:
+    return {"card_count": 1, "job_id": job_id, "proposals": [asdict(item) for item in proposals],
+            "operator_instruction": "Approva, rifiuta o modifica gli ID in una sola risposta."}
+
+
+def proposal_fingerprint(card: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(card, ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":")).encode("utf-8")).hexdigest()

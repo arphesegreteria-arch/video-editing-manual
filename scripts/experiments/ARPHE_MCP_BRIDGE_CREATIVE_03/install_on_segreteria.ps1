@@ -114,7 +114,7 @@ New-Item -ItemType Directory -Path $bridgeDestination -Force | Out-Null
 Get-ChildItem -LiteralPath $bridgeSource -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $bridgeDestination -Force
 }
-foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json', 'artifact_retention.json', 'review_readability_contract.json', 'editorial_selection_contract.json', 'editorial_preferences.json', 'carabellese_cleanup_contract.json', 'carabellese_preferences.json', 'vertical_social_contract.json')) {
+foreach ($registryName in @('editorial_workflows.json', 'render_profiles.json', 'artifact_retention.json', 'review_readability_contract.json', 'editorial_selection_contract.json', 'editorial_preferences.json', 'carabellese_cleanup_contract.json', 'carabellese_preferences.json', 'vertical_social_contract.json', 'branded_longform_contract.json')) {
     $registrySource = Join-Path $PSScriptRoot $registryName
     if (-not (Test-Path -LiteralPath $registrySource -PathType Leaf)) {
         throw "Creative registry not found: $registrySource"

@@ -1392,6 +1392,11 @@ def prepare_workflow_job(workflow_family: str, native_reference: str, target: di
         config = load_config()
         _require_control_plane(config)
         native = load_native_binding(config, workflow_family, native_reference)
+        target = dict(target)
+        for field in ("timeline_identity", "source_fingerprint"):
+            value = getattr(native, field, None)
+            if value is not None:
+                target.setdefault(field, value)
         fingerprint = control_plan_fingerprint(
             config.workstation_id, workflow_family, native_reference, target, native)
         job = new_workflow_job(config.workstation_id, workflow_family, native_reference, target, fingerprint)
@@ -1511,6 +1516,10 @@ def advance_workflow_job(workflow_job_id: str, approved_plan_fingerprint: str) -
             timeline_name = safe_call(timeline, "GetName") if timeline else None
             if project_name != job.target.get("project_name") or timeline_name != job.target.get("timeline_name"):
                 return {"ok": False, "stage": "target_revalidation", "error": "Target Resolve diverso dal job; nessuna write eseguita."}
+            expected_identity = job.target.get("timeline_identity")
+            if expected_identity is not None and editorial_timeline_identity(timeline) != expected_identity:
+                return {"ok": False, "stage": "target_revalidation",
+                        "error": "Identità timeline diversa dal job; nessuna write eseguita."}
             native = load_native_binding(config, job.workflow_family, job.native_reference)
             card = workflow_job_card(job, native)
             if card["state"] == "STALE":
@@ -1642,43 +1651,47 @@ def create_project(project_name: str) -> dict[str, Any]:
 @mcp.tool(annotations=IDEMPOTENT_WRITE)
 def set_current_project(project_name: str) -> dict[str, Any]:
     """Load only an ARPHE project registered or explicitly allowlisted locally."""
-    try:
-        _, manager, _, _, config, registry, error = _runtime()
-        if error: return error
-        return _call(do_set_current_project, manager, config, registry, project_name)
-    except Exception as exc: return _error(exc)
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, manager, _, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_set_current_project, manager, config, registry, project_name)
+        except Exception as exc: return _error(exc)
 
 
 @mcp.tool(annotations=SAFE_WRITE)
 def create_timeline(name: str, width: int = 1080, height: int = 1920, fps: float = 30.0) -> dict[str, Any]:
     """Create a separate ARPHE timeline with allowlisted format settings."""
-    try:
-        _, _, project, _, config, registry, error = _runtime()
-        if error: return error
-        if not project: return {"ok": False, "stage": "preflight", "error": "Serve un progetto aperto."}
-        return _call(do_create_timeline, project, config, registry, name, width, height, fps)
-    except Exception as exc: return _error(exc)
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            if not project: return {"ok": False, "stage": "preflight", "error": "Serve un progetto aperto."}
+            return _call(do_create_timeline, project, config, registry, name, width, height, fps)
+        except Exception as exc: return _error(exc)
 
 
 @mcp.tool(annotations=IDEMPOTENT_WRITE)
 def set_current_timeline(name: str) -> dict[str, Any]:
     """Select only an ARPHE or locally allowlisted timeline."""
-    try:
-        _, _, project, _, config, registry, error = _runtime()
-        if error: return error
-        return _call(do_set_current_timeline, project, config, registry, name)
-    except Exception as exc: return _error(exc)
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_set_current_timeline, project, config, registry, name)
+        except Exception as exc: return _error(exc)
 
 
 @mcp.tool(annotations=SAFE_WRITE)
 def duplicate_timeline_version(source_timeline: str, requested_suffix: str | None = "V2",
                                target_name: str | None = None) -> dict[str, Any]:
     """Duplicate an allowed timeline into a new ARPHE version without modifying its source."""
-    try:
-        _, _, project, _, config, registry, error = _runtime()
-        if error: return error
-        return _call(do_duplicate_timeline, project, config, registry, source_timeline, requested_suffix, target_name)
-    except Exception as exc: return _error(exc)
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_duplicate_timeline, project, config, registry, source_timeline, requested_suffix, target_name)
+        except Exception as exc: return _error(exc)
 
 
 @mcp.tool(annotations=SAFE_WRITE)

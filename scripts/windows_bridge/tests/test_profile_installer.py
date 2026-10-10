@@ -418,7 +418,8 @@ class ProfileInstallerTests(unittest.TestCase):
         for name in ("editorial_workflows.json", "render_profiles.json", "artifact_retention.json",
                      "review_readability_contract.json", "editorial_selection_contract.json",
                      "editorial_preferences.json", "carabellese_cleanup_contract.json",
-                     "carabellese_preferences.json"):
+                     "carabellese_preferences.json", "vertical_social_contract.json",
+                     "branded_longform_contract.json"):
             self.assertEqual(
                 (CREATIVE_INSTALLER.parent / name).read_bytes(),
                 (destination / name).read_bytes(),

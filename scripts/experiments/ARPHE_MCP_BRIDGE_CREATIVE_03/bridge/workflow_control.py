@@ -3,11 +3,29 @@ from __future__ import annotations
 from typing import Any
 
 from .control_plane import WorkflowJob, WorkflowJobStore, transition_workflow_job
+from .editorial_jobs import EditorialJobStore
+from .carabellese_jobs import CarabelleseJobStore
+from .vertical_social_jobs import VerticalSocialPlanStore
+from .branded_longform_jobs import BrandedLongformJobStore
 from .safety import ValidationError
 
 
 _REVIEW_STATES = {"MARKED", "REVIEWED", "VERIFIED", "CUT", "APPLYING", "CHECKPOINTED", "ANALYSED", "APPROVED"}
 _RECOVERABLE = {"BLOCKED", "FAILED_RECOVERABLE"}
+
+
+def load_native_binding(config: object, workflow_family: str, native_reference: str) -> object:
+    """Load exactly one existing, workstation-owned specialized record."""
+    workstation_id = str(getattr(config, "workstation_id"))
+    if workflow_family == "PODCAST_REELS":
+        return EditorialJobStore(getattr(config, "editorial_jobs_path"), workstation_id).get(native_reference, workstation_id)
+    if workflow_family == "CARABELLESE_CLEANUP":
+        return CarabelleseJobStore(getattr(config, "carabellese_jobs_path"), workstation_id).get(native_reference, workstation_id)
+    if workflow_family == "VERTICAL_SOCIAL":
+        return VerticalSocialPlanStore(getattr(config, "vertical_social_plans_path"), workstation_id).get(native_reference)
+    if workflow_family == "BRANDED_LONGFORM":
+        return BrandedLongformJobStore(getattr(config, "branded_longform_jobs_path"), workstation_id).get(native_reference)
+    raise ValidationError("workflow_family non supportato")
 
 
 def native_binding(job: WorkflowJob, native: object) -> dict[str, object]:

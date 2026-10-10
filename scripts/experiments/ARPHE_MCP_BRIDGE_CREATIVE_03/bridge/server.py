@@ -21,7 +21,8 @@ from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
 from .artifact_records import artifact_store_for, load_artifact_policy
 from .audio_provenance import media_fingerprint
 from .config import load_config
-from .control_plane import WorkflowJobStore
+from .control_plane import WorkflowJobStore, new_workflow_job
+from .workflow_control import load_native_binding, native_binding, workflow_job_card
 from .carabellese_analysis import (
     cleanup_candidate_fingerprint,
     derive_pause_candidates,
@@ -1369,11 +1370,20 @@ def _require_control_plane(config: Any) -> None:
 
 @mcp.tool(annotations=SAFE_WRITE)
 def prepare_workflow_job(workflow_family: str, native_reference: str, target: dict[str, Any]) -> dict[str, Any]:
-    """Reserve the control-plane surface; specialized workflows remain authoritative."""
+    """Bind one existing specialized job/plan to a common approved-workflow envelope."""
     try:
         config = load_config()
         _require_control_plane(config)
-        return {"ok": False, "stage": "prepare", "error": "Il binding nativo va preparato dal workflow specializzato."}
+        native = load_native_binding(config, workflow_family, native_reference)
+        payload = {"workflow_family": workflow_family, "native_reference": native_reference, "target": target,
+                   "workstation_id": config.workstation_id}
+        fingerprint = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        job = new_workflow_job(config.workstation_id, workflow_family, native_reference, target, fingerprint)
+        native_binding(job, native)
+        store = WorkflowJobStore(config.workflow_control_jobs_path, config.workstation_id)
+        stored = store.create(job)
+        return {"ok": True, "card_count": 1, "plan_fingerprint": stored.plan_fingerprint,
+                **workflow_job_card(stored, native)}
     except Exception as exc:
         return _error(exc)
 

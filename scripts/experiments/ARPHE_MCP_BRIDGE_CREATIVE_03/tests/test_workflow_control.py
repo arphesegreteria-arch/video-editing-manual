@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bridge.control_plane import WorkflowJobStore, approve_workflow_job, new_workflow_job  # noqa: E402
-from bridge.workflow_control import advance_workflow_job, native_binding, workflow_job_card  # noqa: E402
+from bridge.workflow_control import (advance_workflow_job, load_native_binding, native_binding,
+                                     workflow_job_card)  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 
 
@@ -63,6 +64,22 @@ class WorkflowControlTests(unittest.TestCase):
             self.assertEqual({"native": "done"}, first["evidence"])
             self.assertEqual(first, second)
             self.assertEqual([], calls)
+
+    def test_load_native_binding_uses_editorial_store_and_rejects_unknown_family(self):
+        from bridge.editorial_jobs import EditorialJobStore, new_editorial_job
+        import tempfile
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "editorial.json"
+            native = EditorialJobStore(path, "PC_PERSONALE").create(new_editorial_job(
+                workstation_id="PC_PERSONALE", workflow_version=1, project_name="ARPHE",
+                timeline_name="MASTER", timeline_identity="timeline-1", source_fingerprint="a" * 64,
+                transcript_fingerprint="b" * 64, candidate_fingerprint="c" * 64,
+                candidates=[{"candidate_id": "R01"}]))
+            config = SimpleNamespace(workstation_id="PC_PERSONALE", editorial_jobs_path=path)
+            loaded = load_native_binding(config, "PODCAST_REELS", native.editorial_job_id)
+            self.assertEqual(native.editorial_job_id, loaded.editorial_job_id)
+            with self.assertRaisesRegex(ValidationError, "workflow_family"):
+                load_native_binding(config, "UNKNOWN", native.editorial_job_id)
 
 
 if __name__ == "__main__":

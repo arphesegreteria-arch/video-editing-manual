@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import math
+import struct
 import tempfile
 import time
 import traceback
+import wave
 
-from .audio_provenance import file_sha256, media_fingerprint
+from .audio_provenance import file_sha256, media_fingerprint, silence_windows_sha256
 
 
 PRESET = "ARPHE_DIALOGUE_CLEAN_V1"
@@ -16,6 +20,97 @@ LEVEL_PRESET = "ARPHE_DIALOGUE_LEVEL_V2"
 DISTANT_PRESET = "ARPHE_DIALOGUE_DISTANT_V3"
 NATURAL_PRESET = "ARPHE_DIALOGUE_NATURAL_V4"
 PRESETS = frozenset({PRESET, LEVEL_PRESET, DISTANT_PRESET, NATURAL_PRESET})
+
+
+SYNC_TOLERANCE_SECONDS = 1 / 30
+SILENCE_RMS_THRESHOLD = 0.01
+SILENCE_MIN_DURATION_SECONDS = 0.3
+SILENCE_ANALYSIS_BLOCK_SAMPLES = 480
+
+
+@dataclass(frozen=True)
+class DecodedAudioClock:
+    duration_seconds: float
+    start_seconds: float
+    end_seconds: float
+
+
+class _DecodedAudioClockTracker:
+    def __init__(self) -> None:
+        self.sample_rate: int | None = None
+        self.sample_count = 0
+        self.start: float | None = None
+        self.end: float | None = None
+
+    def observe(self, frame: object) -> None:
+        rate = int(frame.sample_rate)
+        if rate <= 0 or (self.sample_rate is not None and rate != self.sample_rate):
+            raise RuntimeError("Sample rate audio non coerente")
+        if frame.pts is None:
+            raise RuntimeError("PTS audio non disponibile")
+        position = float(frame.pts * frame.time_base)
+        frame_end = position + (int(frame.samples) / rate)
+        if self.start is None:
+            self.start = position
+        elif self.end is not None and abs(position - self.end) > SYNC_TOLERANCE_SECONDS:
+            raise RuntimeError("Discontinuità PTS audio")
+        self.end = frame_end
+        self.sample_rate = rate
+        self.sample_count += int(frame.samples)
+
+    def finish(self) -> DecodedAudioClock:
+        if self.sample_rate is None or self.start is None or self.end is None or self.sample_count <= 0:
+            raise RuntimeError("Durata audio decodificata non disponibile")
+        duration = self.sample_count / self.sample_rate
+        if (abs(self.start) > SYNC_TOLERANCE_SECONDS
+                or abs((self.end - self.start) - duration) > SYNC_TOLERANCE_SECONDS):
+            raise RuntimeError("Offset o durata PTS audio non verificabile")
+        return DecodedAudioClock(duration, self.start, self.end)
+
+
+def decoded_audio_clock(frames: object) -> DecodedAudioClock:
+    """Measure decoded audio by samples and reject PTS discontinuities.
+
+    Container and stream metadata are advisory: Matroska streams may omit a
+    duration or include video tail padding.  The decoded samples are the
+    authoritative duration for an audio-to-audio sync check.
+    """
+    tracker = _DecodedAudioClockTracker()
+    for frame in frames:
+        tracker.observe(frame)
+    return tracker.finish()
+
+
+def detect_silence_windows(path: Path) -> tuple[tuple[float, float], ...]:
+    """Return ordered, sample-clocked quiet ranges from the normalized editorial WAV.
+
+    The worker deliberately measures its own 48 kHz stereo PCM output.  That makes
+    each reported window reproducible from the hash-bound artefact and avoids
+    treating container duration or source-stream timestamps as silence evidence.
+    """
+    with wave.open(str(path), "rb") as handle:
+        if (handle.getnchannels(), handle.getsampwidth(), handle.getframerate(), handle.getcomptype()) != (2, 2, 48_000, "NONE"):
+            raise RuntimeError("WAV editoriale non idoneo all'analisi silenzi")
+        total_frames = handle.getnframes()
+        windows: list[tuple[float, float]] = []
+        quiet_start: int | None = None
+        position = 0
+        while position < total_frames:
+            frames = min(SILENCE_ANALYSIS_BLOCK_SAMPLES, total_frames - position)
+            data = handle.readframes(frames)
+            values = struct.unpack("<" + "h" * (frames * 2), data)
+            rms = math.sqrt(sum(sample * sample for sample in values) / len(values)) / 32768
+            if rms <= SILENCE_RMS_THRESHOLD:
+                if quiet_start is None:
+                    quiet_start = position
+            elif quiet_start is not None:
+                if position - quiet_start >= round(SILENCE_MIN_DURATION_SECONDS * 48_000):
+                    windows.append((quiet_start / 48_000, position / 48_000))
+                quiet_start = None
+            position += frames
+        if quiet_start is not None and total_frames - quiet_start >= round(SILENCE_MIN_DURATION_SECONDS * 48_000):
+            windows.append((quiet_start / 48_000, total_frames / 48_000))
+    return tuple(windows)
 
 
 def _save(path: Path, payload: dict) -> None:
@@ -67,9 +162,11 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
     graph = None
     source_node = sink = None
     processed = 0
-    duration = float(audio_stream.duration * audio_stream.time_base) if audio_stream.duration else 0.0
+    progress_duration = float(source_container.duration / av.time_base) if source_container.duration else 0.0
+    clock = _DecodedAudioClockTracker()
     try:
         for frame in source_container.decode(audio_stream):
+            clock.observe(frame)
             if graph is None:
                 graph = av.filter.Graph()
                 source_node = graph.add("abuffer", (
@@ -165,9 +262,9 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                     for packet in output_stream.encode(converted):
                         destination.mux(packet)
             processed += 1
-            if processed % 250 == 0 and duration > 0:
+            if processed % 250 == 0 and progress_duration > 0:
                 position = float(frame.pts * frame.time_base) if frame.pts is not None else 0.0
-                state["progress_percent"] = min(99, int(position / duration * 100))
+                state["progress_percent"] = min(99, int(position / progress_duration * 100))
                 _save(job_path, state)
         if graph is not None:
             graph.push(None)
@@ -190,6 +287,8 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
         destination.close()
         source_container.close()
 
+    source_clock = clock.finish()
+    duration = source_clock.duration_seconds
     check = av.open(str(output))
     check_stream = next(stream for stream in check.streams if stream.type == "audio")
     output_duration = float(check_stream.duration * check_stream.time_base) if check_stream.duration else None
@@ -199,10 +298,13 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
     sync_delta = output_duration - duration
     if abs(sync_delta) > (1 / 30):
         raise RuntimeError(f"Audio non sincronizzato: differenza {sync_delta:.3f}s")
+    silence_windows = detect_silence_windows(output)
+    serialized_silences = [{"start": start, "end": end} for start, end in silence_windows]
     state.update(status="COMPLETED", progress_percent=100, output_path=str(output),
                  source_duration_seconds=duration, output_duration_seconds=output_duration,
                  sync_delta_seconds=sync_delta, output_sha256=file_sha256(output),
-                 sample_rate=48000, channels=2)
+                  sample_rate=48000, channels=2, silence_windows=serialized_silences,
+                  silence_windows_sha256=silence_windows_sha256(serialized_silences))
     _save(job_path, state)
 
 

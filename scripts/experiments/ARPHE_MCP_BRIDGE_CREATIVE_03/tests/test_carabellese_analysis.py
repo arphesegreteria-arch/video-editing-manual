@@ -54,6 +54,15 @@ def raw_candidate(candidate_id: str = "C01", kind: str = "EDITORIAL_CUE",
 
 
 class PauseDerivationTests(unittest.TestCase):
+    def test_zero_length_word_is_preserved_but_blocks_adjacent_pause_cuts(self):
+        timed = [
+            {"word": "prima", "start": 0.0, "end": 0.4, "speaker": "A"},
+            {"word": "incerta", "start": 1.5, "end": 1.5, "speaker": "A"},
+            {"word": "dopo", "start": 2.0, "end": 2.4, "speaker": "A"},
+        ]
+        candidates = derive_pause_candidates(timed, ({"start": 0.4, "end": 2.0},), CONTRACT)
+        self.assertEqual((), candidates)
+
     def test_thresholds_protect_short_gap_contextualize_mid_gap_and_reduce_long_gap(self):
         timed = words([0.69, 1.0, 2.0])
         silences = ({"start": 0.4, "end": 1.09}, {"start": 1.49, "end": 2.49},
@@ -146,7 +155,9 @@ class ProvenanceTests(unittest.TestCase):
                         "output_path": str(wav), "output_sha256": hashlib.sha256(b"RIFF").hexdigest(),
                         "source_duration_seconds": 10.0, "output_duration_seconds": 10.0,
                         "sync_delta_seconds": 0.0, "sample_rate": 48000, "channels": 2,
-                        "silence_windows": [{"start": 0.4, "end": 1.4}]}
+                        "silence_windows": [{"start": 0.4, "end": 1.4}],
+                        "silence_windows_sha256": hashlib.sha256(
+                            b'[{"end":1.4,"start":0.4}]').hexdigest()}
             (cfg.audio_jobs_root / "audio_0123456789abcdef.json").write_text(
                 json.dumps(manifest), encoding="utf-8")
 

@@ -3,7 +3,7 @@
   "workstation_id": "PC_SEGRETERIA",
   "asset_root": "C:/ARPHE/MCP/assets/creative",
   "render_root": "C:/ARPHE/MCP/renders/creative",
-  "media_roots": ["%USERPROFILE%/Downloads"],
+  "media_roots": ["%USERPROFILE%/Downloads", "%USERPROFILE%/Videos"],
   "transcript_root": "%LOCALAPPDATA%/ARPHE/Longform04/transcripts",
   "audio_root": "%LOCALAPPDATA%/ARPHE/Longform04/audio",
   "audio_jobs_root": "%LOCALAPPDATA%/ARPHE/Longform04/audio_jobs",

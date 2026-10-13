@@ -244,9 +244,20 @@ if (-not (Test-Path -LiteralPath $configPath)) {
             $changed = $true
         }
     }
+    $requiredMediaRoots = @(
+        (Join-Path $env:USERPROFILE 'Downloads').Replace('\', '/'),
+        (Join-Path $env:USERPROFILE 'Videos').Replace('\', '/')
+    )
     if ($null -eq $config.PSObject.Properties['media_roots']) {
-        $config | Add-Member -NotePropertyName media_roots -NotePropertyValue @((Join-Path $env:USERPROFILE 'Downloads').Replace('\', '/'))
+        $config | Add-Member -NotePropertyName media_roots -NotePropertyValue $requiredMediaRoots
         $changed = $true
+    } else {
+        $currentMediaRoots = @($config.media_roots | ForEach-Object { [string]$_ })
+        $missingMediaRoots = @($requiredMediaRoots | Where-Object { $_ -notin $currentMediaRoots })
+        if ($missingMediaRoots.Count -gt 0) {
+            $config.media_roots = @($currentMediaRoots + $missingMediaRoots)
+            $changed = $true
+        }
     }
     if ($null -eq $config.PSObject.Properties['transcript_root']) {
         $config | Add-Member -NotePropertyName transcript_root -NotePropertyValue ((Join-Path $env:LOCALAPPDATA 'ARPHE\Longform04\transcripts').Replace('\', '/'))

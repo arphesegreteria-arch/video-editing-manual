@@ -16,6 +16,7 @@ ALLOWED_FPS = {24.0, 25.0, 30.0}
 COLOR_ROLES = {"ivory", "cream", "beige", "burgundy", "warm_brown", "dark_brown", "black", "white"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mxf"}
+MUSIC_EXTENSIONS = {".aac", ".m4a", ".mp3", ".mp4", ".wav"}
 PRESET_NAMES = {
     "ARPHE_SOFT_DROP", "ARPHE_PAPER_STACK", "ARPHE_ELEGANT_REVEAL",
     "ARPHE_CTA_SETTLE", "ARPHE_CTA_FADE",
@@ -143,6 +144,18 @@ def allowed_asset(path_value: str, root: Path, kind: str) -> Path:
     return candidate
 
 
+def allowed_music_asset(path_value: str, root: Path) -> Path:
+    if not isinstance(path_value, str) or not path_value.strip():
+        raise ValidationError("Music asset richiesto")
+    candidate = Path(path_value).expanduser().resolve(strict=True)
+    root = root.expanduser().resolve(strict=True)
+    if not candidate.is_file() or not candidate.is_relative_to(root):
+        raise ValidationError("Music asset fuori dalla cartella allowlisted")
+    if candidate.suffix.lower() not in MUSIC_EXTENSIONS:
+        raise ValidationError(f"Estensione {candidate.suffix.lower()} non consentita per music")
+    return candidate
+
+
 def finite_float(value: object, name: str, minimum: float, maximum: float) -> float:
     if isinstance(value, bool):
         raise ValidationError(f"{name} non valido")
@@ -153,3 +166,13 @@ def finite_float(value: object, name: str, minimum: float, maximum: float) -> fl
     if not math.isfinite(result) or not minimum <= result <= maximum:
         raise ValidationError(f"{name} deve essere tra {minimum} e {maximum}")
     return result
+
+
+def validate_music_settings(gain_db: float, fade_in_frames: int, fade_out_frames: int) -> tuple[float, int, int]:
+    gain = finite_float(gain_db, "gain_db", -36.0, -12.0)
+    if (isinstance(fade_in_frames, bool) or isinstance(fade_out_frames, bool)
+            or not isinstance(fade_in_frames, int) or not isinstance(fade_out_frames, int)
+            or not 0 <= fade_in_frames <= 60 or not 0 <= fade_out_frames <= 60):
+        raise ValidationError("fade_in_frames e fade_out_frames devono essere interi tra 0 e 60")
+    return gain, fade_in_frames, fade_out_frames
+

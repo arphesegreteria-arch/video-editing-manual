@@ -6,7 +6,7 @@ EXPOSED_TOOL_NAMES = (
     "create_project", "set_current_project", "create_timeline", "set_current_timeline",
     "duplicate_timeline_version", "create_edge_fade_test", "get_creative_status", "create_fusion_composition",
     "inspect_fusion_graph", "capture_timeline_frames",
-    "add_brand_background", "add_logo", "add_image_asset", "add_video_background",
+    "add_brand_background", "add_logo", "add_image_asset", "add_video_background", "set_music_bed",
     "add_text_plus", "inspect_review_readability", "approve_review_readability",
     "add_review_card", "create_review_sequence", "create_review_sequence_v2",
     "set_review_highlight",
@@ -46,3 +46,4 @@ FORBIDDEN_GENERIC_TOOLS = {
     "run_python", "run_shell", "delete_project", "delete_timeline",
     "add_fusion_node", "add_any_node", "set_any_fusion_property", "eval_fusion_script",
 }
+

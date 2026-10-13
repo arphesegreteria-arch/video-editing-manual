@@ -13,7 +13,7 @@ from mcp.server.mcpserver import Image
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
 from .audit import write_audit
-from .asset_tools import add_asset
+from .asset_tools import add_asset, set_music_bed as do_set_music_bed
 from .audio_tools import audio_job as do_audio_job, start_audio_job as do_start_audio_job
 from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
                                restore_artifact as do_restore_artifact,
@@ -1834,6 +1834,19 @@ def add_video_background(path: str, start_frame: int, end_frame: int) -> dict[st
     return _asset("video", path, start_frame, end_frame, 1)
 
 
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
+def set_music_bed(path: str, gain_db: float = -24.0, fade_in_frames: int = 12,
+                  fade_out_frames: int = 12) -> dict[str, Any]:
+    """Set a bounded music bed; replacement touches only the prior bridge-owned clip."""
+    try:
+        _, _, project, timeline, config, registry, error = _runtime()
+        if error: return error
+        with RESOLVE_ACCESS_LOCK:
+            return _call(do_set_music_bed, project, timeline, config, registry, path,
+                         gain_db, fade_in_frames, fade_out_frames)
+    except Exception as exc: return _error(exc)
+
+
 @mcp.tool(annotations=SAFE_WRITE)
 def add_text_plus(composition_id: str, text: str, start_frame: int, end_frame: int,
                   style_role: str = "dark_brown", size: float = 0.06) -> dict[str, Any]:
@@ -2183,3 +2196,4 @@ def run() -> None:
     except Exception:
         pass
     mcp.run()
+

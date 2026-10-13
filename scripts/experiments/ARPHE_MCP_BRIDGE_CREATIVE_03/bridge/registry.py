@@ -17,7 +17,7 @@ class Registry:
         if not self.path.is_file():
             return {"schema_version": 1, "projects": {}, "elements": {},
                     "briefs": {}, "render_batches": {}, "render_locks": {},
-                    "readability_approvals": {}}
+                    "readability_approvals": {}, "music_beds": {}}
         data = json.loads(self.path.read_text(encoding="utf-8-sig"))
         if data.get("schema_version") != 1:
             raise ValueError("Versione registry non supportata")
@@ -27,6 +27,7 @@ class Registry:
         data.setdefault("render_batches", {})
         data.setdefault("render_locks", {})
         data.setdefault("readability_approvals", {})
+        data.setdefault("music_beds", {})
         return data
 
     def _save(self, data: dict[str, Any]) -> None:
@@ -147,3 +148,16 @@ class Registry:
 
     def readability_approval(self, token: str) -> dict[str, Any] | None:
         return self._load()["readability_approvals"].get(token)
+
+    @staticmethod
+    def _music_key(project: str, timeline: str) -> str:
+        return f"{project}\u0000{timeline}"
+
+    def music_bed(self, project: str, timeline: str) -> dict[str, Any] | None:
+        return self._load()["music_beds"].get(self._music_key(project, timeline))
+
+    def save_music_bed(self, project: str, timeline: str, payload: dict[str, Any]) -> None:
+        data = self._load()
+        data["music_beds"][self._music_key(project, timeline)] = dict(payload)
+        self._save(data)
+

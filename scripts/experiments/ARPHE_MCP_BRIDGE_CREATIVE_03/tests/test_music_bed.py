@@ -35,6 +35,13 @@ class Timeline:
         return True
 
 
+class OffsetTimeline(Timeline):
+    def __init__(self):
+        super().__init__()
+        self.video = [[Item("video", 108000, 108866)]]
+    def GetStartFrame(self): return 108000
+
+
 class Pool:
     def __init__(self, timeline): self.timeline = timeline
     def ImportMedia(self, paths): return [object()]
@@ -87,5 +94,18 @@ class MusicBedTests(unittest.TestCase):
             registry = Registry(root / "state.json"); registry.add_timeline("ARPHE_PROJECT", "ARPHE_TEST")
             result = set_music_bed(project, timeline, config, registry, str(music), -24.0, 12, 12)
             self.assertTrue(result["ok"])
+
+    def test_respects_nonzero_timeline_start_frame(self):
+        from bridge.asset_tools import set_music_bed
+        from bridge.registry import Registry
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); (root / "dreamy.mp4").write_bytes(b"music")
+            timeline = OffsetTimeline(); project = SimpleNamespace(GetName=lambda: "ARPHE_PROJECT", GetMediaPool=lambda: Pool(timeline), GetMediaStorage=lambda: None, SetCurrentTimeline=lambda _t: True, GetTimelineCount=lambda: 1, GetTimelineByIndex=lambda _n: timeline, GetSetting=lambda _k: "", SetSetting=lambda _k, _v: True)
+            config = SimpleNamespace(flags={**DEFAULT_FLAGS, "CAP_ASSETS": True}, asset_root=root, allowed_timelines=frozenset())
+            registry = Registry(root / "state.json"); registry.add_timeline("ARPHE_PROJECT", "ARPHE_TEST")
+            result = set_music_bed(project, timeline, config, registry, str(root / "dreamy.mp4"), -24.0, 12, 12)
+            item = timeline.audio[1][0]
+            self.assertTrue(result["ok"])
+            self.assertEqual((108000, 108866), (item.start, item.end))
 
 

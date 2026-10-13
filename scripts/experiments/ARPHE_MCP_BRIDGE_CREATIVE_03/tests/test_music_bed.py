@@ -76,4 +76,16 @@ class MusicBedTests(unittest.TestCase):
             self.assertIn(manual, timeline.audio[0])
             self.assertEqual("ARPHE_MUSIC_BED", timeline.audio[1][0].name)
 
+    def test_accepts_music_from_configured_media_root(self):
+        from bridge.asset_tools import set_music_bed
+        from bridge.registry import Registry
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); assets = root / "assets"; downloads = root / "Downloads"
+            assets.mkdir(); downloads.mkdir(); music = downloads / "dreamy.mp4"; music.write_bytes(b"music")
+            timeline = Timeline(); project = SimpleNamespace(GetName=lambda: "ARPHE_PROJECT", GetMediaPool=lambda: Pool(timeline), GetMediaStorage=lambda: None, SetCurrentTimeline=lambda _t: True, GetTimelineCount=lambda: 1, GetTimelineByIndex=lambda _n: timeline, GetSetting=lambda _k: "", SetSetting=lambda _k, _v: True)
+            config = SimpleNamespace(flags={**DEFAULT_FLAGS, "CAP_ASSETS": True}, asset_root=assets, media_roots=(downloads,), allowed_timelines=frozenset())
+            registry = Registry(root / "state.json"); registry.add_timeline("ARPHE_PROJECT", "ARPHE_TEST")
+            result = set_music_bed(project, timeline, config, registry, str(music), -24.0, 12, 12)
+            self.assertTrue(result["ok"])
+
 

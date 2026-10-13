@@ -20,7 +20,7 @@ def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Reg
     if not (registry.timeline_allowed(project_name, timeline_name) or timeline_name in config.allowed_timelines):
         raise ValidationError("Timeline non creata o allowlisted per gli asset")
     start, end = validate_frame_range(start_frame, end_frame)
-    selected = allowed_asset(path, config.asset_root, kind)
+    selected = allowed_asset(path, (config.asset_root, *getattr(config, "media_roots", ())), kind)
     storage = safe_call(project, "GetMediaStorage")
     imported = safe_call(storage, "AddItemListToMediaPool", str(selected)) if storage else None
     if not imported:
@@ -50,7 +50,7 @@ def set_music_bed(project: Any, timeline: Any, config: CreativeConfig, registry:
     project_name, timeline_name = str(safe_call(project, "GetName") or ""), str(safe_call(timeline, "GetName") or "")
     if not timeline_name.startswith("ARPHE_") or not (registry.timeline_allowed(project_name, timeline_name) or timeline_name in config.allowed_timelines):
         raise ValidationError("Timeline non autorizzata per la base musicale")
-    selected = allowed_music_asset(path, config.asset_root)
+    selected = allowed_music_asset(path, (config.asset_root, *getattr(config, "media_roots", ())))
     gain, fade_in, fade_out = validate_music_settings(gain_db, fade_in_frames, fade_out_frames)
     video_end = max((int(safe_call(item, "GetEnd") or 0)
                      for index in range(1, int(safe_call(timeline, "GetTrackCount", "video") or 0) + 1)

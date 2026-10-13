@@ -131,12 +131,19 @@ def validate_preset(name: str) -> str:
     return name
 
 
-def allowed_asset(path_value: str, root: Path, kind: str) -> Path:
+def _allowlisted_roots(roots: Path | Iterable[Path]) -> tuple[Path, ...]:
+    selected = (roots,) if isinstance(roots, Path) else tuple(roots)
+    if not selected:
+        raise ValidationError("Nessuna cartella asset autorizzata")
+    return tuple(root.expanduser().resolve(strict=True) for root in selected)
+
+
+def allowed_asset(path_value: str, roots: Path | Iterable[Path], kind: str) -> Path:
     if not isinstance(path_value, str) or not path_value.strip():
         raise ValidationError("Asset path richiesto")
     candidate = Path(path_value).expanduser().resolve(strict=True)
-    root = root.expanduser().resolve(strict=True)
-    if not candidate.is_file() or not candidate.is_relative_to(root):
+    allowed_roots = _allowlisted_roots(roots)
+    if not candidate.is_file() or not any(candidate.is_relative_to(root) for root in allowed_roots):
         raise ValidationError("Asset fuori dalla cartella allowlisted")
     extensions = VIDEO_EXTENSIONS if kind == "video" else IMAGE_EXTENSIONS
     if candidate.suffix.lower() not in extensions:
@@ -144,12 +151,12 @@ def allowed_asset(path_value: str, root: Path, kind: str) -> Path:
     return candidate
 
 
-def allowed_music_asset(path_value: str, root: Path) -> Path:
+def allowed_music_asset(path_value: str, roots: Path | Iterable[Path]) -> Path:
     if not isinstance(path_value, str) or not path_value.strip():
         raise ValidationError("Music asset richiesto")
     candidate = Path(path_value).expanduser().resolve(strict=True)
-    root = root.expanduser().resolve(strict=True)
-    if not candidate.is_file() or not candidate.is_relative_to(root):
+    allowed_roots = _allowlisted_roots(roots)
+    if not candidate.is_file() or not any(candidate.is_relative_to(root) for root in allowed_roots):
         raise ValidationError("Music asset fuori dalla cartella allowlisted")
     if candidate.suffix.lower() not in MUSIC_EXTENSIONS:
         raise ValidationError(f"Estensione {candidate.suffix.lower()} non consentita per music")

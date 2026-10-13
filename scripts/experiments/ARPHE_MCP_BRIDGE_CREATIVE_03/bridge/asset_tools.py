@@ -52,19 +52,23 @@ def set_music_bed(project: Any, timeline: Any, config: CreativeConfig, registry:
         raise ValidationError("Timeline non autorizzata per la base musicale")
     selected = allowed_music_asset(path, (config.asset_root, *getattr(config, "media_roots", ())))
     gain, fade_in, fade_out = validate_music_settings(gain_db, fade_in_frames, fade_out_frames)
-    video_end = max((int(safe_call(item, "GetEnd") or 0)
-                     for index in range(1, int(safe_call(timeline, "GetTrackCount", "video") or 0) + 1)
-                     for item in (safe_call(timeline, "GetItemListInTrack", "video", index) or [])), default=0)
-    if video_end <= 0:
+    video_items = [item
+                   for index in range(1, int(safe_call(timeline, "GetTrackCount", "video") or 0) + 1)
+                   for item in (safe_call(timeline, "GetItemListInTrack", "video", index) or [])]
+    video_start = int(safe_call(timeline, "GetStartFrame") or min(
+        (int(safe_call(item, "GetStart") or 0) for item in video_items), default=0))
+    video_end = max((int(safe_call(item, "GetEnd") or 0) for item in video_items), default=0)
+    if video_end <= video_start:
         raise ValidationError("Timeline senza durata video")
+    duration = video_end - video_start
     desired = {"asset_name": selected.name, "gain_db": gain, "fade_in_frames": fade_in,
-               "fade_out_frames": fade_out, "start_frame": 0, "end_frame": video_end,
+               "fade_out_frames": fade_out, "start_frame": video_start, "end_frame": video_end,
                "item_name": "ARPHE_MUSIC_BED"}
     existing = registry.music_bed(project_name, timeline_name)
     if existing and all(existing.get(key) == value for key, value in desired.items()):
         track = int(existing.get("track_index", 0))
         matches = [item for item in (safe_call(timeline, "GetItemListInTrack", "audio", track) or [])
-                   if safe_call(item, "GetName") == "ARPHE_MUSIC_BED" and safe_call(item, "GetStart") == 0 and safe_call(item, "GetEnd") == video_end]
+                   if safe_call(item, "GetName") == "ARPHE_MUSIC_BED" and safe_call(item, "GetStart") == video_start and safe_call(item, "GetEnd") == video_end]
         if len(matches) == 1:
             return {"ok": True, "action": "set_music_bed", "asset_name": selected.name, "status": "UNCHANGED", "absolute_path_returned": False}
     track = 0
@@ -84,12 +88,17 @@ def set_music_bed(project: Any, timeline: Any, config: CreativeConfig, registry:
     imported = safe_call(pool, "ImportMedia", [str(selected)]) if pool else None
     if not imported:
         return {"ok": False, "action": "set_music_bed", "asset_name": selected.name, "status": "IMPORT_FAILED", "absolute_path_returned": False}
-    appended = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": imported[0], "recordFrame": 0,
-                                                       "endFrame": video_end, "mediaType": 2, "trackIndex": track}]) or []
+    before = list(safe_call(timeline, "GetItemListInTrack", "audio", track) or [])
+    safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": imported[0], "startFrame": 0,
+                                            "endFrame": duration, "recordFrame": video_start,
+                                            "mediaType": 2, "trackIndex": track}])
+    appended = [item for item in (safe_call(timeline, "GetItemListInTrack", "audio", track) or [])
+                if item not in before and safe_call(item, "GetStart") == video_start
+                and safe_call(item, "GetEnd") == video_end]
     if len(appended) != 1:
         raise ValidationError("Inserimento della base musicale non verificabile")
     inserted_start, inserted_end = safe_call(appended[0], "GetStart"), safe_call(appended[0], "GetEnd")
-    if inserted_start != 0 or inserted_end != video_end:
+    if inserted_start != video_start or inserted_end != video_end:
         raise ValidationError("Inserimento della base musicale non verificabile")
     item = appended[0]
     if not safe_call(item, "SetName", "ARPHE_MUSIC_BED") or not safe_call(item, "SetProperty", "AudioVolume", gain):
@@ -97,6 +106,6 @@ def set_music_bed(project: Any, timeline: Any, config: CreativeConfig, registry:
     desired["track_index"] = track
     registry.save_music_bed(project_name, timeline_name, desired)
     return {"ok": True, "action": "set_music_bed", "asset_name": selected.name,
-            "status": "APPLIED", "track_index": track, "frame_range": [0, video_end],
+            "status": "APPLIED", "track_index": track, "frame_range": [video_start, video_end],
             "absolute_path_returned": False}
 

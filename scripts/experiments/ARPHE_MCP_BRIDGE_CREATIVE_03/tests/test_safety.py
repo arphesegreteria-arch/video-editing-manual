@@ -330,7 +330,7 @@ class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         self.assertEqual(set(EXPOSED_TOOL_NAMES), set(tools))
         destructive = {"run_artifact_maintenance", "execute_resolve_retirement",
-                       "apply_carabellese_cleanup", "recover_carabellese_cleanup"}
+                       "apply_carabellese_cleanup", "recover_carabellese_cleanup", "set_music_bed"}
         for tool in tools.values():
             self.assertEqual(tool.name in destructive,
                              tool.annotations.destructive_hint, tool.name)
@@ -397,3 +397,4 @@ class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

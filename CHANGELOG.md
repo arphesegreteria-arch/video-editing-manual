@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-10-15 — Voice-over CTA tail
+
+- Aggiunta `move_voiceover_tail_to_cta`: safe write chiusa che duplica una timeline ARPHÈ,
+  sostituisce una sola clip della traccia audio indicata con corpo e coda e colloca la coda su un
+  frame CTA esplicito.
+- Nessuna modifica alla timeline sorgente, nessuna inferenza automatica del parlato e nessun tool
+  generico di editing audio. I confini dei due nuovi segmenti sono restituiti dal read-back.
+- Testata sul runtime Python del profilo `PC_PERSONALE`: suite Creative completa `494` test verdi,
+  `2` skip ambientali per privilegi symlink Windows.
+
 ## 2026-10-10 — Workflow Control Plane (codice completo, non attivo)
 
 ### Hardening successivo alla review indipendente

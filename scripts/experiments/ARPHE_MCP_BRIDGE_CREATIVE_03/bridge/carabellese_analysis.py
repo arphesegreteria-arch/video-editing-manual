@@ -102,17 +102,17 @@ def load_carabellese_inputs(config: CreativeConfig, transcript_path: Path,
                              audio, _flatten_words(transcript), audio.silence_windows)
 
 
-def _word(raw: Mapping[str, object]) -> tuple[str, float, float, str | None]:
+def _word(raw: Mapping[str, object]) -> tuple[str, float, float, str | None, bool]:
     text = raw.get("word", raw.get("text"))
     if not isinstance(text, str) or not text.strip():
         raise ValidationError("Parola senza testo")
     start, end = _number(raw.get("start"), "word.start"), _number(raw.get("end"), "word.end")
-    if end <= start:
+    if end < start:
         raise ValidationError("Intervallo parola non valido")
     speaker = raw.get("speaker")
     if speaker is not None and not isinstance(speaker, str):
         raise ValidationError("speaker parola non valido")
-    return text.strip(), start, end, speaker
+    return text.strip(), start, end, speaker, end == start
 
 
 def derive_pause_candidates(words: Sequence[Mapping[str, object]],
@@ -135,6 +135,10 @@ def derive_pause_candidates(words: Sequence[Mapping[str, object]],
     target_residual = (contract.residual_min_seconds + contract.residual_max_seconds) / 2
     result = []
     for previous, current in zip(parsed_words, parsed_words[1:]):
+        # Preserve zero-length ASR tokens in the pinned transcript, but never
+        # infer a cut on either side of timing that cannot be located safely.
+        if previous[4] or current[4]:
+            continue
         gap_start, gap_end = previous[2], current[1]
         gap = gap_end - gap_start
         if gap < contract.retain_below_seconds or previous[3] != current[3]:

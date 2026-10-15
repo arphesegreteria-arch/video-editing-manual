@@ -48,6 +48,11 @@ def media_fingerprint(path: Path) -> str:
     return file_sha256(path)
 
 
+def silence_windows_sha256(windows: list[dict[str, object]]) -> str:
+    """Fingerprint the exact, normalized silence evidence persisted in a job."""
+    return hashlib.sha256(json.dumps(windows, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 def _finite_number(value: object, name: str, *, allow_negative: bool = False) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValidationError(f"{name} deve essere numerico")
@@ -112,6 +117,12 @@ def verify_audio_manifest(config: CreativeConfig, audio_job_id: str,
         if silence_windows and start < silence_windows[-1][1]:
             raise ValidationError("silence windows sovrapposte o non ordinate")
         silence_windows.append((start, end))
+    if raw_windows:
+        recorded_windows_hash = manifest.get("silence_windows_sha256")
+        if not isinstance(recorded_windows_hash, str) or not SHA256.fullmatch(recorded_windows_hash):
+            raise ValidationError("Hash silence_windows nel manifest non valido")
+        if silence_windows_sha256(raw_windows) != recorded_windows_hash:
+            raise ValidationError("silence_windows non corrisponde all'hash del manifest")
     preset = manifest.get("preset")
     if not isinstance(preset, str) or not preset:
         raise ValidationError("Preset audio mancante")

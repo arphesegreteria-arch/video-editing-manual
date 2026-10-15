@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hashlib
 import math
+from fractions import Fraction
 from pathlib import Path
 import struct
 import sys
@@ -15,8 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bridge.audio_tools import allowed_audio, audio_job  # noqa: E402
-from bridge.audio_provenance import file_sha256, media_fingerprint, verify_audio_manifest  # noqa: E402
-from bridge.audio_worker import DISTANT_PRESET, LEVEL_PRESET, NATURAL_PRESET, process_audio  # noqa: E402
+from bridge.audio_provenance import (file_sha256, media_fingerprint, silence_windows_sha256,
+                                     verify_audio_manifest)  # noqa: E402
+from bridge.audio_worker import (DISTANT_PRESET, LEVEL_PRESET, NATURAL_PRESET,
+                                 decoded_audio_clock, detect_silence_windows,
+                                 process_audio)  # noqa: E402
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 
@@ -53,6 +57,75 @@ def write_worker_job(job: Path, source: Path, output: Path, preset: str) -> None
 
 
 class AudioPipelineTests(unittest.TestCase):
+    def test_silence_detector_reports_only_long_bounded_stereo_silence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav = Path(directory) / "stereo.wav"
+            with wave.open(str(wav), "wb") as handle:
+                handle.setnchannels(2)
+                handle.setsampwidth(2)
+                handle.setframerate(48_000)
+                samples = []
+                for index in range(48_000 * 2):
+                    amplitude = 0 if 24_000 <= index < 72_000 else 4_000
+                    value = int(amplitude * math.sin(2 * math.pi * 440 * index / 48_000))
+                    samples.append(struct.pack("<hh", value, value))
+                handle.writeframes(b"".join(samples))
+            self.assertEqual(((0.5, 1.5),), detect_silence_windows(wav))
+
+    def test_silence_detector_excludes_short_gaps_and_speech(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav = Path(directory) / "mixed.wav"
+            with wave.open(str(wav), "wb") as handle:
+                handle.setnchannels(2)
+                handle.setsampwidth(2)
+                handle.setframerate(48_000)
+                samples = []
+                for index in range(48_000):
+                    amplitude = 0 if 9_600 <= index < 19_200 else 4_000
+                    value = int(amplitude * math.sin(2 * math.pi * 440 * index / 48_000))
+                    samples.append(struct.pack("<hh", value, value))
+                handle.writeframes(b"".join(samples))
+            self.assertEqual((), detect_silence_windows(wav))
+
+    def test_silence_detector_never_rounds_a_terminal_window_past_wav_duration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav = Path(directory) / "terminal.wav"
+            with wave.open(str(wav), "wb") as handle:
+                handle.setnchannels(2)
+                handle.setsampwidth(2)
+                handle.setframerate(48_000)
+                handle.writeframes(b"\x00\x00\x00\x00" * 48_001)
+            windows = detect_silence_windows(wav)
+            with wave.open(str(wav), "rb") as handle:
+                duration = handle.getnframes() / handle.getframerate()
+            self.assertEqual(1, len(windows))
+            self.assertLessEqual(windows[0][1], duration)
+
+    def test_decoded_audio_clock_uses_samples_when_stream_duration_is_absent(self):
+        class Frame:
+            def __init__(self, pts, samples):
+                self.pts = pts
+                self.samples = samples
+                self.sample_rate = 48_000
+                self.time_base = Fraction(1, 1_000)
+
+        clock = decoded_audio_clock((Frame(-21, 1024), Frame(0, 1024), Frame(21, 1024)))
+
+        self.assertAlmostEqual(3072 / 48_000, clock.duration_seconds)
+        self.assertAlmostEqual(-0.021, clock.start_seconds)
+        self.assertAlmostEqual(0.042333333333333334, clock.end_seconds)
+
+    def test_decoded_audio_clock_rejects_timestamp_discontinuity(self):
+        class Frame:
+            def __init__(self, pts):
+                self.pts = pts
+                self.samples = 1024
+                self.sample_rate = 48_000
+                self.time_base = Fraction(1, 1_000)
+
+        with self.assertRaisesRegex(RuntimeError, "PTS"):
+            decoded_audio_clock((Frame(0), Frame(100)))
+
     def test_worker_creates_synchronized_pcm_wav(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -74,6 +147,8 @@ class AudioPipelineTests(unittest.TestCase):
             self.assertAlmostEqual(1.0, state["output_duration_seconds"], places=2)
             self.assertAlmostEqual(0.0, state["sync_delta_seconds"], places=2)
             self.assertEqual(hashlib.sha256(output.read_bytes()).hexdigest(), state["output_sha256"])
+            self.assertEqual([], state["silence_windows"])
+            self.assertEqual(silence_windows_sha256([]), state["silence_windows_sha256"])
             self.assertTrue(output.is_file())
 
     def test_level_preset_reduces_strong_weak_dialogue_gap(self):
@@ -217,6 +292,7 @@ class AudioPipelineTests(unittest.TestCase):
                 "sync_delta_seconds": 0.0, "sample_rate": 48000, "channels": 2,
                 "silence_windows": [{"start": 1.0, "end": 2.0}, {"start": 4.0, "end": 5.5}],
             }
+            manifest["silence_windows_sha256"] = silence_windows_sha256(manifest["silence_windows"])
             (cfg.audio_jobs_root / f"{job_id}.json").write_text(json.dumps(manifest), encoding="utf-8")
             verified = verify_audio_manifest(cfg, job_id, media_fingerprint(source))
             self.assertEqual(((1.0, 2.0), (4.0, 5.5)), verified.silence_windows)
@@ -224,6 +300,28 @@ class AudioPipelineTests(unittest.TestCase):
             manifest["silence_windows"] = [{"start": 2.0, "end": 1.0}]
             (cfg.audio_jobs_root / f"{job_id}.json").write_text(json.dumps(manifest), encoding="utf-8")
             with self.assertRaisesRegex(ValidationError, "silence"):
+                verify_audio_manifest(cfg, job_id, media_fingerprint(source))
+
+    def test_verified_audio_rejects_silence_windows_hash_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cfg = config(root)
+            source = cfg.media_roots[0] / "source.mov"
+            source.write_bytes(b"source-media")
+            output = cfg.audio_root / "clean.wav"
+            output.write_bytes(b"RIFF-valid-audio")
+            job_id = "audio_0123456789abcdef"
+            windows = [{"start": 1.0, "end": 2.0}]
+            manifest = {
+                "schema": "ARPHE_AUDIO_JOB_V2", "job_id": job_id, "status": "COMPLETED",
+                "preset": NATURAL_PRESET, "source_fingerprint": media_fingerprint(source),
+                "output_path": str(output), "output_sha256": file_sha256(output),
+                "source_duration_seconds": 3.0, "output_duration_seconds": 3.0,
+                "sync_delta_seconds": 0.0, "sample_rate": 48000, "channels": 2,
+                "silence_windows": windows, "silence_windows_sha256": "0" * 64,
+            }
+            (cfg.audio_jobs_root / f"{job_id}.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValidationError, "hash"):
                 verify_audio_manifest(cfg, job_id, media_fingerprint(source))
 
     def test_invalid_audio_provenance_blocks_before_downstream_mutation(self):

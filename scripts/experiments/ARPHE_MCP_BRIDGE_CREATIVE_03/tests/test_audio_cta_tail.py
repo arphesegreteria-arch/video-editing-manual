@@ -27,15 +27,22 @@ class Media:
 
 
 class Item:
+    """A Resolve item with half-open read-back ranges.
+
+    Resolve accepts an inclusive `endFrame` when appending; the bridge exposes
+    every read-back range as [start, end), so boundary tests cannot conceal an
+    off-by-one error at that API boundary.
+    """
     def __init__(self, media: Media, source_start: int, source_end: int, record_start: int):
         self.media, self.source_start, self.source_end, self.record_start = (
             media, source_start, source_end, record_start)
 
     def GetMediaPoolItem(self): return self.media
     def GetStart(self): return self.record_start
-    def GetEnd(self): return self.record_start + self.GetDuration() - 1
-    def GetDuration(self): return self.source_end - self.source_start + 1
+    def GetEnd(self): return self.record_start + self.GetDuration()
+    def GetDuration(self): return self.source_end - self.source_start
     def GetSourceStartFrame(self): return self.source_start
+    def GetSourceEndFrame(self): return self.source_end
 
 
 class Timeline:
@@ -61,26 +68,27 @@ class Timeline:
 
 
 class Pool:
-    def __init__(self, project): self.project = project
+    def __init__(self, project, append_return: str = "item"):
+        self.project, self.append_return = project, append_return
     def CreateEmptyTimeline(self, _name): return None
     def AppendToTimeline(self, records):
         record = records[0]
-        item = Item(record["mediaPoolItem"], record["startFrame"], record["endFrame"],
+        item = Item(record["mediaPoolItem"], record["startFrame"], record["endFrame"] + 1,
                     record["recordFrame"])
         self.project.current.tracks.setdefault(record["trackIndex"], []).append(item)
-        return [item]
+        return [] if self.append_return == "empty" else [item]
 
 
 class Project:
-    def __init__(self):
+    def __init__(self, append_return: str = "item"):
         self.voice = Media("voiceover.wav")
         self.source = Timeline("ARPHE_ADV_V3", {
-            4: [Item(self.voice, 300, 1199, 108000)],
+            4: [Item(self.voice, 300, 1200, 108000)],
         })
         self.source.project = self
         self.timelines = [self.source]
         self.current = self.source
-        self.pool = Pool(self)
+        self.pool = Pool(self, append_return)
         self.settings = {"timelineFrameRate": "30"}
 
     def GetName(self): return "ARPHE_ADV"
@@ -102,6 +110,7 @@ def config(root: Path) -> CreativeConfig:
         palette=dict(DEFAULT_PALETTE), flags=flags,
         allowed_projects=frozenset({"ARPHE_ADV"}),
         allowed_timelines=frozenset({"ARPHE_ADV_V3"}), render_format="mp4", render_codec="H264",
+        workstation_id="PC_PERSONALE",
     )
 
 
@@ -124,9 +133,9 @@ class AudioCtaTailTests(unittest.TestCase):
         self.assertEqual("ARPHE_ADV_V3", result["source_timeline"])
         self.assertEqual("ARPHE_ADV_V4_VOICEOVER_CTA", result["created_timeline"])
         self.assertEqual([108000, 108866], result["readback_record_starts"])
-        self.assertEqual([108599, 109165], result["readback_record_ends"])
+        self.assertEqual([108600, 109166], result["readback_record_ends"])
         self.assertEqual([300, 900], result["readback_source_starts"])
-        self.assertEqual([899, 1199], result["readback_source_ends"])
+        self.assertEqual([900, 1200], result["readback_source_ends"])
         self.assertEqual(1, len(project.source.GetItemListInTrack("audio", 4)))
 
     def test_refuses_a_tail_boundary_outside_the_only_a4_clip_before_writing(self):
@@ -140,6 +149,34 @@ class AudioCtaTailTests(unittest.TestCase):
                 )
 
         self.assertEqual(["ARPHE_ADV_V3"], [timeline.GetName() for timeline in project.timelines])
+
+    def test_rejects_another_workstation_before_duplicate_or_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Project()
+            cfg = config(Path(directory))
+            cfg = cfg.__class__(**{**cfg.__dict__, "workstation_id": "PC_SEGRETERIA"})
+            with self.assertRaisesRegex(ValidationError, "PC_PERSONALE"):
+                move_voiceover_tail_to_cta(
+                    project, cfg, Registry(cfg.state_path), "ARPHE_ADV_V3", "SHOULD_NOT_EXIST",
+                    audio_track=4, tail_start_frame=108600, cta_start_frame=108866,
+                )
+        self.assertEqual(["ARPHE_ADV_V3"], [timeline.GetName() for timeline in project.timelines])
+
+    def test_rolls_back_when_resolve_appends_but_returns_no_item(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Project(append_return="empty")
+            cfg = config(Path(directory))
+            with self.assertRaisesRegex(RuntimeError, "Inserimento"):
+                move_voiceover_tail_to_cta(
+                    project, cfg, Registry(cfg.state_path), "ARPHE_ADV_V3", "ARPHE_ADV_V4_VOICEOVER_CTA",
+                    audio_track=4, tail_start_frame=108600, cta_start_frame=108866,
+                )
+
+        duplicate = project.current
+        items = duplicate.GetItemListInTrack("audio", 4)
+        self.assertEqual(1, len(items))
+        self.assertEqual((108000, 108900), (items[0].GetStart(), items[0].GetEnd()))
+        self.assertEqual((300, 1200), (items[0].GetSourceStartFrame(), items[0].GetSourceEndFrame()))
 
 
 if __name__ == "__main__":

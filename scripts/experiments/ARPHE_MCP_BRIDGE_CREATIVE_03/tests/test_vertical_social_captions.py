@@ -17,12 +17,55 @@ class VerticalSocialCaptionTests(unittest.TestCase):
                      "text": "Prima frase", "position": "LOWER"},
                     {"cue_id": "c2", "start_frame": 30, "end_frame": 60,
                      "text": "Seconda frase", "position": "UPPER"},
-                ], "reason": "sottotitoli approvati"}
+                ], "caption_cutoff_frame": 60, "reason": "sottotitoli approvati"}
 
     def test_caption_schema_preserves_gap_and_safe_positions(self):
         from bridge.vertical_social_captions import validate_caption_action
         result = validate_caption_action(self.action(), 60)
         self.assertEqual(((0, 20), (30, 60)), tuple(cue["range"] for cue in result["cues"]))
+
+    def test_lower_caption_layout_stays_inside_story_safe_area_and_clear_of_social_ui(self):
+        from bridge.vertical_social_captions import lower_caption_layout
+        layout = lower_caption_layout()
+        bounds = layout["bounds"]
+        self.assertGreaterEqual(bounds["left"], 0.08)
+        self.assertLessEqual(bounds["right"], 0.84)
+        self.assertGreaterEqual(bounds["top"], 0.10)
+        self.assertLessEqual(bounds["bottom"], 0.82)
+        self.assertEqual((0.12, 0.80, 0.69, 0.77),
+                         (bounds["left"], bounds["right"], bounds["top"], bounds["bottom"]))
+
+    def test_caption_cues_exclude_the_cta_and_reject_a_cue_crossing_it(self):
+        from bridge.vertical_social_captions import cues_before_frame
+        cues = (
+            {"cue_id": "spoken", "range": (100, 220)},
+            {"cue_id": "cta", "range": (866, 920)},
+        )
+        self.assertEqual(("spoken",), tuple(cue["cue_id"] for cue in cues_before_frame(cues, 866)))
+        with self.assertRaisesRegex(Exception, "CTA"):
+            cues_before_frame(({"cue_id": "crossing", "range": (840, 880)},), 866)
+
+    def test_caption_schema_enforces_a_declared_cta_cutoff(self):
+        from bridge.vertical_social_captions import validate_caption_action
+        action = self.action()
+        action["caption_cutoff_frame"] = 30
+        result = validate_caption_action(action, 60)
+        self.assertEqual(((0, 20),), tuple(cue["range"] for cue in result["cues"]))
+        crossing = self.action()
+        crossing["caption_cutoff_frame"] = 30
+        crossing["cues"][1].update({"start_frame": 25, "end_frame": 40})
+        with self.assertRaisesRegex(Exception, "CTA"):
+            validate_caption_action(crossing, 60)
+
+    def test_lower_caption_text_frame_is_contained_inside_its_safe_card(self):
+        from bridge.vertical_social_captions import lower_caption_layout
+        layout = lower_caption_layout()
+        text = layout["text_frame"]
+        card = layout["bounds"]
+        self.assertGreaterEqual(text["left"], card["left"])
+        self.assertLessEqual(text["right"], card["right"])
+        self.assertGreaterEqual(text["top"], card["top"])
+        self.assertLessEqual(text["bottom"], card["bottom"])
 
     def test_caption_schema_rejects_overlap_long_text_and_missing_lock_fingerprint(self):
         from bridge.vertical_social_captions import validate_caption_action
@@ -35,6 +78,31 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         missing = self.action(); missing["locked_edit_fingerprint"] = ""
         with self.assertRaisesRegex(Exception, "fingerprint"):
             validate_caption_action(missing, 60)
+        missing_cutoff = self.action(); missing_cutoff.pop("caption_cutoff_frame")
+        with self.assertRaisesRegex(Exception, "cutoff"):
+            validate_caption_action(missing_cutoff, 60)
+
+    def test_caption_text_frame_fails_closed_when_fusion_does_not_apply_it(self):
+        from bridge.vertical_social_captions import configure_caption_text_frame, lower_caption_layout
+
+        class Tool:
+            def SetInput(self, key, value):
+                if key == "LayoutWidth":
+                    raise RuntimeError("unsupported")
+            def GetInput(self, key):
+                return None
+
+        with self.assertRaisesRegex(Exception, "LayoutWidth"):
+            configure_caption_text_frame(Tool(), lower_caption_layout())
+
+        class MismatchedTool:
+            def __init__(self): self.values = {}
+            def SetInput(self, key, value): self.values[key] = value
+            def GetInput(self, key):
+                return 0.61 if key == "LayoutWidth" else self.values.get(key)
+
+        with self.assertRaisesRegex(Exception, "Read-back"):
+            configure_caption_text_frame(MismatchedTool(), lower_caption_layout())
 
     def test_caption_schema_allows_picture_lock_placeholder_only_during_planning(self):
         from bridge.vertical_social_captions import validate_caption_action

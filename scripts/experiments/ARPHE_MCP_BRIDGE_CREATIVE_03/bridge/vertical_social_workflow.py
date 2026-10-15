@@ -56,6 +56,19 @@ def prepare_vertical_social_plan(path: Path, workstation_id: str, target: dict[s
     contract = load_vertical_social_contract(CONTRACT_PATH)
     known: set[str] = set()
     total_frames = target.get("total_frames")
+    approved_cta_starts: list[int] = []
+    for action in actions:
+        if str(action.get("type")) != "CTA" or str(action.get("state", "APPROVED")) != "APPROVED":
+            continue
+        if not isinstance(total_frames, int) or total_frames <= 0:
+            raise ValidationError("CTA richiede total_frames esplicito nel target")
+        normalized = dict(action)
+        normalized.setdefault("state", "APPROVED")
+        selected = approved_graphic_actions({"actions": [normalized]}, total_frames)
+        approved_cta_starts.append(selected[0]["range"][0])
+    if len(approved_cta_starts) > 1:
+        raise ValidationError("CAPTIONS supporta una sola CTA approvata per piano")
+    approved_cta_start = approved_cta_starts[0] if approved_cta_starts else None
     for action in actions:
         action_type = str(action.get("type"))
         if action_type in {"REFRAME", "B_ROLL_PROVIDED", "GRAPHIC", "CTA", "MUSIC_DUCK"}:
@@ -79,6 +92,9 @@ def prepare_vertical_social_plan(path: Path, workstation_id: str, target: dict[s
                 raise ValidationError("CAPTIONS richiede total_frames esplicito nel target")
             caption_plan = validate_caption_action(
                 action, total_frames, allow_picture_lock_placeholder=True)
+            if (approved_cta_start is not None
+                    and caption_plan["caption_cutoff_frame"] != approved_cta_start):
+                raise ValidationError("caption_cutoff_frame deve coincidere con l'inizio CTA approvato")
             if (caption_plan["locked_edit_fingerprint"] != "AT_PICTURE_LOCK"
                     and caption_plan["locked_edit_fingerprint"] != str(
                         target.get("locked_edit_fingerprint", ""))):

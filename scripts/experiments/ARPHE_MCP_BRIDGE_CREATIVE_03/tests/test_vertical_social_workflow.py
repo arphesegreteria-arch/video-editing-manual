@@ -54,7 +54,8 @@ class VerticalSocialWorkflowTests(unittest.TestCase):
                      "state": "APPROVED", "locked_edit_fingerprint": "a" * 64,
                      "reason": "caption approvate", "cues": [
                          {"cue_id": "c1", "start_frame": 0, "end_frame": 30,
-                          "text": "Testo", "position": "LOWER"}]},
+                          "text": "Testo", "position": "LOWER"}],
+                     "caption_cutoff_frame": 60},
                 ],
             )
             approved = module.approve_vertical_social_plan(path, "PC_PERSONALE", prepared.plan_id, prepared.fingerprint)
@@ -80,7 +81,8 @@ class VerticalSocialWorkflowTests(unittest.TestCase):
                   "state": "APPROVED", "locked_edit_fingerprint": "AT_PICTURE_LOCK",
                   "reason": "caption approvate", "cues": [
                       {"cue_id": "c1", "start_frame": 0, "end_frame": 30,
-                       "text": "Testo", "position": "LOWER"}]}],
+                       "text": "Testo", "position": "LOWER"}],
+                  "caption_cutoff_frame": 60}],
             )
             module.approve_vertical_social_plan(
                 path, "PC_PERSONALE", prepared.plan_id, prepared.fingerprint)
@@ -90,6 +92,38 @@ class VerticalSocialWorkflowTests(unittest.TestCase):
                 path, "PC_PERSONALE", locked.plan_id)
             self.assertTrue(inspected["picture_locked"])
             self.assertEqual("b" * 64, inspected["locked_edit_fingerprint"])
+
+    def test_caption_cutoff_must_match_the_approved_cta_start(self):
+        module = self._module()
+        with tempfile.TemporaryDirectory() as raw_root:
+            action = {
+                "action_id": "caption-1", "type": "CAPTIONS", "phase": "POST_LOCK",
+                "state": "APPROVED", "locked_edit_fingerprint": "a" * 64,
+                "reason": "caption approvate", "caption_cutoff_frame": 39,
+                "cues": [{"cue_id": "c1", "start_frame": 0, "end_frame": 30,
+                           "text": "Testo", "position": "LOWER"}],
+            }
+            cta = {
+                "action_id": "cta-1", "type": "CTA", "phase": "PROVISIONAL_EDIT",
+                "state": "APPROVED", "style_role": "burgundy",
+                "range": {"start_frame": 40, "end_frame": 60},
+                "headline": "ARPHÈ", "text": "Prenota", "reason": "chiusura",
+            }
+            with self.assertRaisesRegex(Exception, "cutoff"):
+                module.prepare_vertical_social_plan(
+                    Path(raw_root) / "plans.json", "PC_PERSONALE",
+                    {"project": "ARPHE", "timeline": "ADV_V1", "fps": "30",
+                     "total_frames": 60, "locked_edit_fingerprint": "a" * 64},
+                    [cta, action],
+                )
+            action["caption_cutoff_frame"] = 40
+            prepared = module.prepare_vertical_social_plan(
+                Path(raw_root) / "matching-plans.json", "PC_PERSONALE",
+                {"project": "ARPHE", "timeline": "ADV_V1", "fps": "30",
+                 "total_frames": 60, "locked_edit_fingerprint": "a" * 64},
+                [cta, action],
+            )
+            self.assertEqual("PROPOSED", prepared.state)
 
     def test_execution_lookup_requires_exact_approved_fingerprint(self):
         module = self._module()

@@ -35,7 +35,7 @@ def main() -> int:
                    "text": "Prima frase", "position": "LOWER"},
                   {"cue_id": "c2", "start_frame": 30, "end_frame": 60,
                    "text": "Seconda frase", "position": "UPPER"},
-              ]}
+              ], "caption_cutoff_frame": 60}
     result = None
     try:
         result = apply_caption_action(project, timeline, config, action, 60)

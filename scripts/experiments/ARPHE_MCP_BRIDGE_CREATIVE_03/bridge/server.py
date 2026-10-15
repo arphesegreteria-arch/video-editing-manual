@@ -15,6 +15,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from .audit import write_audit
 from .asset_tools import add_asset, set_music_bed as do_set_music_bed
 from .audio_tools import audio_job as do_audio_job, start_audio_job as do_start_audio_job
+from .audio_cta_tail import move_voiceover_tail_to_cta as do_move_voiceover_tail_to_cta
 from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
                                restore_artifact as do_restore_artifact,
                                run_maintenance as do_run_maintenance)
@@ -1796,6 +1797,24 @@ def create_fusion_composition(name: str, start_frame: int, end_frame: int) -> di
         if error: return error
         return _call(create_composition, project, timeline, config, registry, name, start_frame, end_frame)
     except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def move_voiceover_tail_to_cta(source_timeline: str, target_name: str, audio_track: int,
+                               tail_start_frame: int, cta_start_frame: int) -> dict[str, Any]:
+    """Copy a reviewed A-track voice-over tail to an exact CTA frame on a new timeline."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, _, config, registry, error = _runtime()
+            if error:
+                return error
+            if project is None:
+                return {"ok": False, "stage": "preflight", "error": "Serve un progetto aperto."}
+            return _call(do_move_voiceover_tail_to_cta, project, config, registry,
+                         source_timeline, target_name, audio_track=audio_track,
+                         tail_start_frame=tail_start_frame, cta_start_frame=cta_start_frame)
+        except Exception as exc:
+            return _error(exc)
 
 
 @mcp.tool(annotations=SAFE_WRITE)

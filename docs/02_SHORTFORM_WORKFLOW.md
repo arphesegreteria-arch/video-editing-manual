@@ -12,6 +12,17 @@ L'originale non deve essere modificato.
 Non usare come requisito un vero blade/split sull'item esistente.
 Ricostruire una nuova timeline con i soli intervalli da tenere.
 
+### VOICE-OVER CTA — COPY / SPLIT / READ-BACK
+
+Per spostare una frase conclusiva del voice-over sulla CTA non modificare la timeline corrente.
+Usare la primitiva chiusa `move_voiceover_tail_to_cta`: duplica una timeline ARPHÈ consentita,
+sostituisce una sola clip audio della traccia indicata con il corpo iniziale e la coda, e colloca
+la coda a un frame CTA esplicito. La frase e i due frame sono sempre verificati dall'operatore;
+il bridge non riconosce o interpreta automaticamente il parlato. Il risultato restituisce il
+read-back dei quattro confini e la timeline sorgente rimane invariata.
+
+Non esiste una primitiva generica per spostare, tagliare o cancellare clip audio.
+
 ### ZOOM / YOYO
 Usare Fusion:
 `MediaIn → Transform → MediaOut`

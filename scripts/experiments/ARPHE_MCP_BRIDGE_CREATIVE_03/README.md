@@ -4,6 +4,13 @@ Bridge MCP sperimentale, affiancato ai bridge validati e dedicato alle creative 
 
 - Entry point: `ARPHE_MCP_BRIDGE_CREATIVE_03.py`
 - Config locale: `<install_root>\runtime-configs\<WORKSTATION_ID>\creative_config.json`
+
+## Voice-over su CTA
+
+`move_voiceover_tail_to_cta` è una safe write strettamente delimitata: richiede timeline
+sorgente e target ARPHÈ, traccia audio, inizio della frase e inizio CTA come frame esatti.
+Duplica la timeline, divide una sola clip della traccia indicata e fa read-back dei segmenti.
+Non modifica l'originale e non espone un editor audio generico.
 - Asset allowlist predefinita: `C:\ARPHE\MCP\assets\creative`
 - Render root predefinita: `C:\ARPHE\MCP\renders\creative`
 - Stato e audit: nella stessa directory per-workstation della config Creative

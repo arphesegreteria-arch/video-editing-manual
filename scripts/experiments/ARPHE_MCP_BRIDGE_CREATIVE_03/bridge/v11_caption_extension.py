@@ -9,12 +9,14 @@ from .safety import ValidationError
 PROJECT = "ARPHE_BIORIVITALIZZAZIONE_ADV_20261013_PERSONALE"
 TIMELINE = "ARPHE_BIORIVITALIZZAZIONE_V11_KARAOKE_UPPER_SAMPLE_20261016"
 R3_TIMELINE = "ARPHE_BIORIVITALIZZAZIONE_V11_KARAOKE_UPPER_SAMPLE_R3_20261016"
+R4_TIMELINE = "ARPHE_BIORIVITALIZZAZIONE_V11_KARAOKE_UPPER_SAMPLE_R4_20261016"
 
 _APPROVED_RANGES = {
     TIMELINE: (108177, 108574),
     # R3 replaces both defective carrier layers on a copy, including the
     # original 13 opening words, with one transparent caption carrier.
     R3_TIMELINE: (108014, 108574),
+    R4_TIMELINE: (108014, 108574),
 }
 
 def apply_caption_visibility(comp: Any, merge: Any, start: int, end: int) -> bool:

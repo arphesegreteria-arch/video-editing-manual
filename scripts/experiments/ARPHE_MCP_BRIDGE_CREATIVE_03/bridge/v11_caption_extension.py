@@ -2,19 +2,32 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Any
-from .fusion_tools import CARRIER_ASSET_NAME
+from .fusion_tools import CARRIER_ASSET_NAME, set_visibility_window
 from .resolve_connection import safe_call
 from .safety import ValidationError
 
 PROJECT = "ARPHE_BIORIVITALIZZAZIONE_ADV_20261013_PERSONALE"
 TIMELINE = "ARPHE_BIORIVITALIZZAZIONE_V11_KARAOKE_UPPER_SAMPLE_20261016"
+R3_TIMELINE = "ARPHE_BIORIVITALIZZAZIONE_V11_KARAOKE_UPPER_SAMPLE_R3_20261016"
+
+_APPROVED_RANGES = {
+    TIMELINE: (108177, 108574),
+    # R3 replaces both defective carrier layers on a copy, including the
+    # original 13 opening words, with one transparent caption carrier.
+    R3_TIMELINE: (108014, 108574),
+}
+
+def apply_caption_visibility(comp: Any, merge: Any, start: int, end: int) -> bool:
+    """Use Resolve-owned keyframes; Text+ SetExpression is not persisted in Resolve 21."""
+    return set_visibility_window(comp, merge, start, end)
 
 def place_v11_caption_carrier(project: Any, timeline: Any, config: Any, start: int, end: int) -> tuple[Any, Any]:
-    if str(safe_call(project, "GetName") or "") != PROJECT or str(safe_call(timeline, "GetName") or "") != TIMELINE:
+    timeline_name = str(safe_call(timeline, "GetName") or "")
+    if str(safe_call(project, "GetName") or "") != PROJECT or timeline_name not in _APPROVED_RANGES:
         raise ValidationError("Estensione caption consentita solo su Biorivitalizzazione V11 approvata")
     # 6.91 s is the first omitted spoken word after the existing V11 sample.
     # 20.13 s is the last non-CTA word; `end` is Resolve-exclusive.
-    if not (start == 108177 and end == 108574):
+    if (start, end) != _APPROVED_RANGES[timeline_name]:
         raise ValidationError("Range caption V11 non approvato")
     carrier = (Path(config.asset_root) / CARRIER_ASSET_NAME).resolve()
     if not carrier.is_file(): raise ValidationError("Carrier Fusion tecnico non installato")

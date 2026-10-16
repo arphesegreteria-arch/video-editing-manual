@@ -111,6 +111,51 @@ def _digest(path: Path) -> str:
     return value.hexdigest()
 
 
+def reconcile_legacy_render_batch(project: Any, registry: Registry, batch_id: str,
+                                  dry_run: bool = True) -> dict[str, Any]:
+    """Safely repair only legacy ``.ext.ext`` expectations without moving media."""
+    batch = registry.render_batch(batch_id)
+    if batch is None or batch.status not in {"RENDERING", "FAILED_VERIFY"}:
+        raise ValidationError("Batch legacy non riconciliabile")
+    suffix = f".{batch.container.casefold()}"
+    if (not batch.expected_outputs or len(batch.expected_outputs) != len(batch.created_job_ids) or
+            any(not name.casefold().endswith(suffix + suffix) for name in batch.expected_outputs)):
+        raise ValidationError("Il batch non presenta esclusivamente il difetto doppia estensione")
+    if any(render_job_status(project, job_id).casefold() not in {"complete", "completed"}
+           for job_id in batch.created_job_ids):
+        raise ValidationError("Uno o piu job Resolve non risultano completati")
+    corrected = tuple(name[:-len(suffix)] for name in batch.expected_outputs)
+    snapshots = (batch.evidence or {}).get("job_snapshots", {})
+    if tuple(str(snapshots.get(job_id, {}).get("OutputFilename") or "") for job_id in batch.created_job_ids) != corrected:
+        raise ValidationError("I nomi Resolve registrati non corrispondono ai file normalizzati")
+    staging = Path(batch.staging_directory or "")
+    sources = tuple(staging / name for name in corrected)
+    actual_files = {item.name for item in staging.iterdir() if item.is_file()} if staging.is_dir() else set()
+    if actual_files != set(corrected):
+        raise ValidationError("Lo staging legacy non contiene esattamente gli output attesi")
+    problems = {source.name: verify_media(probe_media(source), expectation_from_batch(batch, old))
+                for source, old in zip(sources, batch.expected_outputs, strict=True)}
+    problems = {name: issues for name, issues in problems.items() if issues}
+    if problems:
+        raise ValidationError(f"Output legacy non conforme: {problems}")
+    digests = {source.name: _digest(source) for source in sources}
+    result = {"ok": True, "action": "reconcile_legacy_render_batch", "batch_id": batch_id,
+              "dry_run": dry_run, "eligible": True, "status": batch.status,
+              "expected_outputs": list(corrected), "digests": digests}
+    if dry_run:
+        return result
+    prior_durations = dict((batch.evidence or {}).get("expected_durations", {}))
+    corrected_durations = {new: prior_durations[old] for old, new in zip(batch.expected_outputs, corrected, strict=True)}
+    updated = transition_batch(registry, batch_id, batch.status, "VERIFYING", {
+        "expected_outputs": list(corrected), "expected_durations": corrected_durations,
+        "legacy_expected_outputs": list(batch.expected_outputs),
+        "legacy_expected_durations": prior_durations,
+        "legacy_reconciliation": {"reason": "duplicate_container_suffix", "digests": digests,
+                                  "from_status": batch.status},
+    })
+    return {**result, "dry_run": False, "status": updated.status}
+
+
 def verify_and_promote_batch(project: Any, config: CreativeConfig, registry: Registry,
                              batch_id: str) -> dict[str, Any]:
     batch = registry.render_batch(batch_id)

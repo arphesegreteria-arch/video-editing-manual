@@ -58,6 +58,12 @@ def _register_render_staging(config: CreativeConfig, staging: Path, batch_id: st
     )
 
 
+def _expected_output_name(output_name: str, container: str) -> str:
+    """Resolve appends the container suffix only when the custom name lacks it."""
+    suffix = f".{container.casefold()}"
+    return output_name if output_name.casefold().endswith(suffix) else f"{output_name}.{container}"
+
+
 def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registry, batch_id: str) -> dict[str, Any]:
     batch = registry.render_batch(batch_id)
     if batch is None or batch.status != "CONFIRMED":
@@ -100,7 +106,7 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
             if len(new_ids) != 1 or str(returned) != new_ids[0]:
                 raise ValidationError("Impossibile identificare in modo univoco il nuovo job")
             created.append(new_ids[0])
-            filename = f"{output_name}.{batch.container}"
+            filename = _expected_output_name(output_name, batch.container)
             expected.append(filename)
             start = safe_call(timeline, "GetStartFrame")
             end = safe_call(timeline, "GetEndFrame")

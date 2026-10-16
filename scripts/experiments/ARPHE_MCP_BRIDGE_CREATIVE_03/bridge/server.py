@@ -173,7 +173,8 @@ from .resolve_retirement import (
     recover_retirement as do_recover_resolve_retirement,
     retirement_store_for,
 )
-from .media_verification import verify_and_promote_batch as do_verify_render_batch
+from .media_verification import (reconcile_legacy_render_batch as do_reconcile_legacy_render_batch,
+                                 verify_and_promote_batch as do_verify_render_batch)
 from .maintenance_scheduler import start_lazy_maintenance
 from .resolve_connection import RESOLVE_ACCESS_LOCK, context, safe_call
 from .safety import PlaybackFpsActionRequired, ValidationError
@@ -1269,6 +1270,16 @@ def verify_render_batch(batch_id: str) -> dict[str, Any]:
         _, _, project, _, config, registry, error = _runtime()
         if error: return error
         return _call(do_verify_render_batch, project, config, registry, batch_id)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def reconcile_legacy_render_batch(batch_id: str, dry_run: bool = True) -> dict[str, Any]:
+    """Audit and repair only a verified legacy duplicated container suffix; never moves media."""
+    try:
+        _, _, project, _, _, registry, error = _runtime()
+        if error: return error
+        return _call(do_reconcile_legacy_render_batch, project, registry, batch_id, dry_run)
     except Exception as exc: return _error(exc)
 
 

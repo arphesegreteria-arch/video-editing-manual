@@ -244,6 +244,16 @@ class RenderBatchPreparationTests(unittest.TestCase):
             self.assertEqual("High", project.settings["EncodingProfile"])
             self.assertEqual("1001/100", prepared.evidence["expected_durations"]["ARPHE_OUTPUT.mp4"])
 
+    def test_prepare_does_not_duplicate_existing_container_suffix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry = Registry(root / "state.json")
+            batch = create_render_batch(*fixtures(), "ARPHE_PROJECT", ("ARPHE_MAIN",),
+                                        ("ARPHE_OUTPUT.mp4",), "PC_PERSONALE")
+            registry.save_render_batch(batch)
+            prepare_render_batch(FakeRenderProject(), configured(root), registry, batch.batch_id)
+            prepared = registry.render_batch(batch.batch_id)
+            self.assertEqual(("ARPHE_OUTPUT.mp4",), prepared.expected_outputs)
+
 
 def approved_batch(root: Path, project: FakeRenderProject):
     registry = Registry(root / "state.json"); batch = stored_batch(registry)

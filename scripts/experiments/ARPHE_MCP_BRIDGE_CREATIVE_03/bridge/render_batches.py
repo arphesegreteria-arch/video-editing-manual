@@ -21,6 +21,9 @@ TRANSITIONS = {
     "APPROVED": {"RENDERING", "CANCELLED"},
     "RENDERING": {"VERIFYING", "FAILED_RENDER", "CANCELLED"},
     "VERIFYING": {"VERIFIED", "FAILED_VERIFY"},
+    # A failed verification caused solely by the historical duplicated suffix can
+    # be re-entered only through the guarded reconciliation routine.
+    "FAILED_VERIFY": {"VERIFYING"},
 }
 
 

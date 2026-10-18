@@ -47,24 +47,26 @@ Le parti riutilizzabili richiedono una revisione dedicata prima di essere integr
 - Test V11: 11 superati, inclusi range R6 e rollback su read-back errato.
 - Test renderer grafico: 11 superati.
 - Test control plane isolati: 6 superati.
-- Suite bridge completa: interrotta due volte con `KeyboardInterrupt`, non verde.
-- Esecuzione per moduli: primi 29 moduli superati, poi interruzione durante il
-  modulo trascrizione. Non equivale a una suite completa superata.
+- Prima della correzione PID, la suite bridge completa si interrompeva con
+  `KeyboardInterrupt` durante i test di trascrizione.
+- Dopo la correzione PID: 522 test superati, 2 skip Windows previsti, 0 errori.
 
-Non promuovere questa riconciliazione a release completamente validata finché
-l'interruzione della suite non viene spiegata e la suite completa non termina.
-Non alterare o saltare permanentemente i test per ottenere un risultato verde.
+La suite offline certifica il codice riconciliato, non un deployment: prima di
+promuovere una release servono ancora review, manifest e verifica del runtime
+installato sulla sola workstation destinazione.
 
-### Difetto preesistente individuato nel controllo PID
+### Difetto preesistente risolto nel controllo PID
 
 `carabellese_transcription._pid_is_running` usa `os.kill(pid, 0)` anche su Windows.
 Una verifica con `os.kill` intercettato (nessun segnale reale inviato) conferma la
 chiamata; su questo interprete `signal.CTRL_C_EVENT == 0`. Non è un controllo di
 esistenza innocuo su Windows: il comportamento documentato è l'invio di un evento
 console. I test di trascrizione lo invocano con il PID del processo corrente.
-Questo è coerente con le interruzioni osservate e va corretto prima di ripetere la
-suite completa. Non è un difetto delle V11. La correzione non è inclusa in questo
-consolidamento: serve una query di stato Windows senza segnali, con test dedicati.
+Questo spiegava le interruzioni osservate e non era un difetto delle V11. Il ramo
+usa ora `OpenProcess` e `GetExitCodeProcess` per interrogare Windows senza inviare
+segnali; mantiene `os.kill(pid, 0)` soltanto sugli altri sistemi. Due test dedicati
+coprono il PID corrente e un PID inesistente. La suite completa è poi terminata con
+522 test superati e 2 skip previsti.
 Riferimento: https://docs.python.org/3/library/os.html#os.kill.
 
 ## Backup locale verificato

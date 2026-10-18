@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -93,6 +94,28 @@ def _launch(manifest_path: Path) -> int:
 def _pid_is_running(value: object) -> bool:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         return False
+    if os.name == "nt":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        open_process = kernel32.OpenProcess
+        open_process.argtypes = (ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong)
+        open_process.restype = ctypes.c_void_p
+        get_exit_code = kernel32.GetExitCodeProcess
+        get_exit_code.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong))
+        get_exit_code.restype = ctypes.c_int
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = (ctypes.c_void_p,)
+        close_handle.restype = ctypes.c_int
+
+        handle = open_process(0x1000, 0, value)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # Access denied still proves existence.
+        try:
+            exit_code = ctypes.c_ulong()
+            if not get_exit_code(handle, ctypes.byref(exit_code)):
+                return True  # Only a definite terminated state may be treated as stale.
+            return exit_code.value == 259  # STILL_ACTIVE
+        finally:
+            close_handle(handle)
     try:
         os.kill(value, 0)
     except PermissionError:

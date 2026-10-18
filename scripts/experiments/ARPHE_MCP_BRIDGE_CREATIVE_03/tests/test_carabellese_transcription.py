@@ -19,6 +19,7 @@ from bridge.carabellese_transcription import (  # noqa: E402
     get_carabellese_transcription_job,
     start_carabellese_transcription,
 )
+from bridge import carabellese_transcription  # noqa: E402
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 from bridge.transcription_worker import run_job, transcribe_checkpointed  # noqa: E402
@@ -47,6 +48,16 @@ def source(cfg: CreativeConfig, content: bytes = b"podcast-carabellese") -> Path
 
 
 class CarabelleseTranscriptionJobTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows process-query regression")
+    def test_pid_probe_checks_process_state_without_sending_a_console_signal(self):
+        with patch.object(carabellese_transcription.os, "kill",
+                          side_effect=AssertionError("os.kill must not be used on Windows")):
+            self.assertTrue(carabellese_transcription._pid_is_running(os.getpid()))
+
+    @unittest.skipUnless(os.name == "nt", "Windows process-query regression")
+    def test_pid_probe_reports_a_missing_windows_process(self):
+        self.assertFalse(carabellese_transcription._pid_is_running(2_147_483_647))
+
     def test_outside_media_and_wrong_fingerprint_fail_before_process_creation(self):
         with tempfile.TemporaryDirectory() as raw_root:
             root = Path(raw_root)

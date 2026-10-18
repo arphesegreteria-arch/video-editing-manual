@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import sys
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
-from bridge.v11_caption_extension import place_v11_caption_carrier,R3_TIMELINE,R4_TIMELINE,apply_caption_visibility
+from bridge.v11_caption_extension import place_v11_caption_carrier,R3_TIMELINE,R4_TIMELINE,R6_TIMELINE,apply_caption_visibility
 from bridge.safety import ValidationError
 class Item:
  def __init__(self,start=108177,end=108574,comp=True):self.start=start;self.end=end;self.comp=comp
@@ -66,4 +66,9 @@ class T(unittest.TestCase):
   pool=Pool(Item(start=108014));timeline=Timeline(name=R4_TIMELINE);cfg=SimpleNamespace(asset_root=ROOT/'assets')
   with patch('bridge.v11_caption_extension.Path.is_file',return_value=True):place_v11_caption_carrier(Project(pool),timeline,cfg,108014,108574)
   self.assertEqual(108014,pool.payload['recordFrame'])
+ def test_r6_recovery_copy_accepts_only_the_full_replacement_range(self):
+  pool=Pool(Item(start=108014));timeline=Timeline(name=R6_TIMELINE);cfg=SimpleNamespace(asset_root=ROOT/'assets')
+  with patch('bridge.v11_caption_extension.Path.is_file',return_value=True):place_v11_caption_carrier(Project(pool),timeline,cfg,108014,108574)
+  self.assertEqual(108014,pool.payload['recordFrame'])
+  with self.assertRaises(ValidationError):place_v11_caption_carrier(Project(Pool()),Timeline(name=R6_TIMELINE),cfg,108177,108574)
 if __name__=='__main__':unittest.main()

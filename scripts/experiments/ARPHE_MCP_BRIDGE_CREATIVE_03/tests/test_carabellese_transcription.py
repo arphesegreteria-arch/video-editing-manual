@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -57,6 +58,33 @@ class CarabelleseTranscriptionJobTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt", "Windows process-query regression")
     def test_pid_probe_reports_a_missing_windows_process(self):
         self.assertFalse(carabellese_transcription._pid_is_running(2_147_483_647))
+
+    @unittest.skipUnless(os.name == "nt", "Windows process-query regression")
+    def test_pid_probe_treats_indeterminate_open_failure_as_running(self):
+        class Function:
+            def __init__(self, result):
+                self.result = result
+
+            def __call__(self, *_args):
+                return self.result
+
+        kernel32 = SimpleNamespace(
+            OpenProcess=Function(0),
+            WaitForSingleObject=Function(0xFFFFFFFF),
+            CloseHandle=Function(1),
+        )
+        for error_code in (5, 8):  # ERROR_ACCESS_DENIED, ERROR_NOT_ENOUGH_MEMORY
+            with self.subTest(error_code=error_code), \
+                 patch.object(carabellese_transcription.ctypes, "WinDLL", return_value=kernel32), \
+                 patch.object(carabellese_transcription.ctypes, "get_last_error", return_value=error_code):
+                self.assertTrue(carabellese_transcription._pid_is_running(4321))
+
+    @unittest.skipUnless(os.name == "nt", "Windows process-query regression")
+    def test_pid_probe_does_not_confuse_exit_code_259_with_still_running(self):
+        with subprocess.Popen([sys.executable, "-c", "raise SystemExit(259)"]) as process:
+            process.wait(timeout=10)
+            self.assertEqual(259, process.returncode)
+            self.assertFalse(carabellese_transcription._pid_is_running(process.pid))
 
     def test_outside_media_and_wrong_fingerprint_fail_before_process_creation(self):
         with tempfile.TemporaryDirectory() as raw_root:

@@ -49,7 +49,8 @@ Le parti riutilizzabili richiedono una revisione dedicata prima di essere integr
 - Test control plane isolati: 6 superati.
 - Prima della correzione PID, la suite bridge completa si interrompeva con
   `KeyboardInterrupt` durante i test di trascrizione.
-- Dopo la correzione PID: 522 test superati, 2 skip Windows previsti, 0 errori.
+- Dopo la correzione PID e la review: 524 test superati, 2 skip Windows previsti,
+  0 errori.
 
 La suite offline certifica il codice riconciliato, non un deployment: prima di
 promuovere una release servono ancora review, manifest e verifica del runtime
@@ -63,10 +64,13 @@ chiamata; su questo interprete `signal.CTRL_C_EVENT == 0`. Non è un controllo d
 esistenza innocuo su Windows: il comportamento documentato è l'invio di un evento
 console. I test di trascrizione lo invocano con il PID del processo corrente.
 Questo spiegava le interruzioni osservate e non era un difetto delle V11. Il ramo
-usa ora `OpenProcess` e `GetExitCodeProcess` per interrogare Windows senza inviare
-segnali; mantiene `os.kill(pid, 0)` soltanto sugli altri sistemi. Due test dedicati
-coprono il PID corrente e un PID inesistente. La suite completa è poi terminata con
-522 test superati e 2 skip previsti.
+usa ora `OpenProcess` e `WaitForSingleObject` per interrogare Windows senza inviare
+segnali; mantiene `os.kill(pid, 0)` soltanto sugli altri sistemi. I test dedicati
+coprono il PID corrente, un PID inesistente, errori indeterminati/accesso negato e
+un vero processo terminato con codice 259. La suite completa è poi terminata con
+524 test superati e 2 skip previsti, usando Python 3.12.10 e `mcp` 2.2.0 dal
+runtime PC_PERSONALE
+(`C:/ARPHE/MCP/runtimes/PC_PERSONALE/venv/Scripts/python.exe`).
 Riferimento: https://docs.python.org/3/library/os.html#os.kill.
 
 ## Backup locale verificato

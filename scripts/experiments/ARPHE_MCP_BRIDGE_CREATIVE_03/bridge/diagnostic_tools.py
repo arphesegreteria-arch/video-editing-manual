@@ -118,7 +118,12 @@ def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: C
                             registry: Registry, frame_offsets: list[int]) -> list[Any]:
     project_name = str(safe_call(project, "GetName") or "")
     timeline_name = str(safe_call(timeline, "GetName") or "")
-    require_arphe_name(project_name, "progetto")
+    project_explicitly_allowed = (
+        project_name in getattr(config, "allowed_projects", ())
+        or bool(safe_call(registry, "project_allowed", project_name))
+    )
+    if not project_explicitly_allowed:
+        require_arphe_name(project_name, "progetto")
     require_arphe_name(timeline_name, "timeline")
     if not (registry.timeline_allowed(project_name, timeline_name) or timeline_name in config.allowed_timelines):
         raise ValidationError("Cattura consentita solo su timeline creata o allowlisted dal bridge")

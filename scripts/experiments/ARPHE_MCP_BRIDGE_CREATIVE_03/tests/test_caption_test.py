@@ -53,6 +53,22 @@ class CaptionTestCueTests(unittest.TestCase):
         self.assertEqual("molto.", cues[1]["text"])
         self.assertTrue(all(len(cue["text"]) <= 84 for cue in cues))
 
+    def test_does_not_split_apostrophe_token_at_chunk_boundary(self):
+        from bridge.caption_test import caption_cues_from_segments, validate_source_spans
+        spans = validate_source_spans(self.SPANS, 30.0)
+        cues = caption_cues_from_segments([{"words": [
+            {"start": 9.10, "end": 9.30, "word": " soprattutto"},
+            {"start": 9.30, "end": 9.55, "word": " tantissime"},
+            {"start": 9.55, "end": 9.80, "word": " effettivamente"},
+            {"start": 9.80, "end": 9.90, "word": " c"},
+            {"start": 9.90, "end": 10.00, "word": "'è"},
+            {"start": 10.00, "end": 10.20, "word": " seguito."},
+        ]}], spans, 30.0)
+        texts = [cue["text"] for cue in cues]
+        self.assertNotIn("c", texts)
+        self.assertFalse(any(text.startswith(("'", "’")) for text in texts))
+        self.assertIn("c'è", " ".join(texts))
+
     def test_generic_wrapper_rolls_back_new_copy_when_fusion_write_fails(self):
         from bridge.caption_test import create_caption_test
 

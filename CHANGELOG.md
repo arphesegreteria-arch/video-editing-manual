@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-10-22 — Sottotitoli ADV da trascrizione Longform
+
+- Il generatore generico mantiene uniti i token con apostrofo prodotti dalla trascrizione
+  parola-per-parola (per esempio `c` + `'è`) anche quando cadono sul limite di un cue.
+- Aggiunta una regressione dedicata; suite Creative completa: `542` test verdi e `2` skip
+  ambientali per privilegi symlink Windows.
+
 ## 2026-10-15 — Voice-over CTA tail
 
 - Aggiunta `move_voiceover_tail_to_cta`: safe write chiusa che duplica una timeline ARPHÈ,

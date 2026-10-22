@@ -106,7 +106,9 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
 
     for item in mapped:
         proposed = _append_word(" ".join(word for _, _, word, _, _ in chunk), item[2])
-        if chunk and (len(chunk) >= 4 or len(proposed) > 42 or item[0] - chunk[-1][1] > 0.45):
+        joins_previous_token = item[2].startswith(("'", "’"))
+        if chunk and not joins_previous_token and (
+                len(chunk) >= 4 or len(proposed) > 42 or item[0] - chunk[-1][1] > 0.45):
             flush()
         chunk.append(item)
         if item[2].endswith((".", "!", "?")):

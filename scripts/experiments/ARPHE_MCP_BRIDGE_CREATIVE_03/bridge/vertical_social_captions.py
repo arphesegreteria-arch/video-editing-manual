@@ -7,7 +7,7 @@ from typing import Any
 
 from .carabellese_checkpoint import timeline_content_fingerprint
 from .fusion_tools import (_media_out, _new_tool, _rgb, _set, _set_color,
-                           add_layer, connect_input)
+                           add_layer, connect_input, set_visibility_window)
 from .resolve_connection import safe_call
 from .safety import ValidationError
 from .vertical_social_overlay import create_overlay_composition
@@ -164,16 +164,6 @@ def validate_caption_action(action: dict[str, Any], total_frames: int, *,
             "caption_cutoff_frame": cutoff}
 
 
-def _set_expression(tool: object, input_name: str, expression: str) -> None:
-    try:
-        input_proxy = getattr(tool, input_name)
-        result = input_proxy.SetExpression(expression)
-        if result is False:
-            raise RuntimeError("SetExpression=False")
-    except Exception as exc:
-        raise ValidationError(f"Espressione timing CAPTIONS fallita: {exc}") from exc
-
-
 def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
                         palette: dict[str, str]) -> dict[str, Any]:
     media_out = _media_out(comp)
@@ -225,7 +215,8 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
         if outer is None:
             raise ValidationError("Merge timing CAPTIONS non disponibile")
         start, end = cue["range"]
-        _set_expression(outer, "Blend", f"iif(time >= {start} and time < {end}, 1, 0)")
+        if not set_visibility_window(comp, outer, start, end):
+            raise ValidationError("Keyframe timing CAPTIONS non applicati")
     return {"cue_count": len(cues), "text_readback": True, "font": "Satoshi Bold",
             "gap_preserving": True, "lower_layout": lower_layout}
 

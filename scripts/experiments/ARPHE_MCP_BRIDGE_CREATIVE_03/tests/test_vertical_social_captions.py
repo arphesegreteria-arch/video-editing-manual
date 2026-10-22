@@ -122,6 +122,32 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         build.assert_called_once()
         self.assertEqual(2, result["cue_count"])
 
+    def test_caption_graph_uses_resolve_owned_keyframes_for_cue_visibility(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self):
+                self.values = {}
+            def SetInput(self, key, value, *args):
+                self.values[key] = value
+            def GetInput(self, key):
+                return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self):
+                return {}
+
+        outer = Tool()
+        cue = ({"cue_id": "c1", "range": (3, 7), "text": "Testo", "position": "LOWER"},)
+        palette = {"black": "#000000", "burgundy": "#6C2438", "white": "#FFFFFF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool", side_effect=lambda *args: Tool()), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=outer):
+            build_caption_graph(Comp(), cue, palette)
+
+        self.assertEqual({0: 0.0, 2: 0.0, 3: 1.0, 6: 1.0, 7: 0.0}, outer.Blend)
+
     def test_edit_fingerprint_changes_when_same_length_media_is_replaced(self):
         from bridge.vertical_social_captions import timeline_edit_fingerprint
 

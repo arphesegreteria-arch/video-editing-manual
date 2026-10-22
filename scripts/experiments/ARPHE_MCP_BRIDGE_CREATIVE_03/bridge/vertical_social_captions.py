@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from .carabellese_checkpoint import timeline_content_fingerprint
-from .fusion_tools import (_media_out, _new_tool, _rgb, _set, _set_color,
+from .fusion_tools import (_media_out, _new_tool, _rgb, _set,
                            add_layer, connect_input, set_visibility_window)
 from .resolve_connection import safe_call
 from .safety import ValidationError
@@ -97,6 +97,17 @@ def configure_caption_text_frame(tool: object, layout: dict[str, Any]) -> None:
         raise ValidationError(f"Read-back frame Text+ CAPTIONS non corrispondente: {', '.join(mismatched)}")
 
 
+def configure_caption_style(tool: object, requested: dict[str, Any], role: str) -> None:
+    """Apply every visual property and fail closed on silent Fusion mismatches."""
+    for key, value in requested.items():
+        if not _set(tool, key, value):
+            raise ValidationError(f"Impostazione stile CAPTIONS {role}.{key} fallita")
+    mismatched = [key for key, value in requested.items() if not _input_matches(tool, key, value)]
+    if mismatched:
+        raise ValidationError(
+            f"Read-back stile CAPTIONS {role} non corrispondente: {', '.join(mismatched)}")
+
+
 def timeline_edit_fingerprint(timeline: object) -> str:
     """Bind a picture lock to timing, settings and opaque source-media identities."""
     media_items: list[dict[str, Any]] = []
@@ -175,6 +186,10 @@ def validate_caption_action(action: dict[str, Any], total_frames: int, *,
     if isinstance(cutoff, bool) or not isinstance(cutoff, int) or not 0 <= cutoff <= total_frames:
         raise ValidationError("caption_cutoff_frame CAPTIONS non valido")
     cues = list(cues_before_frame(tuple(cues), cutoff))
+    if not cues:
+        raise ValidationError("Nessun cue CAPTIONS rimane prima del cutoff")
+    if caption_mode == "KARAOKE_WORD" and any(cue["position"] != "LOWER" for cue in cues):
+        raise ValidationError("KARAOKE_WORD supporta solo la posizione LOWER verificata")
     return {"locked_edit_fingerprint": fingerprint, "cues": tuple(cues),
             "caption_cutoff_frame": cutoff, "caption_mode": caption_mode,
             "uppercase": uppercase, "font_scale": float(font_scale)}
@@ -187,7 +202,11 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
     if media_out is None:
         raise ValidationError("MediaOut CAPTIONS non trovato")
     canvas = _new_tool(comp, "Background", "ARPHE_VERTICAL_CAPTIONS_CANVAS")
-    _set_color(canvas, _rgb(palette.get("black", "#000000"), 0.0))
+    canvas_color = _rgb(palette.get("black", "#000000"), 0.0)
+    configure_caption_style(canvas, {
+        "TopLeftRed": canvas_color["r"], "TopLeftGreen": canvas_color["g"],
+        "TopLeftBlue": canvas_color["b"], "TopLeftAlpha": canvas_color["a"],
+    }, "canvas")
     if not connect_input(media_out, "Input", canvas):
         raise ValidationError("Collegamento canvas CAPTIONS fallito")
     lower_layout = lower_caption_layout(font_scale)
@@ -199,18 +218,23 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
         width = lower_layout["width"] if is_lower else 0.78
         height = lower_layout["height"] if is_lower else 0.105
         background = _new_tool(comp, "Background", f"ARPHE_CAPTION_{index:03d}_BG")
-        _set_color(background, _rgb(palette["burgundy"], 0.94))
+        card_color = _rgb(palette["burgundy"], 0.94)
+        configure_caption_style(background, {
+            "TopLeftRed": card_color["r"], "TopLeftGreen": card_color["g"],
+            "TopLeftBlue": card_color["b"], "TopLeftAlpha": card_color["a"],
+        }, f"card_{index:03d}")
         mask = _new_tool(comp, "RectangleMask", f"ARPHE_CAPTION_{index:03d}_MASK")
-        for key, value in (("Width", width), ("Height", height),
-                           ("Center", {1: x, 2: y, 3: 0.0}), ("CornerRadius", 0.08)):
-            _set(mask, key, value)
+        configure_caption_style(mask, {
+            "Width": width, "Height": height,
+            "Center": {1: x, 2: y, 3: 0.0}, "CornerRadius": 0.08,
+        }, f"mask_{index:03d}")
         if not connect_input(background, "EffectMask", mask):
             raise ValidationError("Maschera CAPTIONS non collegata")
         text = _new_tool(comp, "TextPlus", f"ARPHE_CAPTION_{index:03d}_TEXT")
-        for key, value in (("StyledText", cue["text"]), ("Font", "Satoshi"),
-                           ("Style", "Bold"), ("Size", 0.050 * font_scale)):
-            if not _set(text, key, value):
-                raise ValidationError(f"Impostazione Text+ CAPTIONS {key} fallita")
+        configure_caption_style(text, {
+            "StyledText": cue["text"], "Font": "Satoshi", "Style": "Bold",
+            "Size": 0.050 * font_scale,
+        }, f"text_{index:03d}")
         if is_lower:
             configure_caption_text_frame(text, lower_layout)
         else:
@@ -221,11 +245,10 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
                 if not _set(text, key, value):
                     raise ValidationError(f"Impostazione Text+ CAPTIONS {key} fallita")
         text_color = _rgb(palette[highlight_role])
-        for key, value in (("Red1", text_color["r"]), ("Green1", text_color["g"]),
-                           ("Blue1", text_color["b"]), ("Alpha1", 1.0)):
-            _set(text, key, value)
-        if safe_call(text, "GetInput", "StyledText") != cue["text"]:
-            raise ValidationError("Read-back testo CAPTIONS non corrispondente")
+        configure_caption_style(text, {
+            "Red1": text_color["r"], "Green1": text_color["g"],
+            "Blue1": text_color["b"], "Alpha1": 1.0,
+        }, f"text_color_{index:03d}")
         card = _new_tool(comp, "Merge", f"ARPHE_CAPTION_{index:03d}_CARD")
         if not connect_input(card, "Background", background) or not connect_input(card, "Foreground", text):
             raise ValidationError("Grafo card CAPTIONS non collegato")

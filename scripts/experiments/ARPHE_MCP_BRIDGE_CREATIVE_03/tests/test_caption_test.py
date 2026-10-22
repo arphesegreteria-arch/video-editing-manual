@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -90,15 +91,25 @@ class CaptionTestCueTests(unittest.TestCase):
         self.assertTrue(hasattr(caption_test, "remove_owned_caption_overlay"),
                         "manca la sostituzione generica del layer caption posseduto")
 
+        class Comp:
+            def FindTool(self, name): return object() if name == "ARPHE_VERTICAL_CAPTIONS_CANVAS" else None
+
         class Item:
             def __init__(self, name): self.name = name
             def GetName(self): return self.name
+            def GetStart(self): return 0
+            def GetEnd(self): return 60
+            def GetDuration(self): return 60
+            def GetFusionCompCount(self): return 1
+            def GetFusionCompByIndex(self, index): return Comp() if index == 1 else None
 
         class Timeline:
             def __init__(self):
                 self.tracks = {1: [Item("VIDEO")],
                                2: [Item("ARPHE_VERTICAL_CAPTIONS_captions")]}
                 self.deleted_tracks = []
+            def GetStartFrame(self): return 0
+            def GetEndFrame(self): return 60
             def GetTrackCount(self, kind): return len(self.tracks) if kind == "video" else 0
             def GetItemListInTrack(self, kind, index): return self.tracks.get(index, [])
             def DeleteClips(self, items, ripple):
@@ -114,13 +125,34 @@ class CaptionTestCueTests(unittest.TestCase):
         self.assertEqual([("video", 2)], timeline.deleted_tracks)
         self.assertEqual(["VIDEO"], [item.GetName() for item in timeline.tracks[1]])
 
-    def test_generic_wrapper_rolls_back_new_copy_when_fusion_write_fails(self):
-        from bridge.caption_test import create_caption_test
+    def test_refuses_named_but_unowned_caption_layer(self):
+        from bridge.caption_test import remove_owned_caption_overlay
+
+        class Item:
+            def GetName(self): return "ARPHE_VERTICAL_CAPTIONS_captions"
+            def GetStart(self): return 0
+            def GetEnd(self): return 60
+            def GetDuration(self): return 60
+            def GetFusionCompCount(self): return 1
+            def GetFusionCompByIndex(self, index): return SimpleNamespace(FindTool=lambda name: None)
 
         class Timeline:
             def GetStartFrame(self): return 0
             def GetEndFrame(self): return 60
-            def GetName(self): return "ARPHE_CAPTION_TEST"
+            def GetTrackCount(self, kind): return 1
+            def GetItemListInTrack(self, kind, index): return [Item()]
+
+        with self.assertRaisesRegex(Exception, "posseduto"):
+            remove_owned_caption_overlay(Timeline())
+
+    def test_generic_wrapper_rolls_back_new_copy_when_fusion_write_fails(self):
+        from bridge.caption_test import create_caption_test
+
+        class Timeline:
+            def __init__(self, name): self.name = name
+            def GetStartFrame(self): return 0
+            def GetEndFrame(self): return 60
+            def GetName(self): return self.name
             def GetSetting(self, key): return "30" if key == "timelineFrameRate" else None
 
         class Pool:
@@ -128,13 +160,17 @@ class CaptionTestCueTests(unittest.TestCase):
             def DeleteTimelines(self, values): self.deleted.extend(values); return True
 
         class Project:
-            def __init__(self): self.timeline = Timeline(); self.pool = Pool(); self.restored = None
+            def __init__(self):
+                self.source = Timeline("ARPHE_SOURCE")
+                self.copy = Timeline("ARPHE_CAPTION_TEST")
+                self.timeline = self.source; self.pool = Pool(); self.restored = None
             def GetCurrentTimeline(self): return self.timeline
-            def SetCurrentTimeline(self, value): self.restored = value; return True
+            def SetCurrentTimeline(self, value): self.timeline = value; self.restored = value; return True
             def GetMediaPool(self): return self.pool
 
         project = Project()
-        with patch("bridge.caption_test.duplicate_timeline", return_value={"ok": True}), \
+        with patch("bridge.caption_test.duplicate_timeline", return_value={"ok": True, "created_timeline": "ARPHE_CAPTION_TEST"}), \
+             patch("bridge.caption_test.find_timeline", return_value=project.copy), \
              patch("bridge.caption_test._load_segments", return_value=[{"words": [
                  {"start": 0.10, "end": 0.30, "word": " Test."}]}]), \
              patch("bridge.caption_test.timeline_edit_fingerprint", return_value="a" * 64), \
@@ -143,8 +179,60 @@ class CaptionTestCueTests(unittest.TestCase):
                 create_caption_test(project, object(), object(), "input", "ARPHE_CAPTION_TEST",
                                     "transcript.json", [{"source_start_frame": 0,
                                     "source_end_frame": 30, "timeline_start_frame": 0}], 60)
-        self.assertEqual([project.timeline], project.pool.deleted)
-        self.assertIs(project.timeline, project.restored)
+        self.assertEqual([project.copy], project.pool.deleted)
+        self.assertIs(project.source, project.restored)
+        self.assertIs(project.source, project.timeline)
+
+    def test_selects_exact_duplicate_even_when_resolve_keeps_source_current(self):
+        from bridge.caption_test import create_caption_test
+
+        class Timeline:
+            def __init__(self, name): self.name = name
+            def GetName(self): return self.name
+            def GetStartFrame(self): return 0
+            def GetEndFrame(self): return 60
+            def GetSetting(self, key): return "30" if key == "timelineFrameRate" else None
+
+        source, duplicate = Timeline("ARPHE_SOURCE"), Timeline("ARPHE_TARGET")
+        project = SimpleNamespace(
+            current=source,
+            GetCurrentTimeline=lambda: project.current,
+            SetCurrentTimeline=lambda value: setattr(project, "current", value) is None,
+        )
+        with patch("bridge.caption_test.duplicate_timeline", return_value={"ok": True, "created_timeline": "ARPHE_TARGET"}), \
+             patch("bridge.caption_test.find_timeline", return_value=duplicate), \
+             patch("bridge.caption_test._load_segments", return_value=[{"words": [
+                 {"start": 0.10, "end": 0.30, "word": " Test."}]}]), \
+             patch("bridge.caption_test.timeline_edit_fingerprint", return_value="a" * 64), \
+             patch("bridge.caption_test.apply_caption_action", return_value={"cue_count": 1}) as apply:
+            result = create_caption_test(project, object(), object(), "ARPHE_SOURCE", "ARPHE_TARGET",
+                                         "transcript.json", [{"source_start_frame": 0,
+                                         "source_end_frame": 30, "timeline_start_frame": 0}], 60)
+        self.assertIs(duplicate, apply.call_args.args[1])
+        self.assertEqual("ARPHE_TARGET", result["created_timeline"])
+
+    def test_public_caption_wrapper_holds_resolve_lock_for_operation(self):
+        from bridge import server
+        events = []
+
+        class Lock:
+            def __enter__(self): events.append("lock_enter")
+            def __exit__(self, *args): events.append("lock_exit")
+
+        def operation(*args):
+            events.append("operation")
+            return {"ok": True}
+
+        runtime = (object(), object(), object(), object(), object(), object(), None)
+        with patch.object(server, "RESOLVE_ACCESS_LOCK", Lock()), \
+             patch.object(server, "_runtime", return_value=runtime), \
+             patch.object(server, "do_create_caption_test", side_effect=operation):
+            result = server.create_caption_test(
+                "ARPHE_SOURCE", "ARPHE_TARGET", "transcript.json",
+                [{"source_start_frame": 0, "source_end_frame": 30,
+                  "timeline_start_frame": 0}], 30)
+        self.assertTrue(result["ok"])
+        self.assertEqual(["lock_enter", "operation", "lock_exit"], events)
 
 
 if __name__ == "__main__":

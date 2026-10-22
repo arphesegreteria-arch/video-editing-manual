@@ -57,6 +57,21 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "CTA"):
             validate_caption_action(crossing, 60)
 
+    def test_caption_schema_rejects_when_cutoff_removes_every_cue(self):
+        from bridge.vertical_social_captions import validate_caption_action
+        action = self.action()
+        action["caption_cutoff_frame"] = 0
+        with self.assertRaisesRegex(Exception, "prima del cutoff"):
+            validate_caption_action(action, 60)
+
+    def test_karaoke_rejects_upper_geometry_until_it_has_scaled_safe_bounds(self):
+        from bridge.vertical_social_captions import validate_caption_action
+        action = self.action()
+        action["style"] = {"caption_mode": "KARAOKE_WORD", "uppercase": True,
+                           "font_scale": 1.2}
+        with self.assertRaisesRegex(Exception, "LOWER"):
+            validate_caption_action(action, 60)
+
     def test_lower_caption_text_frame_is_contained_inside_its_safe_card(self):
         from bridge.vertical_social_captions import lower_caption_layout
         layout = lower_caption_layout()
@@ -207,6 +222,33 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         self.assertAlmostEqual(239 / 255, text.values["Red1"], places=6)
         self.assertLessEqual(result["lower_layout"]["bounds"]["bottom"], 0.82)
         self.assertEqual("cream", result["highlight_role"])
+
+    def test_caption_graph_rejects_silent_style_readback_mismatch(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self, name=""):
+                self.name = name; self.values = {}
+            def SetInput(self, key, value, *args): self.values[key] = value
+            def GetInput(self, key):
+                if self.name.endswith("_TEXT") and key == "Size":
+                    return 0.01
+                return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self): return {}
+
+        cue = ({"cue_id": "c1", "range": (3, 7), "text": "TEST", "position": "LOWER"},)
+        palette = {"black": "#111111", "burgundy": "#6C2438",
+                   "white": "#FFFFFF", "cream": "#EFE3CF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool",
+                   side_effect=lambda comp, kind, name: Tool(name)), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=Tool()):
+            with self.assertRaisesRegex(Exception, "Read-back stile"):
+                build_caption_graph(Comp(), cue, palette,
+                                    caption_mode="KARAOKE_WORD", font_scale=1.2)
 
     def test_edit_fingerprint_changes_when_same_length_media_is_replaced(self):
         from bridge.vertical_social_captions import timeline_edit_fingerprint

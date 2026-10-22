@@ -7,7 +7,7 @@ from typing import Any
 
 from .resolve_connection import safe_call
 from .safety import ValidationError
-from .timeline_tools import duplicate_timeline
+from .timeline_tools import duplicate_timeline, find_timeline
 from .vertical_social_captions import apply_caption_action, timeline_edit_fingerprint
 
 
@@ -152,11 +152,24 @@ def remove_owned_caption_overlay(timeline: Any) -> dict[str, Any]:
     if len(matches) != 1:
         raise ValidationError("Sostituzione CAPTIONS richiede un solo layer bridge esistente")
     track, item = matches[0]
+    timeline_start = safe_call(timeline, "GetStartFrame")
+    timeline_end = safe_call(timeline, "GetEndFrame")
+    comp_count = safe_call(item, "GetFusionCompCount")
+    comp = safe_call(item, "GetFusionCompByIndex", 1) if comp_count == 1 else None
+    owned = (
+        isinstance(timeline_start, int) and isinstance(timeline_end, int)
+        and safe_call(item, "GetStart") == timeline_start
+        and safe_call(item, "GetEnd") == timeline_end
+        and safe_call(item, "GetDuration") == timeline_end - timeline_start
+        and comp is not None
+        and safe_call(comp, "FindTool", "ARPHE_VERTICAL_CAPTIONS_CANVAS") is not None
+    )
+    if not owned:
+        raise ValidationError("Layer CAPTIONS omonimo ma non verificato come posseduto dal bridge")
     if not safe_call(timeline, "DeleteClips", [item], False):
         raise ValidationError("Rimozione layer CAPTIONS esistente fallita")
     remaining = safe_call(timeline, "GetItemListInTrack", "video", track) or []
-    if any(safe_call(entry, "GetName") == "ARPHE_VERTICAL_CAPTIONS_captions"
-           for entry in remaining):
+    if any(entry is item for entry in remaining):
         raise ValidationError("Read-back rimozione layer CAPTIONS non corrispondente")
     if track == track_count and not remaining:
         if not safe_call(timeline, "DeleteTrack", "video", track):
@@ -171,18 +184,32 @@ def create_caption_test(project: Any, config: Any, registry: Any, source_timelin
                         font_scale: float = 1.0,
                         replace_existing_captions: bool = False) -> dict[str, Any]:
     """Duplicate an allowed timeline, apply generic lower captions, and never save automatically."""
+    if not isinstance(replace_existing_captions, bool):
+        raise ValidationError("replace_existing_captions CAPTIONS deve essere booleano")
     original = safe_call(project, "GetCurrentTimeline")
     duplicated = duplicate_timeline(project, config, registry, source_timeline, None, target_name)
     if not duplicated.get("ok"):
         return {**duplicated, "action": "create_caption_test"}
-    timeline = safe_call(project, "GetCurrentTimeline")
-    start, end = safe_call(timeline, "GetStartFrame"), safe_call(timeline, "GetEndFrame")
-    if not isinstance(start, int) or not isinstance(end, int) or end <= start:
-        raise ValidationError("Range timeline caption non leggibile")
-    total_frames = end - start
-    if isinstance(caption_cutoff_frame, bool) or not isinstance(caption_cutoff_frame, int) or not 0 <= caption_cutoff_frame <= total_frames:
-        raise ValidationError("caption_cutoff_frame CAPTIONS non valido")
+    created_name = str(duplicated.get("created_timeline") or "")
+    timeline = None
     try:
+        timeline = find_timeline(project, created_name)
+        if (timeline is None or timeline is original or not created_name
+                or safe_call(timeline, "GetName") != created_name
+                or created_name == source_timeline):
+            raise ValidationError("Copia timeline CAPTIONS non identificata in modo univoco")
+        if not safe_call(project, "SetCurrentTimeline", timeline):
+            raise ValidationError("Selezione copia timeline CAPTIONS fallita")
+        current = safe_call(project, "GetCurrentTimeline")
+        if current is None or safe_call(current, "GetName") != created_name:
+            raise ValidationError("Read-back selezione copia timeline CAPTIONS non corrispondente")
+        start, end = safe_call(timeline, "GetStartFrame"), safe_call(timeline, "GetEndFrame")
+        if not isinstance(start, int) or not isinstance(end, int) or end <= start:
+            raise ValidationError("Range timeline caption non leggibile")
+        total_frames = end - start
+        if (isinstance(caption_cutoff_frame, bool) or not isinstance(caption_cutoff_frame, int)
+                or not 0 <= caption_cutoff_frame <= total_frames):
+            raise ValidationError("caption_cutoff_frame CAPTIONS non valido")
         replaced = remove_owned_caption_overlay(timeline) if replace_existing_captions else None
         fps = _parse_fps(timeline)
         spans = validate_source_spans(source_spans, fps)
@@ -201,7 +228,11 @@ def create_caption_test(project: Any, config: Any, registry: Any, source_timelin
     except Exception as error:
         restored = bool(original and safe_call(project, "SetCurrentTimeline", original))
         pool = safe_call(project, "GetMediaPool")
-        removed = bool(pool and safe_call(pool, "DeleteTimelines", [timeline]))
+        rollback_target = timeline or find_timeline(project, created_name)
+        safe_target = (rollback_target is not None and rollback_target is not original
+                       and safe_call(rollback_target, "GetName") == created_name
+                       and created_name != source_timeline)
+        removed = bool(safe_target and pool and safe_call(pool, "DeleteTimelines", [rollback_target]))
         if not restored or not removed:
             raise RuntimeError("Caption fallite e rollback della copia non confermato") from error
         raise

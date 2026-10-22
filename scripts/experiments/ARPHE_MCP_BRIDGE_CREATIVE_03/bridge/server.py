@@ -1765,11 +1765,12 @@ def create_caption_test(source_timeline: str, target_name: str, transcript_file:
                         replace_existing_captions: bool = False) -> dict[str, Any]:
     """Create a no-save standard or word-karaoke caption copy from an explicit transcript map."""
     try:
-        _, _, project, _, config, registry, error = _runtime()
-        if error: return error
-        return _call(do_create_caption_test, project, config, registry, source_timeline,
-                     target_name, transcript_file, source_spans, caption_cutoff_frame,
-                     caption_mode, uppercase, font_scale, replace_existing_captions)
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_create_caption_test, project, config, registry, source_timeline,
+                         target_name, transcript_file, source_spans, caption_cutoff_frame,
+                         caption_mode, uppercase, font_scale, replace_existing_captions)
     except Exception as exc: return _error(exc)
 
 

@@ -86,6 +86,51 @@ class CaptionTestCueTests(unittest.TestCase):
                          [(cue["start_frame"], cue["end_frame"], cue["text"])
                           for cue in cues])
 
+    def test_phrase_karaoke_keeps_standard_grouping_and_embeds_word_windows(self):
+        from bridge.caption_test import caption_cues_from_segments, validate_source_spans
+        spans = validate_source_spans(self.SPANS, 30.0)
+        cues = caption_cues_from_segments([{"words": [
+            {"start": 9.10, "end": 9.30, "word": " ciao"},
+            {"start": 9.30, "end": 9.40, "word": " c"},
+            {"start": 9.40, "end": 9.55, "word": "'è"},
+            {"start": 9.55, "end": 9.80, "word": " seguito."},
+        ]}], spans, 30.0, caption_mode="KARAOKE_PHRASE", uppercase=True)
+        self.assertEqual(1, len(cues))
+        self.assertEqual("CIAO C'È SEGUITO.", cues[0]["text"])
+        self.assertEqual([
+            {"text": "CIAO", "start_frame": 3, "end_frame": 9},
+            {"text": "C'È", "start_frame": 9, "end_frame": 17},
+            {"text": "SEGUITO.", "start_frame": 17, "end_frame": 24},
+        ], cues[0]["words"])
+
+    def test_phrase_karaoke_matches_all_seventeen_standard_cue_boundaries(self):
+        from bridge.caption_test import caption_cues_from_segments, validate_source_spans
+        expected_texts = [
+            "UNO FINE.", "DUE FINE.", "TRE FINE.", "QUATTRO FINE.", "CINQUE FINE.",
+            "SEI FINE.", "SETTE FINE.", "OTTO FINE.", "NOVE FINE.", "DIECI FINE.",
+            "UNDICI FINE.", "DODICI FINE.", "TREDICI FINE.", "QUATTORDICI FINE.",
+            "QUINDICI FINE.", "SEDICI FINE.", "DICIASSETTE FINE.",
+        ]
+        words = []
+        for index, phrase in enumerate(expected_texts):
+            first, second = phrase.split()
+            start = index * 1.2
+            words.extend([
+                {"start": start, "end": start + 0.4, "word": f" {first.lower()}"},
+                {"start": start + 0.4, "end": start + 0.8, "word": f" {second.lower()}"},
+            ])
+        spans = validate_source_spans([{"source_start_frame": 0, "source_end_frame": 900,
+                                        "timeline_start_frame": 0}], 30.0)
+        standard = caption_cues_from_segments([{"words": words}], spans, 30.0,
+                                              caption_mode="STANDARD", uppercase=True)
+        phrase = caption_cues_from_segments([{"words": words}], spans, 30.0,
+                                            caption_mode="KARAOKE_PHRASE", uppercase=True)
+        self.assertEqual(17, len(phrase))
+        self.assertEqual(expected_texts, [cue["text"] for cue in phrase])
+        self.assertEqual([(cue["start_frame"], cue["end_frame"]) for cue in standard],
+                         [(cue["start_frame"], cue["end_frame"]) for cue in phrase])
+        self.assertLess(phrase[-1]["end_frame"], 900)
+
     def test_removes_only_one_owned_caption_layer_from_duplicate(self):
         import bridge.caption_test as caption_test
         self.assertTrue(hasattr(caption_test, "remove_owned_caption_overlay"),

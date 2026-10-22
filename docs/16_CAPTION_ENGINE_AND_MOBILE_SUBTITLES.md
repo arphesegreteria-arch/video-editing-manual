@@ -25,6 +25,12 @@ la timeline e rimuove soltanto l'unico layer bridge esatto
 progetto non viene salvato automaticamente. Il preset karaoke ADV usa Satoshi Bold, card bordeaux
 e parola corrente cream, tutti ruoli della palette canonica.
 
+Per il karaoke editoriale a frase completa usare `KARAOKE_PHRASE`: il raggruppamento resta quello
+standard, ogni parola mantiene una posizione immutabile e soltanto la sua copia attiva passa dal
+beige del kit al bianco. I timestamp parola provengono da `ARPHE_TRANSCRIPT_V1`; il layout accetta
+al massimo due righe, mantiene la card entro la safe area e lascia vuote pause e coda dopo l'ultimo
+cue. `KARAOKE_WORD` resta disponibile come prova a parola isolata, ma non è il preset a frase.
+
 ## Risultato verificato
 
 Sul progetto `ARPHE_SHORTFORM_PROVA_EDITING_V1`, timeline

@@ -90,7 +90,7 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
                                    span["timeline_start_frame"] + round((start_seconds - source_start) * fps),
                                    span["timeline_start_frame"] + round((end_seconds - source_start) * fps)))
                     break
-    if caption_mode not in {"STANDARD", "KARAOKE_WORD"}:
+    if caption_mode not in {"STANDARD", "KARAOKE_WORD", "KARAOKE_PHRASE"}:
         raise ValidationError("caption_mode CAPTIONS non valido")
     if not isinstance(uppercase, bool):
         raise ValidationError("uppercase CAPTIONS deve essere booleano")
@@ -121,8 +121,19 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
             text = _append_word(text, word)
         start = chunk[0][3]
         end = max(start + 1, chunk[-1][4])
-        cues.append({"cue_id": f"caption_{len(cues) + 1:03d}", "start_frame": start,
-                     "end_frame": end, "text": text, "position": "LOWER"})
+        cue = {"cue_id": f"caption_{len(cues) + 1:03d}", "start_frame": start,
+               "end_frame": end, "text": text, "position": "LOWER"}
+        if caption_mode == "KARAOKE_PHRASE":
+            words: list[dict[str, Any]] = []
+            for _, _, word, word_start, word_end in chunk:
+                if word.startswith(("'", "’")) and words:
+                    words[-1]["text"] += word
+                    words[-1]["end_frame"] = max(words[-1]["start_frame"] + 1, word_end)
+                else:
+                    words.append({"text": word, "start_frame": word_start,
+                                  "end_frame": max(word_start + 1, word_end)})
+            cue["words"] = words
+        cues.append(cue)
         chunk.clear()
 
     for item in mapped:
@@ -138,6 +149,8 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
     if uppercase:
         for cue in cues:
             cue["text"] = cue["text"].upper()
+            for word in cue.get("words", []):
+                word["text"] = word["text"].upper()
     return cues
 
 

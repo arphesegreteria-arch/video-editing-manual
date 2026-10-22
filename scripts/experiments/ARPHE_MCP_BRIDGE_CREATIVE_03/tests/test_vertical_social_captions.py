@@ -72,6 +72,90 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "LOWER"):
             validate_caption_action(action, 60)
 
+    def test_phrase_karaoke_validates_fixed_phrase_and_word_windows(self):
+        from bridge.vertical_social_captions import validate_caption_action
+        action = self.action()
+        action["cues"] = [{
+            "cue_id": "c1", "start_frame": 0, "end_frame": 20,
+            "text": "CIAO MONDO", "position": "LOWER",
+            "words": [
+                {"text": "CIAO", "start_frame": 0, "end_frame": 8},
+                {"text": "MONDO", "start_frame": 8, "end_frame": 20},
+            ],
+        }]
+        action["style"] = {"caption_mode": "KARAOKE_PHRASE", "uppercase": True,
+                           "font_scale": 1.2}
+        result = validate_caption_action(action, 60)
+        self.assertEqual("CIAO MONDO", result["cues"][0]["text"])
+        self.assertEqual(((0, 8), (8, 20)),
+                         tuple(word["range"] for word in result["cues"][0]["words"]))
+        self.assertEqual(40, 60 - result["cues"][-1]["range"][1])
+
+    def test_phrase_karaoke_requires_uppercase_and_twenty_percent_scale(self):
+        from bridge.vertical_social_captions import validate_caption_action
+        action = self.action()
+        action["cues"] = [{"cue_id": "c1", "start_frame": 0, "end_frame": 20,
+                           "text": "CIAO", "position": "LOWER",
+                           "words": [{"text": "CIAO", "start_frame": 0, "end_frame": 20}]}]
+        action["style"] = {"caption_mode": "KARAOKE_PHRASE", "uppercase": False,
+                           "font_scale": 1.2}
+        with self.assertRaisesRegex(Exception, "maiuscolo"):
+            validate_caption_action(action, 60)
+        action["style"] = {"caption_mode": "KARAOKE_PHRASE", "uppercase": True,
+                           "font_scale": 1.1}
+        with self.assertRaisesRegex(Exception, "1.2"):
+            validate_caption_action(action, 60)
+
+    def test_phrase_word_slots_keep_long_words_inside_two_row_safe_card(self):
+        from bridge.vertical_social_captions import phrase_word_slots, measured_satoshi_bold_width
+        slots = phrase_word_slots(
+            ["SOPRATTUTTO", "TANTISSIME", "EFFETTIVAMENTE", "C'È"], 1.2)
+        self.assertEqual(4, len(slots))
+        self.assertLessEqual(len({slot["row"] for slot in slots}), 2)
+        self.assertGreaterEqual(measured_satoshi_bold_width("COSTRUIAMO", 1.2), 0.29)
+        self.assertTrue(all(0.15 <= slot["x"] - slot["width"] / 2
+                            and slot["x"] + slot["width"] / 2 <= 0.77 for slot in slots))
+        for row in {slot["row"] for slot in slots}:
+            row_slots = [slot for slot in slots if slot["row"] == row]
+            for left, right in zip(row_slots, row_slots[1:]):
+                self.assertLessEqual(left["x"] + left["width"] / 2 + 0.015,
+                                     right["x"] - right["width"] / 2)
+
+    def test_satoshi_measurement_releases_font_when_screen_dc_allocation_fails(self):
+        from bridge.vertical_social_captions import measured_satoshi_bold_width
+
+        class Function:
+            def __init__(self, result=None): self.result = result; self.calls = []
+            def __call__(self, *args): self.calls.append(args); return self.result
+
+        gdi = SimpleNamespace(
+            CreateFontW=Function(123), SelectObject=Function(), GetTextFaceW=Function(),
+            GetTextExtentPoint32W=Function(), DeleteObject=Function(1))
+        user = SimpleNamespace(GetDC=Function(0), ReleaseDC=Function(1))
+        with patch("bridge.vertical_social_captions.ctypes.WinDLL",
+                   side_effect=[gdi, user]):
+            with self.assertRaisesRegex(Exception, "non misurabile"):
+                measured_satoshi_bold_width("TEST", 1.2)
+        self.assertEqual([(123,)], gdi.DeleteObject.calls)
+
+    def test_satoshi_measurement_releases_resources_when_font_selection_fails(self):
+        from bridge.vertical_social_captions import measured_satoshi_bold_width
+
+        class Function:
+            def __init__(self, result=None): self.result = result; self.calls = []
+            def __call__(self, *args): self.calls.append(args); return self.result
+
+        gdi = SimpleNamespace(
+            CreateFontW=Function(123), SelectObject=Function(0), GetTextFaceW=Function(),
+            GetTextExtentPoint32W=Function(), DeleteObject=Function(1))
+        user = SimpleNamespace(GetDC=Function(456), ReleaseDC=Function(1))
+        with patch("bridge.vertical_social_captions.ctypes.WinDLL",
+                   side_effect=[gdi, user]):
+            with self.assertRaisesRegex(Exception, "non selezionabile"):
+                measured_satoshi_bold_width("TEST", 1.2)
+        self.assertEqual([(123,)], gdi.DeleteObject.calls)
+        self.assertEqual([(None, 456)], user.ReleaseDC.calls)
+
     def test_lower_caption_text_frame_is_contained_inside_its_safe_card(self):
         from bridge.vertical_social_captions import lower_caption_layout
         layout = lower_caption_layout()
@@ -249,6 +333,58 @@ class VerticalSocialCaptionTests(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "Read-back stile"):
                 build_caption_graph(Comp(), cue, palette,
                                     caption_mode="KARAOKE_WORD", font_scale=1.2)
+
+    def test_phrase_karaoke_keeps_full_phrase_and_moves_only_active_highlight(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self, name=""):
+                self.name = name; self.values = {}
+            def SetInput(self, key, value, *args): self.values[key] = value
+            def GetInput(self, key): return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self): return {}
+
+        created = {}
+        def new_tool(comp, kind, name):
+            tool = Tool(name); created[name] = tool; return tool
+
+        cue = ({
+            "cue_id": "c1", "range": (3, 11),
+            "text": "SOPRATTUTTO TANTISSIME EFFETTIVAMENTE C'È", "position": "LOWER",
+            "words": (
+                {"text": "SOPRATTUTTO", "range": (3, 5)},
+                {"text": "TANTISSIME", "range": (5, 7)},
+                {"text": "EFFETTIVAMENTE", "range": (7, 9)},
+                {"text": "C'È", "range": (9, 11)},
+            ),
+        },)
+        palette = {"black": "#111111", "burgundy": "#6C2438", "beige": "#D7C2A6",
+                   "white": "#FFFFFF", "cream": "#EFE3CF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool", side_effect=new_tool), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=Tool()):
+            result = build_caption_graph(Comp(), cue, palette,
+                                         caption_mode="KARAOKE_PHRASE", font_scale=1.2)
+
+        first_base = created["ARPHE_CAPTION_001_WORD_001_BASE"]
+        first_active = created["ARPHE_CAPTION_001_WORD_001_ACTIVE"]
+        second_base = created["ARPHE_CAPTION_001_WORD_002_BASE"]
+        second_active = created["ARPHE_CAPTION_001_WORD_002_ACTIVE"]
+        self.assertEqual(("SOPRATTUTTO", "TANTISSIME"),
+                         (first_base.values["StyledText"], second_base.values["StyledText"]))
+        self.assertEqual(first_base.values["Center"], first_active.values["Center"])
+        self.assertEqual(second_base.values["Center"], second_active.values["Center"])
+        self.assertEqual({0: 0.0, 2: 0.0, 3: 1.0, 4: 1.0, 5: 0.0},
+                         created["ARPHE_CAPTION_001_WORD_001_ACTIVE_MERGE"].Blend)
+        self.assertEqual({0: 0.0, 4: 0.0, 5: 1.0, 6: 1.0, 7: 0.0},
+                         created["ARPHE_CAPTION_001_WORD_002_ACTIVE_MERGE"].Blend)
+        self.assertEqual(4, result["active_word_count"])
+        self.assertTrue(result["phrase_stable"])
+        self.assertEqual(0.16, result["lower_layout"]["height"])
+        self.assertLessEqual(result["lower_layout"]["bounds"]["bottom"], 0.82)
 
     def test_edit_fingerprint_changes_when_same_length_media_is_replaced(self):
         from bridge.vertical_social_captions import timeline_edit_fingerprint

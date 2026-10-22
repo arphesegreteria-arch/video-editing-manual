@@ -7,7 +7,10 @@
 - La stessa primitiva generica supporta ora una variante `KARAOKE_WORD`: timing per parola,
   maiuscolo opzionale, scala tipografica massima `1.2` con safe-zone verificata e sostituzione
   strettamente limitata al layer caption posseduto dal bridge sulla copia.
-- Regressioni dedicate; suite Creative completa: `545` test verdi e `2` skip
+- Aggiunta `KARAOKE_PHRASE`: conserva i cue/frasi standard visibili e immobili,
+  sovrappone soltanto la parola attiva usando gli stessi timestamp e limita il layout
+  a due righe nella safe zone; non crea CTA e non salva il progetto.
+- Regressioni dedicate; suite Creative completa: `561` test verdi e `2` skip
   ambientali per privilegi symlink Windows.
 
 ## 2026-10-15 — Voice-over CTA tail

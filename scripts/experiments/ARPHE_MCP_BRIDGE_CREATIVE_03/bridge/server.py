@@ -110,6 +110,7 @@ from .creative_tools import (add_end_card as do_add_end_card,
                              set_review_highlight as do_set_review_highlight)
 from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_frames,
                                inspect_fusion_graph as do_inspect_fusion_graph)
+from .edit_point_inspection import inspect_edit_points as do_inspect_edit_points
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
 from .editorial_workflows import (EditorialBrief, load_render_profile_registry,
                                   load_workflow_registry,
@@ -1765,6 +1766,22 @@ def get_creative_status() -> dict[str, Any]:
                 "fusion_composition_count": fusion_count,
                 "feature_flags": feature_report(config, manager, project, timeline)}
     except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_timeline_edit_points() -> dict[str, Any]:
+    """Read exact A/V edit boundaries without changing the open timeline."""
+    try:
+        _, _, project, timeline, _, _, error = _runtime()
+        if error:
+            return error
+        if project is None or timeline is None:
+            return {"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}
+        return {"ok": True, "project": safe_call(project, "GetName"),
+                "timeline": safe_call(timeline, "GetName"),
+                **do_inspect_edit_points(timeline)}
+    except Exception as exc:
+        return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)

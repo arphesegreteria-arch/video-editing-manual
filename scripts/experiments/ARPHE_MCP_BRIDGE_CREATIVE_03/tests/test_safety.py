@@ -368,8 +368,11 @@ class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_diagnostic_reads_and_capture_are_classified_explicitly(self):
         tools = {tool.name: tool for tool in await mcp.list_tools()}
-        for name in ("ping", "resolve_status", "get_feature_flags", "get_creative_status",
-                     "inspect_fusion_graph"):
+        diagnostic_reads = (
+            "ping", "resolve_status", "get_feature_flags", "get_creative_status",
+            "inspect_fusion_graph", "inspect_timeline_edit_points",
+        )
+        for name in diagnostic_reads:
             self.assertTrue(tools[name].annotations.read_only_hint, name)
             self.assertTrue(tools[name].annotations.idempotent_hint, name)
         self.assertFalse(tools["capture_timeline_frames"].annotations.read_only_hint)

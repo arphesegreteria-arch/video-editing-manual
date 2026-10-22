@@ -225,11 +225,23 @@ def apply_caption_action(project: object, timeline: object, config: Any,
                          action: dict[str, Any], total_frames: int,
                          required_timeline_prefix: str = "__ARPHE_VERTICAL_") -> dict[str, Any]:
     plan = validate_caption_action(action, total_frames)
+    timeline_start = safe_call(timeline, "GetStartFrame")
+    timeline_end = safe_call(timeline, "GetEndFrame")
+    if (not isinstance(timeline_start, int) or isinstance(timeline_start, bool)
+            or not isinstance(timeline_end, int) or isinstance(timeline_end, bool)
+            or timeline_end - timeline_start != total_frames):
+        raise ValidationError("Range assoluto timeline CAPTIONS non corrispondente")
+    absolute_cues = tuple({
+        **cue,
+        "range": (timeline_start + cue["range"][0], timeline_start + cue["range"][1]),
+    } for cue in plan["cues"])
     item, comp = create_overlay_composition(
-        project, timeline, config, 0, total_frames, f"CAPTIONS_{action['action_id']}",
+        project, timeline, config, timeline_start, timeline_end,
+        f"CAPTIONS_{action['action_id']}",
         required_timeline_prefix=required_timeline_prefix)
-    graph = build_caption_graph(comp, plan["cues"], config.palette)
+    graph = build_caption_graph(comp, absolute_cues, config.palette)
     return {"ok": True, "action_id": str(action["action_id"]),
             "timeline": str(safe_call(timeline, "GetName") or ""),
-            "range": [0, total_frames], "timeline_item": str(safe_call(item, "GetName") or ""),
+            "range": [timeline_start, timeline_end], "relative_range": [0, total_frames],
+            "timeline_item": str(safe_call(item, "GetName") or ""),
             "locked_edit_fingerprint": plan["locked_edit_fingerprint"], **graph}

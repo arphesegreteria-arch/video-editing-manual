@@ -115,12 +115,36 @@ class VerticalSocialCaptionTests(unittest.TestCase):
     def test_caption_executor_uses_one_full_timeline_composition(self):
         from bridge.vertical_social_captions import apply_caption_action
         cfg = SimpleNamespace(palette={"burgundy": "#6C2438", "white": "#FFFFFF"})
+        timeline = SimpleNamespace(
+            GetStartFrame=lambda: 0, GetEndFrame=lambda: 60, GetName=lambda: "ARPHE_TEST")
         with patch("bridge.vertical_social_captions.create_overlay_composition", return_value=(object(), object())) as create, \
              patch("bridge.vertical_social_captions.build_caption_graph", return_value={"cue_count": 2, "text_readback": True}) as build:
-            result = apply_caption_action(object(), object(), cfg, self.action(), 60)
+            result = apply_caption_action(object(), timeline, cfg, self.action(), 60)
         create.assert_called_once()
         build.assert_called_once()
         self.assertEqual(2, result["cue_count"])
+
+    def test_caption_executor_offsets_carrier_and_cues_to_absolute_timeline_frames(self):
+        from bridge.vertical_social_captions import apply_caption_action
+
+        timeline = SimpleNamespace(
+            GetStartFrame=lambda: 108000,
+            GetEndFrame=lambda: 108060,
+            GetName=lambda: "ARPHE_TEST",
+        )
+        item = SimpleNamespace(GetName=lambda: "ARPHE_CAPTIONS")
+        cfg = SimpleNamespace(palette={"burgundy": "#6C2438", "white": "#FFFFFF"})
+        with patch("bridge.vertical_social_captions.create_overlay_composition",
+                   return_value=(item, object())) as create, \
+             patch("bridge.vertical_social_captions.build_caption_graph",
+                   return_value={"cue_count": 2, "text_readback": True}) as build:
+            result = apply_caption_action(object(), timeline, cfg, self.action(), 60)
+
+        self.assertEqual((108000, 108060), create.call_args.args[3:5])
+        absolute_cues = build.call_args.args[1]
+        self.assertEqual(((108000, 108020), (108030, 108060)),
+                         tuple(cue["range"] for cue in absolute_cues))
+        self.assertEqual([108000, 108060], result["range"])
 
     def test_caption_graph_uses_resolve_owned_keyframes_for_cue_visibility(self):
         from bridge.vertical_social_captions import build_caption_graph

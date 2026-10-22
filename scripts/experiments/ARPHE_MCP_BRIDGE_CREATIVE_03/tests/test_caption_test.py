@@ -1,0 +1,90 @@
+from pathlib import Path
+import sys
+import unittest
+from unittest.mock import patch
+
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+
+class CaptionTestCueTests(unittest.TestCase):
+    SPANS = [
+        {"source_start_frame": 270, "source_end_frame": 360, "timeline_start_frame": 0},
+        {"source_start_frame": 600, "source_end_frame": 630, "timeline_start_frame": 100},
+    ]
+
+    def test_maps_explicit_source_frame_spans_without_filling_removed_gaps(self):
+        from bridge.caption_test import caption_cues_from_segments, validate_source_spans
+        spans = validate_source_spans(self.SPANS, 30.0)
+        cues = caption_cues_from_segments([{"words": [
+            {"start": 9.10, "end": 9.30, "word": " Primo"},
+            {"start": 9.30, "end": 9.55, "word": " blocco."},
+            {"start": 15.10, "end": 15.30, "word": " escluso"},
+            {"start": 20.10, "end": 20.30, "word": " Secondo"},
+            {"start": 20.30, "end": 20.55, "word": " blocco."},
+        ]}], spans, 30.0)
+        self.assertEqual([(3, 17, "Primo blocco."), (103, 117, "Secondo blocco.")],
+                         [(cue["start_frame"], cue["end_frame"], cue["text"]) for cue in cues])
+
+    def test_rejects_overlapping_and_non_integer_source_mapping(self):
+        from bridge.caption_test import validate_source_spans
+        with self.assertRaisesRegex(Exception, "sovrapposti"):
+            validate_source_spans([
+                {"source_start_frame": 0, "source_end_frame": 10, "timeline_start_frame": 0},
+                {"source_start_frame": 20, "source_end_frame": 30, "timeline_start_frame": 9},
+            ], 30.0)
+        with self.assertRaisesRegex(Exception, "interi"):
+            validate_source_spans([{"source_start_frame": 0.5, "source_end_frame": 10,
+                                    "timeline_start_frame": 0}], 30.0)
+
+    def test_rejoins_apostrophe_tokens_and_limits_caption_length(self):
+        from bridge.caption_test import caption_cues_from_segments, validate_source_spans
+        spans = validate_source_spans(self.SPANS, 30.0)
+        cues = caption_cues_from_segments([{"words": [
+            {"start": 9.00, "end": 9.10, "word": " l"},
+            {"start": 9.10, "end": 9.40, "word": "'attenzione"},
+            {"start": 9.40, "end": 9.70, "word": " conta"},
+            {"start": 9.70, "end": 10.00, "word": " sempre"},
+            {"start": 10.00, "end": 10.30, "word": " molto."},
+        ]}], spans, 30.0)
+        self.assertEqual("l'attenzione conta sempre", cues[0]["text"])
+        self.assertEqual("molto.", cues[1]["text"])
+        self.assertTrue(all(len(cue["text"]) <= 84 for cue in cues))
+
+    def test_generic_wrapper_rolls_back_new_copy_when_fusion_write_fails(self):
+        from bridge.caption_test import create_caption_test
+
+        class Timeline:
+            def GetStartFrame(self): return 0
+            def GetEndFrame(self): return 60
+            def GetName(self): return "ARPHE_CAPTION_TEST"
+            def GetSetting(self, key): return "30" if key == "timelineFrameRate" else None
+
+        class Pool:
+            def __init__(self): self.deleted = []
+            def DeleteTimelines(self, values): self.deleted.extend(values); return True
+
+        class Project:
+            def __init__(self): self.timeline = Timeline(); self.pool = Pool(); self.restored = None
+            def GetCurrentTimeline(self): return self.timeline
+            def SetCurrentTimeline(self, value): self.restored = value; return True
+            def GetMediaPool(self): return self.pool
+
+        project = Project()
+        with patch("bridge.caption_test.duplicate_timeline", return_value={"ok": True}), \
+             patch("bridge.caption_test._load_segments", return_value=[{"words": [
+                 {"start": 0.10, "end": 0.30, "word": " Test."}]}]), \
+             patch("bridge.caption_test.timeline_edit_fingerprint", return_value="a" * 64), \
+             patch("bridge.caption_test.apply_caption_action", side_effect=RuntimeError("Fusion rejected")):
+            with self.assertRaisesRegex(RuntimeError, "Fusion rejected"):
+                create_caption_test(project, object(), object(), "input", "ARPHE_CAPTION_TEST",
+                                    "transcript.json", [{"source_start_frame": 0,
+                                    "source_end_frame": 30, "timeline_start_frame": 0}], 60)
+        self.assertEqual([project.timeline], project.pool.deleted)
+        self.assertIs(project.timeline, project.restored)
+
+
+if __name__ == "__main__":
+    unittest.main()

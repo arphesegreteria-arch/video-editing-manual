@@ -113,7 +113,7 @@ from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_fr
 from .edit_point_inspection import inspect_edit_points as do_inspect_edit_points
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
 from .audio_seam_transitions import create_audio_seam_test as do_create_audio_seam_test
-from .adv_caption_test import create_advbeppe_caption_test as do_create_advbeppe_caption_test
+from .caption_test import create_caption_test as do_create_caption_test
 from .editorial_workflows import (EditorialBrief, load_render_profile_registry,
                                   load_workflow_registry,
                                   resolve_delivery_profile,
@@ -1758,13 +1758,14 @@ def create_audio_seam_test(source_timeline: str, target_name: str, cut_frames: l
 
 
 @mcp.tool(annotations=SAFE_WRITE)
-def create_advbeppe_caption_test(source_timeline: str, target_name: str) -> dict[str, Any]:
-    """Create the approved no-CTA caption test from ARPHE_TRANSCRIPT_V1 on a new copy only."""
+def create_caption_test(source_timeline: str, target_name: str, transcript_file: str,
+                        source_spans: list[dict[str, int]], caption_cutoff_frame: int) -> dict[str, Any]:
+    """Create a no-save caption test copy from an allowlisted transcript and explicit source-frame map."""
     try:
         _, _, project, _, config, registry, error = _runtime()
         if error: return error
-        return _call(do_create_advbeppe_caption_test, project, config, registry,
-                     source_timeline, target_name)
+        return _call(do_create_caption_test, project, config, registry, source_timeline,
+                     target_name, transcript_file, source_spans, caption_cutoff_frame)
     except Exception as exc: return _error(exc)
 
 

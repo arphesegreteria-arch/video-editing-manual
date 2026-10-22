@@ -48,6 +48,10 @@ scartato quando peggiora l'ascolto.
 `create_edge_fade_test` duplica una timeline con una sola clip V1/A1 e applica un fade video Fusion
 e un WAV audio derivato con fade lineari. Il preset predefinito è 6/8 frame video e 4/10 frame audio;
 la timeline sorgente resta intatta e il progetto non viene salvato automaticamente.
+`create_audio_seam_test` è separato e serve ai tagli interni A1: richiede i frame di taglio espliciti,
+duplica la timeline e applica soltanto sulla copia un `Cross Fade 0 dB` nativo, centrato (2 frame per
+default). Legge di nuovo ogni transizione creata; se Resolve ne rifiuta una o il read-back non torna,
+elimina la copia di prova, ripristina la timeline sorgente e non salva il progetto.
 `apply_longform_edit_plan` accetta inoltre `full_timeline_name` e `apply_edge_fades`: può creare nello
 stesso progetto una timeline integrale con audio restaurato e applicare il preset edge fade a ogni
 timeline individuale. Il master concatenato resta privo di fade interni.

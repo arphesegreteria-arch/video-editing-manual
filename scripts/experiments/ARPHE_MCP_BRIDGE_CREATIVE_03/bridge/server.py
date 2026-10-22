@@ -112,6 +112,7 @@ from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_fr
                                inspect_fusion_graph as do_inspect_fusion_graph)
 from .edit_point_inspection import inspect_edit_points as do_inspect_edit_points
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
+from .audio_seam_transitions import create_audio_seam_test as do_create_audio_seam_test
 from .editorial_workflows import (EditorialBrief, load_render_profile_registry,
                                   load_workflow_registry,
                                   resolve_delivery_profile,
@@ -1740,6 +1741,18 @@ def create_edge_fade_test(source_timeline: str, target_name: str,
         if error: return error
         return _call(do_create_edge_fade_test, project, config, registry, source_timeline, target_name,
                      video_in_frames, video_out_frames, audio_in_frames, audio_out_frames)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def create_audio_seam_test(source_timeline: str, target_name: str, cut_frames: list[int],
+                           duration_frames: int = 2) -> dict[str, Any]:
+    """Duplicate a timeline and apply native audio cross-fades at verified A1 cut frames only."""
+    try:
+        _, _, project, _, config, registry, error = _runtime()
+        if error: return error
+        return _call(do_create_audio_seam_test, project, config, registry, source_timeline,
+                     target_name, cut_frames, duration_frames)
     except Exception as exc: return _error(exc)
 
 

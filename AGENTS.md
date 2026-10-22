@@ -6,3 +6,4 @@
 - Safe writes must duplicate before editing, never save automatically, roll back a newly created target on failure, and report read-back evidence.
 - CTA creation is always opt-in and explicit. Caption tools must honor an explicit cutoff and never create or alter a CTA by implication.
 - PC_PERSONALE and PC_SEGRETERIA remain separate deployments; nothing propagates between them automatically.
+- Before any Resolve write, call `ping` through the same app/plugin namespace that will perform the write and require its `workstation_id` to match the intended machine. For work on the personal computer, use only `ARPHE Resolve Personale`; never substitute the generic `ARPHE Resolve Creative 03` connection. Stop on any mismatch.

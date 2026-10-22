@@ -52,6 +52,10 @@ la timeline sorgente resta intatta e il progetto non viene salvato automaticamen
 duplica la timeline e applica soltanto sulla copia un `Cross Fade 0 dB` nativo, centrato (2 frame per
 default). Legge di nuovo ogni transizione creata; se Resolve ne rifiuta una o il read-back non torna,
 elimina la copia di prova, ripristina la timeline sorgente e non salva il progetto.
+`create_advbeppe_caption_test` è una primitiva chiusa per la copia audio `ARPHE_ADV_SEAM_TEST_20261022`:
+duplica ancora la timeline, ricava cue brevi dalla trascrizione locale `ARPHE_TRANSCRIPT_V1` usando i tre
+range sorgente effettivamente montati e applica un solo layer Fusion del Graphic Kit. Non crea CTA; il cutoff
+è la fine esclusiva della timeline. In caso di errore Fusion elimina la copia caption e ripristina la sorgente.
 `apply_longform_edit_plan` accetta inoltre `full_timeline_name` e `apply_edge_fades`: può creare nello
 stesso progetto una timeline integrale con audio restaurato e applicare il preset edge fade a ogni
 timeline individuale. Il master concatenato resta privo di fade interni.

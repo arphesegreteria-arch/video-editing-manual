@@ -20,9 +20,10 @@ from .vertical_social_graphics import approved_graphic_actions
 
 
 def create_overlay_composition(project: object, timeline: object, config: Any,
-                               start: int, end: int, name: str) -> tuple[object, object]:
+                               start: int, end: int, name: str,
+                               required_timeline_prefix: str = "__ARPHE_VERTICAL_") -> tuple[object, object]:
     timeline_name = str(safe_call(timeline, "GetName") or "")
-    if not timeline_name.startswith("__ARPHE_VERTICAL_"):
+    if not timeline_name.startswith(required_timeline_prefix):
         raise ValidationError("Overlay consentito solo sulla timeline provvisoria Vertical Social")
     duration = end - start
     if duration <= 0 or duration > MAX_AUTOMATIC_FUSION_FRAMES:

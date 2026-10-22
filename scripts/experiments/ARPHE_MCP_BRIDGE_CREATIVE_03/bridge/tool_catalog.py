@@ -4,7 +4,7 @@ EXPOSED_TOOL_NAMES = (
     "validate_longform_edit_plan", "apply_longform_edit_plan",
     "start_prepare_longform_audio", "get_longform_audio_job",
     "create_project", "set_current_project", "create_timeline", "set_current_timeline",
-    "duplicate_timeline_version", "create_edge_fade_test", "create_audio_seam_test", "get_creative_status", "inspect_timeline_edit_points", "create_fusion_composition",
+    "duplicate_timeline_version", "create_edge_fade_test", "create_audio_seam_test", "create_advbeppe_caption_test", "get_creative_status", "inspect_timeline_edit_points", "create_fusion_composition",
     "move_voiceover_tail_to_cta",
     "inspect_fusion_graph", "capture_timeline_frames",
     "add_brand_background", "add_logo", "add_image_asset", "add_video_background", "set_music_bed",

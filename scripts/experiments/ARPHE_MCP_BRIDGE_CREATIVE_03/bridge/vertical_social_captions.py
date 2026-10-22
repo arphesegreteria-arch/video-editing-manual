@@ -231,10 +231,12 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
 
 
 def apply_caption_action(project: object, timeline: object, config: Any,
-                         action: dict[str, Any], total_frames: int) -> dict[str, Any]:
+                         action: dict[str, Any], total_frames: int,
+                         required_timeline_prefix: str = "__ARPHE_VERTICAL_") -> dict[str, Any]:
     plan = validate_caption_action(action, total_frames)
     item, comp = create_overlay_composition(
-        project, timeline, config, 0, total_frames, f"CAPTIONS_{action['action_id']}")
+        project, timeline, config, 0, total_frames, f"CAPTIONS_{action['action_id']}",
+        required_timeline_prefix=required_timeline_prefix)
     graph = build_caption_graph(comp, plan["cues"], config.palette)
     return {"ok": True, "action_id": str(action["action_id"]),
             "timeline": str(safe_call(timeline, "GetName") or ""),

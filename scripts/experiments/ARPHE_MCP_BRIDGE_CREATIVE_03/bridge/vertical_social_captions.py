@@ -231,15 +231,13 @@ def apply_caption_action(project: object, timeline: object, config: Any,
             or not isinstance(timeline_end, int) or isinstance(timeline_end, bool)
             or timeline_end - timeline_start != total_frames):
         raise ValidationError("Range assoluto timeline CAPTIONS non corrispondente")
-    absolute_cues = tuple({
-        **cue,
-        "range": (timeline_start + cue["range"][0], timeline_start + cue["range"][1]),
-    } for cue in plan["cues"])
     item, comp = create_overlay_composition(
         project, timeline, config, timeline_start, timeline_end,
         f"CAPTIONS_{action['action_id']}",
         required_timeline_prefix=required_timeline_prefix)
-    graph = build_caption_graph(comp, absolute_cues, config.palette)
+    # The carrier is placed in Resolve's absolute timeline coordinates, while
+    # the Fusion Clip evaluates its tools on its own zero-based local clock.
+    graph = build_caption_graph(comp, plan["cues"], config.palette)
     return {"ok": True, "action_id": str(action["action_id"]),
             "timeline": str(safe_call(timeline, "GetName") or ""),
             "range": [timeline_start, timeline_end], "relative_range": [0, total_frames],

@@ -124,7 +124,7 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         build.assert_called_once()
         self.assertEqual(2, result["cue_count"])
 
-    def test_caption_executor_offsets_carrier_and_cues_to_absolute_timeline_frames(self):
+    def test_caption_executor_uses_absolute_carrier_and_local_fusion_cue_frames(self):
         from bridge.vertical_social_captions import apply_caption_action
 
         timeline = SimpleNamespace(
@@ -141,9 +141,9 @@ class VerticalSocialCaptionTests(unittest.TestCase):
             result = apply_caption_action(object(), timeline, cfg, self.action(), 60)
 
         self.assertEqual((108000, 108060), create.call_args.args[3:5])
-        absolute_cues = build.call_args.args[1]
-        self.assertEqual(((108000, 108020), (108030, 108060)),
-                         tuple(cue["range"] for cue in absolute_cues))
+        local_cues = build.call_args.args[1]
+        self.assertEqual(((0, 20), (30, 60)),
+                         tuple(cue["range"] for cue in local_cues))
         self.assertEqual([108000, 108060], result["range"])
 
     def test_caption_graph_uses_resolve_owned_keyframes_for_cue_visibility(self):

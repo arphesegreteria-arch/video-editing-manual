@@ -16,6 +16,15 @@ l'esecutore la ricalcola subito prima della scrittura: una modifica del
 montaggio dopo il lock blocca i sottotitoli. Il piano usa `AT_PICTURE_LOCK`, sostituito internamente
 con l'impronta reale; la segreteria non deve calcolare o copiare hash.
 
+Aggiornamento test ADV del 2026-10-22: la primitiva generica `create_caption_test` supporta anche
+`KARAOKE_WORD`, ricavato esclusivamente dai timestamp parola-per-parola della trascrizione
+allowlisted. La modalità può trasformare il testo in maiuscolo e scalare insieme font, frame testo
+e card fino a `1.2`; oltre tale soglia fallisce chiusa. Per sostituire una prova precedente duplica
+la timeline e rimuove soltanto l'unico layer bridge esatto
+`ARPHE_VERTICAL_CAPTIONS_captions` presente sulla copia. La sorgente non viene modificata e il
+progetto non viene salvato automaticamente. Il preset karaoke ADV usa Satoshi Bold, card bordeaux
+e parola corrente cream, tutti ruoli della palette canonica.
+
 ## Risultato verificato
 
 Sul progetto `ARPHE_SHORTFORM_PROVA_EDITING_V1`, timeline

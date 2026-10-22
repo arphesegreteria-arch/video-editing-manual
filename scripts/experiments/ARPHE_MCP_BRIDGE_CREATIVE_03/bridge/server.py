@@ -1759,13 +1759,17 @@ def create_audio_seam_test(source_timeline: str, target_name: str, cut_frames: l
 
 @mcp.tool(annotations=SAFE_WRITE)
 def create_caption_test(source_timeline: str, target_name: str, transcript_file: str,
-                        source_spans: list[dict[str, int]], caption_cutoff_frame: int) -> dict[str, Any]:
-    """Create a no-save caption test copy from an allowlisted transcript and explicit source-frame map."""
+                        source_spans: list[dict[str, int]], caption_cutoff_frame: int,
+                        caption_mode: str = "STANDARD", uppercase: bool = False,
+                        font_scale: float = 1.0,
+                        replace_existing_captions: bool = False) -> dict[str, Any]:
+    """Create a no-save standard or word-karaoke caption copy from an explicit transcript map."""
     try:
         _, _, project, _, config, registry, error = _runtime()
         if error: return error
         return _call(do_create_caption_test, project, config, registry, source_timeline,
-                     target_name, transcript_file, source_spans, caption_cutoff_frame)
+                     target_name, transcript_file, source_spans, caption_cutoff_frame,
+                     caption_mode, uppercase, font_scale, replace_existing_captions)
     except Exception as exc: return _error(exc)
 
 

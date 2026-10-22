@@ -172,6 +172,42 @@ class VerticalSocialCaptionTests(unittest.TestCase):
 
         self.assertEqual({0: 0.0, 2: 0.0, 3: 1.0, 6: 1.0, 7: 0.0}, outer.Blend)
 
+    def test_karaoke_graph_uses_kit_highlight_and_twenty_percent_larger_safe_text(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self, name=""):
+                self.name = name; self.values = {}
+            def SetInput(self, key, value, *args): self.values[key] = value
+            def GetInput(self, key): return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self): return {}
+
+        created = {}
+        def new_tool(comp, kind, name):
+            tool = Tool(name); created[name] = tool; return tool
+
+        cue = ({"cue_id": "c1", "range": (3, 7), "text": "C'È", "position": "LOWER"},)
+        palette = {"black": "#111111", "burgundy": "#6C2438",
+                   "white": "#FFFFFF", "cream": "#EFE3CF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool", side_effect=new_tool), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=Tool()):
+            try:
+                result = build_caption_graph(Comp(), cue, palette,
+                                             caption_mode="KARAOKE_WORD", font_scale=1.2)
+            except TypeError as exc:
+                self.fail(f"stile karaoke generico non implementato: {exc}")
+
+        text = created["ARPHE_CAPTION_001_TEXT"]
+        self.assertEqual("C'È", text.values["StyledText"])
+        self.assertAlmostEqual(0.060, text.values["Size"], places=6)
+        self.assertAlmostEqual(239 / 255, text.values["Red1"], places=6)
+        self.assertLessEqual(result["lower_layout"]["bounds"]["bottom"], 0.82)
+        self.assertEqual("cream", result["highlight_role"])
+
     def test_edit_fingerprint_changes_when_same_length_media_is_replaced(self):
         from bridge.vertical_social_captions import timeline_edit_fingerprint
 

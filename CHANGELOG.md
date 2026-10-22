@@ -4,7 +4,10 @@
 
 - Il generatore generico mantiene uniti i token con apostrofo prodotti dalla trascrizione
   parola-per-parola (per esempio `c` + `'è`) anche quando cadono sul limite di un cue.
-- Aggiunta una regressione dedicata; suite Creative completa: `542` test verdi e `2` skip
+- La stessa primitiva generica supporta ora una variante `KARAOKE_WORD`: timing per parola,
+  maiuscolo opzionale, scala tipografica massima `1.2` con safe-zone verificata e sostituzione
+  strettamente limitata al layer caption posseduto dal bridge sulla copia.
+- Regressioni dedicate; suite Creative completa: `545` test verdi e `2` skip
   ambientali per privilegi symlink Windows.
 
 ## 2026-10-15 — Voice-over CTA tail

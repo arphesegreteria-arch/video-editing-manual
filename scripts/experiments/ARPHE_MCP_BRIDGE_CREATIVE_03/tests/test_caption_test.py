@@ -69,6 +69,51 @@ class CaptionTestCueTests(unittest.TestCase):
         self.assertFalse(any(text.startswith(("'", "’")) for text in texts))
         self.assertIn("c'è", " ".join(texts))
 
+    def test_karaoke_word_mode_uses_word_timing_uppercase_and_keeps_apostrophes(self):
+        from bridge.caption_test import caption_cues_from_segments, validate_source_spans
+        spans = validate_source_spans(self.SPANS, 30.0)
+        try:
+            cues = caption_cues_from_segments([{"words": [
+                {"start": 9.10, "end": 9.30, "word": " ciao"},
+                {"start": 9.30, "end": 9.40, "word": " c"},
+                {"start": 9.40, "end": 9.55, "word": "'è"},
+                {"start": 9.55, "end": 9.80, "word": " seguito."},
+            ]}], spans, 30.0, caption_mode="KARAOKE_WORD", uppercase=True)
+        except TypeError as exc:
+            self.fail(f"caption mode generico non implementato: {exc}")
+        self.assertEqual([(3, 9, "CIAO"), (9, 17, "C'È"), (17, 24, "SEGUITO.")],
+                         [(cue["start_frame"], cue["end_frame"], cue["text"])
+                          for cue in cues])
+
+    def test_removes_only_one_owned_caption_layer_from_duplicate(self):
+        import bridge.caption_test as caption_test
+        self.assertTrue(hasattr(caption_test, "remove_owned_caption_overlay"),
+                        "manca la sostituzione generica del layer caption posseduto")
+
+        class Item:
+            def __init__(self, name): self.name = name
+            def GetName(self): return self.name
+
+        class Timeline:
+            def __init__(self):
+                self.tracks = {1: [Item("VIDEO")],
+                               2: [Item("ARPHE_VERTICAL_CAPTIONS_captions")]}
+                self.deleted_tracks = []
+            def GetTrackCount(self, kind): return len(self.tracks) if kind == "video" else 0
+            def GetItemListInTrack(self, kind, index): return self.tracks.get(index, [])
+            def DeleteClips(self, items, ripple):
+                for index in self.tracks:
+                    self.tracks[index] = [item for item in self.tracks[index] if item not in items]
+                return True
+            def DeleteTrack(self, kind, index):
+                self.deleted_tracks.append((kind, index)); self.tracks.pop(index); return True
+
+        timeline = Timeline()
+        result = caption_test.remove_owned_caption_overlay(timeline)
+        self.assertEqual({"removed": True, "track": 2}, result)
+        self.assertEqual([("video", 2)], timeline.deleted_tracks)
+        self.assertEqual(["VIDEO"], [item.GetName() for item in timeline.tracks[1]])
+
     def test_generic_wrapper_rolls_back_new_copy_when_fusion_write_fails(self):
         from bridge.caption_test import create_caption_test
 

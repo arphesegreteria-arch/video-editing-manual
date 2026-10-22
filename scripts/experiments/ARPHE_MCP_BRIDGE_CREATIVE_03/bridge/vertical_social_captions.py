@@ -13,16 +13,18 @@ from .safety import ValidationError
 from .vertical_social_overlay import create_overlay_composition
 
 
-def lower_caption_layout() -> dict[str, Any]:
+def lower_caption_layout(font_scale: float = 1.0) -> dict[str, Any]:
     """Return the story-safe lower-third geometry in Fusion coordinates.
 
     Fusion's Y origin is at the bottom; the reported bounds use the usual
     screen convention (top to bottom) so they can be checked against the
     Graphic Kit safe-area contract.
     """
+    if isinstance(font_scale, bool) or not isinstance(font_scale, (int, float)) or not 1.0 <= font_scale <= 1.2:
+        raise ValidationError("font_scale CAPTIONS deve essere tra 1.0 e 1.2")
     center_x, center_y = 0.46, 0.27
-    width, height = 0.68, 0.08
-    text_width, text_height = 0.62, 0.065
+    width, height = 0.68, 0.08 * float(font_scale)
+    text_width, text_height = 0.62, 0.065 * float(font_scale)
     bounds = {
         "left": round(center_x - width / 2, 4),
         "right": round(center_x + width / 2, 4),
@@ -131,6 +133,18 @@ def validate_caption_action(action: dict[str, Any], total_frames: int, *,
         raise ValidationError("locked edit fingerprint CAPTIONS non valido")
     if not str(action.get("reason", "")).strip():
         raise ValidationError("reason CAPTIONS mancante")
+    raw_style = action.get("style") or {}
+    if not isinstance(raw_style, dict):
+        raise ValidationError("style CAPTIONS non valido")
+    caption_mode = str(raw_style.get("caption_mode", "STANDARD"))
+    uppercase = raw_style.get("uppercase", False)
+    font_scale = raw_style.get("font_scale", 1.0)
+    if caption_mode not in {"STANDARD", "KARAOKE_WORD"}:
+        raise ValidationError("caption_mode CAPTIONS non valido")
+    if not isinstance(uppercase, bool):
+        raise ValidationError("uppercase CAPTIONS deve essere booleano")
+    if isinstance(font_scale, bool) or not isinstance(font_scale, (int, float)) or not 1.0 <= font_scale <= 1.2:
+        raise ValidationError("font_scale CAPTIONS deve essere tra 1.0 e 1.2")
     raw_cues = action.get("cues")
     if not isinstance(raw_cues, list) or not 1 <= len(raw_cues) <= 200:
         raise ValidationError("CAPTIONS richiede da 1 a 200 cue")
@@ -154,18 +168,21 @@ def validate_caption_action(action: dict[str, Any], total_frames: int, *,
         if position not in {"LOWER", "UPPER"}:
             raise ValidationError("position CAPTIONS non sicura")
         seen.add(cue_id); previous_end = end
-        cues.append({"cue_id": cue_id, "range": (start, end), "text": text,
+        cues.append({"cue_id": cue_id, "range": (start, end),
+                     "text": text.upper() if uppercase else text,
                      "position": position})
     cutoff = action.get("caption_cutoff_frame")
     if isinstance(cutoff, bool) or not isinstance(cutoff, int) or not 0 <= cutoff <= total_frames:
         raise ValidationError("caption_cutoff_frame CAPTIONS non valido")
     cues = list(cues_before_frame(tuple(cues), cutoff))
     return {"locked_edit_fingerprint": fingerprint, "cues": tuple(cues),
-            "caption_cutoff_frame": cutoff}
+            "caption_cutoff_frame": cutoff, "caption_mode": caption_mode,
+            "uppercase": uppercase, "font_scale": float(font_scale)}
 
 
 def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
-                        palette: dict[str, str]) -> dict[str, Any]:
+                        palette: dict[str, str], caption_mode: str = "STANDARD",
+                        font_scale: float = 1.0) -> dict[str, Any]:
     media_out = _media_out(comp)
     if media_out is None:
         raise ValidationError("MediaOut CAPTIONS non trovato")
@@ -173,7 +190,8 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
     _set_color(canvas, _rgb(palette.get("black", "#000000"), 0.0))
     if not connect_input(media_out, "Input", canvas):
         raise ValidationError("Collegamento canvas CAPTIONS fallito")
-    lower_layout = lower_caption_layout()
+    lower_layout = lower_caption_layout(font_scale)
+    highlight_role = "cream" if caption_mode == "KARAOKE_WORD" else "white"
     for index, cue in enumerate(cues, start=1):
         is_lower = cue["position"] == "LOWER"
         x = lower_layout["center"]["x"] if is_lower else 0.5
@@ -190,7 +208,7 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
             raise ValidationError("Maschera CAPTIONS non collegata")
         text = _new_tool(comp, "TextPlus", f"ARPHE_CAPTION_{index:03d}_TEXT")
         for key, value in (("StyledText", cue["text"]), ("Font", "Satoshi"),
-                           ("Style", "Bold"), ("Size", 0.050)):
+                           ("Style", "Bold"), ("Size", 0.050 * font_scale)):
             if not _set(text, key, value):
                 raise ValidationError(f"Impostazione Text+ CAPTIONS {key} fallita")
         if is_lower:
@@ -202,9 +220,9 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
                                ("VerticalJustificationNew", 3.0)):
                 if not _set(text, key, value):
                     raise ValidationError(f"Impostazione Text+ CAPTIONS {key} fallita")
-        white = _rgb(palette["white"])
-        for key, value in (("Red1", white["r"]), ("Green1", white["g"]),
-                           ("Blue1", white["b"]), ("Alpha1", 1.0)):
+        text_color = _rgb(palette[highlight_role])
+        for key, value in (("Red1", text_color["r"]), ("Green1", text_color["g"]),
+                           ("Blue1", text_color["b"]), ("Alpha1", 1.0)):
             _set(text, key, value)
         if safe_call(text, "GetInput", "StyledText") != cue["text"]:
             raise ValidationError("Read-back testo CAPTIONS non corrispondente")
@@ -218,7 +236,9 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
         if not set_visibility_window(comp, outer, start, end):
             raise ValidationError("Keyframe timing CAPTIONS non applicati")
     return {"cue_count": len(cues), "text_readback": True, "font": "Satoshi Bold",
-            "gap_preserving": True, "lower_layout": lower_layout}
+            "font_size": round(0.050 * font_scale, 4), "caption_mode": caption_mode,
+            "highlight_role": highlight_role, "gap_preserving": True,
+            "lower_layout": lower_layout}
 
 
 def apply_caption_action(project: object, timeline: object, config: Any,
@@ -237,7 +257,9 @@ def apply_caption_action(project: object, timeline: object, config: Any,
         required_timeline_prefix=required_timeline_prefix)
     # The carrier is placed in Resolve's absolute timeline coordinates, while
     # the Fusion Clip evaluates its tools on its own zero-based local clock.
-    graph = build_caption_graph(comp, plan["cues"], config.palette)
+    graph = build_caption_graph(comp, plan["cues"], config.palette,
+                                caption_mode=plan["caption_mode"],
+                                font_scale=plan["font_scale"])
     return {"ok": True, "action_id": str(action["action_id"]),
             "timeline": str(safe_call(timeline, "GetName") or ""),
             "range": [timeline_start, timeline_end], "relative_range": [0, total_frames],

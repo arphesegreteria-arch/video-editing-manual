@@ -141,6 +141,24 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
     return cues
 
 
+def _is_owned_caption_item(timeline: Any, item: Any) -> bool:
+    """Recognize only the bridge's full-range Fusion caption carrier."""
+    if safe_call(item, "GetName") != "ARPHE_VERTICAL_CAPTIONS_captions":
+        return False
+    timeline_start = safe_call(timeline, "GetStartFrame")
+    timeline_end = safe_call(timeline, "GetEndFrame")
+    comp_count = safe_call(item, "GetFusionCompCount")
+    comp = safe_call(item, "GetFusionCompByIndex", 1) if comp_count == 1 else None
+    return bool(
+        isinstance(timeline_start, int) and isinstance(timeline_end, int)
+        and safe_call(item, "GetStart") == timeline_start
+        and safe_call(item, "GetEnd") == timeline_end
+        and safe_call(item, "GetDuration") == timeline_end - timeline_start
+        and comp is not None
+        and safe_call(comp, "FindTool", "ARPHE_VERTICAL_CAPTIONS_CANVAS") is not None
+    )
+
+
 def remove_owned_caption_overlay(timeline: Any) -> dict[str, Any]:
     """Remove one exact bridge-owned caption layer from a duplicate timeline."""
     matches: list[tuple[int, Any]] = []
@@ -152,24 +170,17 @@ def remove_owned_caption_overlay(timeline: Any) -> dict[str, Any]:
     if len(matches) != 1:
         raise ValidationError("Sostituzione CAPTIONS richiede un solo layer bridge esistente")
     track, item = matches[0]
-    timeline_start = safe_call(timeline, "GetStartFrame")
-    timeline_end = safe_call(timeline, "GetEndFrame")
-    comp_count = safe_call(item, "GetFusionCompCount")
-    comp = safe_call(item, "GetFusionCompByIndex", 1) if comp_count == 1 else None
-    owned = (
-        isinstance(timeline_start, int) and isinstance(timeline_end, int)
-        and safe_call(item, "GetStart") == timeline_start
-        and safe_call(item, "GetEnd") == timeline_end
-        and safe_call(item, "GetDuration") == timeline_end - timeline_start
-        and comp is not None
-        and safe_call(comp, "FindTool", "ARPHE_VERTICAL_CAPTIONS_CANVAS") is not None
-    )
-    if not owned:
+    if not _is_owned_caption_item(timeline, item):
         raise ValidationError("Layer CAPTIONS omonimo ma non verificato come posseduto dal bridge")
+    stable_id = safe_call(item, "GetUniqueId")
     if not safe_call(timeline, "DeleteClips", [item], False):
         raise ValidationError("Rimozione layer CAPTIONS esistente fallita")
     remaining = safe_call(timeline, "GetItemListInTrack", "video", track) or []
-    if any(entry is item for entry in remaining):
+    if any(
+        (stable_id not in (None, "") and safe_call(entry, "GetUniqueId") == stable_id)
+        or _is_owned_caption_item(timeline, entry)
+        for entry in remaining
+    ):
         raise ValidationError("Read-back rimozione layer CAPTIONS non corrispondente")
     if track == track_count and not remaining:
         if not safe_call(timeline, "DeleteTrack", "video", track):

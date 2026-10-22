@@ -49,7 +49,10 @@ def create_overlay_composition(project: object, timeline: object, config: Any,
     comp = safe_call(item, "AddFusionComp") or safe_call(item, "GetFusionCompByIndex", 1)
     if comp is None:
         raise ValidationError("Composizione Fusion overlay non disponibile")
-    safe_call(item, "SetName", f"ARPHE_VERTICAL_{name}")
+    expected_name = f"ARPHE_VERTICAL_{name}"
+    safe_call(item, "SetName", expected_name)
+    if safe_call(item, "GetName") != expected_name:
+        raise ValidationError("Read-back nome overlay non corrispondente")
     if (safe_call(item, "GetStart") != start or safe_call(item, "GetEnd") != end
             or safe_call(item, "GetDuration") != duration):
         raise ValidationError("Read-back range overlay non corrispondente")

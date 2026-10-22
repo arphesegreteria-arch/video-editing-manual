@@ -15,6 +15,7 @@ class Item:
     def GetEnd(self): return self.end
     def GetDuration(self): return self.end - self.start
     def SetName(self, name): self.name = name; return True
+    def GetName(self): return self.name
     def AddFusionComp(self): return self.comp
     def GetFusionCompByIndex(self, index): return self.comp
 
@@ -54,6 +55,17 @@ class VerticalSocialOverlayTests(unittest.TestCase):
         self.assertEqual(2, pool.entry["trackIndex"])
         self.assertEqual(30, pool.entry["recordFrame"])
         self.assertEqual(60, item.GetDuration())
+        self.assertEqual("ARPHE_VERTICAL_GRAPHIC_G1", item.GetName())
+
+    def test_overlay_rejects_silent_name_failure(self):
+        from bridge.vertical_social_overlay import create_overlay_composition
+        timeline = Timeline(); comp = object(); pool = Pool(timeline, comp); project = Project(pool)
+        with tempfile.TemporaryDirectory() as raw:
+            carrier = Path(raw) / "arphe_fusion_carrier_5m.mp4"; carrier.write_bytes(b"x")
+            cfg = SimpleNamespace(asset_root=Path(raw))
+            with patch.object(Item, "SetName", return_value=True):
+                with self.assertRaisesRegex(Exception, "nome overlay"):
+                    create_overlay_composition(project, timeline, cfg, 30, 90, "GRAPHIC_G1")
 
     def test_graphic_and_cta_executor_builds_then_reads_back(self):
         from bridge.vertical_social_overlay import apply_graphic_or_cta

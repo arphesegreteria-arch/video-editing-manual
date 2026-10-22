@@ -145,6 +145,34 @@ class CaptionTestCueTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "posseduto"):
             remove_owned_caption_overlay(Timeline())
 
+    def test_removal_readback_detects_same_owned_item_returned_as_new_proxy(self):
+        from bridge.caption_test import remove_owned_caption_overlay
+
+        class Comp:
+            def FindTool(self, name): return object() if name == "ARPHE_VERTICAL_CAPTIONS_CANVAS" else None
+
+        class Item:
+            def GetName(self): return "ARPHE_VERTICAL_CAPTIONS_captions"
+            def GetUniqueId(self): return "fusion-item-1"
+            def GetStart(self): return 0
+            def GetEnd(self): return 60
+            def GetDuration(self): return 60
+            def GetFusionCompCount(self): return 1
+            def GetFusionCompByIndex(self, index): return Comp() if index == 1 else None
+
+        class Timeline:
+            def __init__(self): self.calls = 0
+            def GetStartFrame(self): return 0
+            def GetEndFrame(self): return 60
+            def GetTrackCount(self, kind): return 1
+            def GetItemListInTrack(self, kind, index):
+                self.calls += 1
+                return [Item()]  # Resolve may return a fresh proxy for the same item.
+            def DeleteClips(self, items, ripple): return True  # Silent non-removal.
+
+        with self.assertRaisesRegex(Exception, "Read-back rimozione"):
+            remove_owned_caption_overlay(Timeline())
+
     def test_generic_wrapper_rolls_back_new_copy_when_fusion_write_fails(self):
         from bridge.caption_test import create_caption_test
 

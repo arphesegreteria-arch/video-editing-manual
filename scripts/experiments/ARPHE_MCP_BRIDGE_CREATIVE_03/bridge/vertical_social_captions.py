@@ -335,7 +335,7 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
     if caption_mode == "KARAOKE_PHRASE_CARD":
         active_word_count = 0
         max_rows = 1
-        base_role = "beige" if "beige" in palette else "cream"
+        base_role = "white"
         for index, cue in enumerate(cues, start=1):
             words = list(cue.get("words") or ())
             slots = phrase_word_slots([word["text"] for word in words], font_scale)
@@ -355,27 +355,28 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
                           "HorizontalJustificationNew": 3.0,
                           "VerticalJustificationNew": 3.0}
                 common_styles.append(common)
-                outline = _new_tool(
+                shadow = _new_tool(
                     comp, "TextPlus",
-                    f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE_OUTLINE")
-                outline_style = dict(common)
-                outline_style["Size"] = round(common["Size"] * 1.055, 5)
-                outline_style["LayoutWidth"] = round(common["LayoutWidth"] + 0.012, 5)
+                    f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE_SHADOW")
+                shadow_style = dict(common)
+                shadow_style["Center"] = {
+                    1: round(slot["x"] + 0.0015, 5),
+                    2: round(slot["y"] - 0.002, 5), 3: 0.0}
                 configure_caption_style(
-                    outline, outline_style,
-                    f"phrase_card_outline_{index:03d}_{word_index:03d}")
-                outline_color = _rgb(palette["black"], 0.82)
-                configure_caption_style(outline, {
-                    "Red1": outline_color["r"], "Green1": outline_color["g"],
-                    "Blue1": outline_color["b"], "Alpha1": outline_color["a"],
-                }, f"phrase_card_outline_color_{index:03d}_{word_index:03d}")
-                outline_merge = _new_tool(
+                    shadow, shadow_style,
+                    f"phrase_card_shadow_{index:03d}_{word_index:03d}")
+                shadow_color = _rgb(palette["black"], 0.68)
+                configure_caption_style(shadow, {
+                    "Red1": shadow_color["r"], "Green1": shadow_color["g"],
+                    "Blue1": shadow_color["b"], "Alpha1": shadow_color["a"],
+                }, f"phrase_card_shadow_color_{index:03d}_{word_index:03d}")
+                shadow_merge = _new_tool(
                     comp, "Merge",
-                    f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE_OUTLINE_MERGE")
-                if (not connect_input(outline_merge, "Background", card)
-                        or not connect_input(outline_merge, "Foreground", outline)):
+                    f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE_SHADOW_MERGE")
+                if (not connect_input(shadow_merge, "Background", card)
+                        or not connect_input(shadow_merge, "Foreground", shadow)):
                     raise ValidationError("Contrasto frase base KARAOKE_PHRASE_CARD non collegato")
-                card = outline_merge
+                card = shadow_merge
                 base = _new_tool(comp, "TextPlus",
                                  f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE")
                 configure_caption_style(base, common,

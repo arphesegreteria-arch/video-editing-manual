@@ -186,6 +186,48 @@ def phrase_word_slots(words: list[str], font_scale: float) -> list[dict[str, Any
     return [slot for slot in slots if slot is not None]
 
 
+def split_phrase_cues_for_layout(cues: tuple[dict[str, Any], ...],
+                                 font_scale: float) -> tuple[dict[str, Any], ...]:
+    """Split a phrase only when its measured words would exceed two safe rows.
+
+    The split is generic and uses the same installed-font measurement as the
+    renderer; it never estimates a width from characters. Word timings remain
+    unchanged, and adjacent replacement cues meet exactly at their shared word
+    boundary.
+    """
+    rendered: list[dict[str, Any]] = []
+    for cue in cues:
+        words = list(cue.get("words") or ())
+        if not words:
+            raise ValidationError("KARAOKE_PHRASE richiede finestre parola")
+        groups: list[list[dict[str, Any]]] = []
+        group: list[dict[str, Any]] = []
+        for word in words:
+            candidate = [*group, word]
+            try:
+                phrase_word_slots([str(item["text"]) for item in candidate], font_scale)
+            except ValidationError as exc:
+                if "più di due righe" not in str(exc) or not group:
+                    raise
+                groups.append(group)
+                group = [word]
+                phrase_word_slots([str(word["text"])], font_scale)
+            else:
+                group = candidate
+        if group:
+            groups.append(group)
+        for part, group in enumerate(groups, start=1):
+            text = ""
+            for word in group:
+                token = str(word["text"])
+                text = f"{text}{token}" if token.startswith(("'", "’")) else f"{text} {token}".strip()
+            start, end = group[0]["range"][0], group[-1]["range"][1]
+            rendered.append({**cue, "cue_id": f"{cue['cue_id']}_{part:02d}",
+                             "range": (start, end), "text": text,
+                             "words": tuple(group)})
+    return tuple(rendered)
+
+
 def phrase_lower_layout(rows: int) -> dict[str, Any]:
     if rows not in {1, 2}:
         raise ValidationError("Layout KARAOKE_PHRASE supporta una o due righe")
@@ -584,13 +626,16 @@ def apply_caption_action(project: object, timeline: object, config: Any,
             or not isinstance(timeline_end, int) or isinstance(timeline_end, bool)
             or timeline_end - timeline_start != total_frames):
         raise ValidationError("Range assoluto timeline CAPTIONS non corrispondente")
+    render_cues = plan["cues"]
+    if plan["caption_mode"] in {"KARAOKE_PHRASE", "KARAOKE_PHRASE_CARD"}:
+        render_cues = split_phrase_cues_for_layout(render_cues, plan["font_scale"])
     item, comp = create_overlay_composition(
         project, timeline, config, timeline_start, timeline_end,
         f"CAPTIONS_{action['action_id']}",
         required_timeline_prefix=required_timeline_prefix)
     # The carrier is placed in Resolve's absolute timeline coordinates, while
     # the Fusion Clip evaluates its tools on its own zero-based local clock.
-    graph = build_caption_graph(comp, plan["cues"], config.palette,
+    graph = build_caption_graph(comp, render_cues, config.palette,
                                 caption_mode=plan["caption_mode"],
                                 font_scale=plan["font_scale"])
     return {"ok": True, "action_id": str(action["action_id"]),

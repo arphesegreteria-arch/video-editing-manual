@@ -223,6 +223,33 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         build.assert_called_once()
         self.assertEqual(2, result["cue_count"])
 
+    def test_phrase_cues_split_before_they_require_a_third_safe_row(self):
+        from bridge.vertical_social_captions import split_phrase_cues_for_layout
+        from bridge.safety import ValidationError
+
+        cue = {
+            "cue_id": "caption_001", "range": (10, 30), "text": "UNO DUE TRE QUATTRO",
+            "position": "LOWER", "words": (
+                {"text": "UNO", "range": (10, 14)},
+                {"text": "DUE", "range": (14, 18)},
+                {"text": "TRE", "range": (18, 24)},
+                {"text": "QUATTRO", "range": (24, 30)},
+            ),
+        }
+
+        def slots(words, _scale):
+            if len(words) > 2:
+                raise ValidationError("Frase KARAOKE_PHRASE richiede più di due righe")
+            return [{"row": 0, "width": 0.2, "x": 0.46, "y": 0.27} for _ in words]
+
+        with patch("bridge.vertical_social_captions.phrase_word_slots", side_effect=slots):
+            result = split_phrase_cues_for_layout((cue,), 1.2)
+
+        self.assertEqual(("UNO DUE", "TRE QUATTRO"), tuple(item["text"] for item in result))
+        self.assertEqual(((10, 18), (18, 30)), tuple(item["range"] for item in result))
+        self.assertEqual(("caption_001_01", "caption_001_02"),
+                         tuple(item["cue_id"] for item in result))
+
     def test_caption_executor_uses_absolute_carrier_and_local_fusion_cue_frames(self):
         from bridge.vertical_social_captions import apply_caption_action
 

@@ -164,8 +164,6 @@ def start_timeline_audio_transcription(
             raise ValidationError("Selezione timeline per audio temporaneo fallita")
         if not safe_call(project, "LoadRenderPreset", "Audio Only"):
             raise ValidationError("Preset Resolve Audio Only non disponibile")
-        if not safe_call(project, "SetCurrentRenderFormatAndCodec", "wav", "lpcm"):
-            raise ValidationError("Formato WAV PCM rifiutato da Resolve")
         settings = {
             "TargetDir": str(output_dir), "CustomName": output_name, "SelectAllFrames": True,
             "ExportVideo": False, "ExportAudio": True, "AudioCodec": "lpcm",

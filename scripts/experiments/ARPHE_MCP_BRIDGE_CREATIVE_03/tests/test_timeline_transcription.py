@@ -129,7 +129,7 @@ class TimelineTranscriptionTests(unittest.TestCase):
             self.assertTrue(render_settings["ExportAudio"])
             self.assertEqual(48000, render_settings["AudioSampleRate"])
             self.assertEqual("lpcm", render_settings["AudioCodec"])
-            self.assertEqual(("wav", "lpcm"), project.format_calls[0])
+            self.assertEqual([], project.format_calls)
             temporary = project.saved_presets[0]
             self.assertEqual(["Audio Only", temporary], project.loaded_presets)
             self.assertEqual([temporary], project.deleted_presets)
@@ -149,7 +149,20 @@ class TimelineTranscriptionTests(unittest.TestCase):
             self.assertRegex(temporary, r"^ARPHE_TMP_TIMELINE_AUDIO_[0-9a-f]{16}$")
             self.assertEqual(["Audio Only", temporary], project.loaded_presets)
             self.assertEqual([temporary], project.deleted_presets)
-            self.assertEqual(("wav", "lpcm"), project.format_calls[0])
+            self.assertEqual([], project.format_calls)
+
+    def test_start_uses_audio_only_preset_without_setting_generic_render_format(self):
+        from bridge.timeline_transcription import start_timeline_audio_transcription
+
+        with tempfile.TemporaryDirectory() as directory:
+            cfg, registry, project = setup(Path(directory))
+            project.SetCurrentRenderFormatAndCodec = lambda *_args: False
+
+            result = start_timeline_audio_transcription(project, cfg, registry, "Timeline 1")
+
+            self.assertEqual("RENDERING", result["status"])
+            self.assertEqual(["Audio Only", project.saved_presets[0]], project.loaded_presets)
+            self.assertEqual("lpcm", project.settings_calls[0]["AudioCodec"])
 
     def test_start_refuses_ambiguous_new_render_job_and_preserves_foreign_job(self):
         from bridge.safety import ValidationError

@@ -213,9 +213,9 @@ class TimelineTranscriptionTests(unittest.TestCase):
             wav_path.parent.mkdir(parents=True, exist_ok=True)
             with wave.open(str(wav_path), "wb") as handle:
                 handle.setnchannels(1)
-                handle.setsampwidth(2)
+                handle.setsampwidth(3)
                 handle.setframerate(48000)
-                handle.writeframes(b"\0\0" * 1_032_000)  # 645 / 30 = 21.5 seconds.
+                handle.writeframes(b"\0\0\0" * 1_032_000)  # 645 / 30 = 21.5 seconds.
             project.jobs[-1]["JobStatus"] = "Complete"
 
             with patch("bridge.timeline_transcription._launch", return_value=4321) as launch:

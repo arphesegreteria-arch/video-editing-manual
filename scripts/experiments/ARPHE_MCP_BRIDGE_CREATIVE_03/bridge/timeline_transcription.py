@@ -107,7 +107,7 @@ def _wav_evidence(path: Path, expected_seconds: float, fps: float) -> tuple[str,
             frames = handle.getnframes()
     except (OSError, wave.Error) as exc:
         raise ValidationError(f"WAV timeline non leggibile: {exc}") from exc
-    if rate != 48000 or width != 2 or channels not in {1, 2} or frames <= 0:
+    if rate != 48000 or width not in {2, 3} or channels not in {1, 2} or frames <= 0:
         raise ValidationError("Formato WAV timeline non conforme")
     duration = frames / rate
     if abs(duration - expected_seconds) > (1.0 / fps):

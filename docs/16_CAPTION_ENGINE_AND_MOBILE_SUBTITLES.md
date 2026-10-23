@@ -31,6 +31,12 @@ beige del kit al bianco. I timestamp parola provengono da `ARPHE_TRANSCRIPT_V1`;
 al massimo due righe, mantiene la card entro la safe area e lascia vuote pause e coda dopo l'ultimo
 cue. `KARAOKE_WORD` resta disponibile come prova a parola isolata, ma non è il preset a frase.
 
+Quando il fondino deve essere esso stesso l'indicatore karaoke, usare
+`KARAOKE_PHRASE_CARD`: la frase completa resta ferma e leggibile senza card generale; soltanto
+la parola attiva riceve un rettangolo bordeaux con testo bianco, sincronizzato con la sua finestra
+parola. Il preset mantiene maiuscolo, dimensione `1.2`, massimo due righe, safe area, pause e coda
+vuote come `KARAOKE_PHRASE`.
+
 ## Risultato verificato
 
 Sul progetto `ARPHE_SHORTFORM_PROVA_EDITING_V1`, timeline

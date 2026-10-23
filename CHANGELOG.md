@@ -10,7 +10,10 @@
 - Aggiunta `KARAOKE_PHRASE`: conserva i cue/frasi standard visibili e immobili,
   sovrappone soltanto la parola attiva usando gli stessi timestamp e limita il layout
   a due righe nella safe zone; non crea CTA e non salva il progetto.
-- Regressioni dedicate; suite Creative completa: `561` test verdi e `2` skip
+- Aggiunta `KARAOKE_PHRASE_CARD`: mantiene la frase completa e stabile senza card generale,
+  mentre un fondino bordeaux temporizzato segue soltanto la parola pronunciata; R7 e il
+  comportamento `KARAOKE_PHRASE` restano invariati.
+- Regressioni dedicate; suite Creative completa: `563` test verdi e `2` skip
   ambientali per privilegi symlink Windows.
 
 ## 2026-10-15 — Voice-over CTA tail

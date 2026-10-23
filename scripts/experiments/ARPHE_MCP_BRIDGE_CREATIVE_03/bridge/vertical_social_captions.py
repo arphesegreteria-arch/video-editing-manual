@@ -246,16 +246,17 @@ def validate_caption_action(action: dict[str, Any], total_frames: int, *,
     caption_mode = str(raw_style.get("caption_mode", "STANDARD"))
     uppercase = raw_style.get("uppercase", False)
     font_scale = raw_style.get("font_scale", 1.0)
-    if caption_mode not in {"STANDARD", "KARAOKE_WORD", "KARAOKE_PHRASE"}:
+    phrase_modes = {"KARAOKE_PHRASE", "KARAOKE_PHRASE_CARD"}
+    if caption_mode not in {"STANDARD", "KARAOKE_WORD", *phrase_modes}:
         raise ValidationError("caption_mode CAPTIONS non valido")
     if not isinstance(uppercase, bool):
         raise ValidationError("uppercase CAPTIONS deve essere booleano")
     if isinstance(font_scale, bool) or not isinstance(font_scale, (int, float)) or not 1.0 <= font_scale <= 1.2:
         raise ValidationError("font_scale CAPTIONS deve essere tra 1.0 e 1.2")
-    if caption_mode == "KARAOKE_PHRASE" and not uppercase:
-        raise ValidationError("KARAOKE_PHRASE richiede testo maiuscolo")
-    if caption_mode == "KARAOKE_PHRASE" and abs(float(font_scale) - 1.2) > 1e-9:
-        raise ValidationError("KARAOKE_PHRASE richiede font_scale 1.2")
+    if caption_mode in phrase_modes and not uppercase:
+        raise ValidationError(f"{caption_mode} richiede testo maiuscolo")
+    if caption_mode in phrase_modes and abs(float(font_scale) - 1.2) > 1e-9:
+        raise ValidationError(f"{caption_mode} richiede font_scale 1.2")
     raw_cues = action.get("cues")
     if not isinstance(raw_cues, list) or not 1 <= len(raw_cues) <= 200:
         raise ValidationError("CAPTIONS richiede da 1 a 200 cue")
@@ -282,7 +283,7 @@ def validate_caption_action(action: dict[str, Any], total_frames: int, *,
         normalized = {"cue_id": cue_id, "range": (start, end),
                       "text": text.upper() if uppercase else text,
                       "position": position}
-        if caption_mode == "KARAOKE_PHRASE":
+        if caption_mode in phrase_modes:
             raw_words = raw.get("words")
             if not isinstance(raw_words, list) or not raw_words:
                 raise ValidationError("KARAOKE_PHRASE richiede finestre parola")
@@ -309,7 +310,7 @@ def validate_caption_action(action: dict[str, Any], total_frames: int, *,
     cues = list(cues_before_frame(tuple(cues), cutoff))
     if not cues:
         raise ValidationError("Nessun cue CAPTIONS rimane prima del cutoff")
-    if caption_mode in {"KARAOKE_WORD", "KARAOKE_PHRASE"} and any(
+    if caption_mode in {"KARAOKE_WORD", *phrase_modes} and any(
             cue["position"] != "LOWER" for cue in cues):
         raise ValidationError(f"{caption_mode} supporta solo la posizione LOWER verificata")
     return {"locked_edit_fingerprint": fingerprint, "cues": tuple(cues),
@@ -331,6 +332,94 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
     }, "canvas")
     if not connect_input(media_out, "Input", canvas):
         raise ValidationError("Collegamento canvas CAPTIONS fallito")
+    if caption_mode == "KARAOKE_PHRASE_CARD":
+        active_word_count = 0
+        max_rows = 1
+        base_role = "beige" if "beige" in palette else "cream"
+        for index, cue in enumerate(cues, start=1):
+            words = list(cue.get("words") or ())
+            slots = phrase_word_slots([word["text"] for word in words], font_scale)
+            rows = max(slot["row"] for slot in slots) + 1
+            max_rows = max(max_rows, rows)
+            phrase_lower_layout(rows)
+            card = canvas
+            base_color = _rgb(palette[base_role])
+            active_color = _rgb(palette["white"])
+            common_styles: list[dict[str, Any]] = []
+            for word_index, (word, slot) in enumerate(zip(words, slots), start=1):
+                common = {"StyledText": word["text"], "Font": "Satoshi", "Style": "Bold",
+                          "Size": 0.050 * font_scale,
+                          "Center": {1: slot["x"], 2: slot["y"], 3: 0.0},
+                          "LayoutType": 1.0, "LayoutWidth": slot["width"],
+                          "LayoutHeight": 0.07,
+                          "HorizontalJustificationNew": 3.0,
+                          "VerticalJustificationNew": 3.0}
+                common_styles.append(common)
+                base = _new_tool(comp, "TextPlus",
+                                 f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE")
+                configure_caption_style(base, common,
+                                        f"phrase_card_base_{index:03d}_{word_index:03d}")
+                configure_caption_style(base, {
+                    "Red1": base_color["r"], "Green1": base_color["g"],
+                    "Blue1": base_color["b"], "Alpha1": 1.0,
+                }, f"phrase_card_base_color_{index:03d}_{word_index:03d}")
+                base_merge = _new_tool(
+                    comp, "Merge",
+                    f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE_MERGE")
+                if (not connect_input(base_merge, "Background", card)
+                        or not connect_input(base_merge, "Foreground", base)):
+                    raise ValidationError("Grafo frase base KARAOKE_PHRASE_CARD non collegato")
+                card = base_merge
+            for word_index, (word, slot, common) in enumerate(
+                    zip(words, slots, common_styles), start=1):
+                stem = f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}"
+                highlight = _new_tool(comp, "Background", f"{stem}_HIGHLIGHT")
+                burgundy = _rgb(palette["burgundy"], 0.96)
+                configure_caption_style(highlight, {
+                    "TopLeftRed": burgundy["r"], "TopLeftGreen": burgundy["g"],
+                    "TopLeftBlue": burgundy["b"], "TopLeftAlpha": burgundy["a"],
+                }, f"phrase_card_highlight_{index:03d}_{word_index:03d}")
+                mask = _new_tool(comp, "RectangleMask", f"{stem}_HIGHLIGHT_MASK")
+                configure_caption_style(mask, {
+                    "Width": round(slot["width"] + 0.012, 5), "Height": 0.072,
+                    "Center": common["Center"], "CornerRadius": 0.18,
+                }, f"phrase_card_mask_{index:03d}_{word_index:03d}")
+                if not connect_input(highlight, "EffectMask", mask):
+                    raise ValidationError("Maschera KARAOKE_PHRASE_CARD non collegata")
+                highlight_merge = _new_tool(comp, "Merge", f"{stem}_HIGHLIGHT_MERGE")
+                if (not connect_input(highlight_merge, "Background", card)
+                        or not connect_input(highlight_merge, "Foreground", highlight)):
+                    raise ValidationError("Fondino KARAOKE_PHRASE_CARD non collegato")
+                word_start, word_end = word["range"]
+                if not set_visibility_window(comp, highlight_merge, word_start, word_end):
+                    raise ValidationError("Timing fondino KARAOKE_PHRASE_CARD non applicato")
+                active = _new_tool(comp, "TextPlus", f"{stem}_ACTIVE")
+                configure_caption_style(active, common,
+                                        f"phrase_card_active_{index:03d}_{word_index:03d}")
+                configure_caption_style(active, {
+                    "Red1": active_color["r"], "Green1": active_color["g"],
+                    "Blue1": active_color["b"], "Alpha1": 1.0,
+                }, f"phrase_card_active_color_{index:03d}_{word_index:03d}")
+                active_merge = _new_tool(comp, "Merge", f"{stem}_ACTIVE_MERGE")
+                if (not connect_input(active_merge, "Background", highlight_merge)
+                        or not connect_input(active_merge, "Foreground", active)):
+                    raise ValidationError("Testo attivo KARAOKE_PHRASE_CARD non collegato")
+                if not set_visibility_window(comp, active_merge, word_start, word_end):
+                    raise ValidationError("Timing testo KARAOKE_PHRASE_CARD non applicato")
+                card = active_merge
+                active_word_count += 1
+            outer = add_layer(comp, card, f"ARPHE_CAPTION_{index:03d}_OUTER")
+            cue_start, cue_end = cue["range"]
+            if outer is None or not set_visibility_window(comp, outer, cue_start, cue_end):
+                raise ValidationError("Timing frase KARAOKE_PHRASE_CARD non applicato")
+        return {"cue_count": len(cues), "active_word_count": active_word_count,
+                "text_readback": True, "font": "Satoshi Bold",
+                "font_size": round(0.050 * font_scale, 4),
+                "caption_mode": caption_mode, "base_role": base_role,
+                "highlight_role": "white", "highlight_card_role": "burgundy",
+                "full_phrase_card": False, "phrase_stable": True,
+                "gap_preserving": True, "max_rows": max_rows,
+                "lower_layout": phrase_lower_layout(max_rows)}
     if caption_mode == "KARAOKE_PHRASE":
         active_word_count = 0
         max_rows = 1

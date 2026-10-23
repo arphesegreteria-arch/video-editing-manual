@@ -386,6 +386,57 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         self.assertEqual(0.16, result["lower_layout"]["height"])
         self.assertLessEqual(result["lower_layout"]["bounds"]["bottom"], 0.82)
 
+    def test_phrase_card_karaoke_moves_burgundy_card_behind_spoken_word(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self, name=""):
+                self.name = name; self.values = {}
+            def SetInput(self, key, value, *args): self.values[key] = value
+            def GetInput(self, key): return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self): return {}
+
+        created = {}
+        def new_tool(comp, kind, name):
+            tool = Tool(name); created[name] = tool; return tool
+
+        cue = ({
+            "cue_id": "c1", "range": (3, 11),
+            "text": "SOPRATTUTTO TANTISSIME EFFETTIVAMENTE C'È", "position": "LOWER",
+            "words": (
+                {"text": "SOPRATTUTTO", "range": (3, 5)},
+                {"text": "TANTISSIME", "range": (5, 7)},
+                {"text": "EFFETTIVAMENTE", "range": (7, 9)},
+                {"text": "C'È", "range": (9, 11)},
+            ),
+        },)
+        palette = {"black": "#111111", "burgundy": "#6C2438", "beige": "#D7C2A6",
+                   "white": "#FFFFFF", "cream": "#EFE3CF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool", side_effect=new_tool), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=Tool()):
+            result = build_caption_graph(
+                Comp(), cue, palette, caption_mode="KARAOKE_PHRASE_CARD", font_scale=1.2)
+
+        self.assertNotIn("ARPHE_CAPTION_001_BG", created)
+        for word_index, expected_blend in enumerate((
+                {0: 0.0, 2: 0.0, 3: 1.0, 4: 1.0, 5: 0.0},
+                {0: 0.0, 4: 0.0, 5: 1.0, 6: 1.0, 7: 0.0},
+                {0: 0.0, 6: 0.0, 7: 1.0, 8: 1.0, 9: 0.0}), start=1):
+            stem = f"ARPHE_CAPTION_001_WORD_{word_index:03d}"
+            base = created[f"{stem}_BASE"]
+            mask = created[f"{stem}_HIGHLIGHT_MASK"]
+            self.assertEqual(base.values["Center"], mask.values["Center"])
+            self.assertGreater(mask.values["Width"], base.values["LayoutWidth"])
+            self.assertEqual(expected_blend, created[f"{stem}_HIGHLIGHT_MERGE"].Blend)
+            self.assertEqual(expected_blend, created[f"{stem}_ACTIVE_MERGE"].Blend)
+        self.assertEqual("burgundy", result["highlight_card_role"])
+        self.assertFalse(result["full_phrase_card"])
+        self.assertTrue(result["phrase_stable"])
+
     def test_edit_fingerprint_changes_when_same_length_media_is_replaced(self):
         from bridge.vertical_social_captions import timeline_edit_fingerprint
 

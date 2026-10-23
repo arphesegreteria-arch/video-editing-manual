@@ -103,6 +103,21 @@ class CaptionTestCueTests(unittest.TestCase):
             {"text": "SEGUITO.", "start_frame": 17, "end_frame": 24},
         ], cues[0]["words"])
 
+    def test_phrase_card_karaoke_reuses_phrase_grouping_and_word_windows(self):
+        from bridge.caption_test import caption_cues_from_segments, validate_source_spans
+        spans = validate_source_spans(self.SPANS, 30.0)
+        cues = caption_cues_from_segments([{"words": [
+            {"start": 9.10, "end": 9.30, "word": " uno"},
+            {"start": 9.30, "end": 9.50, "word": " due"},
+            {"start": 9.50, "end": 9.70, "word": " tre."},
+        ]}], spans, 30.0, caption_mode="KARAOKE_PHRASE_CARD", uppercase=True)
+        self.assertEqual("UNO DUE TRE.", cues[0]["text"])
+        self.assertEqual([
+            {"text": "UNO", "start_frame": 3, "end_frame": 9},
+            {"text": "DUE", "start_frame": 9, "end_frame": 15},
+            {"text": "TRE.", "start_frame": 15, "end_frame": 21},
+        ], cues[0]["words"])
+
     def test_phrase_karaoke_matches_all_seventeen_standard_cue_boundaries(self):
         from bridge.caption_test import caption_cues_from_segments, validate_source_spans
         expected_texts = [

@@ -102,7 +102,7 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
                                fps: float, caption_mode: str = "STANDARD",
                                uppercase: bool = False) -> list[dict[str, Any]]:
     """Map word timestamps only through caller-supplied frame spans; preserve removed gaps."""
-    mapped: list[tuple[float, float, str, int, int]] = []
+    mapped: list[tuple[float, float, str, int, int, bool]] = []
     for segment in segments:
         for word in segment.get("words", []):
             if not isinstance(word, dict):
@@ -120,7 +120,8 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
                 if source_start <= start_seconds and end_seconds <= source_end:
                     mapped.append((start_seconds, end_seconds, text,
                                    span["timeline_start_frame"] + round((start_seconds - source_start) * fps),
-                                   span["timeline_start_frame"] + round((end_seconds - source_start) * fps)))
+                                   span["timeline_start_frame"] + round((end_seconds - source_start) * fps),
+                                   word.get("caption_break_after") is True))
                     break
     phrase_modes = {"KARAOKE_PHRASE", "KARAOKE_PHRASE_CARD"}
     if caption_mode not in {"STANDARD", "KARAOKE_WORD", *phrase_modes}:
@@ -128,7 +129,7 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
     if not isinstance(uppercase, bool):
         raise ValidationError("uppercase CAPTIONS deve essere booleano")
     if caption_mode == "KARAOKE_WORD":
-        words: list[tuple[float, float, str, int, int]] = []
+        words: list[tuple[float, float, str, int, int, bool]] = []
         for item in mapped:
             if item[2].startswith(("'", "’")) and words:
                 previous = words[-1]
@@ -150,7 +151,7 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
         if not chunk:
             return
         text = ""
-        for _, _, word, _, _ in chunk:
+        for _, _, word, _, _, _ in chunk:
             text = _append_word(text, word)
         start = chunk[0][3]
         end = max(start + 1, chunk[-1][4])
@@ -158,7 +159,7 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
                "end_frame": end, "text": text, "position": "LOWER"}
         if caption_mode in phrase_modes:
             words: list[dict[str, Any]] = []
-            for _, _, word, word_start, word_end in chunk:
+            for _, _, word, word_start, word_end, _ in chunk:
                 if word.startswith(("'", "’")) and words:
                     words[-1]["text"] += word
                     words[-1]["end_frame"] = max(words[-1]["start_frame"] + 1, word_end)
@@ -170,13 +171,13 @@ def caption_cues_from_segments(segments: list[dict[str, Any]], spans: tuple[dict
         chunk.clear()
 
     for item in mapped:
-        proposed = _append_word(" ".join(word for _, _, word, _, _ in chunk), item[2])
+        proposed = _append_word(" ".join(word for _, _, word, *rest in chunk), item[2])
         joins_previous_token = item[2].startswith(("'", "’"))
         if chunk and not joins_previous_token and (
                 len(chunk) >= 4 or len(proposed) > 42 or item[0] - chunk[-1][1] > 0.45):
             flush()
         chunk.append(item)
-        if item[2].endswith((".", "!", "?")):
+        if item[2].endswith((".", "!", "?")) or item[5]:
             flush()
     flush()
     if uppercase:

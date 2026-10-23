@@ -120,6 +120,21 @@ class CaptionTestCueTests(unittest.TestCase):
             {"text": "TRE.", "start_frame": 15, "end_frame": 21},
         ], cues[0]["words"])
 
+    def test_phrase_card_honours_an_explicit_reviewed_word_break_without_retiming(self):
+        from bridge.caption_test import caption_cues_from_segments, validate_source_spans
+        spans = validate_source_spans([{"source_start_frame": 0, "source_end_frame": 330,
+                                        "timeline_start_frame": 0}], 30.0)
+        cues = caption_cues_from_segments([{"words": [
+            {"start": 7.72, "end": 8.40, "word": " angiologo,", "caption_break_after": True},
+            {"start": 8.40, "end": 9.08, "word": " urologo"},
+            {"start": 9.08, "end": 9.30, "word": " ed"},
+            {"start": 9.30, "end": 10.12, "word": " ecografisti."},
+        ]}], spans, 30.0, caption_mode="KARAOKE_PHRASE_CARD", uppercase=True)
+        self.assertEqual(("ANGIOLOGO,", "UROLOGO ED ECOGRAFISTI."),
+                         tuple(cue["text"] for cue in cues))
+        self.assertEqual(((232, 252), (252, 304)),
+                         tuple((cue["start_frame"], cue["end_frame"]) for cue in cues))
+
     def test_phrase_karaoke_matches_all_seventeen_standard_cue_boundaries(self):
         from bridge.caption_test import caption_cues_from_segments, validate_source_spans
         expected_texts = [

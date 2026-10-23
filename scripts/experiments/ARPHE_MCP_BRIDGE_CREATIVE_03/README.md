@@ -55,7 +55,8 @@ elimina la copia di prova, ripristina la timeline sorgente e non salva il proget
 `start_timeline_audio_transcription` e `get_timeline_audio_transcription_job` producono una trascrizione
 con timestamp parola per parola partendo esclusivamente dal WAV PCM 48 kHz audio-only della timeline Resolve
 indicata. Il job seleziona e avvia soltanto il proprio render, conserva gli altri job, ripristina timeline,
-formato e impostazioni render e non salva il progetto. La trascrizione è legata a workstation, progetto,
+formato e impostazioni Deliver tramite un preset temporaneo eliminato dopo il ripristino, e non salva il
+progetto. Non dipende da `GetRenderSettings`, assente nell'API Resolve 21.1.1. La trascrizione è legata a workstation, progetto,
 ID timeline, impronta del montaggio, durata e impronta del WAV.
 `create_caption_test` è una primitiva generica per una copia di test: accetta soltanto una trascrizione
 completa prodotta dall'audio della stessa timeline e ancora coerente con il montaggio corrente, usa una mappa

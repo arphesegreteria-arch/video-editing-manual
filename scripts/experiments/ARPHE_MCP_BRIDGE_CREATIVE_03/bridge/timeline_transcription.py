@@ -144,14 +144,11 @@ def start_timeline_audio_transcription(
         raise ValidationError("Range timeline non leggibile")
 
     original_timeline = safe_call(project, "GetCurrentTimeline")
-    original_format = _render_format(safe_call(project, "GetCurrentRenderFormatAndCodec"))
-    original_settings = safe_call(project, "GetRenderSettings")
-    if not isinstance(original_settings, dict) or not original_settings:
-        raise ValidationError("Impostazioni render correnti non leggibili")
     before = _job_ids(project)
     config.audio_root.mkdir(parents=True, exist_ok=True)
     config.transcript_root.mkdir(parents=True, exist_ok=True)
     job_id = "timeline_tx_" + uuid.uuid4().hex[:16]
+    restore_preset = "ARPHE_TMP_TIMELINE_AUDIO_" + uuid.uuid4().hex[:16]
     output_dir = (config.audio_root / "timeline-transcriptions" / config.workstation_id).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     output_name = arphe_name(f"{project_name}_{source_timeline}_{job_id[-8:]}", "TIMELINE_AUDIO")
@@ -160,14 +157,18 @@ def start_timeline_audio_transcription(
                        f"{output_name}.ARPHE_TRANSCRIPT_V1.json").resolve()
     created_ids: list[str] = []
     queued_id = ""
+    if not safe_call(project, "SaveAsNewRenderPreset", restore_preset):
+        raise ValidationError("Salvataggio temporaneo impostazioni Deliver fallito")
     try:
         if not safe_call(project, "SetCurrentTimeline", timeline):
             raise ValidationError("Selezione timeline per audio temporaneo fallita")
-        if not safe_call(project, "SetCurrentRenderFormatAndCodec", "wav", "LinearPCM"):
+        if not safe_call(project, "LoadRenderPreset", "Audio Only"):
+            raise ValidationError("Preset Resolve Audio Only non disponibile")
+        if not safe_call(project, "SetCurrentRenderFormatAndCodec", "wav", "lpcm"):
             raise ValidationError("Formato WAV PCM rifiutato da Resolve")
         settings = {
             "TargetDir": str(output_dir), "CustomName": output_name, "SelectAllFrames": True,
-            "ExportVideo": False, "ExportAudio": True, "AudioCodec": "LinearPCM",
+            "ExportVideo": False, "ExportAudio": True, "AudioCodec": "lpcm",
             "AudioSampleRate": 48000,
         }
         if not safe_call(project, "SetRenderSettings", settings):
@@ -183,10 +184,10 @@ def start_timeline_audio_transcription(
             safe_call(project, "DeleteRenderJob", render_id)
         raise
     finally:
-        restored_format = bool(safe_call(project, "SetCurrentRenderFormatAndCodec", *original_format))
-        restored_settings = bool(safe_call(project, "SetRenderSettings", original_settings))
+        restored_settings = bool(safe_call(project, "LoadRenderPreset", restore_preset))
+        deleted_restore_preset = bool(safe_call(project, "DeleteRenderPreset", restore_preset))
         restored_timeline = bool(original_timeline and safe_call(project, "SetCurrentTimeline", original_timeline))
-        if not (restored_format and restored_settings and restored_timeline):
+        if not (restored_settings and deleted_restore_preset and restored_timeline):
             if queued_id:
                 safe_call(project, "DeleteRenderJob", queued_id)
             raise RuntimeError("Ripristino contesto render dopo audio timeline non confermato")

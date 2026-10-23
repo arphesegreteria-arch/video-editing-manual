@@ -38,6 +38,9 @@ class Project:
         self.deleted = []
         self.settings_calls = []
         self.format_calls = []
+        self.saved_presets = []
+        self.loaded_presets = []
+        self.deleted_presets = []
 
     def GetName(self): return "advbeppe"
     def GetCurrentTimeline(self): return self.timeline
@@ -45,7 +48,9 @@ class Project:
     def GetTimelineByIndex(self, index): return self.timeline if index == 1 else None
     def SetCurrentTimeline(self, timeline): self.timeline = timeline; return True
     def GetCurrentRenderFormatAndCodec(self): return {"format": "mp4", "codec": "H264"}
-    def GetRenderSettings(self): return {"TargetDir": "C:/previous", "CustomName": "previous"}
+    def SaveAsNewRenderPreset(self, name): self.saved_presets.append(name); return True
+    def LoadRenderPreset(self, name): self.loaded_presets.append(name); return True
+    def DeleteRenderPreset(self, name): self.deleted_presets.append(name); return True
     def SetCurrentRenderFormatAndCodec(self, fmt, codec): self.format_calls.append((fmt, codec)); return True
     def SetRenderSettings(self, settings): self.settings_calls.append(dict(settings)); return True
     def GetRenderJobList(self): return [dict(job) for job in self.jobs]
@@ -123,11 +128,28 @@ class TimelineTranscriptionTests(unittest.TestCase):
             self.assertFalse(render_settings["ExportVideo"])
             self.assertTrue(render_settings["ExportAudio"])
             self.assertEqual(48000, render_settings["AudioSampleRate"])
-            self.assertEqual("LinearPCM", render_settings["AudioCodec"])
-            self.assertEqual(("wav", "LinearPCM"), project.format_calls[0])
-            self.assertEqual(("mp4", "H264"), project.format_calls[-1])
-            self.assertEqual({"TargetDir": "C:/previous", "CustomName": "previous"},
-                             project.settings_calls[-1])
+            self.assertEqual("lpcm", render_settings["AudioCodec"])
+            self.assertEqual(("wav", "lpcm"), project.format_calls[0])
+            temporary = project.saved_presets[0]
+            self.assertEqual(["Audio Only", temporary], project.loaded_presets)
+            self.assertEqual([temporary], project.deleted_presets)
+
+    def test_start_restores_deliver_state_via_temporary_preset_when_current_format_is_unknown(self):
+        from bridge.timeline_transcription import start_timeline_audio_transcription
+
+        with tempfile.TemporaryDirectory() as directory:
+            cfg, registry, project = setup(Path(directory))
+            project.GetCurrentRenderFormatAndCodec = lambda: {"format": "unknown", "codec": ""}
+
+            result = start_timeline_audio_transcription(project, cfg, registry, "Timeline 1")
+
+            self.assertEqual("RENDERING", result["status"])
+            self.assertEqual(1, len(project.saved_presets))
+            temporary = project.saved_presets[0]
+            self.assertRegex(temporary, r"^ARPHE_TMP_TIMELINE_AUDIO_[0-9a-f]{16}$")
+            self.assertEqual(["Audio Only", temporary], project.loaded_presets)
+            self.assertEqual([temporary], project.deleted_presets)
+            self.assertEqual(("wav", "lpcm"), project.format_calls[0])
 
     def test_start_refuses_ambiguous_new_render_job_and_preserves_foreign_job(self):
         from bridge.safety import ValidationError
@@ -149,13 +171,13 @@ class TimelineTranscriptionTests(unittest.TestCase):
             self.assertNotIn("foreign-job", project.deleted)
             self.assertEqual([], project.started)
 
-    def test_start_fails_closed_when_previous_render_settings_cannot_be_read(self):
+    def test_start_fails_closed_when_deliver_state_cannot_be_saved_as_temporary_preset(self):
         from bridge.safety import ValidationError
         from bridge.timeline_transcription import start_timeline_audio_transcription
 
         with tempfile.TemporaryDirectory() as directory:
             cfg, registry, project = setup(Path(directory))
-            project.GetRenderSettings = lambda: None
+            project.SaveAsNewRenderPreset = lambda _name: False
 
             with self.assertRaises(ValidationError):
                 start_timeline_audio_transcription(project, cfg, registry, "Timeline 1")

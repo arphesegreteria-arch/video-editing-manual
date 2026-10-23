@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import time
 from typing import Any
 from uuid import uuid4
@@ -21,6 +22,27 @@ SAFE_INPUTS = (
     "Width", "Height", "CornerRadius", "Blend", "Font", "Style",
     "Red1", "Green1", "Blue1", "Alpha1",
 )
+
+
+def _verified_vertical_provisional(config: CreativeConfig, timeline_name: str) -> bool:
+    match = re.fullmatch(r"__ARPHE_VERTICAL_VERTICAL_([A-Z0-9]{32})", timeline_name)
+    if match is None:
+        return False
+    try:
+        from .vertical_social_workflow import inspect_vertical_social_plan
+        inspected = inspect_vertical_social_plan(
+            config.vertical_social_plans_path,
+            config.workstation_id,
+            "vertical_" + match.group(1).lower(),
+        )
+    except Exception:
+        return False
+    return any(
+        action.get("state") == "VERIFIED"
+        and isinstance(action.get("evidence"), dict)
+        and action["evidence"].get("timeline") == timeline_name
+        for action in inspected.get("actions", [])
+    )
 
 
 def _number(value: Any) -> Any:
@@ -124,8 +146,11 @@ def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: C
     )
     if not project_explicitly_allowed:
         require_arphe_name(project_name, "progetto")
-    require_arphe_name(timeline_name, "timeline")
-    if not (registry.timeline_allowed(project_name, timeline_name) or timeline_name in config.allowed_timelines):
+    provisional_allowed = _verified_vertical_provisional(config, timeline_name)
+    if not provisional_allowed:
+        require_arphe_name(timeline_name, "timeline")
+    if not (registry.timeline_allowed(project_name, timeline_name)
+            or timeline_name in config.allowed_timelines or provisional_allowed):
         raise ValidationError("Cattura consentita solo su timeline creata o allowlisted dal bridge")
 
     start, fps, offsets = _validate_offsets(timeline, frame_offsets)

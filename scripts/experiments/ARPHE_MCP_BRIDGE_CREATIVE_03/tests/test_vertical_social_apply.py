@@ -15,9 +15,10 @@ class VerticalSocialApplyTests(unittest.TestCase):
         def GetEnd(self): return self.end
 
     class Timeline:
-        def __init__(self, name, items):
-            self.name, self.items = name, items
+        def __init__(self, name, items, start_frame=0):
+            self.name, self.items, self.start_frame = name, items, start_frame
         def GetName(self): return self.name
+        def GetStartFrame(self): return self.start_frame
         def GetItemListInTrack(self, kind, index):
             return self.items if kind == "video" and index == 1 else []
         def GetSetting(self, key):
@@ -46,11 +47,20 @@ class VerticalSocialApplyTests(unittest.TestCase):
         action = {"action_id": "r1", "type": "REFRAME", "state": "APPROVED",
                   "range": {"start_frame": 0, "end_frame": 40},
                   "target": {"kind": "person", "label": "speaker"},
-                  "anchor": {"x": 0.55, "y": 0.5}, "reason": "mantieni volto"}
+                  "anchor": {"x": 0.55, "y": 0.5}, "reason": "mantieni volto",
+                  "zoom": 1.03,
+                  "rotation_keys": [
+                      {"frame": 0, "angle": -0.4}, {"frame": 39, "angle": 0.1},
+                  ]}
         with patch("bridge.vertical_social_apply.apply_fusion_reframe", return_value=True) as apply:
             result = apply_reframe_action(timeline, action, 80)
         self.assertEqual("r1", result["action_id"])
         self.assertEqual([0, 40], result["range"])
+        self.assertEqual(1.03, result["zoom"])
+        self.assertEqual(
+            [{"frame": 0, "angle": -0.4}, {"frame": 39, "angle": 0.1}],
+            result["rotation_keys"],
+        )
         apply.assert_called_once()
 
     def test_reframe_rejects_partial_clip_geometry(self):
@@ -62,3 +72,17 @@ class VerticalSocialApplyTests(unittest.TestCase):
                   "anchor": {"x": 0.5, "y": 0.5}, "reason": "mantieni volto"}
         with self.assertRaisesRegex(Exception, "confini di una clip"):
             apply_reframe_action(timeline, action, 80)
+
+    def test_reframe_matches_relative_action_range_on_nonzero_timeline(self):
+        from bridge.vertical_social_apply import apply_reframe_action
+        timeline = self.Timeline(
+            "__ARPHE_VERTICAL_VERTICAL_ABC12345ABC12345ABC12345ABC12345",
+            [self.Item(108000, 108040)], start_frame=108000,
+        )
+        action = {"action_id": "r1", "type": "REFRAME", "state": "APPROVED",
+                  "range": {"start_frame": 0, "end_frame": 40},
+                  "target": {"kind": "reference_line", "label": "soffitto"},
+                  "anchor": {"x": 0.5, "y": 0.5}, "reason": "linea soffitto"}
+        with patch("bridge.vertical_social_apply.apply_fusion_reframe", return_value=True):
+            result = apply_reframe_action(timeline, action, 40)
+        self.assertTrue(result["ok"])

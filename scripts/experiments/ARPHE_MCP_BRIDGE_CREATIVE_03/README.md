@@ -22,6 +22,15 @@ Le feature progressive si modificano nella config locale, senza cambiare lo sche
 `set_feature_flag.ps1 -WorkstationId <ID> -ProfilePath <profilo.local.json>`; dopo la modifica
 riavviare il runtime Creative03.
 
+## Raddrizzamento esplicito Vertical Social
+
+L'azione generica `REFRAME` può includere `zoom` e `rotation_keys` per correggere una ripresa
+leggermente inclinata o oscillante. I punti sono frame assoluti della timeline e angoli in gradi;
+devono essere ordinati e ancorare esattamente il primo e l'ultimo frame del range approvato. Il
+bridge rifiuta angoli oltre `+/-7.5` gradi, zoom fuori da `1.0..1.15`, valori impliciti e punti fuori
+range. Resolve conserva l'interpolazione in una spline Fusion sulla sola timeline provvisoria del
+piano approvato. La sorgente non viene modificata e il progetto non viene salvato automaticamente.
+
 Stato: **50 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
 GATE E SEQUENCE TRANSITION PASS / PAPER STACK + GATES F-G PENDING**.
 

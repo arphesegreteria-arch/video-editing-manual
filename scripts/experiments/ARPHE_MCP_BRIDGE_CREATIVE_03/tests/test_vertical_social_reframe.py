@@ -62,3 +62,65 @@ class ReframeRequestTests(unittest.TestCase):
                 patch("bridge.vertical_social_reframe.connect_input", return_value=True) as connected:
             self.assertTrue(apply_fusion_reframe(item, {"center": {"x": .5, "y": .42}, "zoom": 1.0}))
         self.assertEqual(2, connected.call_count)
+
+    def test_reframe_normalizes_explicit_rotation_keys_to_clip_local_frames(self):
+        from bridge.vertical_social_reframe import validate_reframe_action, reframe_transform_plan
+        action = {
+            "type": "REFRAME", "state": "APPROVED", "reason": "linea soffitto",
+            "range": {"start_frame": 100, "end_frame": 220},
+            "target": {"kind": "reference_line", "label": "soffitto"},
+            "anchor": {"x": 0.5, "y": 0.5},
+            "zoom": 1.04,
+            "rotation_keys": [
+                {"frame": 100, "angle": -0.6},
+                {"frame": 160, "angle": 0.2},
+                {"frame": 219, "angle": -0.1},
+            ],
+        }
+        validated = validate_reframe_action(action, 300)
+        self.assertEqual([(100, -0.6), (160, 0.2), (219, -0.1)], validated["rotation_keys"])
+        plan = reframe_transform_plan(action, 1280, 720)
+        self.assertEqual(1.04, plan["zoom"])
+        self.assertEqual(
+            [{"frame": 0, "angle": -0.6}, {"frame": 60, "angle": 0.2},
+             {"frame": 119, "angle": -0.1}],
+            plan["rotation_keys"],
+        )
+
+    def test_reframe_rejects_rotation_keys_without_both_range_anchors(self):
+        from bridge.vertical_social_reframe import validate_reframe_action
+        action = {
+            "type": "REFRAME", "state": "APPROVED", "reason": "linea soffitto",
+            "range": {"start_frame": 10, "end_frame": 40},
+            "target": {"kind": "reference_line", "label": "soffitto"},
+            "anchor": {"x": 0.5, "y": 0.5},
+            "rotation_keys": [{"frame": 11, "angle": 0.5}, {"frame": 39, "angle": 0.0}],
+        }
+        with self.assertRaisesRegex(Exception, "estremi"):
+            validate_reframe_action(action, 100)
+
+    def test_transform_applies_and_reads_back_rotation_spline(self):
+        from bridge.vertical_social_reframe import apply_transform_parameters
+
+        class Spline(dict):
+            pass
+
+        class Comp:
+            def BezierSpline(self): return Spline()
+
+        class Tool:
+            def __init__(self): self.values = {}
+            def SetInput(self, name, value): self.values[name] = value
+            def GetInput(self, name): return self.values.get(name)
+
+        tool = Tool()
+        plan = {
+            "center": {"x": 0.5, "y": 0.5}, "zoom": 1.04,
+            "rotation_keys": [
+                {"frame": 0, "angle": -0.6},
+                {"frame": 60, "angle": 0.2},
+                {"frame": 119, "angle": -0.1},
+            ],
+        }
+        self.assertTrue(apply_transform_parameters(tool, plan, Comp()))
+        self.assertEqual({0: -0.6, 60: 0.2, 119: -0.1}, dict(tool.Angle))

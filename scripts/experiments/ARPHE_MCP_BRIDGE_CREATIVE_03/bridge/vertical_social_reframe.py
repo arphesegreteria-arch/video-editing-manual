@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from .safety import ValidationError
@@ -7,20 +8,66 @@ from .fusion_tools import _media_out, _new_tool, connect_input
 from .resolve_connection import safe_call
 
 
+def _rotation_keys(action: dict[str, Any], start: int, end: int) -> list[tuple[int, float]]:
+    raw = action.get("rotation_keys")
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or len(raw) < 2:
+        raise ValidationError("rotation_keys REFRAME richiede almeno due punti")
+    keys: list[tuple[int, float]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ValidationError("rotation_keys REFRAME non valide")
+        frame, angle = entry.get("frame"), entry.get("angle")
+        if (not isinstance(frame, int) or isinstance(frame, bool)
+                or not isinstance(angle, (int, float)) or isinstance(angle, bool)
+                or not math.isfinite(float(angle)) or abs(float(angle)) > 7.5):
+            raise ValidationError("rotation_keys REFRAME non sicure")
+        keys.append((frame, float(angle)))
+    if any(frame < start or frame >= end for frame, _ in keys):
+        raise ValidationError("rotation_keys REFRAME fuori range")
+    if any(current[0] >= following[0] for current, following in zip(keys, keys[1:])):
+        raise ValidationError("rotation_keys REFRAME non ordinate")
+    if keys[0][0] != start or keys[-1][0] != end - 1:
+        raise ValidationError("rotation_keys REFRAME deve ancorare entrambi gli estremi")
+    return keys
+
+
+def _zoom(action: dict[str, Any]) -> float:
+    value = action.get("zoom", 1.0)
+    if (not isinstance(value, (int, float)) or isinstance(value, bool)
+            or not math.isfinite(float(value)) or not 1.0 <= float(value) <= 1.15):
+        raise ValidationError("zoom REFRAME non sicuro")
+    return float(value)
+
+
 def reframe_transform_plan(action: dict[str, Any], output_width: int, output_height: int) -> dict[str, Any]:
-    """Return the explicit, non-animated Transform parameters for one approved reframe."""
+    """Return explicit static or keyframed Transform parameters for an approved reframe."""
     anchor = action.get("anchor")
     if (not isinstance(output_width, int) or not isinstance(output_height, int)
             or output_width <= 0 or output_height <= 0):
         raise ValidationError("dimensioni output REFRAME non valide")
     if not isinstance(anchor, dict) or not all(isinstance(anchor.get(key), (int, float)) and 0.1 <= float(anchor[key]) <= 0.9 for key in ("x", "y")):
         raise ValidationError("anchor REFRAME non sicuro")
-    return {"center": {"x": float(anchor["x"]), "y": float(anchor["y"])}, "zoom": 1.0,
-            "output": {"width": output_width, "height": output_height}}
+    raw_range = action.get("range") or {}
+    start, end = raw_range.get("start_frame"), raw_range.get("end_frame")
+    rotation_keys: list[tuple[int, float]] = []
+    if action.get("rotation_keys") is not None:
+        if not isinstance(start, int) or not isinstance(end, int) or start >= end:
+            raise ValidationError("range REFRAME non valido")
+        rotation_keys = _rotation_keys(action, start, end)
+    return {
+        "center": {"x": float(anchor["x"]), "y": float(anchor["y"])},
+        "zoom": _zoom(action),
+        "rotation_keys": [
+            {"frame": frame - int(start), "angle": angle} for frame, angle in rotation_keys
+        ],
+        "output": {"width": output_width, "height": output_height},
+    }
 
 
-def apply_transform_parameters(tool: object, plan: dict[str, Any]) -> bool:
-    """Apply and read back the two Transform controls used by a static reframe."""
+def apply_transform_parameters(tool: object, plan: dict[str, Any], comp: object | None = None) -> bool:
+    """Apply and read back static framing plus optional Resolve-owned rotation keys."""
     center = plan.get("center")
     zoom = plan.get("zoom")
     if not isinstance(center, dict) or not isinstance(zoom, (int, float)):
@@ -29,6 +76,17 @@ def apply_transform_parameters(tool: object, plan: dict[str, Any]) -> bool:
     try:
         tool.SetInput("Center", value)
         tool.SetInput("Size", float(zoom))
+        keys = plan.get("rotation_keys") or []
+        if keys:
+            if comp is None:
+                raise ValidationError("Composizione Fusion richiesta per rotation_keys REFRAME")
+            tool.Angle = comp.BezierSpline()
+            angle = tool.Angle
+            for key in keys:
+                angle[int(key["frame"])] = float(key["angle"])
+            if any(abs(float(angle[int(key["frame"])]) - float(key["angle"])) > 1e-6
+                   for key in keys):
+                return False
         return tool.GetInput("Center") == value and float(tool.GetInput("Size")) == float(zoom)
     except Exception as exc:
         raise ValidationError(f"Transform REFRAME non applicabile: {exc}") from exc
@@ -46,7 +104,7 @@ def apply_fusion_reframe(item: object, plan: dict[str, Any]) -> bool:
     transform = _new_tool(comp, "Transform", "ARPHE_VERTICAL_REFRAME")
     if not connect_input(transform, "Input", media_in) or not connect_input(media_out, "Input", transform):
         raise ValidationError("Collegamento Transform REFRAME fallito")
-    return apply_transform_parameters(transform, plan)
+    return apply_transform_parameters(transform, plan, comp)
 
 
 def validate_reframe_action(action: dict[str, Any], total_frames: int) -> dict[str, Any]:
@@ -66,4 +124,9 @@ def validate_reframe_action(action: dict[str, Any], total_frames: int) -> dict[s
         raise ValidationError("anchor REFRAME non sicuro")
     if not str(action.get("reason", "")).strip():
         raise ValidationError("reason REFRAME mancante")
-    return {"range": (start, end), "target": dict(target), "anchor": {"x": float(anchor["x"]), "y": float(anchor["y"])}}
+    rotation_keys = _rotation_keys(action, start, end)
+    return {
+        "range": (start, end), "target": dict(target),
+        "anchor": {"x": float(anchor["x"]), "y": float(anchor["y"])},
+        "zoom": _zoom(action), "rotation_keys": rotation_keys,
+    }

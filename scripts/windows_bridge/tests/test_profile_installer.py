@@ -401,6 +401,16 @@ class ProfileInstallerTests(unittest.TestCase):
         self.assertIn("CAP_CARABELLESE_CLEANUP", result.stdout)
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
+    def test_feature_flag_accepts_vertical_social_gate(self):
+        creative_config, _command = self.write_profile_runtime_config()
+        config = json.loads(creative_config.read_text(encoding="utf-8"))
+        config["feature_flags"]["CAP_VERTICAL_SOCIAL"] = False
+        creative_config.write_text(json.dumps(config), encoding="utf-8")
+        result = self.run_feature_flag_dry_run("CAP_VERTICAL_SOCIAL")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("CAP_VERTICAL_SOCIAL", result.stdout)
+
+    @unittest.skipUnless(os.name == "nt" and POWERSHELL.is_file(), "PowerShell test is Windows-only")
     def test_creative_install_keeps_state_and_audit_inside_profile_directory(self):
         config_path = self.root / "install" / "runtime-configs" / "PC_PERSONALE" / "creative_config.json"
         result = self.run_creative_install(config_path)

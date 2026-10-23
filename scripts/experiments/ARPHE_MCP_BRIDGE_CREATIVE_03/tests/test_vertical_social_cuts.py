@@ -54,6 +54,7 @@ class VerticalSocialCutPolicyTests(unittest.TestCase):
         class ProvisionalTimeline:
             def __init__(self, name): self.name, self.appended = name, []
             def GetName(self): return self.name
+            def GetStartFrame(self): return 108000
             def GetTrackCount(self, kind): return 1
             def GetItemListInTrack(self, kind, index):
                 media_type = 1 if kind == "video" else 2
@@ -99,7 +100,8 @@ class VerticalSocialCutPolicyTests(unittest.TestCase):
             (entry["startFrame"], entry["endFrame"]) for entry in result.appended[::2]
         ])
         self.assertTrue(all(entry["mediaPoolItem"] is media for entry in result.appended))
-        self.assertEqual([0, 0, 20, 20, 40, 40], [entry["recordFrame"] for entry in result.appended])
+        self.assertEqual([108000, 108000, 108020, 108020, 108040, 108040],
+                         [entry["recordFrame"] for entry in result.appended])
 
     def test_existing_valid_provisional_timeline_is_reused_idempotently(self):
         module = self.module()

@@ -143,6 +143,28 @@ class DiagnosticTests(unittest.TestCase):
                     FakeResolve(), ForeignProject(), FakeTimeline(), config, FakeRegistry(), [45]
                 )
 
+    def test_capture_accepts_verified_bridge_owned_vertical_provisional(self):
+        suffix = "D8F1AA1A931A4218A0FCD2F080DA678C"
+        timeline_name = f"__ARPHE_VERTICAL_VERTICAL_{suffix}"
+
+        class ProvisionalTimeline(FakeTimeline):
+            def GetName(self): return timeline_name
+
+        class ProvisionalRegistry(FakeRegistry):
+            def timeline_allowed(self, project, timeline): return False
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = self._config(Path(directory))
+            config.vertical_social_plans_path = Path(directory) / "plans.json"
+            evidence = {"actions": [{"state": "VERIFIED", "evidence": {"timeline": timeline_name}}]}
+            with patch("bridge.vertical_social_workflow.inspect_vertical_social_plan",
+                       return_value=evidence):
+                result = capture_timeline_frames(
+                    FakeResolve(), FakeProject(), ProvisionalTimeline(), config,
+                    ProvisionalRegistry(), [0],
+                )
+        self.assertTrue(result[0]["ok"])
+
     def test_capture_does_not_prune_older_registered_or_unregistered_images(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

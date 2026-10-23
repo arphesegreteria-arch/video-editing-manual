@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
+from bridge.registry import Registry  # noqa: E402
+
+
+class Timeline:
+    def __init__(self, name: str = "Timeline 1") -> None:
+        self.name = name
+
+    def GetName(self): return self.name
+    def GetUniqueId(self): return "timeline-advbeppe-1"
+    def GetStartFrame(self): return 108000
+    def GetEndFrame(self): return 108645
+    def GetSetting(self, key): return {"timelineFrameRate": "30"}.get(key)
+    def GetTrackCount(self, kind): return 1 if kind in {"video", "audio"} else 0
+    def GetItemListInTrack(self, kind, track): return []
+
+
+class Project:
+    def __init__(self) -> None:
+        self.timeline = Timeline()
+        self.jobs = [{"JobId": "foreign-job", "JobStatus": "Ready"}]
+        self.started = []
+        self.deleted = []
+        self.settings_calls = []
+        self.format_calls = []
+
+    def GetName(self): return "advbeppe"
+    def GetCurrentTimeline(self): return self.timeline
+    def GetTimelineCount(self): return 1
+    def GetTimelineByIndex(self, index): return self.timeline if index == 1 else None
+    def SetCurrentTimeline(self, timeline): self.timeline = timeline; return True
+    def GetCurrentRenderFormatAndCodec(self): return {"format": "mp4", "codec": "H264"}
+    def GetRenderSettings(self): return {"TargetDir": "C:/previous", "CustomName": "previous"}
+    def SetCurrentRenderFormatAndCodec(self, fmt, codec): self.format_calls.append((fmt, codec)); return True
+    def SetRenderSettings(self, settings): self.settings_calls.append(dict(settings)); return True
+    def GetRenderJobList(self): return [dict(job) for job in self.jobs]
+    def AddRenderJob(self): self.jobs.append({"JobId": "timeline-audio-job", "JobStatus": "Ready"}); return "timeline-audio-job"
+    def StartRendering(self, job_ids, interactive=False): self.started.append((job_ids, interactive)); return True
+    def DeleteRenderJob(self, job_id): self.deleted.append(job_id); self.jobs = [j for j in self.jobs if j["JobId"] != job_id]; return True
+    def IsRenderingInProgress(self): return False
+
+
+def setup(root: Path):
+    flags = dict(DEFAULT_FLAGS)
+    flags["CAP_RENDER"] = True
+    cfg = CreativeConfig(
+        path=root / "config.json", asset_root=root / "assets", render_root=root / "renders",
+        state_path=root / "state.json", audit_log_path=root / "audit.jsonl",
+        palette=dict(DEFAULT_PALETTE), flags=flags,
+        allowed_projects=frozenset({"advbeppe"}), allowed_timelines=frozenset({"Timeline 1"}),
+        render_format="mp4", render_codec="H264", media_roots=(root,),
+        transcript_root=root / "transcripts", audio_root=root / "audio",
+        audio_jobs_root=root / "audio_jobs", workstation_id="PC_PERSONALE",
+    )
+    cfg.transcript_root.mkdir(parents=True)
+    cfg.audio_root.mkdir(parents=True)
+    registry = Registry(cfg.state_path)
+    project = Project()
+    return cfg, registry, project
+
+
+class TimelineTranscriptionTests(unittest.TestCase):
+    def test_start_renders_only_selected_timeline_audio_and_restores_render_context(self):
+        from bridge.timeline_transcription import start_timeline_audio_transcription
+
+        with tempfile.TemporaryDirectory() as directory:
+            cfg, registry, project = setup(Path(directory))
+            result = start_timeline_audio_transcription(
+                project, cfg, registry, "Timeline 1", model="small", language="it")
+
+            self.assertTrue(result["ok"])
+            self.assertEqual("RENDERING", result["status"])
+            self.assertEqual("Timeline 1", result["source_timeline"])
+            self.assertEqual(645, result["duration_frames"])
+            self.assertEqual([(["timeline-audio-job"], False)], project.started)
+            self.assertEqual([], project.deleted)
+            self.assertEqual({"foreign-job", "timeline-audio-job"},
+                             {job["JobId"] for job in project.jobs})
+            render_settings = project.settings_calls[0]
+            self.assertFalse(render_settings["ExportVideo"])
+            self.assertTrue(render_settings["ExportAudio"])
+            self.assertEqual(48000, render_settings["AudioSampleRate"])
+            self.assertEqual("LinearPCM", render_settings["AudioCodec"])
+            self.assertEqual(("wav", "LinearPCM"), project.format_calls[0])
+            self.assertEqual(("mp4", "H264"), project.format_calls[-1])
+            self.assertEqual({"TargetDir": "C:/previous", "CustomName": "previous"},
+                             project.settings_calls[-1])
+
+    def test_start_refuses_ambiguous_new_render_job_and_preserves_foreign_job(self):
+        from bridge.safety import ValidationError
+        from bridge.timeline_transcription import start_timeline_audio_transcription
+
+        with tempfile.TemporaryDirectory() as directory:
+            cfg, registry, project = setup(Path(directory))
+            def ambiguous():
+                project.jobs.extend([
+                    {"JobId": "new-a", "JobStatus": "Ready"},
+                    {"JobId": "new-b", "JobStatus": "Ready"},
+                ])
+                return "new-a"
+            project.AddRenderJob = ambiguous
+
+            with self.assertRaises(ValidationError):
+                start_timeline_audio_transcription(project, cfg, registry, "Timeline 1")
+
+            self.assertNotIn("foreign-job", project.deleted)
+            self.assertEqual([], project.started)
+
+    def test_start_fails_closed_when_previous_render_settings_cannot_be_read(self):
+        from bridge.safety import ValidationError
+        from bridge.timeline_transcription import start_timeline_audio_transcription
+
+        with tempfile.TemporaryDirectory() as directory:
+            cfg, registry, project = setup(Path(directory))
+            project.GetRenderSettings = lambda: None
+
+            with self.assertRaises(ValidationError):
+                start_timeline_audio_transcription(project, cfg, registry, "Timeline 1")
+
+            self.assertEqual(["foreign-job"], [job["JobId"] for job in project.jobs])
+            self.assertEqual([], project.started)
+
+
+if __name__ == "__main__":
+    unittest.main()

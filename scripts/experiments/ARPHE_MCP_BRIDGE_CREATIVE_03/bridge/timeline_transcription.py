@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
+import re
 import uuid
+import wave
 from typing import Any
 
 from .config import CreativeConfig
@@ -14,6 +17,10 @@ from .safety import ValidationError, arphe_name
 from .timeline_tools import find_timeline
 from .transcription_worker import ALLOWED_LANGUAGES, ALLOWED_MODELS, JOB_SCHEMA, _atomic_json
 from .vertical_social_captions import timeline_edit_fingerprint
+from .carabellese_transcription import _launch
+
+
+JOB_ID = re.compile(r"^timeline_tx_[0-9a-f]{16}$")
 
 
 def _now() -> str:
@@ -51,17 +58,62 @@ def _allowed(config: CreativeConfig, registry: Any, project_name: str, timeline_
 
 def _public(payload: dict[str, Any]) -> dict[str, object]:
     source = payload["timeline_source"]
-    return {
+    raw_status = str(payload["status"])
+    status = "TRANSCRIBING" if raw_status in {"QUEUED", "RUNNING"} else raw_status
+    result: dict[str, object] = {
         "ok": payload["status"] != "INTERRUPTED",
         "action": "get_timeline_audio_transcription_job",
         "job_id": payload["job_id"],
-        "status": payload["status"],
+        "status": status,
         "source_project": source["project_name"],
         "source_timeline": source["timeline_name"],
         "duration_frames": source["duration_frames"],
         "fps": source["fps"],
         "saved": False,
     }
+    if raw_status == "COMPLETED":
+        result["transcript_file"] = Path(payload["output_path"]).name
+        result["transcript_fingerprint"] = payload.get("transcript_fingerprint")
+    return result
+
+
+def _manifest_path(config: CreativeConfig, job_id: str) -> Path:
+    if not isinstance(job_id, str) or not JOB_ID.fullmatch(job_id):
+        raise ValidationError("job_id trascrizione timeline non valido")
+    return (config.transcript_root / ".timeline_jobs" / config.workstation_id /
+            f"{job_id}.json").resolve()
+
+
+def _load_manifest(config: CreativeConfig, job_id: str) -> tuple[Path, dict[str, Any]]:
+    path = _manifest_path(config, job_id)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValidationError(f"Job trascrizione timeline non leggibile: {exc}") from exc
+    if (not isinstance(payload, dict) or payload.get("schema") != JOB_SCHEMA
+            or payload.get("job_id") != job_id
+            or payload.get("workstation_id") != config.workstation_id
+            or not isinstance(payload.get("timeline_source"), dict)):
+        raise ValidationError("Manifest trascrizione timeline non valido")
+    return path, payload
+
+
+def _wav_evidence(path: Path, expected_seconds: float, fps: float) -> tuple[str, float]:
+    try:
+        with wave.open(str(path.resolve(strict=True)), "rb") as handle:
+            rate = handle.getframerate()
+            width = handle.getsampwidth()
+            channels = handle.getnchannels()
+            frames = handle.getnframes()
+    except (OSError, wave.Error) as exc:
+        raise ValidationError(f"WAV timeline non leggibile: {exc}") from exc
+    if rate != 48000 or width != 2 or channels not in {1, 2} or frames <= 0:
+        raise ValidationError("Formato WAV timeline non conforme")
+    duration = frames / rate
+    if abs(duration - expected_seconds) > (1.0 / fps):
+        raise ValidationError("Durata WAV timeline non coincide con la timeline")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    return digest, round(duration, 6)
 
 
 def start_timeline_audio_transcription(
@@ -170,4 +222,61 @@ def start_timeline_audio_transcription(
     except Exception:
         safe_call(project, "DeleteRenderJob", queued_id)
         raise
+    return _public(payload)
+
+
+def get_timeline_audio_transcription_job(
+    project: Any,
+    config: CreativeConfig,
+    registry: Any,
+    job_id: str,
+) -> dict[str, object]:
+    """Advance or read one owned timeline-audio transcription job."""
+    manifest_path, payload = _load_manifest(config, job_id)
+    status = str(payload.get("status"))
+    if status == "RENDERING":
+        render_id = str(payload.get("render_job_id") or "")
+        current_ids = set(_job_ids(project))
+        if render_id not in current_ids:
+            raise ValidationError("Job render audio timeline non più presente")
+        render_status_raw = safe_call(project, "GetRenderJobStatus", render_id)
+        render_status = (str(render_status_raw.get("JobStatus") or "")
+                         if isinstance(render_status_raw, dict) else str(render_status_raw or ""))
+        normalized = render_status.casefold()
+        if normalized not in {"complete", "completed"}:
+            if normalized in {"failed", "cancelled", "canceled"}:
+                payload.update(status="INTERRUPTED", updated_at=_now(), error=f"RENDER_{render_status.upper()}")
+                _atomic_json(manifest_path, payload)
+            return _public(payload)
+        source = payload["timeline_source"]
+        expected_seconds = float(source["duration_frames"]) / float(source["fps"])
+        try:
+            digest, duration = _wav_evidence(Path(payload["source_path"]), expected_seconds,
+                                             float(source["fps"]))
+        except Exception as exc:
+            payload.update(status="INTERRUPTED", updated_at=_now(), error=type(exc).__name__)
+            _atomic_json(manifest_path, payload)
+            raise
+        if not safe_call(project, "DeleteRenderJob", render_id) or render_id in set(_job_ids(project)):
+            raise RuntimeError("Rimozione job render audio timeline non confermata")
+        source.update(audio_fingerprint=digest, audio_duration_seconds=duration)
+        payload.update(status="QUEUED", progress_percent=0.0, source_fingerprint=digest,
+                       updated_at=_now(), error=None)
+        _atomic_json(manifest_path, payload)
+        try:
+            payload["pid"] = _launch(manifest_path)
+            _atomic_json(manifest_path, payload)
+        except OSError as exc:
+            payload.update(status="INTERRUPTED", updated_at=_now(), error=type(exc).__name__)
+            _atomic_json(manifest_path, payload)
+            raise RuntimeError("Avvio worker trascrizione timeline fallito") from exc
+        return _public(payload)
+    if status == "COMPLETED":
+        output = Path(payload["output_path"])
+        try:
+            transcript = json.loads(output.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValidationError(f"Trascrizione timeline completata non leggibile: {exc}") from exc
+        if transcript.get("timeline_source") != payload["timeline_source"]:
+            raise ValidationError("Provenienza trascrizione timeline non corrispondente")
     return _public(payload)

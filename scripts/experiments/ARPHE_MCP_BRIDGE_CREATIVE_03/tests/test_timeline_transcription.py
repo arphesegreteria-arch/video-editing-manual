@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
+import json
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+import wave
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +53,9 @@ class Project:
     def StartRendering(self, job_ids, interactive=False): self.started.append((job_ids, interactive)); return True
     def DeleteRenderJob(self, job_id): self.deleted.append(job_id); self.jobs = [j for j in self.jobs if j["JobId"] != job_id]; return True
     def IsRenderingInProgress(self): return False
+    def GetRenderJobStatus(self, job_id):
+        job = next((entry for entry in self.jobs if entry["JobId"] == job_id), None)
+        return {"JobStatus": job["JobStatus"]} if job else {}
 
 
 def setup(root: Path):
@@ -130,6 +137,64 @@ class TimelineTranscriptionTests(unittest.TestCase):
 
             self.assertEqual(["foreign-job"], [job["JobId"] for job in project.jobs])
             self.assertEqual([], project.started)
+
+    def test_poll_verifies_rendered_wav_and_launches_one_bound_transcription(self):
+        from bridge.timeline_transcription import (
+            get_timeline_audio_transcription_job,
+            start_timeline_audio_transcription,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            cfg, registry, project = setup(Path(directory))
+            started = start_timeline_audio_transcription(project, cfg, registry, "Timeline 1")
+            manifest_path = next((cfg.transcript_root / ".timeline_jobs" / "PC_PERSONALE").glob("*.json"))
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            wav_path = Path(manifest["source_path"])
+            wav_path.parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(wav_path), "wb") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(48000)
+                handle.writeframes(b"\0\0" * 1_032_000)  # 645 / 30 = 21.5 seconds.
+            project.jobs[-1]["JobStatus"] = "Complete"
+
+            with patch("bridge.timeline_transcription._launch", return_value=4321) as launch:
+                result = get_timeline_audio_transcription_job(
+                    project, cfg, registry, started["job_id"])
+
+            self.assertEqual("TRANSCRIBING", result["status"])
+            self.assertEqual(["timeline-audio-job"], project.deleted)
+            self.assertEqual(["foreign-job"], [job["JobId"] for job in project.jobs])
+            launch.assert_called_once_with(manifest_path)
+            updated = json.loads(manifest_path.read_text(encoding="utf-8"))
+            digest = hashlib.sha256(wav_path.read_bytes()).hexdigest()
+            self.assertEqual(digest, updated["source_fingerprint"])
+            self.assertEqual(digest, updated["timeline_source"]["audio_fingerprint"])
+            self.assertEqual(21.5, updated["timeline_source"]["audio_duration_seconds"])
+
+    def test_poll_rejects_wrong_wav_duration_before_worker_launch(self):
+        from bridge.safety import ValidationError
+        from bridge.timeline_transcription import (
+            get_timeline_audio_transcription_job,
+            start_timeline_audio_transcription,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            cfg, registry, project = setup(Path(directory))
+            started = start_timeline_audio_transcription(project, cfg, registry, "Timeline 1")
+            manifest_path = next((cfg.transcript_root / ".timeline_jobs" / "PC_PERSONALE").glob("*.json"))
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            wav_path = Path(manifest["source_path"])
+            wav_path.parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(wav_path), "wb") as handle:
+                handle.setnchannels(1); handle.setsampwidth(2); handle.setframerate(48000)
+                handle.writeframes(b"\0\0" * 48_000)
+            project.jobs[-1]["JobStatus"] = "Complete"
+
+            with patch("bridge.timeline_transcription._launch") as launch, self.assertRaises(ValidationError):
+                get_timeline_audio_transcription_job(project, cfg, registry, started["job_id"])
+
+            launch.assert_not_called()
 
 
 if __name__ == "__main__":

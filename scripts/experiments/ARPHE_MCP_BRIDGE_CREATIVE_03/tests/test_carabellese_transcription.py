@@ -225,6 +225,34 @@ class CarabelleseTranscriptionJobTests(unittest.TestCase):
 
 
 class CheckpointedTranscriptionTests(unittest.TestCase):
+    def test_timeline_provenance_is_written_into_transcript(self):
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            media = root / "timeline.wav"
+            media.write_bytes(b"timeline-audio")
+            output = root / "timeline.transcript.json"
+            fingerprint = hashlib.sha256(media.read_bytes()).hexdigest()
+            binding = {
+                "workstation_id": "PC_PERSONALE", "project_name": "advbeppe",
+                "timeline_name": "Timeline 1", "timeline_id": "timeline-advbeppe-1",
+                "timeline_edit_fingerprint": "a" * 64, "start_frame": 108000,
+                "end_frame": 108645, "duration_frames": 645, "fps": 30.0,
+                "audio_fingerprint": fingerprint, "audio_duration_seconds": 21.5,
+            }
+
+            class EmptyModel:
+                def transcribe(self, _source: str, **_kwargs: object):
+                    return iter(()), SimpleNamespace(language="it", language_probability=1.0)
+
+            transcribe_checkpointed(
+                media, output, "small", "it", expected_source_fingerprint=fingerprint,
+                model_factory=lambda *_args, **_kwargs: EmptyModel(),
+                duration_reader=lambda _path: 21.5, provenance=binding,
+            )
+
+            result = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(binding, result["timeline_source"])
+
     def test_worker_rejects_tampered_model_before_transcription(self):
         with tempfile.TemporaryDirectory() as raw_root:
             root = Path(raw_root)

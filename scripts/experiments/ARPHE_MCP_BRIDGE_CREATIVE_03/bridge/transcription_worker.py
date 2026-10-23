@@ -55,8 +55,8 @@ def _word_payload(word: Any) -> dict[str, Any]:
 
 
 def _new_payload(source: Path, fingerprint: str, duration: float, model_name: str,
-                 language: str) -> dict[str, Any]:
-    return {
+                 language: str, provenance: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = {
         "schema": SCHEMA, "status": "running",
         "source": {"name": source.name, "path": str(source), "size_bytes": source.stat().st_size,
                    "fingerprint": fingerprint, "duration_seconds": round(duration, 3)},
@@ -66,10 +66,13 @@ def _new_payload(source: Path, fingerprint: str, duration: float, model_name: st
                           "word_timestamps": True},
         "segments": [], "created_at": _now(), "updated_at": None,
     }
+    if provenance is not None:
+        payload["timeline_source"] = dict(provenance)
+    return payload
 
 
 def _load_checkpoint(output: Path, source: Path, fingerprint: str, model_name: str,
-                     language: str) -> dict[str, Any] | None:
+                     language: str, provenance: dict[str, Any] | None = None) -> dict[str, Any] | None:
     if not output.is_file():
         return None
     try:
@@ -83,6 +86,7 @@ def _load_checkpoint(output: Path, source: Path, fingerprint: str, model_name: s
             or source_data.get("path") != str(source) or not isinstance(transcription, dict)
             or transcription.get("model") != model_name
             or transcription.get("requested_language") != language
+            or (provenance is not None and payload.get("timeline_source") != provenance)
             or not isinstance(payload.get("segments"), list)):
         raise ValueError("Checkpoint transcript associato a parametri o sorgente differenti")
     return payload
@@ -94,6 +98,7 @@ def transcribe_checkpointed(
     model_factory: Callable[..., Any] | None = None,
     duration_reader: Callable[[Path], float] = _duration,
     progress_callback: Callable[[float], None] | None = None,
+    provenance: dict[str, Any] | None = None,
 ) -> None:
     source = source.expanduser().resolve(strict=True)
     output = output.expanduser().resolve()
@@ -105,9 +110,9 @@ def transcribe_checkpointed(
     duration = float(duration_reader(source))
     if duration <= 0:
         raise ValueError("Durata sorgente non valida")
-    payload = _load_checkpoint(output, source, actual_fingerprint, model_name, language)
+    payload = _load_checkpoint(output, source, actual_fingerprint, model_name, language, provenance)
     if payload is None:
-        payload = _new_payload(source, actual_fingerprint, duration, model_name, language)
+        payload = _new_payload(source, actual_fingerprint, duration, model_name, language, provenance)
     elif payload.get("status") == "complete":
         return
     else:
@@ -184,7 +189,9 @@ def run_job(job_path: Path) -> None:
         transcribe_checkpointed(Path(payload["source_path"]), Path(payload["output_path"]),
                                 str(payload["model"]), str(payload["language"]),
                                 expected_source_fingerprint=str(payload["source_fingerprint"]),
-                                progress_callback=progress)
+                                progress_callback=progress,
+                                provenance=(dict(payload["timeline_source"])
+                                            if isinstance(payload.get("timeline_source"), dict) else None))
         payload = _load_worker_job(job_path)
         payload.update(status="COMPLETED", progress_percent=100.0,
                        transcript_fingerprint=file_sha256(Path(payload["output_path"])),

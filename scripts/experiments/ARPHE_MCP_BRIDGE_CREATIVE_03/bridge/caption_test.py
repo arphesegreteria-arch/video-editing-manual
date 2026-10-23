@@ -47,7 +47,8 @@ def validate_source_spans(raw_spans: list[dict[str, int]], fps: float) -> tuple[
     return tuple(spans)
 
 
-def _load_segments(config: Any, transcript_file: str) -> list[dict[str, Any]]:
+def _load_segments(config: Any, transcript_file: str, timeline: Any | None = None,
+                   project_name: str | None = None) -> list[dict[str, Any]]:
     root = Path(config.transcript_root).resolve()
     candidate = (root / transcript_file).resolve()
     if not candidate.is_file() or not candidate.is_relative_to(root):
@@ -56,6 +57,37 @@ def _load_segments(config: Any, transcript_file: str) -> list[dict[str, Any]]:
         data = json.loads(candidate.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValidationError("Trascrizione CAPTIONS non leggibile") from exc
+    if timeline is not None:
+        binding = data.get("timeline_source") if isinstance(data, dict) else None
+        source = data.get("source") if isinstance(data, dict) else None
+        start = safe_call(timeline, "GetStartFrame")
+        end = safe_call(timeline, "GetEndFrame")
+        try:
+            fps = float(safe_call(timeline, "GetSetting", "timelineFrameRate"))
+        except (TypeError, ValueError):
+            raise ValidationError("FPS timeline della trascrizione non leggibile") from None
+        expected = {
+            "workstation_id": getattr(config, "workstation_id", None),
+            "project_name": project_name,
+            "timeline_name": str(safe_call(timeline, "GetName") or ""),
+            "timeline_id": str(safe_call(timeline, "GetUniqueId") or ""),
+            "timeline_edit_fingerprint": timeline_edit_fingerprint(timeline),
+            "start_frame": start, "end_frame": end,
+            "duration_frames": end - start if isinstance(start, int) and isinstance(end, int) else None,
+            "fps": fps,
+        }
+        if not isinstance(binding, dict):
+            raise ValidationError("La trascrizione CAPTIONS non proviene dall'audio della timeline")
+        if any(binding.get(key) != value for key, value in expected.items()):
+            raise ValidationError("La trascrizione CAPTIONS appartiene a una timeline diversa o modificata")
+        if (not isinstance(source, dict)
+                or binding.get("audio_fingerprint") != source.get("fingerprint")
+                or not isinstance(binding.get("audio_duration_seconds"), (int, float))
+                or not isinstance(source.get("duration_seconds"), (int, float))
+                or abs(float(binding["audio_duration_seconds"]) - float(source["duration_seconds"])) > 0.001):
+            raise ValidationError("Provenienza audio della trascrizione timeline non valida")
+        if data.get("schema") != "ARPHE_TRANSCRIPT_V1" or data.get("status") != "complete":
+            raise ValidationError("Trascrizione timeline non completa")
     segments = data.get("segments") if isinstance(data, dict) else None
     if not isinstance(segments, list):
         raise ValidationError("Formato trascrizione CAPTIONS non valido")
@@ -212,6 +244,21 @@ def create_caption_test(project: Any, config: Any, registry: Any, source_timelin
     if not isinstance(replace_existing_captions, bool):
         raise ValidationError("replace_existing_captions CAPTIONS deve essere booleano")
     original = safe_call(project, "GetCurrentTimeline")
+    source = (original if original is not None and safe_call(original, "GetName") == source_timeline
+              else find_timeline(project, source_timeline))
+    if source is None:
+        raise ValidationError("Timeline sorgente CAPTIONS non trovata")
+    source_start, source_end = safe_call(source, "GetStartFrame"), safe_call(source, "GetEndFrame")
+    if not isinstance(source_start, int) or not isinstance(source_end, int) or source_end <= source_start:
+        raise ValidationError("Range timeline sorgente CAPTIONS non leggibile")
+    source_total = source_end - source_start
+    source_fps = _parse_fps(source)
+    spans = validate_source_spans(source_spans, source_fps)
+    if spans != ({"source_start_frame": 0, "source_end_frame": source_total,
+                  "timeline_start_frame": 0},):
+        raise ValidationError("La trascrizione audio timeline richiede una mappa completa 1:1")
+    segments = _load_segments(config, transcript_file, source,
+                              str(safe_call(project, "GetName") or ""))
     duplicated = duplicate_timeline(project, config, registry, source_timeline, None, target_name)
     if not duplicated.get("ok"):
         return {**duplicated, "action": "create_caption_test"}
@@ -237,8 +284,7 @@ def create_caption_test(project: Any, config: Any, registry: Any, source_timelin
             raise ValidationError("caption_cutoff_frame CAPTIONS non valido")
         replaced = remove_owned_caption_overlay(timeline) if replace_existing_captions else None
         fps = _parse_fps(timeline)
-        spans = validate_source_spans(source_spans, fps)
-        cues = caption_cues_from_segments(_load_segments(config, transcript_file), spans, fps,
+        cues = caption_cues_from_segments(segments, spans, fps,
                                           caption_mode=caption_mode, uppercase=uppercase)
         if not cues:
             raise ValidationError("Nessuna parola della trascrizione coincide con source_spans")

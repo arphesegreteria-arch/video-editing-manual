@@ -1,5 +1,7 @@
 from pathlib import Path
+import json
 import sys
+import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -266,7 +268,7 @@ class CaptionTestCueTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Fusion rejected"):
                 create_caption_test(project, object(), object(), "input", "ARPHE_CAPTION_TEST",
                                     "transcript.json", [{"source_start_frame": 0,
-                                    "source_end_frame": 30, "timeline_start_frame": 0}], 60)
+                                    "source_end_frame": 60, "timeline_start_frame": 0}], 60)
         self.assertEqual([project.copy], project.pool.deleted)
         self.assertIs(project.source, project.restored)
         self.assertIs(project.source, project.timeline)
@@ -295,7 +297,7 @@ class CaptionTestCueTests(unittest.TestCase):
              patch("bridge.caption_test.apply_caption_action", return_value={"cue_count": 1}) as apply:
             result = create_caption_test(project, object(), object(), "ARPHE_SOURCE", "ARPHE_TARGET",
                                          "transcript.json", [{"source_start_frame": 0,
-                                         "source_end_frame": 30, "timeline_start_frame": 0}], 60)
+                                         "source_end_frame": 60, "timeline_start_frame": 0}], 60)
         self.assertIs(duplicate, apply.call_args.args[1])
         self.assertEqual("ARPHE_TARGET", result["created_timeline"])
 
@@ -321,6 +323,68 @@ class CaptionTestCueTests(unittest.TestCase):
                   "timeline_start_frame": 0}], 30)
         self.assertTrue(result["ok"])
         self.assertEqual(["lock_enter", "operation", "lock_exit"], events)
+
+    def test_rejects_media_transcript_before_timeline_duplication(self):
+        from bridge.caption_test import create_caption_test
+
+        class Timeline:
+            def GetName(self): return "Timeline 1"
+            def GetUniqueId(self): return "timeline-advbeppe-1"
+            def GetStartFrame(self): return 108000
+            def GetEndFrame(self): return 108645
+            def GetSetting(self, key): return "30" if key == "timelineFrameRate" else None
+
+        timeline = Timeline()
+        project = SimpleNamespace(
+            GetName=lambda: "advbeppe", GetCurrentTimeline=lambda: timeline,
+            GetTimelineCount=lambda: 1, GetTimelineByIndex=lambda index: timeline,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "foreign.json").write_text(json.dumps({
+                "schema": "ARPHE_TRANSCRIPT_V1", "status": "complete",
+                "source": {"name": "video in 3.mp4", "fingerprint": "b" * 64},
+                "segments": [],
+            }), encoding="utf-8")
+            config = SimpleNamespace(transcript_root=root, workstation_id="PC_PERSONALE")
+            with patch("bridge.caption_test.duplicate_timeline") as duplicate, \
+                 patch("bridge.caption_test.timeline_edit_fingerprint", return_value="a" * 64):
+                with self.assertRaisesRegex(Exception, "timeline"):
+                    create_caption_test(project, config, object(), "Timeline 1", "ARPHE_TARGET",
+                                        "foreign.json", [{"source_start_frame": 0,
+                                        "source_end_frame": 645, "timeline_start_frame": 0}], 645)
+            duplicate.assert_not_called()
+
+    def test_accepts_transcript_bound_to_current_timeline(self):
+        from bridge.caption_test import _load_segments
+
+        class Timeline:
+            def GetName(self): return "Timeline 1"
+            def GetUniqueId(self): return "timeline-advbeppe-1"
+            def GetStartFrame(self): return 108000
+            def GetEndFrame(self): return 108645
+            def GetSetting(self, key): return "30" if key == "timelineFrameRate" else None
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binding = {
+                "workstation_id": "PC_PERSONALE", "project_name": "advbeppe",
+                "timeline_name": "Timeline 1", "timeline_id": "timeline-advbeppe-1",
+                "timeline_edit_fingerprint": "a" * 64, "start_frame": 108000,
+                "end_frame": 108645, "duration_frames": 645, "fps": 30.0,
+                "audio_fingerprint": "c" * 64, "audio_duration_seconds": 21.5,
+            }
+            segments = [{"words": [{"start": 0.1, "end": 0.3, "word": " Test"}]}]
+            (root / "timeline.json").write_text(json.dumps({
+                "schema": "ARPHE_TRANSCRIPT_V1", "status": "complete",
+                "source": {"name": "timeline.wav", "fingerprint": "c" * 64,
+                           "duration_seconds": 21.5},
+                "timeline_source": binding, "segments": segments,
+            }), encoding="utf-8")
+            config = SimpleNamespace(transcript_root=root, workstation_id="PC_PERSONALE")
+            with patch("bridge.caption_test.timeline_edit_fingerprint", return_value="a" * 64):
+                loaded = _load_segments(config, "timeline.json", Timeline(), "advbeppe")
+            self.assertEqual(segments, loaded)
 
 
 if __name__ == "__main__":

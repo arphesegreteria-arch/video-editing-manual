@@ -114,6 +114,10 @@ from .edit_point_inspection import inspect_edit_points as do_inspect_edit_points
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
 from .audio_seam_transitions import create_audio_seam_test as do_create_audio_seam_test
 from .caption_test import create_caption_test as do_create_caption_test
+from .timeline_transcription import (
+    get_timeline_audio_transcription_job as do_get_timeline_audio_transcription_job,
+    start_timeline_audio_transcription as do_start_timeline_audio_transcription,
+)
 from .editorial_workflows import (EditorialBrief, load_render_profile_registry,
                                   load_workflow_registry,
                                   resolve_delivery_profile,
@@ -1771,6 +1775,30 @@ def create_caption_test(source_timeline: str, target_name: str, transcript_file:
             return _call(do_create_caption_test, project, config, registry, source_timeline,
                          target_name, transcript_file, source_spans, caption_cutoff_frame,
                          caption_mode, uppercase, font_scale, replace_existing_captions)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def start_timeline_audio_transcription(source_timeline: str, model: str = "small",
+                                       language: str = "it") -> dict[str, Any]:
+    """Render and transcribe only the exact audio heard on one allowed timeline."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_start_timeline_audio_transcription, project, config, registry,
+                         source_timeline, model, language)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def get_timeline_audio_transcription_job(job_id: str) -> dict[str, Any]:
+    """Advance or read an owned timeline-audio transcription job."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_get_timeline_audio_transcription_job, project, config, registry, job_id)
     except Exception as exc: return _error(exc)
 
 

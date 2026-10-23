@@ -52,11 +52,17 @@ la timeline sorgente resta intatta e il progetto non viene salvato automaticamen
 duplica la timeline e applica soltanto sulla copia un `Cross Fade 0 dB` nativo, centrato (2 frame per
 default). Legge di nuovo ogni transizione creata; se Resolve ne rifiuta una o il read-back non torna,
 elimina la copia di prova, ripristina la timeline sorgente e non salva il progetto.
-`create_caption_test` è una primitiva generica per una copia di test: duplica la timeline indicata,
-ricava cue brevi da una trascrizione locale autorizzata e da una mappa esplicita di frame sorgente→timeline,
-e applica un solo layer Fusion del Graphic Kit. Non crea CTA; il cutoff è obbligatorio e dichiarato dal chiamante.
-Non contiene nomi di progetti, timeline, CTA o timestamp specifici. In caso di errore Fusion elimina la copia
-caption e ripristina la sorgente.
+`start_timeline_audio_transcription` e `get_timeline_audio_transcription_job` producono una trascrizione
+con timestamp parola per parola partendo esclusivamente dal WAV PCM 48 kHz audio-only della timeline Resolve
+indicata. Il job seleziona e avvia soltanto il proprio render, conserva gli altri job, ripristina timeline,
+formato e impostazioni render e non salva il progetto. La trascrizione è legata a workstation, progetto,
+ID timeline, impronta del montaggio, durata e impronta del WAV.
+`create_caption_test` è una primitiva generica per una copia di test: accetta soltanto una trascrizione
+completa prodotta dall'audio della stessa timeline e ancora coerente con il montaggio corrente, usa una mappa
+1:1 dell'intera durata e applica un solo layer Fusion del Graphic Kit. Una trascrizione di un media sorgente,
+di un'altra timeline o di una versione precedente del montaggio viene respinta prima della duplicazione.
+Non crea CTA; il cutoff è obbligatorio e dichiarato dal chiamante. Non contiene nomi di progetti, timeline,
+CTA o timestamp specifici. In caso di errore Fusion elimina la copia caption e ripristina la sorgente.
 `apply_longform_edit_plan` accetta inoltre `full_timeline_name` e `apply_edge_fades`: può creare nello
 stesso progetto una timeline integrale con audio restaurato e applicare il preset edge fade a ogni
 timeline individuale. Il master concatenato resta privo di fade interni.

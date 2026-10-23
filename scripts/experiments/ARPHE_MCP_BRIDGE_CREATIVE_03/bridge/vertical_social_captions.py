@@ -355,6 +355,27 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
                           "HorizontalJustificationNew": 3.0,
                           "VerticalJustificationNew": 3.0}
                 common_styles.append(common)
+                outline = _new_tool(
+                    comp, "TextPlus",
+                    f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE_OUTLINE")
+                outline_style = dict(common)
+                outline_style["Size"] = round(common["Size"] * 1.055, 5)
+                outline_style["LayoutWidth"] = round(common["LayoutWidth"] + 0.012, 5)
+                configure_caption_style(
+                    outline, outline_style,
+                    f"phrase_card_outline_{index:03d}_{word_index:03d}")
+                outline_color = _rgb(palette["black"], 0.82)
+                configure_caption_style(outline, {
+                    "Red1": outline_color["r"], "Green1": outline_color["g"],
+                    "Blue1": outline_color["b"], "Alpha1": outline_color["a"],
+                }, f"phrase_card_outline_color_{index:03d}_{word_index:03d}")
+                outline_merge = _new_tool(
+                    comp, "Merge",
+                    f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE_OUTLINE_MERGE")
+                if (not connect_input(outline_merge, "Background", card)
+                        or not connect_input(outline_merge, "Foreground", outline)):
+                    raise ValidationError("Contrasto frase base KARAOKE_PHRASE_CARD non collegato")
+                card = outline_merge
                 base = _new_tool(comp, "TextPlus",
                                  f"ARPHE_CAPTION_{index:03d}_WORD_{word_index:03d}_BASE")
                 configure_caption_style(base, common,
@@ -417,7 +438,8 @@ def build_caption_graph(comp: object, cues: tuple[dict[str, Any], ...],
                 "font_size": round(0.050 * font_scale, 4),
                 "caption_mode": caption_mode, "base_role": base_role,
                 "highlight_role": "white", "highlight_card_role": "burgundy",
-                "full_phrase_card": False, "phrase_stable": True,
+                "full_phrase_card": False, "inactive_contrast_guard": True,
+                "phrase_stable": True,
                 "gap_preserving": True, "max_rows": max_rows,
                 "lower_layout": phrase_lower_layout(max_rows)}
     if caption_mode == "KARAOKE_PHRASE":

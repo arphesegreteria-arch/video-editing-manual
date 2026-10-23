@@ -12,7 +12,8 @@
   a due righe nella safe zone; non crea CTA e non salva il progetto.
 - Aggiunta `KARAOKE_PHRASE_CARD`: mantiene la frase completa e stabile senza card generale,
   mentre un fondino bordeaux temporizzato segue soltanto la parola pronunciata; R7 e il
-  comportamento `KARAOKE_PHRASE` restano invariati.
+  comportamento `KARAOKE_PHRASE` restano invariati. Le parole inattive hanno un sottile
+  rinforzo scuro per restare leggibili anche sui fondali chiari.
 - Regressioni dedicate; suite Creative completa: `563` test verdi e `2` skip
   ambientali per privilegi symlink Windows.
 

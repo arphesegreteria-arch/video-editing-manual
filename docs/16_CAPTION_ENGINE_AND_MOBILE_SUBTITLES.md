@@ -34,7 +34,8 @@ cue. `KARAOKE_WORD` resta disponibile come prova a parola isolata, ma non è il 
 Quando il fondino deve essere esso stesso l'indicatore karaoke, usare
 `KARAOKE_PHRASE_CARD`: la frase completa resta ferma e leggibile senza card generale; soltanto
 la parola attiva riceve un rettangolo bordeaux con testo bianco, sincronizzato con la sua finestra
-parola. Il preset mantiene maiuscolo, dimensione `1.2`, massimo due righe, safe area, pause e coda
+parola. Un sottile rinforzo scuro sotto le parole inattive evita perdite di contrasto sui fondali
+chiari. Il preset mantiene maiuscolo, dimensione `1.2`, massimo due righe, safe area, pause e coda
 vuote come `KARAOKE_PHRASE`.
 
 ## Risultato verificato

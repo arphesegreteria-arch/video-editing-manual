@@ -428,12 +428,17 @@ class VerticalSocialCaptionTests(unittest.TestCase):
                 {0: 0.0, 6: 0.0, 7: 1.0, 8: 1.0, 9: 0.0}), start=1):
             stem = f"ARPHE_CAPTION_001_WORD_{word_index:03d}"
             base = created[f"{stem}_BASE"]
+            outline = created[f"{stem}_BASE_OUTLINE"]
             mask = created[f"{stem}_HIGHLIGHT_MASK"]
+            self.assertEqual(base.values["StyledText"], outline.values["StyledText"])
+            self.assertEqual(base.values["Center"], outline.values["Center"])
+            self.assertGreater(outline.values["Size"], base.values["Size"])
             self.assertEqual(base.values["Center"], mask.values["Center"])
             self.assertGreater(mask.values["Width"], base.values["LayoutWidth"])
             self.assertEqual(expected_blend, created[f"{stem}_HIGHLIGHT_MERGE"].Blend)
             self.assertEqual(expected_blend, created[f"{stem}_ACTIVE_MERGE"].Blend)
         self.assertEqual("burgundy", result["highlight_card_role"])
+        self.assertTrue(result["inactive_contrast_guard"])
         self.assertFalse(result["full_phrase_card"])
         self.assertTrue(result["phrase_stable"])
 

@@ -50,6 +50,7 @@ class ArtifactPolicyTests(unittest.TestCase):
 
         self.assertEqual("ARPHE_ARTIFACT_RETENTION_V1", policy.policy_version)
         self.assertEqual(604800, policy.quarantine_seconds)
+        self.assertFalse(policy.purge_enabled)
         self.assertEqual(86400, policy.rules["DIAGNOSTIC_CAPTURE"].active_seconds)
         self.assertEqual(86400, policy.rules["TEMP_REPORT"].active_seconds)
         self.assertEqual(604800, policy.rules["TECHNICAL_PREVIEW"].active_seconds)
@@ -76,6 +77,109 @@ class ArtifactPolicyTests(unittest.TestCase):
 
 
 class ArtifactStoreTests(unittest.TestCase):
+    def test_protected_file_round_trips_dependencies_and_review_hold(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "audio" / "dialogue.wav"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"protected-audio")
+            store = ArtifactStore(root / "registry.json", "PC_PERSONALE",
+                                  managed_roots={"audio_root": (root / "audio").resolve()})
+
+            created = store.register_protected_path(
+                source,
+                category="AUDIO_DERIVATIVE",
+                producer="timeline_dialogue_cleanup",
+                managed_root_id="audio_root",
+                dependencies=("sha256:source", "resolve:timeline-1"),
+                review_state="PENDING",
+                hold_reasons=("HUMAN_LISTENING_REVIEW",),
+            )
+
+            reloaded = ArtifactStore(store.path, "PC_PERSONALE").records()[0]
+            self.assertEqual(created.artifact_id, reloaded.artifact_id)
+            self.assertEqual("PROTECTED", reloaded.protection_class)
+            self.assertEqual(("sha256:source", "resolve:timeline-1"), reloaded.dependencies)
+            self.assertEqual("PENDING", reloaded.review_state)
+            self.assertEqual(("HUMAN_LISTENING_REVIEW",), reloaded.hold_reasons)
+            self.assertEqual(64, len(reloaded.sha256 or ""))
+
+    def test_protected_registration_upgrades_existing_disposable_record(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "audio" / "shared.wav"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"shared")
+            store = ArtifactStore(root / "registry.json", "PC_PERSONALE",
+                                  managed_roots={"audio_root": path.parent.resolve(),
+                                                 "render_root": path.parent.resolve()})
+            disposable = store.register_path(
+                path, "file", "TEMP_REPORT", "legacy", "render_root")
+
+            protected = store.register_protected_path(
+                path, category="AUDIO_SOURCE", producer="audio",
+                managed_root_id="audio_root", dependencies=("fingerprint:source",))
+
+            self.assertEqual(disposable.artifact_id, protected.artifact_id)
+            self.assertEqual("PROTECTED", protected.protection_class)
+            self.assertEqual("AUDIO_SOURCE", protected.category)
+            self.assertEqual(("fingerprint:source",), protected.dependencies)
+
+    def test_protected_registration_rejects_false_managed_root_claim(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            inside = root / "audio"
+            inside.mkdir()
+            outside = root / "outside.wav"
+            outside.write_bytes(b"outside")
+            store = ArtifactStore(root / "registry.json", "PC_PERSONALE",
+                                  managed_roots={"audio_root": inside.resolve()})
+
+            with self.assertRaisesRegex(ValueError, "managed root|radice"):
+                store.register_protected_path(
+                    outside, category="AUDIO_SOURCE", producer="test",
+                    managed_root_id="audio_root")
+
+    def test_crash_left_registration_lock_fails_closed_and_preserves_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "audio.wav"
+            source.write_bytes(b"audio")
+            store = ArtifactStore(root / "registry.json", "PC_PERSONALE",
+                                  managed_roots={"audio_root": root.resolve()})
+            lock = store.path.with_suffix(store.path.suffix + ".registration.lock")
+            lock.write_text("crashed-writer", encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimeError, "registrazione.*bloccata"):
+                store.register_protected_path(
+                    source, category="AUDIO_SOURCE", producer="test",
+                    managed_root_id="audio_root",
+                )
+
+            self.assertEqual(b"audio", source.read_bytes())
+            self.assertEqual("crashed-writer", lock.read_text(encoding="utf-8"))
+            self.assertFalse(store.path.exists())
+
+    @unittest.skipUnless(hasattr(Path, "symlink_to"), "symlink non supportato")
+    def test_protected_registration_rejects_symlink_without_following_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "target.wav"
+            target.write_bytes(b"audio")
+            link = root / "link.wav"
+            try:
+                link.symlink_to(target)
+            except OSError as exc:
+                self.skipTest(f"symlink non disponibile: {exc}")
+            store = ArtifactStore(root / "registry.json", "PC_PERSONALE",
+                                  managed_roots={"audio_root": root.resolve()})
+
+            with self.assertRaisesRegex(ValueError, "symlink|reparse"):
+                store.register_protected_path(
+                    link, category="AUDIO_SOURCE", producer="test",
+                    managed_root_id="audio_root",
+                )
+
     def test_register_file_persists_digest_and_workstation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

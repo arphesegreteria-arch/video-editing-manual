@@ -172,6 +172,7 @@ def make_config(root: Path) -> CreativeConfig:
         render_format="mp4", render_codec="H264", media_roots=(root,),
         transcript_root=root / "transcripts", audio_root=root / "audio",
         audio_jobs_root=root / "audio_jobs", workstation_id="PC_PERSONALE",
+        artifact_registry_path=root / "artifact_registry.json",
     )
     cfg.transcript_root.mkdir(parents=True)
     cfg.audio_root.mkdir(parents=True)

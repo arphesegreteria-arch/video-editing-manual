@@ -44,10 +44,38 @@ class MaintenanceSchedulerTests(unittest.TestCase):
 
     def test_background_failure_is_swallowed(self):
         loader = Mock(side_effect=RuntimeError("secret path must not escape"))
-        thread = start_lazy_maintenance(loader, delay_seconds=0)
+        thread = start_lazy_maintenance(loader, delay_seconds=0, max_cycles=1)
         self.assertIsNotNone(thread)
         thread.join(timeout=2)
         self.assertFalse(thread.is_alive())
+
+    def test_background_loop_retries_after_transient_config_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = config_for(Path(directory))
+            loader = Mock(side_effect=[RuntimeError("temporary config read"), config])
+
+            thread = start_lazy_maintenance(
+                loader, delay_seconds=0, interval_seconds=0.01, max_cycles=2
+            )
+            self.assertIsNotNone(thread)
+            thread.join(timeout=2)
+
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(2, loader.call_count)
+
+    def test_background_loop_rechecks_without_an_os_scheduler(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = config_for(Path(directory))
+            loader = Mock(return_value=config)
+
+            thread = start_lazy_maintenance(
+                loader, delay_seconds=0, interval_seconds=0.01, max_cycles=2
+            )
+            self.assertIsNotNone(thread)
+            thread.join(timeout=2)
+
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(2, loader.call_count)
 
     def test_server_run_reaches_mcp_even_if_lazy_start_fails(self):
         from bridge import server

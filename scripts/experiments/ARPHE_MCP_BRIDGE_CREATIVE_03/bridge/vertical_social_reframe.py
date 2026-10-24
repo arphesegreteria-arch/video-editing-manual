@@ -107,7 +107,24 @@ def apply_transform_parameters(tool: object, plan: dict[str, Any], comp: object 
         raise ValidationError("piano Transform REFRAME non valido")
     value = {1: float(center["x"]), 2: float(center["y"]), 3: 0.0}
     try:
-        tool.SetInput("Center", value)
+        center_keys = plan.get("center_keys") or []
+        if center_keys:
+            if comp is None:
+                raise ValidationError("Composizione Fusion richiesta per center_keys REFRAME")
+            tool.Center = comp.BezierSpline()
+            animated_center = tool.Center
+            for key in center_keys:
+                animated_center[int(key["frame"])] = {
+                    1: float(key["x"]), 2: float(key["y"]), 3: 0.0,
+                }
+            if any(
+                abs(float(animated_center[int(key["frame"])][1]) - float(key["x"])) > 1e-6
+                or abs(float(animated_center[int(key["frame"])][2]) - float(key["y"])) > 1e-6
+                for key in center_keys
+            ):
+                return False
+        else:
+            tool.SetInput("Center", value)
         tool.SetInput("Size", float(zoom))
         keys = plan.get("rotation_keys") or []
         if keys:
@@ -120,7 +137,8 @@ def apply_transform_parameters(tool: object, plan: dict[str, Any], comp: object 
             if any(abs(float(angle[int(key["frame"])]) - float(key["angle"])) > 1e-6
                    for key in keys):
                 return False
-        return tool.GetInput("Center") == value and float(tool.GetInput("Size")) == float(zoom)
+        center_ok = bool(center_keys) or tool.GetInput("Center") == value
+        return center_ok and float(tool.GetInput("Size")) == float(zoom)
     except Exception as exc:
         raise ValidationError(f"Transform REFRAME non applicabile: {exc}") from exc
 

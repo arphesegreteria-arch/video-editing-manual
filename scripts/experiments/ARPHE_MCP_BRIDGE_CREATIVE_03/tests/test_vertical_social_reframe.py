@@ -198,3 +198,63 @@ class ReframeRequestTests(unittest.TestCase):
         }
         self.assertTrue(apply_transform_parameters(tool, plan, Comp()))
         self.assertEqual({0: -0.6, 60: 0.2, 119: -0.1}, dict(tool.Angle))
+        self.assertEqual({1: 0.5, 2: 0.5, 3: 0.0}, tool.GetInput("Center"))
+
+    def test_transform_applies_and_reads_back_center_spline(self):
+        from bridge.vertical_social_reframe import apply_transform_parameters
+
+        class Spline(dict):
+            pass
+
+        class Comp:
+            def BezierSpline(self): return Spline()
+
+        class Tool:
+            def __init__(self): self.values = {}
+            def SetInput(self, name, value): self.values[name] = value
+            def GetInput(self, name): return self.values.get(name)
+
+        tool = Tool()
+        plan = {
+            "center": {"x": 0.5, "y": 0.5}, "zoom": 1.08,
+            "center_keys": [
+                {"frame": 0, "x": 0.5, "y": 0.49},
+                {"frame": 60, "x": 0.5, "y": 0.51},
+                {"frame": 119, "x": 0.5, "y": 0.505},
+            ],
+        }
+        self.assertTrue(apply_transform_parameters(tool, plan, Comp()))
+        self.assertEqual(
+            {
+                0: {1: 0.5, 2: 0.49, 3: 0.0},
+                60: {1: 0.5, 2: 0.51, 3: 0.0},
+                119: {1: 0.5, 2: 0.505, 3: 0.0},
+            },
+            dict(tool.Center),
+        )
+        self.assertNotIn("Center", tool.values)
+
+    def test_transform_rejects_silent_center_key_mismatch(self):
+        from bridge.vertical_social_reframe import apply_transform_parameters
+
+        class MismatchSpline(dict):
+            def __getitem__(self, key):
+                value = super().__getitem__(key)
+                return {**value, 2: value[2] + 0.01}
+
+        class Comp:
+            def BezierSpline(self): return MismatchSpline()
+
+        class Tool:
+            def __init__(self): self.values = {}
+            def SetInput(self, name, value): self.values[name] = value
+            def GetInput(self, name): return self.values.get(name)
+
+        plan = {
+            "center": {"x": 0.5, "y": 0.5}, "zoom": 1.08,
+            "center_keys": [
+                {"frame": 0, "x": 0.5, "y": 0.49},
+                {"frame": 119, "x": 0.5, "y": 0.505},
+            ],
+        }
+        self.assertFalse(apply_transform_parameters(Tool(), plan, Comp()))

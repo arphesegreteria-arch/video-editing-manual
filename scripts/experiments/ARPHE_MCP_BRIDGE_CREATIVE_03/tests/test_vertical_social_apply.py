@@ -86,3 +86,25 @@ class VerticalSocialApplyTests(unittest.TestCase):
         with patch("bridge.vertical_social_apply.apply_fusion_reframe", return_value=True):
             result = apply_reframe_action(timeline, action, 40)
         self.assertTrue(result["ok"])
+
+    def test_reframe_evidence_preserves_absolute_center_keys(self):
+        from bridge.vertical_social_apply import apply_reframe_action
+        timeline = self.Timeline(
+            "__ARPHE_VERTICAL_VERTICAL_ABC12345ABC12345ABC12345ABC12345",
+            [self.Item(108000, 108040)], start_frame=108000,
+        )
+        center_keys = [
+            {"frame": 0, "x": 0.5, "y": 0.49},
+            {"frame": 20, "x": 0.5, "y": 0.51},
+            {"frame": 39, "x": 0.5, "y": 0.505},
+        ]
+        action = {
+            "action_id": "r-center", "type": "REFRAME", "state": "APPROVED",
+            "range": {"start_frame": 0, "end_frame": 40},
+            "target": {"kind": "reference_line", "label": "soffitto"},
+            "anchor": {"x": 0.5, "y": 0.5}, "reason": "linea soffitto",
+            "center_keys": center_keys,
+        }
+        with patch("bridge.vertical_social_apply.apply_fusion_reframe", return_value=True):
+            result = apply_reframe_action(timeline, action, 40)
+        self.assertEqual(center_keys, result["center_keys"])

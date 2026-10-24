@@ -60,4 +60,8 @@ def apply_reframe_action(timeline: object, action: dict[str, Any], total_frames:
                 {"frame": frame, "angle": angle}
                 for frame, angle in validated["rotation_keys"]
             ],
+            "center_keys": [
+                {"frame": frame, "x": x, "y": y}
+                for frame, x, y in validated["center_keys"]
+            ],
             "output": transform["output"]}

@@ -24,12 +24,16 @@ riavviare il runtime Creative03.
 
 ## Raddrizzamento esplicito Vertical Social
 
-L'azione generica `REFRAME` può includere `zoom` e `rotation_keys` per correggere una ripresa
-leggermente inclinata o oscillante. I punti sono frame assoluti della timeline e angoli in gradi;
-devono essere ordinati e ancorare esattamente il primo e l'ultimo frame del range approvato. Il
-bridge rifiuta angoli oltre `+/-7.5` gradi, zoom fuori da `1.0..1.15`, valori impliciti e punti fuori
-range. Resolve conserva l'interpolazione in una spline Fusion sulla sola timeline provvisoria del
-piano approvato. La sorgente non viene modificata e il progetto non viene salvato automaticamente.
+L'azione generica `REFRAME` può includere `zoom`, `rotation_keys` e `center_keys` per correggere una
+ripresa leggermente inclinata o oscillante. I punti sono frame assoluti della timeline; gli angoli
+sono in gradi e le coordinate `x/y` sono normalizzate. Ogni lista deve essere ordinata e ancorare
+esattamente il primo e l'ultimo frame del range approvato. Il bridge rifiuta angoli oltre `+/-7.5`
+gradi, coordinate fuori da `0.1..0.9`, zoom fuori da `1.0..1.15`, valori impliciti e punti fuori
+range. Le coordinate devono provenire da misure esplicite fornite dal chiamante: il bridge non
+riconosce automaticamente soggetti o orizzonti. Resolve conserva la rotazione in `BezierSpline` e
+la posizione bidimensionale in un modificatore `Path` Fusion, verificando ogni punto sulla sola
+timeline provvisoria del piano approvato. La sorgente non viene modificata e il progetto non viene
+salvato automaticamente.
 
 Stato: **50 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
 GATE E SEQUENCE TRANSITION PASS / PAPER STACK + GATES F-G PENDING**.

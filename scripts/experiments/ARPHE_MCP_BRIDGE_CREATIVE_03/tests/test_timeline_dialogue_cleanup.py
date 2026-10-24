@@ -35,10 +35,14 @@ class Media:
 
 class Item:
     def __init__(self, media: Media, start: int = 108000, end: int = 108732,
-                 source_start: int = 0) -> None:
+                 source_start: int = 0, fresh_media_proxy: bool = False) -> None:
         self.media, self.start, self.end, self.source_start = media, start, end, source_start
+        self.fresh_media_proxy = fresh_media_proxy
 
-    def GetMediaPoolItem(self): return self.media
+    def GetMediaPoolItem(self):
+        if self.fresh_media_proxy:
+            return Media(self.media.name, self.media.unique_id, self.media.path)
+        return self.media
     def GetStart(self): return self.start
     def GetEnd(self): return self.end
     def GetDuration(self): return self.end - self.start
@@ -71,17 +75,20 @@ class Timeline:
         return list(self.video_items if kind == "video" else self.audio_items if kind == "audio" else [])
     def DuplicateTimeline(self, name):
         def copy_item(item):
-            return Item(item.media, item.start, item.end, item.source_start)
+            return Item(item.media, item.start, item.end, item.source_start,
+                        item.fresh_media_proxy)
         duplicate = Timeline(
             name, f"timeline-{len(self.project.timelines) + 1}",
             [copy_item(item) for item in self.video_items],
             [copy_item(item) for item in self.audio_items],
         )
         duplicate.project = self.project
+        duplicate.delete_calls = []
         self.project.timelines.append(duplicate)
         self.project.current = duplicate
         return duplicate
     def DeleteClips(self, clips, _ripple):
+        self.delete_calls.append(list(clips))
         for clip in clips:
             if clip in self.video_items:
                 self.video_items.remove(clip)
@@ -94,31 +101,42 @@ class Pool:
     def __init__(self, project) -> None:
         self.project = project
         self.append_return = "item"
+        self.import_unique_id = "processed-media"
+        self.append_foreign_media = None
+        self.append_records = []
 
     def CreateEmptyTimeline(self, _name): return None
     def ImportMedia(self, paths):
-        return [Media(Path(paths[0]).name, "processed-media", str(Path(paths[0]).resolve()))]
+        return [Media(Path(paths[0]).name, self.import_unique_id, str(Path(paths[0]).resolve()))]
     def AppendToTimeline(self, records):
         record = records[0]
+        self.append_records.append(dict(record))
         item = Item(
             record["mediaPoolItem"], record["recordFrame"],
             record["recordFrame"] + record["endFrame"] - record["startFrame"] + 1,
-            record["startFrame"],
+            record["startFrame"], fresh_media_proxy=True,
         )
         self.project.current.audio_items.append(item)
+        if self.append_foreign_media is not None:
+            self.project.current.audio_items.append(Item(
+                self.append_foreign_media, item.start, item.end, item.source_start,
+                fresh_media_proxy=True,
+            ))
         return [] if self.append_return == "empty" else [item]
 
 
 class Project:
-    def __init__(self) -> None:
+    def __init__(self, fresh_media_proxies: bool = False) -> None:
         video = Media("peeling.mp4", "media-video", "C:/ARPHE/peeling.mp4")
         audio = Media("peeling.wav", "media-audio", "C:/ARPHE/peeling.wav")
         self.source = Timeline("ARPHE_PEELING_STABILIZED", "timeline-source",
-                               [Item(video)], [Item(audio)])
+                               [Item(video, fresh_media_proxy=fresh_media_proxies)],
+                               [Item(audio, fresh_media_proxy=fresh_media_proxies)])
         self.other = Timeline("ARPHE_OTHER", "timeline-other")
         self.timelines = [self.source, self.other]
         for timeline in self.timelines:
             timeline.project = self
+            timeline.delete_calls = []
         self.current = self.other
         self.pool = Pool(self)
         self.jobs = [{"JobId": "foreign-job", "JobStatus": "Ready"}]
@@ -210,10 +228,10 @@ class TimelineDialogueCleanupTests(unittest.TestCase):
         self.assertEqual(0, structure["audio_source_start"])
         self.assertEqual(732, structure["audio_source_end"])
 
-    def _start(self, root: Path):
+    def _start(self, root: Path, project=None):
         module = cleanup_module(self)
         cfg = make_config(root)
-        project = Project()
+        project = project or Project()
         result = module.start_timeline_dialogue_cleanup_test(
             project, cfg, Registry(cfg.state_path),
             "ARPHE_PEELING_STABILIZED", "ARPHE_PEELING_AUDIO_NATURAL_V5_TEST",
@@ -222,8 +240,8 @@ class TimelineDialogueCleanupTests(unittest.TestCase):
                          cfg.workstation_id / f"{result['job_id']}.json")
         return module, cfg, project, result, manifest_path
 
-    def _advance_to_applying(self, root: Path):
-        module, cfg, project, started, manifest_path = self._start(root)
+    def _advance_to_applying(self, root: Path, project=None):
+        module, cfg, project, started, manifest_path = self._start(root, project)
         parent = json.loads(manifest_path.read_text(encoding="utf-8"))
         sample_frames = int(48000 * 732 / 30)
         source_path = Path(parent["source_path"])
@@ -579,6 +597,68 @@ class TimelineDialogueCleanupTests(unittest.TestCase):
             self.assertEqual((108000, 108732), (restored.GetStart(), restored.GetEnd()))
             self.assertEqual("INTERRUPTED", json.loads(
                 manifest_path.read_text(encoding="utf-8"))["status"])
+
+    def test_apply_processed_audio_accepts_fresh_media_proxies_with_same_ids(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Project(fresh_media_proxies=True)
+            module, cfg, project, _started, manifest_path = self._advance_to_applying(
+                Path(directory), project)
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+            readback = module._apply_processed_audio(project, cfg, Registry(cfg.state_path), payload)
+
+            target = project.current
+            self.assertEqual("ARPHE_PEELING_AUDIO_NATURAL_V5_TEST", readback["created_timeline"])
+            self.assertEqual(1, len(target.video_items))
+            self.assertEqual(1, len(target.audio_items))
+            self.assertEqual("processed-media", target.audio_items[0].GetMediaPoolItem().GetUniqueId())
+            self.assertEqual(1, len(target.delete_calls))
+            self.assertEqual(1, len(target.delete_calls[0]))
+            self.assertEqual("media-audio", target.delete_calls[0][0].GetMediaPoolItem().GetUniqueId())
+            self.assertEqual([{
+                "mediaPoolItem": project.pool.append_records[0]["mediaPoolItem"],
+                "startFrame": 0, "endFrame": 731, "recordFrame": 108000,
+                "mediaType": 2, "trackIndex": 1,
+            }], project.pool.append_records)
+
+    def test_apply_processed_audio_rolls_back_only_processed_media_after_append_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Project(fresh_media_proxies=True)
+            module, cfg, project, _started, manifest_path = self._advance_to_applying(
+                Path(directory), project)
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            foreign = Media("foreign.wav", "foreign-media", "C:/ARPHE/foreign.wav")
+            project.pool.append_return = "empty"
+            project.pool.append_foreign_media = foreign
+
+            with self.assertRaisesRegex(RuntimeError, "Inserimento"):
+                module._apply_processed_audio(project, cfg, Registry(cfg.state_path), payload)
+
+            target = project.current
+            self.assertEqual({"media-audio", "foreign-media"}, {
+                item.GetMediaPoolItem().GetUniqueId() for item in target.audio_items
+            })
+            self.assertEqual((108000, 108732),
+                             (target.audio_items[0].GetStart(), target.audio_items[0].GetEnd()))
+            deleted_ids = [clip.GetMediaPoolItem().GetUniqueId()
+                           for call in target.delete_calls for clip in call]
+            self.assertEqual(["media-audio", "processed-media"], deleted_ids)
+
+    def test_apply_processed_audio_missing_processed_id_does_not_mutate_duplicate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Project(fresh_media_proxies=True)
+            module, cfg, project, _started, manifest_path = self._advance_to_applying(
+                Path(directory), project)
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            project.pool.import_unique_id = ""
+
+            with self.assertRaisesRegex(ValidationError, "media audio non disponibile"):
+                module._apply_processed_audio(project, cfg, Registry(cfg.state_path), payload)
+
+            target = project.current
+            self.assertEqual([], target.delete_calls)
+            self.assertEqual([], project.pool.append_records)
+            self.assertEqual("media-audio", target.audio_items[0].GetMediaPoolItem().GetUniqueId())
 
 
 if __name__ == "__main__":

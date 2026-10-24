@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 
 
@@ -124,6 +125,62 @@ class ColoristJobTests(unittest.TestCase):
             path.write_text("{broken", encoding="utf-8")
             with self.assertRaises(ValidationError):
                 store.get(created.colorist_job_id, "PC_PERSONALE")
+
+    def test_store_serializes_create_with_transition_without_losing_the_transition(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "colorist.json"
+            primary = ColoristJobStore(path, "PC_PERSONALE")
+            first = primary.create(job())
+            second = job()
+            create_reached_save = threading.Event()
+            allow_create_save = threading.Event()
+
+            class PausedCreateStore(ColoristJobStore):
+                def _save(self, data):
+                    create_reached_save.set()
+                    if not allow_create_save.wait(5):
+                        raise RuntimeError("test synchronization timeout")
+                    super()._save(data)
+
+            errors = []
+
+            def create_second():
+                try:
+                    PausedCreateStore(path, "PC_PERSONALE").create(second)
+                except Exception as exc:  # pragma: no cover - asserted below
+                    errors.append(exc)
+
+            create_thread = threading.Thread(target=create_second)
+            create_thread.start()
+            self.assertTrue(create_reached_save.wait(5))
+
+            current = primary.get(first.colorist_job_id, "PC_PERSONALE")
+            approved = approve_colorist_job(current, current.plan_fingerprint, "ALESSIO")
+
+            def save_transition():
+                try:
+                    primary.save(approved, current.revision)
+                except Exception as exc:  # pragma: no cover - asserted below
+                    errors.append(exc)
+
+            transition_thread = threading.Thread(target=save_transition)
+            transition_thread.start()
+            transition_thread.join(0.25)
+            allow_create_save.set()
+            create_thread.join(5)
+            transition_thread.join(5)
+
+            self.assertFalse(create_thread.is_alive())
+            self.assertFalse(transition_thread.is_alive())
+            self.assertEqual([], errors)
+            self.assertEqual(
+                "APPROVED",
+                primary.get(first.colorist_job_id, "PC_PERSONALE").state,
+            )
+            self.assertEqual(
+                "PREPARED",
+                primary.get(second.colorist_job_id, "PC_PERSONALE").state,
+            )
 
     def test_registry_rejects_foreign_workstation_payload(self):
         with tempfile.TemporaryDirectory() as directory:

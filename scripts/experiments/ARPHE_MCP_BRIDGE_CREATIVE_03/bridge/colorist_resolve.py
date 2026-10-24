@@ -173,7 +173,8 @@ def apply_colorist_job(project: Any, timeline: Any, job: ColoristJob,
         for clip_id in job.clip_ids:
             before = job.before_versions[clip_id]
             try:
-                if _call(clips[clip_id], "LoadVersionByName", before["versionName"], 0) is True:
+                if (_call(clips[clip_id], "LoadVersionByName", before["versionName"], 0) is True
+                        and _current_version(clips[clip_id])["versionName"] == before["versionName"]):
                     restored.append(clip_id)
             except Exception:
                 pass
@@ -224,6 +225,8 @@ def preview_colorist_version(project: Any, timeline: Any, job: ColoristJob,
     version = preview["target_version"]
     if _call(clips[clip_id], "LoadVersionByName", version, 0) is not True:
         raise RuntimeError("LoadVersionByName preview fallita")
+    if _current_version(clips[clip_id])["versionName"] != version:
+        raise RuntimeError("LoadVersionByName preview read-back fallita")
     return {"ok": True, "clip_id": clip_id, "side": side, "loaded_version": version}
 
 
@@ -238,5 +241,7 @@ def restore_colorist_preview(project: Any, timeline: Any, job: ColoristJob,
         raise ValidationError("Versione di ripristino preview non disponibile")
     if _call(clips[clip_id], "LoadVersionByName", restore_version, 0) is not True:
         raise RuntimeError(f"Ripristino preview fallito per {clip_id}")
+    if _current_version(clips[clip_id])["versionName"] != restore_version:
+        raise RuntimeError(f"Ripristino preview read-back fallito per {clip_id}")
     return {"ok": True, "clip_id": clip_id, "restored_version": restore_version}
 

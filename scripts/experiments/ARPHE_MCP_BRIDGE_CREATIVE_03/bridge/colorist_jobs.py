@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import threading
 from typing import Any, Mapping, Sequence
 from uuid import uuid4
 
@@ -20,6 +21,7 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 STATES = {"PREPARED", "APPROVED", "APPLYING", "FAILED_RECOVERABLE", "FAILED_MANUAL",
           "APPLIED", "ACCEPTED", "REJECTED"}
 ROLES = {"ALESSIO", "COLORIST"}
+_STORE_WRITE_LOCK = threading.RLock()
 
 
 def _now() -> str:
@@ -367,13 +369,14 @@ class ColoristJobStore:
         _validate(job)
         if job.workstation_id != self.workstation_id or job.state != "PREPARED" or job.revision != 0:
             raise ValidationError("Nuovo job Colorist non valido per questo store")
-        data = self._load()
-        if job.colorist_job_id in data["jobs"]:
-            raise ValidationError("colorist_job_id già esistente")
-        created = replace(job, revision=1)
-        data["jobs"][created.colorist_job_id] = asdict(created)
-        self._save(data)
-        return created
+        with _STORE_WRITE_LOCK:
+            data = self._load()
+            if job.colorist_job_id in data["jobs"]:
+                raise ValidationError("colorist_job_id già esistente")
+            created = replace(job, revision=1)
+            data["jobs"][created.colorist_job_id] = asdict(created)
+            self._save(data)
+            return created
 
     def get(self, job_id: str, workstation_id: str) -> ColoristJob:
         if workstation_id != self.workstation_id:
@@ -388,41 +391,42 @@ class ColoristJobStore:
 
     def save(self, job: ColoristJob, expected_revision: int) -> ColoristJob:
         _validate(job)
-        data = self._load()
-        raw = data["jobs"].get(job.colorist_job_id)
-        if raw is None:
-            raise ValidationError("Job Colorist non trovato")
-        current = _from_payload(raw)
-        if job == current:
-            return current
-        if current.revision != expected_revision:
-            raise ValidationError("revision Colorist stale")
-        if job.revision != current.revision:
-            raise ValidationError("Il chiamante non può impostare revision")
-        immutable = (
-            "colorist_job_id", "workstation_id", "project_name", "timeline_name", "timeline_identity",
-            "clip_ids", "reference_clip_id", "adjustments", "preset_name", "drx_preset_name",
-            "drx_asset_identity", "before_versions", "cdl", "plan_fingerprint",
-        )
-        if any(getattr(job, name) != getattr(current, name) for name in immutable):
-            raise ValidationError("Identità immutabile Colorist modificata")
-        allowed = {"PREPARED": "APPROVED", "APPROVED": "APPLYING", "APPLYING": None,
-                   "FAILED_RECOVERABLE": None, "FAILED_MANUAL": None,
-                   "APPLIED": None, "ACCEPTED": None, "REJECTED": None}
-        if job.state != current.state:
-            if current.state == "APPLIED":
-                if job.state not in {"ACCEPTED", "REJECTED"}:
-                    raise ValidationError("Transizione review Colorist non consentita")
-            elif current.state == "APPLYING" and job.state in {
-                "APPLIED", "FAILED_RECOVERABLE", "FAILED_MANUAL"
-            }:
-                pass
-            elif allowed[current.state] != job.state:
-                raise ValidationError("Transizione Colorist non consentita")
-        elif job.state not in {"APPLIED", "ACCEPTED", "REJECTED"}:
-            raise ValidationError("Aggiornamento Colorist senza transizione non consentito")
-        saved = replace(job, revision=current.revision + 1)
-        data["jobs"][saved.colorist_job_id] = asdict(saved)
-        self._save(data)
-        return saved
+        with _STORE_WRITE_LOCK:
+            data = self._load()
+            raw = data["jobs"].get(job.colorist_job_id)
+            if raw is None:
+                raise ValidationError("Job Colorist non trovato")
+            current = _from_payload(raw)
+            if job == current:
+                return current
+            if current.revision != expected_revision:
+                raise ValidationError("revision Colorist stale")
+            if job.revision != current.revision:
+                raise ValidationError("Il chiamante non può impostare revision")
+            immutable = (
+                "colorist_job_id", "workstation_id", "project_name", "timeline_name", "timeline_identity",
+                "clip_ids", "reference_clip_id", "adjustments", "preset_name", "drx_preset_name",
+                "drx_asset_identity", "before_versions", "cdl", "plan_fingerprint",
+            )
+            if any(getattr(job, name) != getattr(current, name) for name in immutable):
+                raise ValidationError("Identità immutabile Colorist modificata")
+            allowed = {"PREPARED": "APPROVED", "APPROVED": "APPLYING", "APPLYING": None,
+                       "FAILED_RECOVERABLE": None, "FAILED_MANUAL": None,
+                       "APPLIED": None, "ACCEPTED": None, "REJECTED": None}
+            if job.state != current.state:
+                if current.state == "APPLIED":
+                    if job.state not in {"ACCEPTED", "REJECTED"}:
+                        raise ValidationError("Transizione review Colorist non consentita")
+                elif current.state == "APPLYING" and job.state in {
+                    "APPLIED", "FAILED_RECOVERABLE", "FAILED_MANUAL"
+                }:
+                    pass
+                elif allowed[current.state] != job.state:
+                    raise ValidationError("Transizione Colorist non consentita")
+            elif job.state not in {"APPLIED", "ACCEPTED", "REJECTED"}:
+                raise ValidationError("Aggiornamento Colorist senza transizione non consentito")
+            saved = replace(job, revision=current.revision + 1)
+            data["jobs"][saved.colorist_job_id] = asdict(saved)
+            self._save(data)
+            return saved
 

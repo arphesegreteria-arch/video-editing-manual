@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bridge import server  # noqa: E402
+from bridge.colorist_jobs import after_version_names  # noqa: E402
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 from bridge.registry import Registry  # noqa: E402
 
@@ -194,6 +195,59 @@ class ColoristToolTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(applied["ok"])
             self.assertEqual("FAILED_RECOVERABLE", applied["state"])
             self.assertEqual("FAILED_RECOVERABLE", inspected["state"])
+
+    def test_failed_preview_restore_keeps_tracking_for_a_later_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = config_for(root, enabled=True)
+            project, timeline = FakeProject(), FakeTimeline()
+            registry = Registry(config.state_path)
+            registry.add_project("ARPHE_TEST")
+            registry.add_timeline("ARPHE_TEST", "ARPHE_COLOR_TEST")
+            runtime = (object(), object(), project, timeline, config, registry, None)
+            with patch("bridge.server._runtime", return_value=runtime), patch(
+                "bridge.server.load_config", return_value=config
+            ):
+                prepared = server.prepare_colorist_plan(
+                    ["clip-a"], "clip-a", {}, "ARPHE_CLEAN_NEUTRAL", None,
+                )
+                server.approve_colorist_plan(
+                    prepared["colorist_job_id"], prepared["plan_fingerprint"], "ALESSIO"
+                )
+                applying = server._colorist_store(config).get(
+                    prepared["colorist_job_id"], config.workstation_id
+                )
+                names = after_version_names(applying)
+                evidence = ({
+                    "clip_id": "clip-a", "before_version": "Original",
+                    "after_version": names["clip-a"], "reference_clip_id": "clip-a",
+                    "cdl_applied_directly": True, "drx_preset_name": None,
+                },)
+                with patch("bridge.server.do_apply_colorist_job", return_value={
+                    "ok": True, "evidence": evidence,
+                }):
+                    applied = server.apply_colorist_plan(prepared["colorist_job_id"])
+                self.assertTrue(applied["ok"])
+                with patch("bridge.server.do_validate_colorist_preview", return_value={
+                    "restore_version": names["clip-a"], "target_version": "Original",
+                }), patch("bridge.server.do_preview_colorist_version", return_value={
+                    "ok": True, "clip_id": "clip-a", "loaded_version": "Original",
+                }):
+                    previewed = server.preview_colorist_version(
+                        prepared["colorist_job_id"], "clip-a", "before"
+                    )
+                self.assertTrue(previewed["ok"])
+                with patch(
+                    "bridge.server.do_restore_colorist_preview",
+                    side_effect=RuntimeError("Ripristino preview read-back fallito"),
+                ):
+                    restored = server.restore_colorist_preview(
+                        prepared["colorist_job_id"], "clip-a"
+                    )
+                inspected = server.inspect_colorist_plan(prepared["colorist_job_id"])
+
+            self.assertFalse(restored["ok"])
+            self.assertEqual(names["clip-a"], inspected["preview_restore_versions"]["clip-a"])
 
 
 if __name__ == "__main__":

@@ -35,13 +35,15 @@ class FakeGraph:
 
 
 class FakeClip:
-    def __init__(self, clip_id, name, *, add_ok=True, cdl_ok=True, copy_ok=True, restore_ok=True):
+    def __init__(self, clip_id, name, *, add_ok=True, cdl_ok=True, copy_ok=True,
+                 restore_ok=True, load_changes=True):
         self.clip_id = clip_id
         self.name = name
         self.add_ok = add_ok
         self.cdl_ok = cdl_ok
         self.copy_ok = copy_ok
         self.restore_ok = restore_ok
+        self.load_changes = load_changes
         self.versions = ["Original"]
         self.current = "Original"
         self.add_calls = []
@@ -71,7 +73,8 @@ class FakeClip:
             return False
         if version_type != 0 or name not in self.versions:
             return False
-        self.current = name
+        if self.load_changes:
+            self.current = name
         return True
 
     def SetCDL(self, payload):
@@ -185,6 +188,15 @@ class ColoristResolveTests(unittest.TestCase):
         self.assertTrue(result["manual_recovery_required"])
         self.assertNotIn("clip-a", result["restored_clip_ids"])
 
+    def test_partial_failure_requires_restore_readback_not_only_true_return(self):
+        clips = [FakeClip("clip-a", "Camera A", load_changes=False),
+                 FakeClip("clip-b", "Camera B", add_ok=False)]
+        result = apply_colorist_job(FakeProject(), FakeTimeline(clips), approved_job(clips))
+        self.assertFalse(result["ok"])
+        self.assertFalse(result["recoverable"])
+        self.assertTrue(result["manual_recovery_required"])
+        self.assertNotIn("clip-a", result["restored_clip_ids"])
+
     def test_preview_loads_only_recorded_before_or_after_versions_and_restore_returns_after(self):
         clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]
         applying = approved_job(clips)
@@ -202,6 +214,32 @@ class ColoristResolveTests(unittest.TestCase):
         self.assertTrue(restored["ok"])
         self.assertTrue(clips[0].current.startswith("ARPHE_COLOR_"))
         self.assertEqual(clip_b_loads, clips[1].load_calls)
+
+    def test_preview_requires_version_readback_after_true_return(self):
+        clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]
+        applying = approved_job(clips)
+        applied_result = apply_colorist_job(FakeProject(), FakeTimeline(clips), applying)
+        applied = record_colorist_apply(applying, applied_result["evidence"])
+        clips[0].load_changes = False
+
+        with self.assertRaisesRegex(RuntimeError, "read-back"):
+            preview_colorist_version(FakeProject(), FakeTimeline(clips), applied, "clip-a", "before")
+
+    def test_restore_requires_version_readback_after_true_return(self):
+        clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]
+        applying = approved_job(clips)
+        applied_result = apply_colorist_job(FakeProject(), FakeTimeline(clips), applying)
+        applied = record_colorist_apply(applying, applied_result["evidence"])
+        applied = record_colorist_preview_start(applied, "clip-a", clips[0].current)
+        preview_colorist_version(FakeProject(), FakeTimeline(clips), applied, "clip-a", "before")
+        clips[0].load_changes = False
+
+        with self.assertRaisesRegex(RuntimeError, "read-back"):
+            restore_colorist_preview(
+                FakeProject(), FakeTimeline(clips), applied, "clip-a",
+                applied.preview_restore_versions["clip-a"],
+            )
+        self.assertEqual("Original", clips[0].current)
 
     def test_drx_graph_is_preflighted_before_any_version_is_created(self):
         clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]

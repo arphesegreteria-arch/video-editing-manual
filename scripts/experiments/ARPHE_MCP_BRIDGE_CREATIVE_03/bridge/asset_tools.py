@@ -30,13 +30,52 @@ def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Reg
         return {"ok": False, "action": f"add_{kind}_asset", "stage": "import", "asset_name": selected.name}
     media_item = imported[0]
     pool = safe_call(project, "GetMediaPool")
-    appended = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": media_item, "recordFrame": start,
-                                                       "endFrame": end - start, "mediaType": 1,
+    created_tracks: list[int] = []
+
+    def rollback(items: list[Any]) -> None:
+        rollback_ok = True
+        if items and safe_call(timeline, "DeleteClips", items, False) is not True:
+            rollback_ok = False
+        for created_track in reversed(created_tracks):
+            if safe_call(timeline, "DeleteTrack", "video", created_track) is not True:
+                rollback_ok = False
+        if not rollback_ok:
+            raise ValidationError("Rollback inserimento asset incompleto; verifica manuale richiesta")
+
+    current_tracks = safe_call(timeline, "GetTrackCount", "video")
+    if isinstance(current_tracks, bool) or not isinstance(current_tracks, int) or current_tracks < 0:
+        raise ValidationError("Conteggio tracce video non verificabile")
+    for expected_track_count in range(current_tracks + 1, int(track_index) + 1):
+        if safe_call(timeline, "AddTrack", "video") is not True:
+            rollback([])
+            raise ValidationError("Impossibile creare la traccia video richiesta")
+        created_tracks.append(expected_track_count)
+        if safe_call(timeline, "GetTrackCount", "video") != expected_track_count:
+            rollback([])
+            raise ValidationError("Read-back creazione traccia video non verificabile")
+    # Resolve uses an inclusive source endFrame; bridge and TimelineItem ranges
+    # are half-open [start, end).
+    appended = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": media_item,
+                                                       "startFrame": 0,
+                                                       "endFrame": end - start - 1,
+                                                       "recordFrame": start,
+                                                       "mediaType": 1,
                                                        "trackIndex": int(track_index)}])
+
+    if not isinstance(appended, (list, tuple)) or len(appended) != 1:
+        rollback(list(appended) if isinstance(appended, (list, tuple)) else [])
+        raise ValidationError("Inserimento asset non verificabile")
+    item = appended[0]
+    actual_start, actual_end = safe_call(item, "GetStart"), safe_call(item, "GetEnd")
+    if actual_start != start or actual_end != end:
+        rollback([item])
+        raise ValidationError(
+            "Inserimento asset con range non verificabile: "
+            f"atteso=[{start},{end}) effettivo=[{actual_start},{actual_end})"
+        )
     created_name = arphe_name(selected.stem, "ASSET")
-    for item in appended or []:
-        safe_call(item, "SetName", created_name)
-    return {"ok": bool(appended), "action": f"add_{kind}_asset", "asset_name": selected.name,
+    safe_call(item, "SetName", created_name)
+    return {"ok": True, "action": f"add_{kind}_asset", "asset_name": selected.name,
             "created_item_name": created_name, "timeline": timeline_name,
             "frame_range": [start, end], "track_index": int(track_index),
             "absolute_path_returned": False, "status": "PENDING"}

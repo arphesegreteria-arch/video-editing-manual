@@ -43,7 +43,7 @@ EXPOSED_TOOL_NAMES = (
     "inspect_workstation_control_plane", "prepare_workflow_job", "inspect_workflow_job",
     "approve_workflow_job", "advance_workflow_job", "approve_workflow_delivery",
     "inspect_colorist_context", "prepare_colorist_plan", "inspect_colorist_plan",
-    "approve_colorist_plan", "apply_colorist_plan", "preview_colorist_version",
+    "cancel_colorist_plan", "approve_colorist_plan", "apply_colorist_plan", "preview_colorist_version",
     "restore_colorist_preview", "submit_colorist_review",
     "inspect_voice_isolation", "prepare_voice_isolation",
     "apply_voice_isolation_job", "restore_voice_isolation_job",

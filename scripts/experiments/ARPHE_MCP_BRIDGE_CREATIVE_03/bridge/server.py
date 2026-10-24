@@ -26,6 +26,7 @@ from .config import load_config
 from .colorist_jobs import (
     ColoristJobStore,
     approve_colorist_job as do_approve_colorist_job,
+    cancel_colorist_job as do_cancel_colorist_job,
     new_colorist_job,
     record_colorist_apply,
     record_colorist_apply_failure,
@@ -388,6 +389,38 @@ def inspect_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
         config = load_config(); job = _colorist_store(config).get(colorist_job_id, config.workstation_id)
         return {"ok": True, **asdict(job)}
     except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def cancel_colorist_plan(colorist_job_id: str, expected_plan_fingerprint: str,
+                         expected_revision: int, operator_role: str,
+                         reason: str) -> dict[str, Any]:
+    """Cancel one exact PREPARED Colorist plan in the ledger; never calls Resolve."""
+    config = None
+    try:
+        config = load_config()
+        saved = do_cancel_colorist_job(
+            _colorist_store(config), colorist_job_id, expected_plan_fingerprint,
+            expected_revision, operator_role, reason,
+        )
+        result = {
+            "ok": True,
+            "action": "cancel_colorist_plan",
+            "colorist_job_id": saved.colorist_job_id,
+            "state": saved.state,
+            "revision": saved.revision,
+            "plan_fingerprint": saved.plan_fingerprint,
+            "operator_role": saved.operator_role,
+            "cancellation_evidence": saved.cancellation_evidence,
+        }
+    except Exception as exc:
+        result = {**_error(exc), "action": "cancel_colorist_plan"}
+    if config is not None:
+        try:
+            write_audit(config.audit_log_path, "cancel_colorist_plan", result)
+        except Exception:
+            pass
+    return result
 
 
 @mcp.tool(annotations=SAFE_WRITE)

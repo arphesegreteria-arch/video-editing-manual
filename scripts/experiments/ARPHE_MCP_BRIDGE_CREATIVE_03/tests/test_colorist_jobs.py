@@ -17,6 +17,7 @@ from bridge.colorist_jobs import (  # noqa: E402
     ColoristJobStore,
     after_version_names,
     approve_colorist_job,
+    cancel_colorist_job,
     new_colorist_job,
     record_colorist_apply,
     record_colorist_apply_failure,
@@ -49,6 +50,39 @@ def job():
 
 
 class ColoristJobTests(unittest.TestCase):
+    def test_cancel_is_compare_and_swap_idempotent_and_cannot_cancel_approved_work(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = ColoristJobStore(Path(directory) / "colorist.json", "PC_PERSONALE")
+            created = store.create(job())
+            cancelled = cancel_colorist_job(
+                store, created.colorist_job_id, created.plan_fingerprint, created.revision,
+                "ALESSIO", "Superseded test plan",
+            )
+            self.assertEqual("CANCELLED", cancelled.state)
+            self.assertEqual(created.revision + 1, cancelled.revision)
+            self.assertEqual("Superseded test plan", cancelled.cancellation_evidence["reason"])
+            self.assertEqual(
+                cancelled,
+                cancel_colorist_job(
+                    store, created.colorist_job_id, created.plan_fingerprint, created.revision,
+                    "ALESSIO", "Superseded test plan",
+                ),
+            )
+            with self.assertRaisesRegex(ValidationError, "differenti"):
+                cancel_colorist_job(
+                    store, created.colorist_job_id, created.plan_fingerprint, created.revision,
+                    "ALESSIO", "Other reason",
+                )
+
+            second = store.create(job())
+            approved = approve_colorist_job(second, second.plan_fingerprint, "ALESSIO")
+            store.save(approved, second.revision)
+            with self.assertRaisesRegex(ValidationError, "PREPARED"):
+                cancel_colorist_job(
+                    store, second.colorist_job_id, second.plan_fingerprint, second.revision + 1,
+                    "ALESSIO", "Too late",
+                )
+
     def test_job_lifecycle_requires_fingerprint_bound_human_approval(self):
         prepared = job()
         with self.assertRaisesRegex(ValidationError, "fingerprint"):

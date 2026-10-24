@@ -81,16 +81,44 @@ class ColoristToolTests(unittest.IsolatedAsyncioTestCase):
                          list(inspect.signature(server.preview_colorist_version).parameters))
         self.assertEqual(["colorist_job_id", "clip_id"],
                          list(inspect.signature(server.restore_colorist_preview).parameters))
+        self.assertEqual(
+            ["colorist_job_id", "expected_plan_fingerprint", "expected_revision", "operator_role", "reason"],
+            list(inspect.signature(server.cancel_colorist_plan).parameters),
+        )
 
     async def test_annotations_make_inspection_read_only_and_every_state_change_explicit(self):
         tools = {tool.name: tool for tool in await server.mcp.list_tools()}
         for name in ("inspect_colorist_context", "inspect_colorist_plan"):
             self.assertTrue(tools[name].annotations.read_only_hint, name)
         for name in ("prepare_colorist_plan", "approve_colorist_plan", "apply_colorist_plan",
-                     "preview_colorist_version", "restore_colorist_preview", "submit_colorist_review"):
+                     "preview_colorist_version", "restore_colorist_preview", "submit_colorist_review",
+                     "cancel_colorist_plan"):
             self.assertFalse(tools[name].annotations.read_only_hint, name)
             self.assertFalse(tools[name].annotations.destructive_hint, name)
             self.assertFalse(tools[name].annotations.open_world_hint, name)
+
+    def test_cancel_prepared_plan_uses_fingerprint_and_revision_without_resolve(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = config_for(root, enabled=False)
+            project, timeline = FakeProject(), FakeTimeline()
+            registry = Registry(config.state_path)
+            registry.add_project("ARPHE_TEST")
+            registry.add_timeline("ARPHE_TEST", "ARPHE_COLOR_TEST")
+            runtime = (object(), object(), project, timeline, config, registry, None)
+            with patch("bridge.server._runtime", return_value=runtime), patch(
+                "bridge.server.load_config", return_value=config
+            ):
+                prepared = server.prepare_colorist_plan(
+                    ["clip-a"], "clip-a", {}, "ARPHE_CLEAN_NEUTRAL", None,
+                )
+                cancelled = server.cancel_colorist_plan(
+                    prepared["colorist_job_id"], prepared["plan_fingerprint"], prepared["revision"],
+                    "ALESSIO", "No longer needed",
+                )
+            self.assertTrue(cancelled["ok"])
+            self.assertEqual("CANCELLED", cancelled["state"])
+            self.assertEqual([], timeline.clips[0].add_calls)
 
     def test_prepare_and_approve_are_offline_but_apply_fails_closed_when_gate_disabled(self):
         with tempfile.TemporaryDirectory() as directory:

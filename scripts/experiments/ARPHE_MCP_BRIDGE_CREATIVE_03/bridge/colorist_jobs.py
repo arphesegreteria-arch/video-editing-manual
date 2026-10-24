@@ -19,7 +19,7 @@ SCHEMA = "ARPHE_COLORIST_JOBS_V1"
 JOB_ID = re.compile(r"^colorist_[0-9a-f]{16}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 STATES = {"PREPARED", "APPROVED", "APPLYING", "FAILED_RECOVERABLE", "FAILED_MANUAL",
-          "APPLIED", "ACCEPTED", "REJECTED"}
+          "APPLIED", "ACCEPTED", "REJECTED", "CANCELLED"}
 ROLES = {"ALESSIO", "COLORIST"}
 _STORE_WRITE_LOCK = threading.RLock()
 
@@ -49,6 +49,7 @@ class ColoristJob:
     operator_role: str | None
     apply_evidence: tuple[dict[str, object], ...]
     failure_evidence: dict[str, object] | None
+    cancellation_evidence: dict[str, object] | None
     preview_restore_versions: dict[str, str]
     review_accepted: bool | None
     state_timestamps: dict[str, str]
@@ -99,6 +100,7 @@ def new_colorist_job(**kwargs: Any) -> ColoristJob:
         operator_role=None,
         apply_evidence=(),
         failure_evidence=None,
+        cancellation_evidence=None,
         preview_restore_versions={},
         review_accepted=None,
         state_timestamps={"PREPARED": created},
@@ -160,6 +162,23 @@ def _validate(job: ColoristJob) -> None:
             raise ValidationError("Stato di recupero Colorist incoerente con l'evidenza")
     elif job.failure_evidence is not None:
         raise ValidationError("Evidenza di fallimento incoerente")
+    if job.state == "CANCELLED":
+        evidence = job.cancellation_evidence
+        if not isinstance(evidence, dict) or set(evidence) != {
+            "expected_revision", "plan_fingerprint", "reason"
+        }:
+            raise ValidationError("Evidenza annullamento Colorist non valida")
+        reason = evidence.get("reason")
+        expected_revision = evidence.get("expected_revision")
+        if (not isinstance(reason, str) or not reason or len(reason) > 500
+                or not all(character.isprintable() for character in reason)
+                or isinstance(expected_revision, bool) or not isinstance(expected_revision, int)
+                or expected_revision < 1
+                or evidence.get("plan_fingerprint") != job.plan_fingerprint
+                or "CANCELLED" not in job.state_timestamps):
+            raise ValidationError("Evidenza annullamento Colorist non valida")
+    elif job.cancellation_evidence is not None:
+        raise ValidationError("Evidenza annullamento presente su piano non annullato")
     if set(job.preview_restore_versions) - set(job.clip_ids):
         raise ValidationError("Tracking preview fuori dal piano Colorist")
     if job.preview_restore_versions and job.state not in {"APPLIED", "ACCEPTED", "REJECTED"}:
@@ -289,7 +308,9 @@ def record_colorist_review(job: ColoristJob, accepted: bool, operator_role: str)
 
 
 def _from_payload(raw: object) -> ColoristJob:
-    if not isinstance(raw, dict) or set(raw) != set(ColoristJob.__dataclass_fields__):
+    fields = set(ColoristJob.__dataclass_fields__)
+    legacy_fields = fields - {"cancellation_evidence"}
+    if not isinstance(raw, dict) or (set(raw) != fields and set(raw) != legacy_fields):
         raise ValidationError("Record Colorist malformato")
     try:
         job = ColoristJob(
@@ -308,6 +329,8 @@ def _from_payload(raw: object) -> ColoristJob:
             operator_role=None if raw["operator_role"] is None else str(raw["operator_role"]),
             apply_evidence=tuple(dict(item) for item in raw["apply_evidence"]),
             failure_evidence=(None if raw["failure_evidence"] is None else dict(raw["failure_evidence"])),
+            cancellation_evidence=(None if raw.get("cancellation_evidence") is None
+                                   else dict(raw["cancellation_evidence"])),
             preview_restore_versions={str(key): str(value)
                                       for key, value in raw["preview_restore_versions"].items()},
             review_accepted=raw["review_accepted"],
@@ -416,7 +439,8 @@ class ColoristJobStore:
                 raise ValidationError("Identità immutabile Colorist modificata")
             allowed = {"PREPARED": "APPROVED", "APPROVED": "APPLYING", "APPLYING": None,
                        "FAILED_RECOVERABLE": None, "FAILED_MANUAL": None,
-                       "APPLIED": None, "ACCEPTED": None, "REJECTED": None}
+                       "APPLIED": None, "ACCEPTED": None, "REJECTED": None,
+                       "CANCELLED": None}
             if job.state != current.state:
                 if current.state == "APPLIED":
                     if job.state not in {"ACCEPTED", "REJECTED"}:
@@ -435,4 +459,66 @@ class ColoristJobStore:
         if self.on_save is not None:
             self.on_save(saved)
         return saved
+
+    def cancel(self, job_id: str, expected_plan_fingerprint: str, expected_revision: int,
+               operator_role: str, reason: str) -> ColoristJob:
+        if not isinstance(expected_plan_fingerprint, str) or not HEX64.fullmatch(expected_plan_fingerprint):
+            raise ValidationError("plan fingerprint Colorist non valido")
+        if isinstance(expected_revision, bool) or not isinstance(expected_revision, int) or expected_revision < 1:
+            raise ValidationError("revision Colorist non valida")
+        role = str(operator_role).upper()
+        if role not in ROLES:
+            raise ValidationError("ruolo annullamento Colorist non consentito")
+        normalized_reason = reason.strip() if isinstance(reason, str) else ""
+        if (not normalized_reason or len(normalized_reason) > 500
+                or not all(character.isprintable() for character in normalized_reason)):
+            raise ValidationError("motivo annullamento Colorist non valido")
+        evidence = {
+            "expected_revision": expected_revision,
+            "plan_fingerprint": expected_plan_fingerprint,
+            "reason": normalized_reason,
+        }
+        with _STORE_WRITE_LOCK:
+            data = self._load()
+            raw = data["jobs"].get(job_id)
+            if raw is None:
+                raise ValidationError("Job Colorist non trovato")
+            current = _from_payload(raw)
+            if current.plan_fingerprint != expected_plan_fingerprint:
+                raise ValidationError("plan fingerprint Colorist non corrispondente")
+            if current.state == "CANCELLED":
+                if (current.revision == expected_revision + 1
+                        and current.operator_role == role
+                        and current.cancellation_evidence == evidence):
+                    return current
+                raise ValidationError("Piano Colorist già CANCELLED con parametri differenti")
+            if current.state != "PREPARED":
+                raise ValidationError("Solo un piano PREPARED può essere annullato")
+            if current.revision != expected_revision:
+                raise ValidationError("revision Colorist stale")
+            if current.preview_restore_versions:
+                raise ValidationError("Annullamento Colorist vietato con preview attiva")
+            if current.apply_evidence:
+                raise ValidationError("Annullamento Colorist vietato con evidenza apply")
+            cancelled = replace(
+                current,
+                state="CANCELLED",
+                operator_role=role,
+                cancellation_evidence=evidence,
+                state_timestamps={**current.state_timestamps, "CANCELLED": _now()},
+            )
+            _validate(cancelled)
+            saved = replace(cancelled, revision=current.revision + 1)
+            data["jobs"][saved.colorist_job_id] = asdict(saved)
+            self._save(data)
+        if self.on_save is not None:
+            self.on_save(saved)
+        return saved
+
+
+def cancel_colorist_job(store: ColoristJobStore, job_id: str, expected_plan_fingerprint: str,
+                         expected_revision: int, operator_role: str, reason: str) -> ColoristJob:
+    return store.cancel(
+        job_id, expected_plan_fingerprint, expected_revision, operator_role, reason,
+    )
 

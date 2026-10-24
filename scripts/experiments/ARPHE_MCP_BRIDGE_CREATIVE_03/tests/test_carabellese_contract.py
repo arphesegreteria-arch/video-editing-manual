@@ -89,7 +89,7 @@ class CarabelleseContractTests(unittest.TestCase):
 
             config = load_config(config_path)
 
-        expected = root / "state"
+        expected = (root / "state").resolve()
         self.assertEqual(expected / "carabellese_jobs.json", config.carabellese_jobs_path)
         self.assertEqual(expected / "carabellese_journal.jsonl", config.carabellese_journal_path)
         self.assertEqual(expected / "carabellese_profile_overlay.json",

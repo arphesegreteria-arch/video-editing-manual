@@ -255,6 +255,21 @@ class ArtifactInventoryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "symlink|reparse|root"):
                 validate_managed_path(link / "file.txt", managed, allow_directory=False)
 
+    def test_internal_symlink_is_rejected_even_when_target_stays_managed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            managed = Path(directory) / "managed"
+            target = managed / "target"
+            target.mkdir(parents=True)
+            (target / "file.txt").write_text("managed", encoding="utf-8")
+            link = managed / "alias"
+            try:
+                link.symlink_to(target, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symlink unavailable: {exc}")
+
+            with self.assertRaisesRegex(ValueError, "symlink|reparse"):
+                validate_managed_path(link / "file.txt", managed)
+
 
 class ArtifactLifecycleTests(unittest.TestCase):
     def test_maintenance_imports_only_exact_valid_rotated_log_root(self):

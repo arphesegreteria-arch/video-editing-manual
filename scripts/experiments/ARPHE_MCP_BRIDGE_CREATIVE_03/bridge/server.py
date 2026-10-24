@@ -22,6 +22,25 @@ from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
 from .artifact_records import artifact_store_for, load_artifact_policy
 from .audio_provenance import media_fingerprint
 from .config import load_config
+from .colorist_jobs import (
+    ColoristJobStore,
+    approve_colorist_job as do_approve_colorist_job,
+    new_colorist_job,
+    record_colorist_apply,
+    record_colorist_apply_failure,
+    record_colorist_apply_started,
+    record_colorist_preview_restored,
+    record_colorist_preview_start,
+    record_colorist_review,
+)
+from .colorist_model import build_cdl, load_colorist_presets
+from .colorist_resolve import (
+    apply_colorist_job as do_apply_colorist_job,
+    inspect_colorist_context as do_inspect_colorist_context,
+    preview_colorist_version as do_preview_colorist_version,
+    restore_colorist_preview as do_restore_colorist_preview,
+    validate_colorist_preview as do_validate_colorist_preview,
+)
 from .control_plane import WorkflowJobStore, approve_workflow_job as do_approve_workflow_job, new_workflow_job
 from .workflow_control import (advance_workflow_job as do_advance_control_job,
                                control_plan_fingerprint, load_native_binding, native_binding,
@@ -181,6 +200,10 @@ from .timeline_tools import (create_safe_working_timeline as do_safe_timeline,
                              create_timeline as do_create_timeline,
                              duplicate_timeline as do_duplicate_timeline,
                              set_current_timeline as do_set_current_timeline)
+from .timeline_dialogue_cleanup import (
+    get_timeline_dialogue_cleanup_job as do_get_timeline_dialogue_cleanup_job,
+    start_timeline_dialogue_cleanup_test as do_start_timeline_dialogue_cleanup_test,
+)
 
 
 mcp = MCPServer(
@@ -239,6 +262,218 @@ CARABELLESE_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "carabellese_c
 CARABELLESE_SHARED_PROFILE_PATH = Path(__file__).resolve().parents[1] / "carabellese_preferences.json"
 VERTICAL_SOCIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "vertical_social_contract.json"
 BRANDED_LONGFORM_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "branded_longform_contract.json"
+
+
+def _colorist_store(config: Any) -> ColoristJobStore:
+    return ColoristJobStore(config.colorist_jobs_path, config.workstation_id)
+
+
+def _require_colorist(config: Any, manager: Any, project: Any, timeline: Any) -> None:
+    if not config.flags.get("CAP_COLORIST", False):
+        raise ValidationError("CAP_COLORIST non attiva nella config locale")
+    try:
+        require_capability("CAP_COLORIST", config, manager, project, timeline)
+    except RuntimeError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+def _require_colorist_target(config: Any, registry: Registry, project: Any, timeline: Any) -> None:
+    project_name = str(safe_call(project, "GetName") or "")
+    timeline_name = str(safe_call(timeline, "GetName") or "")
+    if not (registry.project_allowed(project_name) or project_name in config.allowed_projects):
+        raise ValidationError("Il progetto Colorist deve essere registrato o allowlisted")
+    if not (registry.timeline_allowed(project_name, timeline_name)
+            or timeline_name in config.allowed_timelines):
+        raise ValidationError("La timeline Colorist deve essere registrata o allowlisted")
+
+
+def _resolve_colorist_drx(config: Any, registry: dict[str, Any], preset_name: str | None) -> Path | None:
+    if preset_name is None:
+        return None
+    relative = registry["drx_presets"].get(preset_name)
+    if relative is None:
+        raise ValidationError("Preset DRX Colorist non consentito")
+    root = config.asset_root.expanduser().resolve()
+    candidate = (root / relative).resolve()
+    if not candidate.is_relative_to(root) or not candidate.is_file() or candidate.suffix.lower() != ".drx":
+        raise ValidationError("Asset DRX Colorist non disponibile nella cartella allowlisted")
+    return candidate
+
+
+def _colorist_drx_identity(config: Any, path: Path | None) -> dict[str, object] | None:
+    if path is None:
+        return None
+    root = config.asset_root.expanduser().resolve()
+    resolved = path.resolve()
+    if not resolved.is_relative_to(root):
+        raise ValidationError("Asset DRX Colorist fuori dalla cartella allowlisted")
+    return {
+        "relative_path": resolved.relative_to(root).as_posix(),
+        "size": resolved.stat().st_size,
+        "sha256": hashlib.sha256(resolved.read_bytes()).hexdigest(),
+    }
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_colorist_context() -> dict[str, Any]:
+    """Inspect Colorist API support and stable clip IDs without modifying Resolve."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, timeline, config, registry, error = _runtime()
+            if error: return error
+            _require_colorist_target(config, registry, project, timeline)
+            result = do_inspect_colorist_context(project, timeline)
+            registry = load_colorist_presets(config.colorist_presets_path)
+            return {**result, "capability_enabled": bool(config.flags.get("CAP_COLORIST", False)),
+                    "capability_status": "PENDING", "presets": sorted(registry["presets"]),
+                    "drx_presets": sorted(registry["drx_presets"])}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
+                          adjustments: dict[str, Any], preset_name: str = "ARPHE_CLEAN_NEUTRAL",
+                          drx_preset_name: str | None = None) -> dict[str, Any]:
+    """Prepare a fingerprint-bound Colorist plan locally; performs no Resolve write."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, timeline, config, target_registry, error = _runtime()
+            if error: return error
+            _require_colorist_target(config, target_registry, project, timeline)
+            context_card = do_inspect_colorist_context(project, timeline)
+            available = {item["clip_id"]: item for item in context_card["clips"]}
+            if not clip_ids or len(set(clip_ids)) != len(clip_ids) or set(clip_ids) - set(available):
+                raise ValidationError("clip_ids Colorist devono essere un sottoinsieme unico della timeline corrente")
+            if reference_clip_id is not None and reference_clip_id not in clip_ids:
+                raise ValidationError("reference_clip_id deve appartenere ai clip selezionati")
+            registry = load_colorist_presets(config.colorist_presets_path)
+            cdl = build_cdl(adjustments, preset_name, registry["presets"])
+            drx_path = _resolve_colorist_drx(config, registry, drx_preset_name)
+            drx_identity = _colorist_drx_identity(config, drx_path)
+            before = {clip_id: available[clip_id]["current_version"] for clip_id in clip_ids}
+            job = new_colorist_job(
+                workstation_id=config.workstation_id,
+                project_name=context_card["project_name"], timeline_name=context_card["timeline_name"],
+                timeline_identity=context_card["timeline_identity"], clip_ids=tuple(clip_ids),
+                reference_clip_id=reference_clip_id, adjustments=adjustments,
+                preset_name=preset_name, drx_preset_name=drx_preset_name,
+                drx_asset_identity=drx_identity, before_versions=before, cdl=cdl,
+            )
+            saved = _colorist_store(config).create(job)
+            return {"ok": True, "action": "prepare_colorist_plan",
+                    "colorist_job_id": saved.colorist_job_id, "revision": saved.revision,
+                    "state": saved.state, "plan_fingerprint": saved.plan_fingerprint,
+                    "clip_ids": list(saved.clip_ids), "reference_clip_id": saved.reference_clip_id,
+                    "preset_name": saved.preset_name, "drx_preset_name": saved.drx_preset_name,
+                    "cdl": saved.cdl, "requires_human_approval": True}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
+    """Inspect one local Colorist plan and its human-review state."""
+    try:
+        config = load_config(); job = _colorist_store(config).get(colorist_job_id, config.workstation_id)
+        return {"ok": True, **asdict(job)}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_colorist_plan(colorist_job_id: str, expected_plan_fingerprint: str,
+                          operator_role: str) -> dict[str, Any]:
+    """Approve exactly one Colorist plan fingerprint; performs no Resolve write."""
+    try:
+        config = load_config(); store = _colorist_store(config)
+        current = store.get(colorist_job_id, config.workstation_id)
+        approved = do_approve_colorist_job(current, expected_plan_fingerprint, operator_role)
+        saved = store.save(approved, current.revision)
+        return {"ok": True, "action": "approve_colorist_plan", "colorist_job_id": saved.colorist_job_id,
+                "state": saved.state, "revision": saved.revision, "plan_fingerprint": saved.plan_fingerprint}
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
+    """Create new local color versions and apply only the approved Colorist plan."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, manager, project, timeline, config, target_registry, error = _runtime()
+            if error: return error
+            _require_colorist_target(config, target_registry, project, timeline)
+            _require_colorist(config, manager, project, timeline)
+            store = _colorist_store(config); current = store.get(colorist_job_id, config.workstation_id)
+            registry = load_colorist_presets(config.colorist_presets_path)
+            drx_path = _resolve_colorist_drx(config, registry, current.drx_preset_name)
+            if _colorist_drx_identity(config, drx_path) != current.drx_asset_identity:
+                raise ValidationError("Asset DRX Colorist modificato dopo l'approvazione")
+            applying = record_colorist_apply_started(current)
+            applying = store.save(applying, current.revision)
+            try:
+                result = do_apply_colorist_job(project, timeline, applying, drx_path)
+            except Exception as exc:
+                result = {"ok": False, "stage": "preflight_colorist", "recoverable": True,
+                          "manual_recovery_required": False, "error": str(exc),
+                          "created_versions": [], "restored_clip_ids": []}
+            if not result.get("ok"):
+                failed = record_colorist_apply_failure(applying, result)
+                saved_failure = store.save(failed, applying.revision)
+                return {**result, "state": saved_failure.state, "revision": saved_failure.revision}
+            applied = record_colorist_apply(applying, result["evidence"])
+            saved = store.save(applied, applying.revision)
+            return {**result, "action": "apply_colorist_plan", "state": saved.state,
+                    "revision": saved.revision}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def preview_colorist_version(colorist_job_id: str, clip_id: str, side: str) -> dict[str, Any]:
+    """Load a recorded before/after local version for explicit human comparison."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, manager, project, timeline, config, registry, error = _runtime()
+            if error: return error
+            _require_colorist_target(config, registry, project, timeline); _require_colorist(config, manager, project, timeline)
+            store = _colorist_store(config)
+            job = store.get(colorist_job_id, config.workstation_id)
+            preview = do_validate_colorist_preview(project, timeline, job, clip_id, side)
+            restore_version = preview["restore_version"]
+            tracked = record_colorist_preview_start(job, clip_id, restore_version)
+            tracked = store.save(tracked, job.revision)
+            return do_preview_colorist_version(project, timeline, tracked, clip_id, side)
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def restore_colorist_preview(colorist_job_id: str, clip_id: str) -> dict[str, Any]:
+    """Restore only the exact clip version active before its preview."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, manager, project, timeline, config, registry, error = _runtime()
+            if error: return error
+            _require_colorist_target(config, registry, project, timeline); _require_colorist(config, manager, project, timeline)
+            store = _colorist_store(config)
+            job = store.get(colorist_job_id, config.workstation_id)
+            restore_version = job.preview_restore_versions.get(clip_id)
+            if restore_version is None:
+                raise ValidationError("Nessuna preview Colorist attiva per il clip")
+            result = do_restore_colorist_preview(project, timeline, job, clip_id, restore_version)
+            restored = record_colorist_preview_restored(job, clip_id)
+            saved = store.save(restored, job.revision)
+            return {**result, "revision": saved.revision}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def submit_colorist_review(colorist_job_id: str, accepted: bool, operator_role: str) -> dict[str, Any]:
+    """Record a human Colorist accept/reject decision; never saves or deletes versions."""
+    try:
+        config = load_config(); store = _colorist_store(config)
+        current = store.get(colorist_job_id, config.workstation_id)
+        reviewed = record_colorist_review(current, accepted, operator_role)
+        saved = store.save(reviewed, current.revision)
+        return {"ok": True, "action": "submit_colorist_review", "colorist_job_id": saved.colorist_job_id,
+                "state": saved.state, "revision": saved.revision, "accepted": saved.review_accepted}
+    except Exception as exc: return _error(exc)
 
 
 def _require_vertical_social(config: Any) -> None:
@@ -1728,6 +1963,34 @@ def create_edge_fade_test(source_timeline: str, target_name: str,
         if error: return error
         return _call(do_create_edge_fade_test, project, config, registry, source_timeline, target_name,
                      video_in_frames, video_out_frames, audio_in_frames, audio_out_frames)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def start_timeline_dialogue_cleanup_test(
+    source_timeline: str,
+    target_name: str,
+    preset: str = "ARPHE_DIALOGUE_DEREVERB_NATURAL_V5",
+) -> dict[str, Any]:
+    """Render exact timeline audio and create one verified non-destructive cleanup test."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_start_timeline_dialogue_cleanup_test, project, config, registry,
+                         source_timeline, target_name, preset)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def get_timeline_dialogue_cleanup_job(job_id: str) -> dict[str, Any]:
+    """Advance or read one owned timeline dialogue-cleanup job."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_get_timeline_dialogue_cleanup_job,
+                         project, config, registry, job_id)
     except Exception as exc: return _error(exc)
 
 

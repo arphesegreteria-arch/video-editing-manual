@@ -44,6 +44,25 @@ fino a circa 18 dB e compressione controllata. È intenzionalmente conservato co
 perché richiede ascolto comparativo prima dell'uso sul montaggio completo. Non sostituisce due
 microfoni separati: il recupero selettivo dei turni può amplificare ambiente e riverbero e va
 scartato quando peggiora l'ascolto.
+`ARPHE_DIALOGUE_DEREVERB_NATURAL_V5` è il preset conservativo per dialogo con rimbombo: usa
+passa-alto, denoise leggero, due attenuazioni larghe sui medio-bassi, espansione lenta,
+compressione 1,5:1 e limiter a -1 dBFS. Non usa modelli neurali, de-esser o livellamento dinamico;
+riduce le code percepite senza promettere una ricostruzione acustica perfetta.
+
+Il flusso generico `start_timeline_dialogue_cleanup_test` →
+`get_timeline_dialogue_cleanup_job` lavora sull'audio realmente udito nella timeline Resolve.
+Richiede una sola V1 e una sola A1 perfettamente allineate, mette in coda un unico render
+Audio Only PCM 48 kHz di proprietà del bridge, ripristina subito timeline e Deliver e conserva
+ogni job estraneo. Dopo il worker duplica la sorgente, sostituisce soltanto A1 sulla copia e
+verifica una sola copia audio, range, durata, media video e provenienza del WAV. Il poll può
+avanzare il job e quindi è una safe write; ripetuto dopo `COMPLETED` è idempotente. Il progetto
+resta non salvato e l'ascolto A/B umano è obbligatorio.
+
+Prima installazione e prova live: soltanto `PC_PERSONALE`, con backup del runtime, ping che legga
+`PC_PERSONALE` e progetto di prova. `PC_SEGRETERIA` non va aggiornata nello stesso passaggio: il
+rollout successivo richiede backup, installazione del medesimo commit, ping/read-back e una prova
+usa-e-getta prima dei progetti reali. Lavori indipendenti, come una prova colore che produce codice,
+restano su ramo e PR distinti e si integrano con merge separati.
 `queue_longform_exports` non avvia il render; l'avvio resta separato e protetto da `CAP_RENDER`.
 `create_edge_fade_test` duplica una timeline con una sola clip V1/A1 e applica un fade video Fusion
 e un WAV audio derivato con fade lineari. Il preset predefinito è 6/8 frame video e 4/10 frame audio;

@@ -104,6 +104,25 @@ class SafetyTests(unittest.TestCase):
         }
         self.assertEqual(set(EXPOSED_TOOL_NAMES), decorated)
 
+    def test_colorist_and_dialogue_catalog_is_closed(self):
+        expected = {
+            "inspect_colorist_context", "prepare_colorist_plan", "inspect_colorist_plan",
+            "approve_colorist_plan", "apply_colorist_plan", "preview_colorist_version",
+            "restore_colorist_preview", "submit_colorist_review",
+            "start_timeline_dialogue_cleanup_test", "get_timeline_dialogue_cleanup_job",
+        }
+        residual_adv = {
+            "create_audio_seam_test", "create_caption_test",
+            "start_timeline_audio_transcription", "get_timeline_audio_transcription_job",
+            "inspect_timeline_edit_points", "reconcile_legacy_render_batch",
+        }
+
+        names = set(EXPOSED_TOOL_NAMES)
+        self.assertEqual(113, len(EXPOSED_TOOL_NAMES))
+        self.assertEqual(113, len(names))
+        self.assertTrue(expected.issubset(names))
+        self.assertTrue(residual_adv.isdisjoint(names))
+
     def test_render_tools_expose_closed_prepare_approve_start_verify_surface(self):
         required = {"list_editorial_workflows", "validate_editorial_brief", "prepare_render_batch",
                     "approve_render_batch", "start_render_batch", "get_render_batch_status",
@@ -211,8 +230,10 @@ class SafetyTests(unittest.TestCase):
             config = load_config(path)
             self.assertEqual(path.resolve(), config.path)
             self.assertEqual("PC_PERSONALE", config.workstation_id)
-            self.assertEqual(path.parent / "resolve-archives", config.resolve_archive_root)
-            self.assertEqual(path.parent / "resolve-retirements.json",
+            self.assertEqual(
+                (path.parent / "resolve-archives").resolve(), config.resolve_archive_root)
+            self.assertEqual(
+                (path.parent / "resolve-retirements.json").resolve(),
                              config.resolve_retirement_registry_path)
             self.assertFalse(config.flags["CAP_RESOLVE_RETIREMENT"])
 

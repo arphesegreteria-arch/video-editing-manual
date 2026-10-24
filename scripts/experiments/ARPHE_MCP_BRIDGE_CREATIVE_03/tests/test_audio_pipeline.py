@@ -14,6 +14,7 @@ import wave
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from bridge import audio_worker  # noqa: E402
 from bridge.audio_tools import allowed_audio, audio_job  # noqa: E402
 from bridge.audio_provenance import file_sha256, media_fingerprint, verify_audio_manifest  # noqa: E402
 from bridge.audio_worker import DISTANT_PRESET, LEVEL_PRESET, NATURAL_PRESET, process_audio  # noqa: E402
@@ -53,6 +54,105 @@ def write_worker_job(job: Path, source: Path, output: Path, preset: str) -> None
 
 
 class AudioPipelineTests(unittest.TestCase):
+    def test_dereverb_natural_v5_uses_contract_limiter_without_auto_level(self):
+        self.assertEqual(
+            "limit=0.891:attack=8:release=80:level=false",
+            audio_worker._limiter_options("ARPHE_DIALOGUE_DEREVERB_NATURAL_V5"),
+        )
+
+    def test_dereverb_natural_v5_emits_synchronized_bounded_pcm(self):
+        """Catches an absent/misrouted V5 preset or a lossy output contract."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output, job = root / "source.wav", root / "output.wav", root / "job.json"
+            with wave.open(str(source), "wb") as handle:
+                handle.setnchannels(2)
+                handle.setsampwidth(2)
+                handle.setframerate(48000)
+                samples = []
+                for index in range(48000 * 2):
+                    value = int(28000 * math.sin(2 * math.pi * 220 * index / 48000))
+                    samples.append(struct.pack("<hh", value, value))
+                handle.writeframes(b"".join(samples))
+
+            preset = "ARPHE_DIALOGUE_DEREVERB_NATURAL_V5"
+            self.assertIn(preset, audio_worker.PRESETS)
+            write_worker_job(job, source, output, preset)
+            process_audio(source, output, job, preset)
+
+            with wave.open(str(output), "rb") as handle:
+                self.assertEqual(2, handle.getnchannels())
+                self.assertEqual(2, handle.getsampwidth())
+                self.assertEqual(48000, handle.getframerate())
+                self.assertEqual(48000 * 2, handle.getnframes())
+                data = handle.readframes(handle.getnframes())
+            values = struct.unpack("<" + "h" * (len(data) // 2), data)
+            self.assertLessEqual(max(abs(value) for value in values), int(32768 * 0.891) + 1)
+            state = json.loads(job.read_text(encoding="utf-8"))
+            self.assertEqual("COMPLETED", state["status"])
+            self.assertEqual(48000, state["sample_rate"])
+            self.assertEqual(2, state["channels"])
+
+    def test_dereverb_natural_v5_reduces_room_tails_without_crushing_voice(self):
+        """Catches a missing expander or an aggressive gate that damages speech."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output, job = root / "source.wav", root / "output.wav", root / "job.json"
+            sample_rate = 48000
+            mono_input: list[int] = []
+            for index in range(sample_rate * 4):
+                time_seconds = index / sample_rate
+                amplitude = 0.0
+                for onset in (0.0, 2.0):
+                    elapsed = time_seconds - onset
+                    if 0.0 <= elapsed < 0.35:
+                        amplitude += 9000.0
+                    elif 0.35 <= elapsed < 1.5:
+                        amplitude += 1800.0 * math.exp(-1.5 * (elapsed - 0.35))
+                mono_input.append(int(amplitude * math.sin(2 * math.pi * 220 * index / sample_rate)))
+            with wave.open(str(source), "wb") as handle:
+                handle.setnchannels(2)
+                handle.setsampwidth(2)
+                handle.setframerate(sample_rate)
+                handle.writeframes(b"".join(struct.pack("<hh", value, value) for value in mono_input))
+
+            preset = "ARPHE_DIALOGUE_DEREVERB_NATURAL_V5"
+            write_worker_job(job, source, output, preset)
+            process_audio(source, output, job, preset)
+            with wave.open(str(output), "rb") as handle:
+                output_data = handle.readframes(handle.getnframes())
+            mono_output = struct.unpack("<" + "h" * (len(output_data) // 2), output_data)[::2]
+
+            def rms(values):
+                return math.sqrt(sum(value * value for value in values) / len(values))
+
+            active_ranges = ((0.10, 0.30), (2.10, 2.30))
+            tail_ranges = ((0.75, 1.30), (2.75, 3.30))
+            active_input = [
+                mono_input[index]
+                for start, end in active_ranges
+                for index in range(int(start * sample_rate), int(end * sample_rate))
+            ]
+            active_output = [
+                mono_output[index]
+                for start, end in active_ranges
+                for index in range(int(start * sample_rate), int(end * sample_rate))
+            ]
+            tail_input = [
+                mono_input[index]
+                for start, end in tail_ranges
+                for index in range(int(start * sample_rate), int(end * sample_rate))
+            ]
+            tail_output = [
+                mono_output[index]
+                for start, end in tail_ranges
+                for index in range(int(start * sample_rate), int(end * sample_rate))
+            ]
+
+            self.assertLess(rms(tail_output), rms(tail_input) * 0.80)
+            self.assertGreater(rms(active_output), rms(active_input) * 0.55)
+            self.assertLess(rms(active_output), rms(active_input) * 1.45)
+
     def test_worker_creates_synchronized_pcm_wav(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

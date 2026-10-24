@@ -30,6 +30,33 @@ Il trattamento precede i tagli, quindi ogni estratto riceve la stessa correzione
 interventi manuali clip per clip. Il video rimane quello originale; il suo audio viene escluso e
 sostituito dal WAV sincronizzato. La preparazione dei job non avvia automaticamente il render.
 
+### Pulizia dialogo dalla timeline Resolve
+
+Per un ADV già montato, non trascrivere o trattare il file sorgente non tagliato. Usare invece
+l'audio esatto della timeline approvata:
+
+1. verificare che il progetto e la timeline siano allowlisted e che esistano esattamente una V1 e
+   una A1 con lo stesso range;
+2. chiamare `start_timeline_dialogue_cleanup_test` con `source_timeline`, un `target_name` nuovo e
+   `ARPHE_DIALOGUE_DEREVERB_NATURAL_V5`;
+3. conservare il `job_id` e chiamare `get_timeline_dialogue_cleanup_job` finché lo stato è
+   `COMPLETED` o `INTERRUPTED`;
+4. su `COMPLETED`, controllare nel read-back una sola clip V1, una sola clip A1, range identici,
+   `source_preserved: true`, provenienza del WAV gestito e `saved: false`;
+5. ascoltare A/B in Resolve. Non salvare finché la voce non è più chiara ma resta naturale, senza
+   coda che pompa, consonanti tagliate o timbro metallico.
+
+Il comando di polling è una safe write: al completamento del render può avviare il worker e, dopo
+le verifiche, creare la copia. Il manifest lega workstation, progetto, ID timeline, impronta del
+montaggio, job render posseduto, durata e fingerprint dei WAV. Se il montaggio cambia prima
+dell'applicazione, il bridge si interrompe prima della duplicazione. Se l'inserimento A1 fallisce,
+rimuove soltanto l'audio gestito e ripristina l'A1 originale sulla copia; la sorgente resta intatta.
+
+Il rollout iniziale è limitato a `PC_PERSONALE`. Su `PC_SEGRETERIA` eseguire in seguito, e non da
+remoto per assunzione: backup runtime/config, installazione dello stesso commit, riavvio, ping con
+identità workstation, test in progetto usa-e-getta e read-back. Non trasferire output audio,
+manifest o transcript locali tra le due macchine.
+
 1. Selezionare una sorgente o una `SOURCE_EXCERPT` autonoma.
 2. Conservare sempre la sorgente/timeline originale intoccabile.
 3. Trascrivere localmente con `faster-whisper`.

@@ -36,23 +36,24 @@ def _is_reparse(path: Path) -> bool:
 def validate_managed_path(path: Path, root: Path, *, allow_directory: bool = False) -> Path:
     root_resolved = root.resolve(strict=False)
     selected = path if path.is_absolute() else root_resolved / path
-    selected_absolute = selected.absolute()
+    selected_resolved = selected.resolve(strict=False)
     try:
-        common = Path(os.path.commonpath((str(root_resolved), str(selected.resolve(strict=False)))))
+        common = Path(os.path.commonpath((str(root_resolved), str(selected_resolved))))
     except ValueError as exc:
         raise ValueError("Percorso fuori dal managed root") from exc
     if common != root_resolved:
         raise ValueError("Percorso fuori dal managed root")
-    try:
-        relative = selected_absolute.relative_to(root.absolute())
-    except ValueError as exc:
-        raise ValueError("Percorso fuori dal managed root") from exc
-    current = root.absolute()
-    for part in relative.parts:
-        current /= part
+    current = selected.absolute()
+    while True:
         if current.exists() and (current.is_symlink() or _is_reparse(current)):
             raise ValueError("Percorso symlink o reparse non consentito")
-    resolved = selected.resolve(strict=False)
+        if current.resolve(strict=False) == root_resolved:
+            break
+        parent = current.parent
+        if parent == current:
+            raise ValueError("Percorso fuori dal managed root")
+        current = parent
+    resolved = selected_resolved
     if resolved.exists():
         if allow_directory and not resolved.is_dir():
             raise ValueError("Artefatto directory atteso")

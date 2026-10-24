@@ -25,6 +25,7 @@ CAPABILITY_STATUS = {
     "CAP_VERTICAL_SOCIAL": "EXPERIMENTAL",
     "CAP_BRANDED_LONGFORM_EDITORIAL": "PENDING",
     "CAP_WORKFLOW_CONTROL_PLANE": "PENDING",
+    "CAP_COLORIST": "PENDING",
 }
 
 
@@ -114,6 +115,21 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
             "GetProjectListInCurrentFolder", "CloseProject", "DeleteProject", "ImportProject",
         )
     ) and _method(pool, "DeleteTimelines")
+    colorist_ok = False
+    if timeline is not None and all(_method(timeline, name) for name in (
+        "GetName", "GetUniqueId", "GetTrackCount", "GetItemListInTrack",
+    )):
+        try:
+            clips = []
+            for track_index in range(1, int(timeline.GetTrackCount("video") or 0) + 1):
+                clips.extend(timeline.GetItemListInTrack("video", track_index) or [])
+            required = (
+                "GetUniqueId", "GetName", "GetCurrentVersion", "GetVersionNameList",
+                "AddVersion", "LoadVersionByName", "SetCDL", "GetNodeGraph", "CopyGrades",
+            )
+            colorist_ok = bool(clips) and all(all(_method(clip, name) for name in required) for clip in clips)
+        except Exception:
+            colorist_ok = False
     return {
         "CAP_PROJECT": project_ok,
         "CAP_TIMELINE": timeline_ok,
@@ -135,6 +151,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
             and _method(timeline, "DuplicateTimeline") and _method(timeline, "AddMarker")
         ),
         "CAP_WORKFLOW_CONTROL_PLANE": bool(project is not None and timeline is not None),
+        "CAP_COLORIST": colorist_ok,
     }
 
 

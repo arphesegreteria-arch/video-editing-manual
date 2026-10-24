@@ -24,7 +24,9 @@ POWERSHELL = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "W
 class ProfileInstallerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp.name)
+        # Hosted Windows runners expose TEMP through an 8.3 alias; use the
+        # canonical directory so PowerShell and Python compare the same path.
+        self.root = Path(self.temp.name).resolve()
         self.local_app_data = self.root / "localappdata"
         self.local_config_path = (
             self.local_app_data

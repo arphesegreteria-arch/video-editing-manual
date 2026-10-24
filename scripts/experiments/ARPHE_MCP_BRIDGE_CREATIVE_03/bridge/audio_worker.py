@@ -15,7 +15,17 @@ PRESET = "ARPHE_DIALOGUE_CLEAN_V1"
 LEVEL_PRESET = "ARPHE_DIALOGUE_LEVEL_V2"
 DISTANT_PRESET = "ARPHE_DIALOGUE_DISTANT_V3"
 NATURAL_PRESET = "ARPHE_DIALOGUE_NATURAL_V4"
-PRESETS = frozenset({PRESET, LEVEL_PRESET, DISTANT_PRESET, NATURAL_PRESET})
+DEREVERB_NATURAL_PRESET = "ARPHE_DIALOGUE_DEREVERB_NATURAL_V5"
+PRESETS = frozenset({PRESET, LEVEL_PRESET, DISTANT_PRESET, NATURAL_PRESET,
+                     DEREVERB_NATURAL_PRESET})
+
+
+def _limiter_options(preset: str) -> str:
+    if preset == DISTANT_PRESET:
+        return "limit=0.8:attack=5:release=50:level=false"
+    if preset in {NATURAL_PRESET, DEREVERB_NATURAL_PRESET}:
+        return "limit=0.891:attack=8:release=80:level=false"
+    return "limit=0.891:attack=5:release=50"
 
 
 def _save(path: Path, payload: dict) -> None:
@@ -76,15 +86,20 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                     f"time_base={frame.time_base}:sample_rate={frame.sample_rate}:"
                     f"sample_fmt={frame.format.name}:channel_layout={frame.layout.name}"
                 ))
-                highpass = graph.add("highpass", "f=70" if preset == NATURAL_PRESET else "f=80")
+                highpass = graph.add(
+                    "highpass",
+                    "f=70" if preset in {NATURAL_PRESET, DEREVERB_NATURAL_PRESET} else "f=80",
+                )
                 denoise = graph.add(
                     "afftdn",
                     (
                         "nr=14:nf=-48:tn=1" if preset == DISTANT_PRESET
+                        else "nr=3:nf=-55:tn=1" if preset == DEREVERB_NATURAL_PRESET
                         else "nr=4:nf=-55:tn=1" if preset == NATURAL_PRESET
                         else "nr=8:nf=-50:tn=1"
                     ),
                 )
+                room_low = room_mid = gate = None
                 if preset in {LEVEL_PRESET, DISTANT_PRESET}:
                     if preset == DISTANT_PRESET:
                         presence = graph.add("equalizer", "f=3200:t=q:w=1.2:g=3")
@@ -116,6 +131,20 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                         "acompressor",
                         "threshold=0.18:ratio=1.6:attack=25:release=220:makeup=1.05",
                     )
+                elif preset == DEREVERB_NATURAL_PRESET:
+                    presence = None
+                    room_low = graph.add("equalizer", "f=220:t=q:w=0.8:g=-2.5")
+                    room_mid = graph.add("equalizer", "f=430:t=q:w=1.0:g=-2.0")
+                    gate = graph.add(
+                        "agate",
+                        "threshold=0.035:ratio=1.8:attack=20:release=220:range=0.35:makeup=1",
+                    )
+                    booster = graph.add("volume", "volume=0.5dB")
+                    leveler = None
+                    compressor = graph.add(
+                        "acompressor",
+                        "threshold=0.16:ratio=1.5:attack=25:release=250:makeup=1.03",
+                    )
                 else:
                     presence = None
                     booster = None
@@ -124,13 +153,7 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                         "acompressor",
                         "threshold=0.125:ratio=3:attack=15:release=150:makeup=1.4",
                     )
-                limiter_options = (
-                    "limit=0.8:attack=5:release=50:level=false"
-                    if preset == DISTANT_PRESET
-                    else "limit=0.891:attack=8:release=80:level=false"
-                    if preset == NATURAL_PRESET
-                    else "limit=0.891:attack=5:release=50"
-                )
+                limiter_options = _limiter_options(preset)
                 limiter = graph.add("alimiter", limiter_options)
                 sink = graph.add("abuffersink")
                 source_node.link_to(highpass)
@@ -143,7 +166,12 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                         denoise.link_to(leveler)
                     leveler.link_to(compressor)
                 else:
-                    if presence is not None:
+                    if gate is not None and room_low is not None and room_mid is not None:
+                        denoise.link_to(room_low)
+                        room_low.link_to(room_mid)
+                        room_mid.link_to(gate)
+                        gate.link_to(compressor)
+                    elif presence is not None:
                         denoise.link_to(presence)
                         presence.link_to(compressor)
                     else:

@@ -102,8 +102,10 @@ class VerticalSocialContractTests(unittest.TestCase):
             config = load_config(path)
 
         self.assertFalse(config.flags["CAP_VERTICAL_SOCIAL"])
-        self.assertEqual(root / "state" / "vertical_social_plans.json", config.vertical_social_plans_path)
-        self.assertEqual(root / "state" / "vertical_social_journal.jsonl", config.vertical_social_journal_path)
+        self.assertEqual((root / "state" / "vertical_social_plans.json").resolve(),
+                         config.vertical_social_plans_path)
+        self.assertEqual((root / "state" / "vertical_social_journal.jsonl").resolve(),
+                         config.vertical_social_journal_path)
 
 
 if __name__ == "__main__":

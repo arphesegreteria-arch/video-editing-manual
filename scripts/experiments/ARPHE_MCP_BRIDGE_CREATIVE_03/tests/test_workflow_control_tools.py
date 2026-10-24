@@ -112,10 +112,10 @@ class WorkflowControlToolTests(unittest.TestCase):
         with patch("bridge.server.load_config", return_value=cfg), \
              patch("bridge.server._runtime", side_effect=AssertionError("runtime touched")):
             result = server.prepare_workflow_job("PODCAST_REELS", "editorial_0123456789abcdef", {"project_name": "A", "timeline_name": "T"})
+            delivery = server.approve_workflow_delivery(
+                "workflow_0123456789abcdef", "a" * 64, "SECRETARY")
         self.assertFalse(result["ok"])
         self.assertIn("CAP_WORKFLOW_CONTROL_PLANE", result["error"])
-        delivery = server.approve_workflow_delivery(
-            "workflow_0123456789abcdef", "a" * 64, "SECRETARY")
         self.assertFalse(delivery["ok"])
         self.assertIn("CAP_WORKFLOW_CONTROL_PLANE", delivery["error"])
 

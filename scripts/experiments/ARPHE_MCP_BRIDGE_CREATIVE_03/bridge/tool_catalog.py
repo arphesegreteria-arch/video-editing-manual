@@ -3,6 +3,7 @@ EXPOSED_TOOL_NAMES = (
     "list_longform_media", "get_transcript_metadata", "get_transcript_chunk",
     "validate_longform_edit_plan", "apply_longform_edit_plan",
     "start_prepare_longform_audio", "get_longform_audio_job",
+    "start_timeline_dialogue_cleanup_test", "get_timeline_dialogue_cleanup_job",
     "create_project", "set_current_project", "create_timeline", "set_current_timeline",
     "duplicate_timeline_version", "create_edge_fade_test", "get_creative_status", "create_fusion_composition",
     "move_voiceover_tail_to_cta",

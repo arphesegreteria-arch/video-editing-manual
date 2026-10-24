@@ -200,6 +200,10 @@ from .timeline_tools import (create_safe_working_timeline as do_safe_timeline,
                              create_timeline as do_create_timeline,
                              duplicate_timeline as do_duplicate_timeline,
                              set_current_timeline as do_set_current_timeline)
+from .timeline_dialogue_cleanup import (
+    get_timeline_dialogue_cleanup_job as do_get_timeline_dialogue_cleanup_job,
+    start_timeline_dialogue_cleanup_test as do_start_timeline_dialogue_cleanup_test,
+)
 
 
 mcp = MCPServer(
@@ -1959,6 +1963,34 @@ def create_edge_fade_test(source_timeline: str, target_name: str,
         if error: return error
         return _call(do_create_edge_fade_test, project, config, registry, source_timeline, target_name,
                      video_in_frames, video_out_frames, audio_in_frames, audio_out_frames)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def start_timeline_dialogue_cleanup_test(
+    source_timeline: str,
+    target_name: str,
+    preset: str = "ARPHE_DIALOGUE_DEREVERB_NATURAL_V5",
+) -> dict[str, Any]:
+    """Render exact timeline audio and create one verified non-destructive cleanup test."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_start_timeline_dialogue_cleanup_test, project, config, registry,
+                         source_timeline, target_name, preset)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def get_timeline_dialogue_cleanup_job(job_id: str) -> dict[str, Any]:
+    """Advance or read one owned timeline dialogue-cleanup job."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_get_timeline_dialogue_cleanup_job,
+                         project, config, registry, job_id)
     except Exception as exc: return _error(exc)
 
 

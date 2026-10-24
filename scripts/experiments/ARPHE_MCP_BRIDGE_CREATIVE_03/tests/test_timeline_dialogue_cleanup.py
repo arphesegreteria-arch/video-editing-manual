@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import hashlib
+import inspect
 import json
 from pathlib import Path
 import sys
@@ -271,6 +272,44 @@ class TimelineDialogueCleanupTests(unittest.TestCase):
             self.assertEqual(108732, source["end_frame"])
             self.assertEqual("dialogue-render-job", manifest["render_job_id"])
             self.assertEqual("ARPHE_DIALOGUE_DEREVERB_NATURAL_V5", manifest["preset"])
+
+    def test_catalog_and_server_publish_only_generic_cleanup_commands(self):
+        from bridge.tool_catalog import EXPOSED_TOOL_NAMES
+        from bridge import server
+
+        self.assertIn("start_timeline_dialogue_cleanup_test", EXPOSED_TOOL_NAMES)
+        self.assertIn("get_timeline_dialogue_cleanup_job", EXPOSED_TOOL_NAMES)
+        start_signature = inspect.signature(server.start_timeline_dialogue_cleanup_test)
+        poll_signature = inspect.signature(server.get_timeline_dialogue_cleanup_job)
+        self.assertEqual(["source_timeline", "target_name", "preset"],
+                         list(start_signature.parameters))
+        self.assertEqual(["job_id"], list(poll_signature.parameters))
+        published = (str(start_signature) + str(poll_signature)
+                     + (server.start_timeline_dialogue_cleanup_test.__doc__ or "")
+                     + (server.get_timeline_dialogue_cleanup_job.__doc__ or "")).casefold()
+        self.assertNotIn("peeling", published)
+
+    def test_server_cleanup_wrappers_hold_resolve_lock(self):
+        from bridge import server
+        events = []
+
+        class Lock:
+            def __enter__(self): events.append("enter")
+            def __exit__(self, *_args): events.append("exit")
+
+        runtime = (object(), object(), object(), object(), object(), object(), None)
+        with patch.object(server, "RESOLVE_ACCESS_LOCK", Lock()), \
+             patch.object(server, "_runtime", return_value=runtime), \
+             patch.object(server, "do_start_timeline_dialogue_cleanup_test",
+                          side_effect=lambda *_args: events.append("start") or {"ok": True}), \
+             patch.object(server, "do_get_timeline_dialogue_cleanup_job",
+                          side_effect=lambda *_args: events.append("get") or {"ok": True}):
+            self.assertTrue(server.start_timeline_dialogue_cleanup_test(
+                "SOURCE", "ARPHE_TARGET")["ok"])
+            self.assertTrue(server.get_timeline_dialogue_cleanup_job(
+                "dialogue_cleanup_0123456789abcdef")["ok"])
+
+        self.assertEqual(["enter", "start", "exit", "enter", "get", "exit"], events)
 
     def test_start_rejects_collision_concurrent_render_and_non_single_clip_before_writing(self):
         module = cleanup_module(self)

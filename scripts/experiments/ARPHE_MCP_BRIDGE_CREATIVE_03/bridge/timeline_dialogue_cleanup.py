@@ -88,6 +88,19 @@ def _load_manifest(config: CreativeConfig, job_id: str) -> tuple[Path, dict[str,
             or payload.get("workstation_id") != config.workstation_id
             or not isinstance(payload.get("timeline_source"), dict)):
         raise ValidationError("Manifest pulizia dialogo non valido")
+    managed_root = (config.audio_root / "timeline-dialogue-cleanup" /
+                    config.workstation_id / job_id).resolve()
+    source_path = Path(str(payload.get("source_path") or "")).resolve()
+    processed_path = Path(str(payload.get("processed_path") or "")).resolve()
+    worker_value = payload.get("audio_worker_manifest")
+    worker_path = Path(str(worker_value)).resolve() if worker_value else None
+    expected_worker = path.with_name(f"{job_id}.audio.json")
+    if (source_path.parent != managed_root or processed_path.parent != managed_root
+            or source_path.suffix.lower() != ".wav"
+            or processed_path.suffix.lower() != ".wav"
+            or source_path == processed_path
+            or (worker_path is not None and worker_path != expected_worker)):
+        raise ValidationError("Manifest pulizia dialogo con percorsi gestiti non validi")
     return path, payload
 
 
@@ -145,16 +158,17 @@ def _single_clip_structure(timeline: Any) -> dict[str, Any]:
     audio_media = safe_call(audio, "GetMediaPoolItem")
     if video_media is None or audio_media is None:
         raise ValidationError("Media V1/A1 non leggibili")
+    audio_source_start = int(safe_call(audio, "GetSourceStartFrame") or 0)
     return {
         "record_start": video_range[0],
         "record_end": video_range[1],
         "video_media_id": str(safe_call(video_media, "GetUniqueId") or ""),
         "audio_media_id": str(safe_call(audio_media, "GetUniqueId") or ""),
-        "audio_source_start": int(safe_call(audio, "GetSourceStartFrame") or 0),
-        "audio_source_end": int(
-            safe_call(audio, "GetSourceEndFrame")
-            or (int(safe_call(audio, "GetSourceStartFrame") or 0) + video_range[1] - video_range[0])
-        ),
+        "audio_source_start": audio_source_start,
+        # AppendToTimeline takes an inclusive endFrame while every bridge range
+        # is half-open. Derive the exclusive source end from the verified clip
+        # duration instead of trusting Resolve's ambiguous source-end read-back.
+        "audio_source_end": audio_source_start + video_range[1] - video_range[0],
     }
 
 

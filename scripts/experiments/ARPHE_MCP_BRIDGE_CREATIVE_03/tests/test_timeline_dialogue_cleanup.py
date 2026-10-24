@@ -187,6 +187,17 @@ def cleanup_module(test_case: unittest.TestCase):
 
 
 class TimelineDialogueCleanupTests(unittest.TestCase):
+    def test_source_end_for_rollback_is_derived_from_verified_duration(self):
+        module = cleanup_module(self)
+        project = Project()
+        audio = project.source.audio_items[0]
+        audio.GetSourceEndFrame = lambda: audio.source_start + audio.GetDuration() - 1
+
+        structure = module._single_clip_structure(project.source)
+
+        self.assertEqual(0, structure["audio_source_start"])
+        self.assertEqual(732, structure["audio_source_end"])
+
     def _start(self, root: Path):
         module = cleanup_module(self)
         cfg = make_config(root)
@@ -398,6 +409,22 @@ class TimelineDialogueCleanupTests(unittest.TestCase):
                 with self.subTest(value=value), self.assertRaises(ValidationError):
                     module.get_timeline_dialogue_cleanup_job(
                         project, cfg, Registry(cfg.state_path), value)
+
+    def test_tampered_managed_paths_are_rejected_before_render_or_worker_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            module, cfg, project, started, manifest_path = self._start(root)
+            parent = json.loads(manifest_path.read_text(encoding="utf-8"))
+            parent["processed_path"] = str((root / "outside.wav").resolve())
+            manifest_path.write_text(json.dumps(parent), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValidationError, "percorsi gestiti"):
+                module.get_timeline_dialogue_cleanup_job(
+                    project, cfg, Registry(cfg.state_path), started["job_id"])
+
+            self.assertEqual([], project.deleted)
+            self.assertEqual({"foreign-job", "dialogue-render-job"},
+                             {job["JobId"] for job in project.jobs})
 
     def test_invalid_processed_pcm_interrupts_before_timeline_write(self):
         with tempfile.TemporaryDirectory() as directory:

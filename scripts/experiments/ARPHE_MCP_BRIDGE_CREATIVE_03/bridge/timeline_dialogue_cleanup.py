@@ -174,9 +174,12 @@ def _single_clip_structure(timeline: Any) -> dict[str, Any]:
 
 
 def _matching_audio(timeline: Any, media: Any, start: int, end: int) -> list[Any]:
+    media_id = str(safe_call(media, "GetUniqueId") or "")
+    if not media_id:
+        raise ValidationError("Identità media audio non disponibile")
     return [
         item for item in (safe_call(timeline, "GetItemListInTrack", "audio", 1) or [])
-        if safe_call(item, "GetMediaPoolItem") is media
+        if str(safe_call(safe_call(item, "GetMediaPoolItem"), "GetUniqueId") or "") == media_id
         and safe_call(item, "GetStart") == start
         and safe_call(item, "GetEnd") == end
     ]

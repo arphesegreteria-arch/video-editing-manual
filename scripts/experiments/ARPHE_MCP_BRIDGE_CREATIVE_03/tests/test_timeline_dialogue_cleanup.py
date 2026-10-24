@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 from bridge.registry import Registry  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
+from bridge.timeline_dialogue_cleanup import _matching_audio  # noqa: E402
 
 
 class Media:
@@ -188,6 +189,14 @@ def cleanup_module(test_case: unittest.TestCase):
 
 
 class TimelineDialogueCleanupTests(unittest.TestCase):
+    def test_audio_matching_uses_stable_media_identity_and_exact_position(self):
+        canonical = Media("voice.wav", "same-media", "C:/ARPHE/voice.wav")
+        proxy = Media("voice-proxy.wav", "same-media", "C:/ARPHE/voice.wav")
+        foreign = Media("foreign.wav", "foreign-media", "C:/ARPHE/foreign.wav")
+        timeline = Timeline("test", "timeline-test", audio_items=[
+            Item(proxy, 100, 120), Item(foreign, 100, 120), Item(proxy, 120, 140),
+        ])
+        self.assertEqual([timeline.audio_items[0]], _matching_audio(timeline, canonical, 100, 120))
     def test_source_end_for_rollback_is_derived_from_verified_duration(self):
         module = cleanup_module(self)
         project = Project()

@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT))
 
 from bridge import audio_worker  # noqa: E402
 from bridge.audio_tools import allowed_audio, audio_job  # noqa: E402
+from bridge.artifact_records import ArtifactStore  # noqa: E402
 from bridge.audio_provenance import file_sha256, media_fingerprint, verify_audio_manifest  # noqa: E402
 from bridge.audio_worker import DISTANT_PRESET, LEVEL_PRESET, NATURAL_PRESET, process_audio  # noqa: E402
 from bridge.config import CreativeConfig, DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
@@ -37,6 +38,7 @@ def config(root: Path) -> CreativeConfig:
         palette=dict(DEFAULT_PALETTE), flags=flags, allowed_projects=frozenset(),
         allowed_timelines=frozenset(), render_format="mp4", render_codec="H264",
         media_roots=(media,), transcript_root=transcripts, audio_root=audio, audio_jobs_root=jobs,
+        artifact_registry_path=root / "artifact_registry.json",
     )
 
 
@@ -265,8 +267,14 @@ class AudioPipelineTests(unittest.TestCase):
                 allowed_audio(str(outside), cfg)
             job_id = "audio_0123456789abcdef"
             (cfg.audio_jobs_root / f"{job_id}.json").write_text(
-                json.dumps({"job_id": job_id, "status": "COMPLETED"}), encoding="utf-8")
+                json.dumps({
+                    "schema": "ARPHE_AUDIO_JOB_V2", "job_id": job_id,
+                    "status": "COMPLETED", "source_fingerprint": "a" * 64,
+                    "workstation_id": cfg.workstation_id,
+                    "output_path": str(audio), "output_sha256": file_sha256(audio),
+                }), encoding="utf-8")
             self.assertTrue(audio_job(cfg, job_id)["ok"])
+            self.assertFalse(cfg.artifact_registry_path.exists())
             with self.assertRaises(ValidationError):
                 audio_job(cfg, "../escape")
 

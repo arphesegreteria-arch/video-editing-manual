@@ -10,13 +10,36 @@ import shutil
 import stat
 from typing import Any
 
-from .artifact_records import ArtifactPolicy, ArtifactRecord, ArtifactStore, sha256_file
+from .artifact_records import (ArtifactPolicy, ArtifactRecord, ArtifactStore,
+                               RegistrationLockedError, sha256_file)
 from .config import CreativeConfig
 
 
 UTC = timezone.utc
 ACTIVE_BATCH_STATES = frozenset({"DRAFT", "CONFIRMED", "PREPARED", "APPROVED", "RENDERING", "VERIFYING"})
 FAILED_BATCH_STATES = frozenset({"FAILED_RENDER", "FAILED_VERIFY"})
+
+
+def _producer_activity_hold(config: CreativeConfig) -> bool:
+    active = {"QUEUED", "RUNNING", "RENDERING", "PROCESSING", "APPLYING",
+              "PREPARED", "APPROVED"}
+    if config.audio_jobs_root.is_dir():
+        for path in config.audio_jobs_root.rglob("*.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                return True
+            if isinstance(payload, dict) and str(payload.get("status") or "").upper() in active:
+                return True
+    if config.colorist_jobs_path.exists():
+        try:
+            payload = json.loads(config.colorist_jobs_path.read_text(encoding="utf-8-sig"))
+            jobs = payload.get("jobs", {}) if isinstance(payload, dict) else {}
+            return any(str(value.get("state") or "").upper() in active
+                       for value in jobs.values() if isinstance(value, dict))
+        except (OSError, json.JSONDecodeError):
+            return True
+    return False
 
 
 def _utc(value: datetime) -> datetime:
@@ -67,6 +90,8 @@ def _roots(config: CreativeConfig) -> dict[str, Path]:
         "render_root": config.render_root.resolve(),
         "profile_root": config.artifact_registry_path.parent.resolve(),
         "runtime_log_root": config.runtime_log_root.resolve(),
+        "audio_root": config.audio_root.resolve(),
+        "audio_jobs_root": config.audio_jobs_root.resolve(),
     }
 
 
@@ -101,6 +126,9 @@ def _record_item(record: ArtifactRecord, config: CreativeConfig, project_registr
         item["error_code"] = "PATH_OUTSIDE_MANAGED_ROOT"
         return item
     if record.state in {"QUARANTINED", "PURGED", "ERROR"}:
+        return item
+    if record.protection_class == "PROTECTED":
+        item["state"] = "PROTECTED"
         return item
     rule = policy.rules[record.category]
     if record.batch_id:
@@ -490,43 +518,57 @@ def run_maintenance(config: CreativeConfig, artifact_store: ArtifactStore, proje
                 "error_code": "MAINTENANCE_LOCKED", "quarantined": [], "purged": []}
     quarantined: list[str] = []
     purged: list[str] = []
+    purge_blocked: list[str] = []
     try:
-        _reconcile_pending(artifact_store)
         _import_rotated_logs(config, artifact_store, policy)
-        for original in artifact_store.records():
-            record = original
-            if record.state == "ERROR" or record.state == "PURGED":
-                continue
-            if record.batch_id and record.terminal_observed_at is None:
-                record = _freeze_terminal(record, artifact_store, project_registry, policy, now)
-            if record.state in {"ACTIVE", "ELIGIBLE", "RESTORED"}:
-                if record.batch_id:
-                    batch = project_registry.render_batch(record.batch_id)
-                    if batch is None or batch.status in ACTIVE_BATCH_STATES or record.eligible_at is None:
-                        continue
-                rule = policy.rules[record.category]
-                eligible_at = record.eligible_at or record.created_at + timedelta(seconds=rule.active_seconds)
-                if now >= eligible_at:
-                    _quarantine(config, artifact_store, record, policy, now)
-                    updated = _record_by_id(artifact_store, record.artifact_id)
-                    if updated.state == "QUARANTINED":
-                        quarantined.append(record.artifact_id)
-            elif record.state == "QUARANTINED" and record.purge_after is not None and now >= record.purge_after:
-                _purge(artifact_store, record)
-                if _record_by_id(artifact_store, record.artifact_id).state == "PURGED":
-                    purged.append(record.artifact_id)
-        artifact_store.set_maintenance_state(last_attempt_at=now, last_result="ok")
+        with artifact_store.registration_guard():
+            _reconcile_pending(artifact_store)
+            producer_hold = _producer_activity_hold(config)
+            for original in artifact_store.records():
+                record = original
+                if record.state == "ERROR" or record.state == "PURGED":
+                    continue
+                if record.protection_class == "PROTECTED":
+                    continue
+                if producer_hold:
+                    continue
+                if record.batch_id and record.terminal_observed_at is None:
+                    record = _freeze_terminal(record, artifact_store, project_registry, policy, now)
+                if record.state in {"ACTIVE", "ELIGIBLE", "RESTORED"}:
+                    if record.batch_id:
+                        batch = project_registry.render_batch(record.batch_id)
+                        if batch is None or batch.status in ACTIVE_BATCH_STATES or record.eligible_at is None:
+                            continue
+                    rule = policy.rules[record.category]
+                    eligible_at = record.eligible_at or record.created_at + timedelta(seconds=rule.active_seconds)
+                    if now >= eligible_at:
+                        _quarantine(config, artifact_store, record, policy, now)
+                        updated = _record_by_id(artifact_store, record.artifact_id)
+                        if updated.state == "QUARANTINED":
+                            quarantined.append(record.artifact_id)
+                elif (record.state == "QUARANTINED" and record.purge_after is not None
+                      and now >= record.purge_after):
+                    # Purge is deliberately unreachable in production code.  The
+                    # policy field is descriptive, not an execution switch.
+                    purge_blocked.append(record.artifact_id)
+            artifact_store.set_maintenance_state(last_attempt_at=now, last_result="ok")
         return {"ok": True, "action": "run_artifact_maintenance",
                 "workstation_id": config.workstation_id,
                 "policy_version": policy.policy_version,
-                "quarantined": quarantined, "purged": purged}
+                "quarantined": quarantined, "purged": purged,
+                "purge_blocked": purge_blocked}
+    except RegistrationLockedError:
+        return {"ok": False, "action": "run_artifact_maintenance",
+                "error_code": "REGISTRATION_LOCKED", "quarantined": quarantined,
+                "purged": purged, "purge_blocked": purge_blocked}
     except Exception as exc:
         try:
             artifact_store.set_maintenance_state(last_attempt_at=now, last_result="error")
         except Exception:
             pass
         return {"ok": False, "action": "run_artifact_maintenance",
-                "error_code": type(exc).__name__, "quarantined": quarantined, "purged": purged}
+                "error_code": type(exc).__name__, "quarantined": quarantined,
+                "purged": purged, "purge_blocked": purge_blocked}
     finally:
         _release_lock(artifact_store, descriptor)
 

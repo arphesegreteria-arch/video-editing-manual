@@ -26,6 +26,7 @@ CAPABILITY_STATUS = {
     "CAP_BRANDED_LONGFORM_EDITORIAL": "PENDING",
     "CAP_WORKFLOW_CONTROL_PLANE": "PENDING",
     "CAP_COLORIST": "PENDING",
+    "CAP_VOICE_ISOLATION": "PENDING",
 }
 
 
@@ -130,6 +131,10 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
             colorist_ok = bool(clips) and all(all(_method(clip, name) for name in required) for clip in clips)
         except Exception:
             colorist_ok = False
+    voice_isolation_ok = bool(timeline is not None and all(_method(timeline, name) for name in (
+        "GetName", "GetUniqueId", "GetTrackCount", "GetTrackName",
+        "GetVoiceIsolationState", "SetVoiceIsolationState",
+    )))
     return {
         "CAP_PROJECT": project_ok,
         "CAP_TIMELINE": timeline_ok,
@@ -152,6 +157,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         ),
         "CAP_WORKFLOW_CONTROL_PLANE": bool(project is not None and timeline is not None),
         "CAP_COLORIST": colorist_ok,
+        "CAP_VOICE_ISOLATION": voice_isolation_ok,
     }
 
 

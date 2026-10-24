@@ -55,10 +55,18 @@ Stati ammessi:
 | Colorist: matching multicamera | PENDING | Copia da riferimento esplicito con `CopyGrades` su nuove versioni locali; nessun auto-match, gate nativo non eseguito |
 | Colorist: preset DRX allowlisted | PENDING | `Graph.ApplyGradeFromDRX` confermata negli stub Resolve 21; nessun DRX configurato o validato visivamente |
 | Colorist: preview prima/dopo | PENDING | Toggle reversibile tra versioni locali registrate; nessun cambio pagina/playhead, cattura o render; gate umano richiesto |
+| Fairlight: Voice Isolation via scripting | PENDING | Resolve 21.1 installato documenta `Get/SetVoiceIsolationState` su traccia e clip; nessun probe live eseguito. `Amount` è generico e non è un controllo de-reverb separato |
+| Fairlight: Dialogue Leveler via proprietà clip | PENDING | Le firme 21.1 documentano proprietà tipizzate; nessun test mutante e nessun parametro promosso a default |
+| Fairlight: Dialogue Separator | MANUAL | Il manuale 21.1 conferma Voice/Background/Ambience e vincolo mono-only, ma le API installate non espongono il plugin o i suoi parametri |
+| Fairlight: applicazione preset via scripting | PENDING | `GetFairlightPresets` e `ApplyFairlightPresetToCurrentTimeline` sono documentati; tipo, contenuto, destinazione e rollback del preset non sono attestati senza gate mutante isolato |
 
 ## Regola
 
 Un valore `PENDING` non diventa `SUPPORTED` dalla sola documentazione API. Deve essere verificato su questa installazione con un test controllato e con controllo del risultato reale in Resolve.
+
+La ricognizione documentale del 24 ottobre 2026 ha rilevato Resolve installato `21.1.1.10`, senza
+collegarsi alla sessione o modificare progetti. Le righe Fairlight descrivono esclusivamente firme e
+manuale locali; non sostituiscono il gate nativo.
 
 ## Milestone raggiunto — 2026-09-01
 

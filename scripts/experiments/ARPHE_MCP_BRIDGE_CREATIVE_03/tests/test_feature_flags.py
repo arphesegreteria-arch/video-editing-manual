@@ -64,6 +64,10 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertFalse(DEFAULT_FLAGS["CAP_COLORIST"])
         self.assertFalse(capabilities["CAP_COLORIST"]["active"])
         self.assertEqual("PENDING", capabilities["CAP_COLORIST"]["status"])
+        self.assertFalse(DEFAULT_FLAGS["CAP_VOICE_ISOLATION"])
+        self.assertFalse(capabilities["CAP_VOICE_ISOLATION"]["active"])
+        self.assertFalse(capabilities["CAP_VOICE_ISOLATION"]["technically_available"])
+        self.assertEqual("PENDING", capabilities["CAP_VOICE_ISOLATION"]["status"])
 
 
 if __name__ == "__main__":

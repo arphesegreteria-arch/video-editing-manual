@@ -14,6 +14,7 @@ import wave
 from typing import Any
 
 from .audio_worker import DEREVERB_NATURAL_PRESET, PRESETS
+from .artifact_producers import register_completed_audio_job
 from .config import CreativeConfig
 from .feature_flags import require_capability
 from .resolve_connection import safe_call
@@ -483,6 +484,8 @@ def get_timeline_dialogue_cleanup_job(
             "source_name": Path(payload["source_path"]).name,
             "source_fingerprint": digest,
             "output_path": str(output),
+            "workstation_id": config.workstation_id,
+            "creative_config_path": str(config.path.resolve()),
         }
         _atomic_json(worker_manifest, worker_payload)
         payload.update(
@@ -549,5 +552,6 @@ def get_timeline_dialogue_cleanup_job(
             raise
         payload.update(status="COMPLETED", updated_at=_now(), error=None, readback=readback)
         _atomic_json(manifest_path, payload)
+        register_completed_audio_job(config, manifest_path)
         return _public(payload)
     return _public(payload)

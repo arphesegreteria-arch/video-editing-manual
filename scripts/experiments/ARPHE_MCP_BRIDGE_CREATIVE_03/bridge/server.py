@@ -20,11 +20,13 @@ from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
                                restore_artifact as do_restore_artifact,
                                run_maintenance as do_run_maintenance)
 from .artifact_records import artifact_store_for, load_artifact_policy
+from .artifact_producers import register_colorist_state
 from .audio_provenance import media_fingerprint
 from .config import load_config
 from .colorist_jobs import (
     ColoristJobStore,
     approve_colorist_job as do_approve_colorist_job,
+    cancel_colorist_job as do_cancel_colorist_job,
     new_colorist_job,
     record_colorist_apply,
     record_colorist_apply_failure,
@@ -204,6 +206,9 @@ from .timeline_dialogue_cleanup import (
     get_timeline_dialogue_cleanup_job as do_get_timeline_dialogue_cleanup_job,
     start_timeline_dialogue_cleanup_test as do_start_timeline_dialogue_cleanup_test,
 )
+from .voice_isolation import (VoiceIsolationCapture, VoiceIsolationState, VoiceIsolationStore,
+                              VoiceIsolationTarget, apply_voice_isolation, capture_track,
+                              read_voice_isolation, restore_voice_isolation)
 
 
 mcp = MCPServer(
@@ -265,7 +270,15 @@ BRANDED_LONGFORM_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "branded_
 
 
 def _colorist_store(config: Any) -> ColoristJobStore:
-    return ColoristJobStore(config.colorist_jobs_path, config.workstation_id)
+    return ColoristJobStore(
+        config.colorist_jobs_path, config.workstation_id,
+        on_save=lambda _job: register_colorist_state(config),
+    )
+
+
+def _register_colorist_state(config: Any, job: Any) -> Any:
+    register_colorist_state(config, job)
+    return job
 
 
 def _require_colorist(config: Any, manager: Any, project: Any, timeline: Any) -> None:
@@ -359,7 +372,7 @@ def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
                 preset_name=preset_name, drx_preset_name=drx_preset_name,
                 drx_asset_identity=drx_identity, before_versions=before, cdl=cdl,
             )
-            saved = _colorist_store(config).create(job)
+            saved = _register_colorist_state(config, _colorist_store(config).create(job))
             return {"ok": True, "action": "prepare_colorist_plan",
                     "colorist_job_id": saved.colorist_job_id, "revision": saved.revision,
                     "state": saved.state, "plan_fingerprint": saved.plan_fingerprint,
@@ -379,6 +392,38 @@ def inspect_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
 
 
 @mcp.tool(annotations=SAFE_WRITE)
+def cancel_colorist_plan(colorist_job_id: str, expected_plan_fingerprint: str,
+                         expected_revision: int, operator_role: str,
+                         reason: str) -> dict[str, Any]:
+    """Cancel one exact PREPARED Colorist plan in the ledger; never calls Resolve."""
+    config = None
+    try:
+        config = load_config()
+        saved = do_cancel_colorist_job(
+            _colorist_store(config), colorist_job_id, expected_plan_fingerprint,
+            expected_revision, operator_role, reason,
+        )
+        result = {
+            "ok": True,
+            "action": "cancel_colorist_plan",
+            "colorist_job_id": saved.colorist_job_id,
+            "state": saved.state,
+            "revision": saved.revision,
+            "plan_fingerprint": saved.plan_fingerprint,
+            "operator_role": saved.operator_role,
+            "cancellation_evidence": saved.cancellation_evidence,
+        }
+    except Exception as exc:
+        result = {**_error(exc), "action": "cancel_colorist_plan"}
+    if config is not None:
+        try:
+            write_audit(config.audit_log_path, "cancel_colorist_plan", result)
+        except Exception:
+            pass
+    return result
+
+
+@mcp.tool(annotations=SAFE_WRITE)
 def approve_colorist_plan(colorist_job_id: str, expected_plan_fingerprint: str,
                           operator_role: str) -> dict[str, Any]:
     """Approve exactly one Colorist plan fingerprint; performs no Resolve write."""
@@ -386,7 +431,7 @@ def approve_colorist_plan(colorist_job_id: str, expected_plan_fingerprint: str,
         config = load_config(); store = _colorist_store(config)
         current = store.get(colorist_job_id, config.workstation_id)
         approved = do_approve_colorist_job(current, expected_plan_fingerprint, operator_role)
-        saved = store.save(approved, current.revision)
+        saved = _register_colorist_state(config, store.save(approved, current.revision))
         return {"ok": True, "action": "approve_colorist_plan", "colorist_job_id": saved.colorist_job_id,
                 "state": saved.state, "revision": saved.revision, "plan_fingerprint": saved.plan_fingerprint}
     except Exception as exc: return _error(exc)
@@ -407,7 +452,7 @@ def apply_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
             if _colorist_drx_identity(config, drx_path) != current.drx_asset_identity:
                 raise ValidationError("Asset DRX Colorist modificato dopo l'approvazione")
             applying = record_colorist_apply_started(current)
-            applying = store.save(applying, current.revision)
+            applying = _register_colorist_state(config, store.save(applying, current.revision))
             try:
                 result = do_apply_colorist_job(project, timeline, applying, drx_path)
             except Exception as exc:
@@ -416,10 +461,12 @@ def apply_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
                           "created_versions": [], "restored_clip_ids": []}
             if not result.get("ok"):
                 failed = record_colorist_apply_failure(applying, result)
-                saved_failure = store.save(failed, applying.revision)
+                saved_failure = _register_colorist_state(
+                    config, store.save(failed, applying.revision)
+                )
                 return {**result, "state": saved_failure.state, "revision": saved_failure.revision}
             applied = record_colorist_apply(applying, result["evidence"])
-            saved = store.save(applied, applying.revision)
+            saved = _register_colorist_state(config, store.save(applied, applying.revision))
             return {**result, "action": "apply_colorist_plan", "state": saved.state,
                     "revision": saved.revision}
         except Exception as exc: return _error(exc)
@@ -438,7 +485,7 @@ def preview_colorist_version(colorist_job_id: str, clip_id: str, side: str) -> d
             preview = do_validate_colorist_preview(project, timeline, job, clip_id, side)
             restore_version = preview["restore_version"]
             tracked = record_colorist_preview_start(job, clip_id, restore_version)
-            tracked = store.save(tracked, job.revision)
+            tracked = _register_colorist_state(config, store.save(tracked, job.revision))
             return do_preview_colorist_version(project, timeline, tracked, clip_id, side)
         except Exception as exc: return _error(exc)
 
@@ -458,7 +505,7 @@ def restore_colorist_preview(colorist_job_id: str, clip_id: str) -> dict[str, An
                 raise ValidationError("Nessuna preview Colorist attiva per il clip")
             result = do_restore_colorist_preview(project, timeline, job, clip_id, restore_version)
             restored = record_colorist_preview_restored(job, clip_id)
-            saved = store.save(restored, job.revision)
+            saved = _register_colorist_state(config, store.save(restored, job.revision))
             return {**result, "revision": saved.revision}
         except Exception as exc: return _error(exc)
 
@@ -470,7 +517,7 @@ def submit_colorist_review(colorist_job_id: str, accepted: bool, operator_role: 
         config = load_config(); store = _colorist_store(config)
         current = store.get(colorist_job_id, config.workstation_id)
         reviewed = record_colorist_review(current, accepted, operator_role)
-        saved = store.save(reviewed, current.revision)
+        saved = _register_colorist_state(config, store.save(reviewed, current.revision))
         return {"ok": True, "action": "submit_colorist_review", "colorist_job_id": saved.colorist_job_id,
                 "state": saved.state, "revision": saved.revision, "accepted": saved.review_accepted}
     except Exception as exc: return _error(exc)
@@ -2472,6 +2519,93 @@ def recover_resolve_retirement(retirement_id: str) -> dict[str, Any]:
                          retirement_store_for(config), retirement_id, datetime.now(timezone.utc))
     except Exception as exc:
         return _error(exc)
+
+
+def _voice_store(config: Any) -> VoiceIsolationStore:
+    return VoiceIsolationStore(config.state_path.parent / "voice_isolation_jobs.json", config.workstation_id)
+
+
+def _require_voice_isolation_enabled(config: Any) -> None:
+    if not bool(config.flags.get("CAP_VOICE_ISOLATION")):
+        raise RuntimeError("CAP_VOICE_ISOLATION non attiva")
+
+
+def _voice_capture(job: dict[str, Any]) -> VoiceIsolationCapture:
+    target = VoiceIsolationTarget(**job["target"])
+    initial = VoiceIsolationState(job["initial"]["isEnabled"], job["initial"]["amount"])
+    return VoiceIsolationCapture(target, initial)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_voice_isolation(track_index: int) -> dict[str, Any]:
+    """Inspect documented Voice Isolation support and current state; no Resolve write."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, manager, project, timeline, config, _, error = _runtime()
+            if error: return error
+            capture = capture_track(project, timeline, track_index)
+            return {"ok": True, "action": "inspect_voice_isolation", "target": capture.target.__dict__,
+                    "current": capture.initial.as_dict(), "capability_enabled": bool(config.flags.get("CAP_VOICE_ISOLATION")),
+                    "capability_status": "PENDING"}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_voice_isolation(track_index: int, amount: int) -> dict[str, Any]:
+    """Persist the pre-change state for one exact audio track; does not modify Resolve."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            config = load_config()
+            _require_voice_isolation_enabled(config)
+            _, _, project, timeline, config, _, error = _runtime()
+            if error: return error
+            if config.workstation_id != "PC_PERSONALE": raise ValidationError("Voice Isolation solo PC_PERSONALE")
+            job = _voice_store(config).prepare(capture_track(project, timeline, track_index), amount)
+            return {"ok": True, "action": "prepare_voice_isolation", "voice_job_id": job["job_id"], "state": job["state"]}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_voice_isolation_job(voice_job_id: str) -> dict[str, Any]:
+    """Apply exactly one prepared Voice Isolation job, only when its local gate is enabled."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _require_voice_isolation_enabled(load_config())
+            _, manager, project, timeline, config, _, error = _runtime()
+            if error: return error
+            if config.workstation_id != "PC_PERSONALE": raise ValidationError("Voice Isolation solo PC_PERSONALE")
+            require_capability("CAP_VOICE_ISOLATION", config, manager, project, timeline)
+            store = _voice_store(config)
+            result = store.apply(voice_job_id, lambda job: apply_voice_isolation(
+                project, timeline, _voice_capture(job), job["requested"]["amount"]
+            ))
+            return {"ok": True, "action": "apply_voice_isolation", "current": result.current.as_dict()}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def restore_voice_isolation_job(voice_job_id: str) -> dict[str, Any]:
+    """Restore only the recorded state after exact target and state read-back validation."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _require_voice_isolation_enabled(load_config())
+            _, manager, project, timeline, config, _, error = _runtime()
+            if error: return error
+            if config.workstation_id != "PC_PERSONALE": raise ValidationError("Voice Isolation solo PC_PERSONALE")
+            require_capability("CAP_VOICE_ISOLATION", config, manager, project, timeline)
+            store = _voice_store(config)
+            def restore_operation(job: dict[str, Any]):
+                capture = _voice_capture(job)
+                expected = VoiceIsolationState(job["requested"]["isEnabled"], job["requested"]["amount"])
+                current = read_voice_isolation(project, timeline, capture)
+                if job["state"] == "RESTORING" and current.current == capture.initial:
+                    return current
+                return restore_voice_isolation(project, timeline, capture, expected)
+            result, idempotent = store.restore(voice_job_id, restore_operation)
+            if idempotent:
+                return {"ok": True, "action": "restore_voice_isolation", "idempotent": True}
+            return {"ok": True, "action": "restore_voice_isolation", "current": result.current.as_dict()}
+        except Exception as exc: return _error(exc)
 
 
 def run() -> None:

@@ -1,6 +1,7 @@
 """Non-destructive cleanup of the exact dialogue heard on a Resolve timeline."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -18,13 +19,33 @@ from .feature_flags import require_capability
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name
 from .timeline_tools import duplicate_timeline, find_timeline, timeline_names
-from .timeline_transcription import _allowed, _job_ids, _now
 from .transcription_worker import _atomic_json
 from .vertical_social_captions import timeline_edit_fingerprint
 
 
 JOB_SCHEMA = "ARPHE_TIMELINE_DIALOGUE_CLEANUP_JOB_V1"
 JOB_ID = re.compile(r"^dialogue_cleanup_[0-9a-f]{16}$")
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _job_ids(project: Any) -> tuple[str, ...]:
+    jobs = safe_call(project, "GetRenderJobList") or []
+    values = tuple(str(job.get("JobId") or job.get("JobID") or "")
+                   for job in jobs if isinstance(job, dict))
+    if any(not value for value in values) or len(values) != len(set(values)):
+        raise ValidationError("La coda Resolve contiene job senza ID o duplicati")
+    return values
+
+
+def _allowed(config: CreativeConfig, registry: Any,
+             project_name: str, timeline_name: str) -> bool:
+    return bool(
+        (project_name in config.allowed_projects and timeline_name in config.allowed_timelines)
+        or registry.timeline_allowed(project_name, timeline_name)
+    )
 
 
 def _manifest_path(config: CreativeConfig, job_id: str) -> Path:

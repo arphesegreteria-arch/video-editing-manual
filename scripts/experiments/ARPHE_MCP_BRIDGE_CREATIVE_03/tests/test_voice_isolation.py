@@ -81,6 +81,22 @@ def _config(root: Path, enabled: bool) -> CreativeConfig:
 
 
 class VoiceIsolationTests(unittest.TestCase):
+    def test_prepare_blocks_target_while_restore_is_interrupted(self):
+        with tempfile.TemporaryDirectory() as root:
+            store = VoiceIsolationStore(Path(root) / "jobs.json", "PC_PERSONALE")
+            capture = capture_track(FakeProject(), FakeTimeline(), 1)
+            job = store.prepare(capture, 60)
+            store.transition(job["job_id"], "PREPARED", "RESTORING")
+            with self.assertRaisesRegex(ValidationError, "attivo"):
+                store.prepare(capture, 40)
+
+    def test_apply_refuses_state_drift_before_write(self):
+        timeline = FakeTimeline()
+        capture = capture_track(FakeProject(), timeline, 1)
+        timeline.state[1] = {"isEnabled": True, "amount": 35}
+        with self.assertRaisesRegex(ValidationError, "cambiato"):
+            apply_voice_isolation(FakeProject(), timeline, capture, 60)
+        self.assertEqual([], timeline.set_calls)
     def test_capture_requires_typed_getter_and_stable_audio_target(self):
         card = capture_track(FakeProject(), FakeTimeline(), 1)
         self.assertEqual("timeline-1", card.target.timeline_id)

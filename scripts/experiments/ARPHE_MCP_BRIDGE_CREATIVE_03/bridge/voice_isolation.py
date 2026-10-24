@@ -98,7 +98,7 @@ class VoiceIsolationStore:
         with self._locked():
             raw = self._read()
             target = asdict(capture.target)
-            if any(job["state"] in {"PREPARED", "APPLYING", "APPLIED"} and job["target"] == target for job in raw["jobs"].values()):
+            if any(job["state"] in {"PREPARED", "APPLYING", "APPLIED", "RESTORING"} and job["target"] == target for job in raw["jobs"].values()):
                 raise ValidationError("Esiste gia un job Voice Isolation attivo sul target")
             job_id = "voice_" + uuid.uuid4().hex
             job = {"job_id": job_id, "workstation_id": self.workstation_id, "state": "PREPARED",
@@ -215,6 +215,9 @@ def apply_voice_isolation(project: Any, timeline: Any, capture: VoiceIsolationCa
     if isinstance(amount, bool) or not isinstance(amount, int) or not 0 <= amount <= 100:
         raise ValidationError("amount Voice Isolation deve essere un intero tra 0 e 100")
     _validate_target(project, timeline, capture.target)
+    current = _state(_method(timeline, "GetVoiceIsolationState")(capture.target.track_index))
+    if current != capture.initial:
+        raise ValidationError("Stato Voice Isolation cambiato dopo la cattura; apply bloccato")
     return _set_and_readback(timeline, capture.target, VoiceIsolationState(True, amount))
 
 

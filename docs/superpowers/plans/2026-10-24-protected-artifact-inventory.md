@@ -16,6 +16,10 @@
 - No live move, quarantine, purge, scheduler installation, Resolve write, push or merge.
 - `purge_enabled` is false and cannot be enabled by configuration in this proposal.
 - Producer paths must remain inside configured roots and reject symlinks/reparse points.
+- No producer contract may hardcode a historical project/video name, absolute source path, duration,
+  output name or universal creative parameter.
+- Media transformation producers must consume typed plans derived from natural-language intent and
+  register source, derivative, manifest and human-review evidence as protected.
 
 ## Review Focus
 
@@ -55,7 +59,8 @@
 - Consumes: protected registration from Task 1.
 - Produces: idempotent registration for completed audio bundles and mutable Colorist state with opaque dependencies and review holds.
 
-- [ ] Write failing tests for audio A/V5/manifest relationships, Colorist review holds and active-job refusal.
+- [ ] Write failing tests for generic source/derivative/manifest relationships, Colorist review holds
+  and active-job refusal.
 - [ ] Run and verify RED.
 - [ ] Implement helpers and wire only post-save/post-completion producer points.
 - [ ] Run focused producer and existing audio/Colorist tests green.

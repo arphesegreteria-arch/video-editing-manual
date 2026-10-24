@@ -11,15 +11,22 @@ protected. New audio and Colorist producers register their own closed outputs, m
 dependencies as `PROTECTED`; they do not make those files eligible for retention. The existing
 quarantine mechanism remains recoverable, while purge is disabled by policy and code.
 
+The inventory is also the provenance layer for reusable, prompt-driven transformations of existing
+media. The operator's natural-language request is converted into a typed plan; producers register the
+validated source, derivative, manifest and review evidence without encoding any specific video,
+project, path, duration, filename or universal creative parameter in the hygiene contract.
+
 ## Constraints
 
 - Work only on the offline feature branch; do not install, schedule, push or merge it.
-- Do not modify Resolve, its projects/timelines, referenced source media, the Peeling A1, gate
-  projects or the existing A/original, V5 and `PIU_NATURALE` WAVs.
+- Do not modify Resolve, its projects/timelines, referenced source media, previous derivatives or
+  human-approved references. Named gate assets are historical evidence, never runtime defaults.
 - Do not move, quarantine or delete live files during design, tests, inventory or migration work.
 - Do not classify legacy files by extension, prefix, age or directory alone.
 - `PC_PERSONALE` and `PC_SEGRETERIA` remain isolated.
 - Purge is disabled even after the seven-day quarantine deadline.
+- The bridge modifies supplied media through a non-destructive copy/version/output workflow; it does
+  not generate a replacement from scratch when the requested correction is unsupported.
 
 ## Model
 
@@ -38,12 +45,16 @@ protected upsert after its own atomic save.
 
 - Completed whole-source audio jobs register their output WAV and completed manifest. The WAV
   depends on the source fingerprint and manifest identity.
-- Completed timeline-dialogue jobs register source WAV, processed WAV, worker manifest and parent
+- Completed timeline-dialogue jobs register source WAV, derivative WAV, worker manifest and parent
   manifest. Resolve project/timeline/media fingerprints are opaque dependencies and hold reasons.
 - Every Colorist store save registers the Colorist registry as protected. DRX identity, project,
   timeline and review state are dependencies; `PREPARED`, `APPROVED`, `APPLYING` and `APPLIED`
   remain held for human review.
 - Producer failure before registration leaves an unknown protected orphan for inspection.
+- Future prompt-driven producers must follow: typed intent, read-only material/capability analysis,
+  verified preset/parameter selection, approved non-destructive execution, and output verification.
+  Unsupported corrections stop with a declared limitation rather than an approximate mislabeled
+  effect.
 
 ## Inventory and simulation
 

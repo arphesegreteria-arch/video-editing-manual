@@ -6,6 +6,11 @@ Questa estensione resta sul branch offline `codex/artifact-hygiene-offline`. Non
 runtime, non abilita `CAP_ARTIFACT_MAINTENANCE` e non ha spostato, messo in quarantena o cancellato
 alcun file.
 
+Il criterio generale per i futuri producer è descritto in
+`docs/25_REUSABLE_MEDIA_TRANSFORMATION_BRIDGE.md`: intento naturale, analisi read-only, selezione
+verificata, esecuzione non distruttiva e verifica con review umana. L'inventario conserva la
+provenienza di questo flusso ma non decide il trattamento creativo.
+
 ## Comportamento proposto
 
 - I nuovi WAV, manifest audio, registri Colorist e dipendenze di review sono registrati come
@@ -46,10 +51,11 @@ Configurazione isolata del gate audio V5 (snapshot precedente all'ultimo hardeni
   sconosciuti fino a review manuale;
 - nessuna scrittura del registro è stata eseguita.
 
-Le proposte coprono l'originale A, il V5, la variante `PIU_NATURALE`, gli altri output di prova e i
-manifest corrispondenti. A/B, sorgenti, backup Colorist e progetti gate non sono candidati di spazio
-recuperabile. Poiché tutto l'inventario legacy resta protetto, lo spazio recuperabile simulato in
-questa fase è **0 byte**.
+Le proposte storiche coprivano sorgenti, derivati di ascolto, altri output di prova e relativi
+manifest. Quei nomi e parametri non fanno parte del contratto riusabile e non diventano default.
+Confronti A/B, sorgenti, backup Colorist e progetti gate non sono candidati di spazio recuperabile.
+Poiché tutto l'inventario legacy resta protetto, lo spazio recuperabile simulato in questa fase è
+**0 byte**.
 
 ## Limiti
 

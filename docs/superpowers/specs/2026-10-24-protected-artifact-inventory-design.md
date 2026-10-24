@@ -92,4 +92,3 @@ Temporary-directory tests cover producer registration and dependencies, active/r
 unknown protection, hash drift, symlink rejection, registration-lock crashes, periodic wakeups,
 laptop time jumps, purge-disabled behavior and legacy migration dry-run immutability. A read-only
 inventory of the live configured roots produces only counts, categories and protected proposals.
-

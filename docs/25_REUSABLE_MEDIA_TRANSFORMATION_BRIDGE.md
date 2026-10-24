@@ -76,4 +76,3 @@ stale, il target non è isolato, il preset non è attestabile o la verifica rich
 Il messaggio all'operatrice indica cosa non è correggibile automaticamente, quale rischio rimane e il
 test minimo eventualmente necessario. Non promette la rimozione completa di rumore, eco, difetti di
 colore o altri problemi percettivi.
-

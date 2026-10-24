@@ -85,4 +85,3 @@ Poiché tutto l'inventario legacy resta protetto, lo spazio recuperabile simulat
 
 La correzione read-only è stata verificata esclusivamente su radici temporanee. Non è stata eseguita
 una nuova scansione live e lo snapshot riportato sopra non autorizza classificazioni automatiche.
-

@@ -33,6 +33,33 @@ def _rotation_keys(action: dict[str, Any], start: int, end: int) -> list[tuple[i
     return keys
 
 
+def _center_keys(action: dict[str, Any], start: int, end: int) -> list[tuple[int, float, float]]:
+    raw = action.get("center_keys")
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or len(raw) < 2:
+        raise ValidationError("center_keys REFRAME richiede almeno due punti")
+    keys: list[tuple[int, float, float]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise ValidationError("center_keys REFRAME non valide")
+        frame, x, y = entry.get("frame"), entry.get("x"), entry.get("y")
+        if (not isinstance(frame, int) or isinstance(frame, bool)
+                or not isinstance(x, (int, float)) or isinstance(x, bool)
+                or not isinstance(y, (int, float)) or isinstance(y, bool)
+                or not math.isfinite(float(x)) or not math.isfinite(float(y))
+                or not 0.1 <= float(x) <= 0.9 or not 0.1 <= float(y) <= 0.9):
+            raise ValidationError("center_keys REFRAME non sicure")
+        keys.append((frame, float(x), float(y)))
+    if any(frame < start or frame >= end for frame, _, _ in keys):
+        raise ValidationError("center_keys REFRAME fuori range")
+    if any(current[0] >= following[0] for current, following in zip(keys, keys[1:])):
+        raise ValidationError("center_keys REFRAME non ordinate")
+    if keys[0][0] != start or keys[-1][0] != end - 1:
+        raise ValidationError("center_keys REFRAME deve ancorare entrambi gli estremi")
+    return keys
+
+
 def _zoom(action: dict[str, Any]) -> float:
     value = action.get("zoom", 1.0)
     if (not isinstance(value, (int, float)) or isinstance(value, bool)
@@ -52,15 +79,21 @@ def reframe_transform_plan(action: dict[str, Any], output_width: int, output_hei
     raw_range = action.get("range") or {}
     start, end = raw_range.get("start_frame"), raw_range.get("end_frame")
     rotation_keys: list[tuple[int, float]] = []
-    if action.get("rotation_keys") is not None:
+    center_keys: list[tuple[int, float, float]] = []
+    if action.get("rotation_keys") is not None or action.get("center_keys") is not None:
         if not isinstance(start, int) or not isinstance(end, int) or start >= end:
             raise ValidationError("range REFRAME non valido")
         rotation_keys = _rotation_keys(action, start, end)
+        center_keys = _center_keys(action, start, end)
     return {
         "center": {"x": float(anchor["x"]), "y": float(anchor["y"])},
         "zoom": _zoom(action),
         "rotation_keys": [
             {"frame": frame - int(start), "angle": angle} for frame, angle in rotation_keys
+        ],
+        "center_keys": [
+            {"frame": frame - int(start), "x": x, "y": y}
+            for frame, x, y in center_keys
         ],
         "output": {"width": output_width, "height": output_height},
     }
@@ -125,8 +158,9 @@ def validate_reframe_action(action: dict[str, Any], total_frames: int) -> dict[s
     if not str(action.get("reason", "")).strip():
         raise ValidationError("reason REFRAME mancante")
     rotation_keys = _rotation_keys(action, start, end)
+    center_keys = _center_keys(action, start, end)
     return {
         "range": (start, end), "target": dict(target),
         "anchor": {"x": float(anchor["x"]), "y": float(anchor["y"])},
-        "zoom": _zoom(action), "rotation_keys": rotation_keys,
+        "zoom": _zoom(action), "rotation_keys": rotation_keys, "center_keys": center_keys,
     }

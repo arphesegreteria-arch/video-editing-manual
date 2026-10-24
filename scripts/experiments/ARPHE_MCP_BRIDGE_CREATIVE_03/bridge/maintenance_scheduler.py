@@ -41,16 +41,25 @@ def start_lazy_maintenance(config_loader: Callable[[], CreativeConfig],
                            interval_seconds: float = 3600,
                            stop_event: threading.Event | None = None,
                            max_cycles: int | None = None) -> threading.Thread | None:
+    try:
+        initial_config = config_loader()
+    except Exception:
+        return None
+    if not initial_config.flags.get("CAP_ARTIFACT_MAINTENANCE", False):
+        return None
+
     stop = stop_event or threading.Event()
 
     def worker() -> None:
         if delay_seconds > 0 and stop.wait(delay_seconds):
             return
         cycles = 0
+        next_config: CreativeConfig | None = initial_config
         while not stop.is_set():
             config: CreativeConfig | None = None
             try:
-                config = config_loader()
+                config = next_config if next_config is not None else config_loader()
+                next_config = None
                 result = run_if_due(config)
                 write_audit(config.audit_log_path, "lazy_artifact_maintenance", result)
             except Exception as exc:

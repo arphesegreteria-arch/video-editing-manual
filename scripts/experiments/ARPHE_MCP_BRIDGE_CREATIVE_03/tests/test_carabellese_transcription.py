@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from bridge.carabellese_transcription import (  # noqa: E402
+    _pid_is_running,
     get_carabellese_transcription_job,
     start_carabellese_transcription,
 )
@@ -47,6 +48,16 @@ def source(cfg: CreativeConfig, content: bytes = b"podcast-carabellese") -> Path
 
 
 class CarabelleseTranscriptionJobTests(unittest.TestCase):
+    def test_windows_pid_probe_never_uses_os_kill(self):
+        with patch("bridge.carabellese_transcription.os.name", "nt"), \
+                patch("bridge.carabellese_transcription._windows_pid_is_running",
+                      return_value=True) as windows_probe, \
+                patch("bridge.carabellese_transcription.os.kill") as kill:
+            self.assertTrue(_pid_is_running(1234))
+
+        windows_probe.assert_called_once_with(1234)
+        kill.assert_not_called()
+
     def test_outside_media_and_wrong_fingerprint_fail_before_process_creation(self):
         with tempfile.TemporaryDirectory() as raw_root:
             root = Path(raw_root)

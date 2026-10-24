@@ -93,6 +93,8 @@ def _launch(manifest_path: Path) -> int:
 def _pid_is_running(value: object) -> bool:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         return False
+    if os.name == "nt":
+        return _windows_pid_is_running(value)
     try:
         os.kill(value, 0)
     except PermissionError:
@@ -100,6 +102,25 @@ def _pid_is_running(value: object) -> bool:
     except OSError:
         return False
     return True
+
+
+def _windows_pid_is_running(value: int, kernel32: object | None = None) -> bool:
+    """Query a Windows process without sending it a console control signal."""
+    import ctypes
+
+    api = kernel32 or ctypes.WinDLL("kernel32", use_last_error=True)
+    process_query_limited_information = 0x1000
+    still_active = 259
+    handle = api.OpenProcess(process_query_limited_information, False, value)
+    if not handle:
+        return ctypes.get_last_error() == 5  # Access denied still proves the PID exists.
+    try:
+        exit_code = ctypes.c_ulong()
+        if not api.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == still_active
+    finally:
+        api.CloseHandle(handle)
 
 
 def _matching_manifest(config: CreativeConfig, source_fingerprint: str, model: str,

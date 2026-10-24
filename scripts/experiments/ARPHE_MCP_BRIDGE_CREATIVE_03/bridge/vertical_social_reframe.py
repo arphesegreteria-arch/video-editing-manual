@@ -100,7 +100,7 @@ def reframe_transform_plan(action: dict[str, Any], output_width: int, output_hei
 
 
 def apply_transform_parameters(tool: object, plan: dict[str, Any], comp: object | None = None) -> bool:
-    """Apply and read back static framing plus optional Resolve-owned rotation keys."""
+    """Apply and read back static framing plus optional Resolve-owned motion keys."""
     center = plan.get("center")
     zoom = plan.get("zoom")
     if not isinstance(center, dict) or not isinstance(zoom, (int, float)):
@@ -111,18 +111,26 @@ def apply_transform_parameters(tool: object, plan: dict[str, Any], comp: object 
         if center_keys:
             if comp is None:
                 raise ValidationError("Composizione Fusion richiesta per center_keys REFRAME")
-            tool.Center = comp.BezierSpline()
+            # Center is a 2D point. Resolve accepts a BezierSpline assignment
+            # here but evaluates every requested frame as the final point.
+            # Path is the native Fusion modifier for animated XY coordinates.
+            tool.Center = comp.Path()
             animated_center = tool.Center
             for key in center_keys:
                 animated_center[int(key["frame"])] = {
                     1: float(key["x"]), 2: float(key["y"]), 3: 0.0,
                 }
-            if any(
-                abs(float(animated_center[int(key["frame"])][1]) - float(key["x"])) > 1e-6
-                or abs(float(animated_center[int(key["frame"])][2]) - float(key["y"])) > 1e-6
-                for key in center_keys
-            ):
-                return False
+            for key in center_keys:
+                frame = int(key["frame"])
+                actual = animated_center[frame]
+                expected_x, expected_y = float(key["x"]), float(key["y"])
+                actual_x, actual_y = float(actual[1]), float(actual[2])
+                if abs(actual_x - expected_x) > 1e-6 or abs(actual_y - expected_y) > 1e-6:
+                    raise ValidationError(
+                        "center_keys REFRAME read-back diverso al frame "
+                        f"{frame}: atteso ({expected_x}, {expected_y}), "
+                        f"letto ({actual_x}, {actual_y})"
+                    )
         else:
             tool.SetInput("Center", value)
         tool.SetInput("Size", float(zoom))

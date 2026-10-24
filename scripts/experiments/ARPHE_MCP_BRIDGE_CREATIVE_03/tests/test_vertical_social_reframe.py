@@ -207,7 +207,9 @@ class ReframeRequestTests(unittest.TestCase):
             pass
 
         class Comp:
-            def BezierSpline(self): return Spline()
+            def Path(self): return Spline()
+            def BezierSpline(self):
+                raise AssertionError("Center must use Resolve's 2D Path modifier")
 
         class Tool:
             def __init__(self): self.values = {}
@@ -243,7 +245,9 @@ class ReframeRequestTests(unittest.TestCase):
                 return {**value, 2: value[2] + 0.01}
 
         class Comp:
-            def BezierSpline(self): return MismatchSpline()
+            def Path(self): return MismatchSpline()
+            def BezierSpline(self):
+                raise AssertionError("Center must use Resolve's 2D Path modifier")
 
         class Tool:
             def __init__(self): self.values = {}
@@ -257,4 +261,5 @@ class ReframeRequestTests(unittest.TestCase):
                 {"frame": 119, "x": 0.5, "y": 0.505},
             ],
         }
-        self.assertFalse(apply_transform_parameters(Tool(), plan, Comp()))
+        with self.assertRaisesRegex(Exception, "center_keys.*frame 0.*atteso.*letto"):
+            apply_transform_parameters(Tool(), plan, Comp())

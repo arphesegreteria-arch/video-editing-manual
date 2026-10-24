@@ -35,7 +35,7 @@ jobs:
         working-directory: scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03
 
       - name: Run creative bridge suite
-        run: python -m unittest discover -s tests
+        run: python -m unittest discover -s tests -v
         working-directory: scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03
 
       - name: Run Windows runtime and profile suite

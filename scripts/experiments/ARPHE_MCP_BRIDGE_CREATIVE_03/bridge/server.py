@@ -2091,11 +2091,13 @@ def add_brand_background(composition_id: str, color_role: str = "ivory") -> dict
 
 
 def _asset(kind: str, path: str, start_frame: int, end_frame: int, track_index: int) -> dict:
-    try:
-        _, _, project, timeline, config, registry, error = _runtime()
-        if error: return error
-        return _call(add_asset, project, timeline, config, registry, path, kind, start_frame, end_frame, track_index)
-    except Exception as exc: return _error(exc)
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, timeline, config, registry, error = _runtime()
+            if error: return error
+            return _call(add_asset, project, timeline, config, registry, path, kind,
+                         start_frame, end_frame, track_index)
+        except Exception as exc: return _error(exc)
 
 
 @mcp.tool(annotations=SAFE_WRITE)

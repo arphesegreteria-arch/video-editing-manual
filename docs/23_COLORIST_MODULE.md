@@ -2,9 +2,13 @@
 
 ## Stato
 
-`CODICE OFFLINE VALIDATO / GATE NATIVO PENDING`
+`GATE NATIVO E CONFRONTO PRIMA/DOPO PASS / ACCETTAZIONE UMANA E CATALOGO NUOVA CHAT PENDING`
 
-Il modulo è presente soltanto nel mirror sorgente. Non è installato nel runtime, non è stato pubblicato nell'app MCP e non è stato provato sul progetto Resolve attualmente aperto. `CAP_COLORIST` è `false` per default.
+Il modulo è installato sul solo `PC_PERSONALE` ed è stato provato in un progetto Resolve
+usa-e-getta. Al termine del gate `CAP_COLORIST` è stato riportato a `false` e il progetto iniziale
+è stato ripristinato. Viewer, node graph e RGB parade sono stati osservati sulle versioni prima/dopo;
+l'accettazione estetica dell'operatore e la verifica dell'esposizione dei nuovi tool in una sessione
+app aperta dopo il rollout restano obbligatorie prima dell'uso di produzione.
 
 ## Provenienza verificata
 
@@ -13,10 +17,13 @@ Il modulo è presente soltanto nel mirror sorgente. Non è installato nel runtim
 - Quel checkout contiene effettivamente il sorgente bridge esaminato e modificato in
   `scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03`; non è stato quindi assunto dal nome del
   repository, ma verificato nel worktree e nel remote Git.
-- Non è emersa una seconda repository GitHub dedicata al bridge. Resta però non dimostrato che il
-  runtime installato di `ARPHE Resolve Personale` sia stato distribuito esattamente da questo commit:
-  servirà confrontarne manifest/versione quando il runtime potrà essere ispezionato senza interferire
-  con il montaggio.
+- Non è emersa una seconda repository GitHub dedicata al bridge. Il 2026-10-24 il runtime
+  `ARPHE Resolve Personale` è stato aggiornato dal source head
+  `b8b25186acb664365ba0efcba4d0e3637d3dad18`, poi integrato su `main` come commit squash
+  `b87238120c3f295cdfe9eccc9bf5fd9df80a1ceb`. Prima dell'installazione è stato creato il backup
+  recuperabile `C:\ARPHE\MCP\backups\PC_PERSONALE\pre_colorist_gate_20261024_135602`.
+  La correzione helper asset successiva è versionata nello stesso commit Git che contiene questa
+  evidenza, così non viene attribuita impropriamente al source head iniziale.
 
 ## API Resolve 21 verificate dalla documentazione installata
 
@@ -82,10 +89,12 @@ Quando `reference_clip_id` è presente, il bridge crea una nuova versione locale
   solo clip; non forza più tutti i clip del piano sulla versione `after`.
 - Una review non può essere accettata o rifiutata finché esiste una preview non ripristinata.
 - Il modulo non salva il progetto, non renderizza e non cambia pagina o playhead.
+- Il gate nativo usa uno script separato che salva esplicitamente il solo progetto disposable e può
+  aprire la pagina Color per l'ispezione; queste azioni non fanno parte dei tool Colorist pubblici.
 
-## Gate nativo futuro
+## Gate nativo
 
-Da eseguire soltanto con consenso, editor fermo e progetto usa-e-getta:
+Procedura da ripetere soltanto con consenso, editor fermo e progetto usa-e-getta:
 
 1. installare il codice su `PC_PERSONALE` senza attivare il flag;
 2. aggiornare lo schema dell'app MCP e confermare che inspect/prepare non scrivano;
@@ -95,12 +104,67 @@ Da eseguire soltanto con consenso, editor fermo e progetto usa-e-getta:
 6. confrontare prima/dopo in Color page con scopes e revisione umana;
 7. riportare `CAP_COLORIST=false`, ripristinare progetto iniziale e documentare l'evidenza.
 
-Verifica offline nel worktree isolato: 532 test complessivi superati, con 2 skip; i 26 test
-Colorist passano e il gruppo focalizzato con feature flag totalizza 27/27. La venv isolata usa le
-dipendenze dichiarate dal bridge e non modifica il runtime attivo.
+### Evidenza PC_PERSONALE — 2026-10-24
 
-Nessun test nativo è stato ancora eseguito. Il gate è autorizzato soltanto su una copia del progetto
-test, con Resolve libero dal lavoro audio, coordinamento preventivo e rollback/read-back. Anche un job rimasto
-`APPLYING` dopo un errore di persistenza richiede ispezione e recupero umano: non viene rieseguito
-automaticamente.
+- Resolve Studio `21.1.1.10`; progetto usa-e-getta
+  `ARPHE_COLORIST_GATE_20261024_1401`, timeline `ARPHE_COLORIST_GATE_TIMELINE`.
+- Due chart sintetiche con cast diversi hanno prodotto clip ID stabili. Su entrambi Resolve ha
+  confermato `GetCurrentVersion`, `GetVersionNameList`, `AddVersion`, `LoadVersionByName`,
+  `SetCDL`, `GetNodeGraph` e `CopyGrades`.
+- Con `CAP_COLORIST=false`, inspect e prepare hanno funzionato senza write Resolve; apply è stato
+  rifiutato con `CAP_COLORIST non attiva nella config locale`.
+- Con il flag temporaneamente attivo, il job `colorist_f57a0d5be0a4416c` ha creato le versioni
+  `ARPHE_COLOR_F57A0D5BE0A4416C_01` e `_02`. Il CDL è stato applicato direttamente soltanto al
+  riferimento; il secondo clip ha ricevuto il grade tramite `CopyGrades`.
+- Preview `before` e `after` hanno caricato soltanto le versioni registrate; il restore ha riportato
+  la versione attiva precedente e `preview_restore_versions` è tornato vuoto.
+- Una collisione preinserita è stata rifiutata in preflight con zero nuove versioni. Un piano
+  eseguito da una timeline registrata ma diversa è stato rifiutato come `Timeline Colorist stale`,
+  ancora con zero nuove versioni.
+- Nel probe di failure parziale il primo clip ha creato una versione, il secondo ha simulato
+  `AddVersion=false`; il recovery ha ricaricato esattamente su entrambi le versioni precedenti e ha
+  restituito `recoverable=true`, `manual_recovery_required=false`.
+- Nessun DRX è stato provato: il registro installato non dichiara preset DRX. Non è quindi una
+  capability validata dal gate.
+- La prima ricostruzione visuale ha rivelato che il vecchio helper asset dichiarava riuscito un
+  append senza creare la traccia richiesta né verificare il range restituito. L'helper ora crea V2
+  quando manca, richiede un solo `TimelineItem` di ritorno e confronta `GetStart`/`GetEnd` col range
+  richiesto. Se append o read-back falliscono, elimina gli item restituiti e le sole tracce appena
+  create; un rollback incompleto richiede esplicitamente verifica manuale. Il wrapper pubblico
+  mantiene il lock Resolve per l'intera operazione e ogni `AddTrack` deve incrementare il count
+  esattamente di uno. Otto test di
+  regressione coprono traccia mancante, creazione parziale delle tracce, range discordante e append
+  senza item.
+- Resolve 21.1.1 applica ai PNG la preferenza locale di durata still (150 frame) anche se il payload
+  chiede una durata sorgente diversa. Il gate usa quindi due intervalli verificati da 150 frame e
+  fallisce esplicitamente se il read-back non coincide, invece di dichiarare un range non ottenuto.
+- La timeline finale `ARPHE_COLORIST_VISUAL_REVIEW_20261024_145724` contiene due clip su V2,
+  durata complessiva 300 frame. Il job `colorist_ea377703fe404a78` ha creato
+  `ARPHE_COLOR_EA377703FE404A78_01` e `_02`, applicando il CDL al riferimento e `CopyGrades` al
+  secondo clip. Il progetto disposable è stato salvato esplicitamente.
+- Il confronto UI ha mostrato entrambe le versioni sul viewer; la pagina Color ha mostrato un nodo
+  attivo e RGB parade differenti. La versione `after` riduce esposizione e saturazione, raffredda il
+  cast caldo e mantiene le patch leggibili. Questa è evidenza tecnica/visiva del funzionamento, non
+  un'accettazione estetica a nome dell'utente.
+- Il catalogo tool della chat già aperta era stato memorizzato prima del rollout. I nuovi entrypoint
+  sono stati verificati contro il modulo installato e i flag tramite il connettore, ma la loro
+  esposizione pubblica deve essere ricontrollata da una nuova sessione app.
+- La review del job resta `APPLIED` con `review_accepted=null`: viewer e scopes sono stati
+  controllati, ma l'utente deve ancora accettare o rifiutare il look prima di calibrare le
+  approssimazioni di temperatura, tinta e contrasto per la produzione.
+- Chiusura verificata: `CAP_COLORIST=false`; progetto
+  `ARPHE_PEELING_ADV_TEST_20261023` e timeline
+  `__ARPHE_VERTICAL_VERTICAL_9957F4FFC8BC43E0B5B333FF4B4BFC03` ripristinati. Il progetto gate
+  e gli asset sintetici sono stati conservati come evidenza e non sono stati cancellati.
+- Lo script gate rifiuta una config che non dichiari `PC_PERSONALE`; l'azione `finish` disattiva e
+  rilegge `CAP_COLORIST=false` in un blocco `finally`, anche se il ripristino di preview/progetto
+  fallisce. Non opera su `PC_SEGRETERIA`.
+
+Verifica finale del follow-up: suite Creative `570` test superati e `3` skip legati a privilegi
+Windows per symlink; suite runtime Windows `58` test superati e `1` skip DPAPI nel token di test.
+I controlli di catalogo sono inclusi nella suite Creative e gli otto test helper asset sono verdi. La
+venv isolata usa le dipendenze dichiarate dal bridge.
+
+Il gate tecnico sopra non sostituisce la revisione visiva. Anche un job rimasto `APPLYING` dopo un
+errore di persistenza richiede ispezione e recupero umano: non viene rieseguito automaticamente.
 

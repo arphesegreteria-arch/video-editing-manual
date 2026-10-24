@@ -1,0 +1,27 @@
+{
+  "schema": "ARPHE_COLORIST_PRESETS_V1",
+  "presets": {
+    "ARPHE_CLEAN_NEUTRAL": {
+      "temperature": 0.0,
+      "tint": 0.0,
+      "exposure_stops": 0.0,
+      "contrast": 0.0,
+      "saturation": 1.0
+    },
+    "ARPHE_WARM_PRESENCE": {
+      "temperature": 0.16,
+      "tint": 0.03,
+      "exposure_stops": 0.0,
+      "contrast": 0.08,
+      "saturation": 1.04
+    },
+    "ARPHE_SOFT_LUXURY": {
+      "temperature": 0.08,
+      "tint": 0.02,
+      "exposure_stops": 0.04,
+      "contrast": -0.12,
+      "saturation": 0.94
+    }
+  },
+  "drx_presets": {}
+}

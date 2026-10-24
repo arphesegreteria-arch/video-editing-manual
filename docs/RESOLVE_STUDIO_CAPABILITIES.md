@@ -51,6 +51,10 @@ Stati ammessi:
 | Creative 03: motion preset/card stack | PARTIAL | Gate D SUPPORTED; Gate E sequence transition PASS con overlap 10 frame e opacità sul Transform, confini 37/75/112 e finale 149 senza buchi; `ARPHE_PAPER_STACK` helper PENDING |
 | Creative 03: asset allowlisted | PENDING | Implementato dietro `CAP_ASSETS=false`; import/placement da verificare |
 | Creative 03: render preview | PENDING | Implementato dietro `CAP_RENDER=false`; non abilitare prima del Gate G |
+| Colorist: versioni colore locali + CDL | PENDING | Codice e test offline; API Resolve 21 installata conferma `AddVersion`, `LoadVersionByName`, `SetCDL`. `CAP_COLORIST=false`; gate nativo disposable non eseguito |
+| Colorist: matching multicamera | PENDING | Copia da riferimento esplicito con `CopyGrades` su nuove versioni locali; nessun auto-match, gate nativo non eseguito |
+| Colorist: preset DRX allowlisted | PENDING | `Graph.ApplyGradeFromDRX` confermata negli stub Resolve 21; nessun DRX configurato o validato visivamente |
+| Colorist: preview prima/dopo | PENDING | Toggle reversibile tra versioni locali registrate; nessun cambio pagina/playhead, cattura o render; gate umano richiesto |
 
 ## Regola
 

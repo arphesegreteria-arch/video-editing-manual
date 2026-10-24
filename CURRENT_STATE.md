@@ -1,5 +1,17 @@
 # CURRENT STATE
 
+## 2026-10-24 — Modulo Colorist: codice offline, gate nativo pending
+
+Implementato nel mirror sorgente un workflow Colorist chiuso con correzione tecnica CDL, preset
+ARPHE, DRX opzionale allowlisted, matching multicamera da riferimento esplicito, versioni colore
+locali before/after e review umana fingerprint-bound. La documentazione Resolve 21.1.1 installata
+conferma le firme usate (`AddVersion`, `LoadVersionByName`, `SetCDL`, `CopyGrades`,
+`GetNodeGraph`, `ApplyGradeFromDRX`). Il bridge non espone path, CDL o node editing arbitrari.
+
+`CAP_COLORIST=false` per default e stato `PENDING`. Nessuna installazione, riavvio, pubblicazione,
+chiamata Resolve o modifica al progetto live è stata eseguita. Il gate futuro richiede progetto
+usa-e-getta, editor fermo e consenso esplicito. Procedura: `docs/23_COLORIST_MODULE.md`.
+
 Ultimo aggiornamento: sessione 2026-10-10.
 
 <a id="workflow-control-plane"></a>

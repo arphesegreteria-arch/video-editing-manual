@@ -61,6 +61,9 @@ class FeatureFlagTests(unittest.TestCase):
         self.assertFalse(DEFAULT_FLAGS["CAP_WORKFLOW_CONTROL_PLANE"])
         self.assertFalse(capabilities["CAP_WORKFLOW_CONTROL_PLANE"]["active"])
         self.assertTrue(capabilities["CAP_WORKFLOW_CONTROL_PLANE"]["implemented"])
+        self.assertFalse(DEFAULT_FLAGS["CAP_COLORIST"])
+        self.assertFalse(capabilities["CAP_COLORIST"]["active"])
+        self.assertEqual("PENDING", capabilities["CAP_COLORIST"]["status"])
 
 
 if __name__ == "__main__":

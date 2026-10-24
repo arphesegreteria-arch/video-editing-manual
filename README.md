@@ -2,6 +2,10 @@
 
 Memoria di lavoro persistente del progetto **ARPHE Video Automation**.
 
+Il bridge include inoltre un modulo Colorist offline-gated per versioni colore locali, CDL,
+matching da riferimento e look DRX allowlisted. È disabilitato per default e documentato in
+`docs/23_COLORIST_MODULE.md`; non va attivato su progetti reali prima del gate nativo.
+
 ## Obiettivo prodotto corrente
 
 L'interfaccia principale destinata alla segreteria deve essere **ChatGPT**, non una GUI ARPHE separata.

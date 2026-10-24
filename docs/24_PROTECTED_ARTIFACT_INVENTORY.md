@@ -18,7 +18,8 @@ alcun file.
   registrata. Non crea task Windows e non richiede rete.
 - La quarantena esistente rimane recuperabile. La policy dichiara `purge_enabled=false`; anche dopo
   sette giorni un record resta `QUARANTINED` e viene riportato come `PURGE_DISABLED`.
-- La migrazione legacy produce soltanto proposte validate. Non crea né aggiorna il registro.
+- La migrazione legacy produce soltanto proposte validate. Non crea né aggiorna il registro. I
+  manifest senza identità workstation o fingerprint sorgente completo restano in review manuale.
 
 ## Radici
 
@@ -35,12 +36,15 @@ Profilo Creative attivo:
 - 4 percorsi bloccati da symlink/reparse o containment, lasciati intatti per review manuale;
 - registro nuovo non presente, quindi nessun artefatto è stato adottato.
 
-Configurazione isolata del gate audio V5:
+Configurazione isolata del gate audio V5 (snapshot precedente all'ultimo hardening):
 
 - 179 elementi visibili come sconosciuti protetti, 95.987.863 byte complessivi nelle radici
   configurate;
-- migrazione dry-run valida: 1 sorgente audio, 4 derivati e 5 manifest proposti come protetti;
-- nessun errore di fingerprint e nessuna scrittura del registro.
+- la prima migrazione dry-run aveva proposto 1 sorgente audio, 4 derivati e 5 manifest protetti;
+- l'hardening successivo richiede anche `workstation_id` e fingerprint sorgente: i manifest legacy
+  che non li contengono non vengono più adottati automaticamente e restano protetti come
+  sconosciuti fino a review manuale;
+- nessuna scrittura del registro è stata eseguita.
 
 Le proposte coprono l'originale A, il V5, la variante `PIU_NATURALE`, gli altri output di prova e i
 manifest corrispondenti. A/B, sorgenti, backup Colorist e progetti gate non sono candidati di spazio
@@ -57,4 +61,16 @@ questa fase è **0 byte**.
   gestisce database, progetti o timeline Resolve.
 - Nessun beneficio di spazio è promesso finché una futura review umana non identifica record
   disposable realmente terminali e ne approva la quarantena.
+
+## Verifica finale del branch
+
+- Il purge è irraggiungibile anche costruendo in memoria una policy alterata.
+- Bundle audio e aggiornamenti Colorist sono registrati sotto lock; la lettura dello stato audio non
+  produce scritture.
+- La classificazione protetta può promuovere in sicurezza un vecchio record disposable e verifica
+  il containment nella radice dichiarata.
+- Scansione e simulazione falliscono chiuse con un lock residuo e includono nel conteggio anche gli
+  elementi sconosciuti protetti.
+- Qualunque job audio o Colorist attivo sospende le proposte di quarantena.
+- Suite isolata: 589 test eseguiti, tutti superati; 4 test saltati per dipendenze non disponibili.
 

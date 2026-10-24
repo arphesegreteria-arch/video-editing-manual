@@ -18,7 +18,6 @@ from .audio_worker import (
     PRESETS,
 )
 from .audio_provenance import media_fingerprint
-from .artifact_producers import register_completed_audio_job
 from .config import CreativeConfig
 from .longform_tools import allowed_media
 from .safety import ValidationError, arphe_name
@@ -48,7 +47,9 @@ def start_audio_job(config: CreativeConfig, media_path: str, preset: str = PRESE
     job_path = config.audio_jobs_root / f"{job_id}.json"
     payload = {"schema": "ARPHE_AUDIO_JOB_V2", "job_id": job_id, "status": "QUEUED",
                "progress_percent": 0, "preset": preset, "source_name": source.name,
-               "source_fingerprint": media_fingerprint(source), "output_path": str(output.resolve())}
+               "source_fingerprint": media_fingerprint(source), "output_path": str(output.resolve()),
+               "workstation_id": config.workstation_id,
+               "creative_config_path": str(config.path.resolve())}
     job_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS if os.name == "nt" else 0
     subprocess.Popen([sys.executable, "-m", "bridge.audio_worker", "--source", str(source),
@@ -66,8 +67,6 @@ def audio_job(config: CreativeConfig, job_id: str) -> dict[str, Any]:
     if not path.is_file():
         raise ValidationError("Job audio non trovato")
     result = json.loads(path.read_text(encoding="utf-8-sig"))
-    if result.get("status") == "COMPLETED":
-        register_completed_audio_job(config, path)
     result["ok"] = result.get("status") != "FAILED"
     result["action"] = "get_longform_audio_job"
     return result

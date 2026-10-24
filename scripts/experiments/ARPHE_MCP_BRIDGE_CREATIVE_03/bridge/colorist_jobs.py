@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import tempfile
 import threading
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 from uuid import uuid4
 
 from .colorist_model import plan_fingerprint
@@ -330,11 +330,13 @@ def _from_payload(raw: object) -> ColoristJob:
 
 
 class ColoristJobStore:
-    def __init__(self, path: Path, workstation_id: str):
+    def __init__(self, path: Path, workstation_id: str,
+                 on_save: Callable[[ColoristJob], None] | None = None):
         if not re.fullmatch(r"PC_[A-Z0-9_]{2,48}", workstation_id):
             raise ValidationError("workstation store Colorist non valido")
         self.path = path
         self.workstation_id = workstation_id
+        self.on_save = on_save
 
     def _load(self) -> dict[str, Any]:
         if not self.path.is_file():
@@ -376,7 +378,9 @@ class ColoristJobStore:
             created = replace(job, revision=1)
             data["jobs"][created.colorist_job_id] = asdict(created)
             self._save(data)
-            return created
+        if self.on_save is not None:
+            self.on_save(created)
+        return created
 
     def get(self, job_id: str, workstation_id: str) -> ColoristJob:
         if workstation_id != self.workstation_id:
@@ -428,5 +432,7 @@ class ColoristJobStore:
             saved = replace(job, revision=current.revision + 1)
             data["jobs"][saved.colorist_job_id] = asdict(saved)
             self._save(data)
-            return saved
+        if self.on_save is not None:
+            self.on_save(saved)
+        return saved
 

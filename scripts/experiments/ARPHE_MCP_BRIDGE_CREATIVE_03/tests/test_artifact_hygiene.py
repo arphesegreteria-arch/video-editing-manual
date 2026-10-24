@@ -369,7 +369,22 @@ class ArtifactLifecycleTests(unittest.TestCase):
             self.assertEqual([], at_boundary["purged"])
             self.assertEqual([record.artifact_id], at_boundary["purge_blocked"])
             self.assertEqual("QUARANTINED", store.records()[0].state)
-            self.assertTrue(Path(store.records()[0].quarantine_path or "").exists())
+
+    def test_in_memory_policy_cannot_reenable_purge(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            created = datetime(2026, 10, 1, tzinfo=UTC)
+            config, store, record, _ = self._diagnostic(root, created)
+            self._run(config, store, created + timedelta(days=1))
+            payload = Path(store.records()[0].quarantine_path or "")
+            policy = replace(load_artifact_policy(POLICY_PATH), purge_enabled=True)
+
+            result = run_maintenance(
+                config, store, ProjectRegistry(), policy, created + timedelta(days=8))
+
+            self.assertTrue(payload.exists())
+            self.assertEqual([], result["purged"])
+            self.assertEqual([record.artifact_id], result["purge_blocked"])
 
     def test_restore_returns_exact_item_and_collision_changes_nothing(self):
         with tempfile.TemporaryDirectory() as directory:

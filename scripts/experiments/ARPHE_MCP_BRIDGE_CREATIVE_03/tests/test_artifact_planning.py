@@ -74,7 +74,57 @@ class ArtifactPlanningTests(unittest.TestCase):
 
             item = next(value for value in report["items"] if value["display_path"].endswith("mystery.wav"))
             self.assertEqual("UNCLASSIFIED_PROTECTED", item["state"])
+            self.assertTrue(any(value["state"] == "UNCLASSIFIED_PROTECTED"
+                                for value in simulation["items"]))
             self.assertEqual([], simulation["quarantine_candidates"])
+
+    def test_crash_left_registration_lock_blocks_scan_and_simulation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cfg = config_for(root)
+            cfg.render_root.mkdir(parents=True)
+            path = cfg.render_root / "candidate.tmp"
+            path.write_bytes(b"candidate")
+            store = ArtifactStore(cfg.artifact_registry_path, cfg.workstation_id)
+            record = store.register_path(
+                path, "file", "TEMP_REPORT", "test", "render_root",
+                created_at=datetime(2026, 10, 1, tzinfo=UTC))
+            store.replace(replace(record, eligible_at=datetime(2026, 10, 2, tzinfo=UTC)))
+            store.registration_lock_path.write_text("crashed", encoding="utf-8")
+
+            scan = scan_artifacts(cfg, store)
+            simulation = simulate_maintenance(
+                cfg, store, load_artifact_policy(cfg.artifact_policy_path),
+                datetime(2026, 10, 24, tzinfo=UTC), active_job_ids=())
+
+            self.assertFalse(scan["ok"])
+            self.assertEqual("REGISTRATION_LOCKED", scan["error_code"])
+            self.assertFalse(simulation["ok"])
+            self.assertEqual([], simulation["quarantine_candidates"])
+
+    def test_active_audio_job_blocks_all_quarantine_proposals(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cfg = config_for(root)
+            cfg.render_root.mkdir(parents=True)
+            cfg.audio_jobs_root.mkdir(parents=True)
+            path = cfg.render_root / "candidate.tmp"
+            path.write_bytes(b"candidate")
+            store = ArtifactStore(cfg.artifact_registry_path, cfg.workstation_id)
+            record = store.register_path(
+                path, "file", "TEMP_REPORT", "test", "render_root",
+                created_at=datetime(2026, 10, 1, tzinfo=UTC))
+            store.replace(replace(record, eligible_at=datetime(2026, 10, 2, tzinfo=UTC)))
+            (cfg.audio_jobs_root / "active.json").write_text(
+                json.dumps({"schema": "ARPHE_AUDIO_JOB_V2", "status": "RUNNING"}),
+                encoding="utf-8")
+
+            report = simulate_maintenance(
+                cfg, store, load_artifact_policy(cfg.artifact_policy_path),
+                datetime(2026, 10, 24, tzinfo=UTC), active_job_ids=())
+
+            self.assertEqual([], report["quarantine_candidates"])
+            self.assertIn("HELD_ACTIVE_SYSTEM", {item["state"] for item in report["items"]})
 
     def test_simulation_blocks_hash_drift_dependencies_active_jobs_and_purge(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -135,6 +185,7 @@ class ArtifactPlanningTests(unittest.TestCase):
             manifest = cfg.audio_jobs_root / "audio_0123456789abcdef.json"
             manifest.write_text(json.dumps({
                 "schema": "ARPHE_AUDIO_JOB_V2", "status": "COMPLETED",
+                "workstation_id": "PC_PERSONALE",
                 "source_fingerprint": "a" * 64, "output_path": str(output),
                 "output_sha256": digest,
             }), encoding="utf-8")
@@ -161,6 +212,7 @@ class ArtifactPlanningTests(unittest.TestCase):
             manifest = cfg.audio_jobs_root / "piu_naturale.json"
             manifest.write_text(json.dumps({
                 "schema": "ARPHE_LISTENING_VARIANT_V1", "status": "COMPLETED",
+                "workstation_id": "PC_PERSONALE",
                 "source": {"path": str(source), "sha256": hashlib.sha256(b"source").hexdigest()},
                 "reference_v5": {"path": str(v5), "sha256": hashlib.sha256(b"v5").hexdigest()},
                 "output": {"path": str(variant), "sha256": hashlib.sha256(b"natural").hexdigest()},
@@ -175,6 +227,25 @@ class ArtifactPlanningTests(unittest.TestCase):
             self.assertIn("audio_jobs_root:piu_naturale.json", names)
             self.assertEqual([], report["errors"])
             self.assertFalse(cfg.artifact_registry_path.exists())
+
+    def test_legacy_worker_missing_source_fingerprint_is_manual_review(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cfg = config_for(root)
+            cfg.audio_root.mkdir(parents=True)
+            cfg.audio_jobs_root.mkdir(parents=True)
+            output = cfg.audio_root / "output.wav"
+            output.write_bytes(b"output")
+            (cfg.audio_jobs_root / "legacy.json").write_text(json.dumps({
+                "schema": "ARPHE_AUDIO_JOB_V2", "status": "COMPLETED",
+                "workstation_id": "PC_PERSONALE", "output_path": str(output),
+                "output_sha256": hashlib.sha256(b"output").hexdigest(),
+            }), encoding="utf-8")
+
+            report = plan_legacy_migration(cfg)
+
+            self.assertEqual([], report["proposals"])
+            self.assertEqual(1, report["migration_error_count"] if "migration_error_count" in report else len(report["errors"]))
 
 
 if __name__ == "__main__":

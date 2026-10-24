@@ -20,6 +20,28 @@ ACTIVE_BATCH_STATES = frozenset({"DRAFT", "CONFIRMED", "PREPARED", "APPROVED", "
 FAILED_BATCH_STATES = frozenset({"FAILED_RENDER", "FAILED_VERIFY"})
 
 
+def _producer_activity_hold(config: CreativeConfig) -> bool:
+    active = {"QUEUED", "RUNNING", "RENDERING", "PROCESSING", "APPLYING",
+              "PREPARED", "APPROVED"}
+    if config.audio_jobs_root.is_dir():
+        for path in config.audio_jobs_root.rglob("*.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                return True
+            if isinstance(payload, dict) and str(payload.get("status") or "").upper() in active:
+                return True
+    if config.colorist_jobs_path.exists():
+        try:
+            payload = json.loads(config.colorist_jobs_path.read_text(encoding="utf-8-sig"))
+            jobs = payload.get("jobs", {}) if isinstance(payload, dict) else {}
+            return any(str(value.get("state") or "").upper() in active
+                       for value in jobs.values() if isinstance(value, dict))
+        except (OSError, json.JSONDecodeError):
+            return True
+    return False
+
+
 def _utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         raise ValueError("Timestamp inventario privo di timezone")
@@ -501,11 +523,14 @@ def run_maintenance(config: CreativeConfig, artifact_store: ArtifactStore, proje
         _import_rotated_logs(config, artifact_store, policy)
         with artifact_store.registration_guard():
             _reconcile_pending(artifact_store)
+            producer_hold = _producer_activity_hold(config)
             for original in artifact_store.records():
                 record = original
                 if record.state == "ERROR" or record.state == "PURGED":
                     continue
                 if record.protection_class == "PROTECTED":
+                    continue
+                if producer_hold:
                     continue
                 if record.batch_id and record.terminal_observed_at is None:
                     record = _freeze_terminal(record, artifact_store, project_registry, policy, now)
@@ -523,12 +548,9 @@ def run_maintenance(config: CreativeConfig, artifact_store: ArtifactStore, proje
                             quarantined.append(record.artifact_id)
                 elif (record.state == "QUARANTINED" and record.purge_after is not None
                       and now >= record.purge_after):
-                    if not policy.purge_enabled:
-                        purge_blocked.append(record.artifact_id)
-                    else:
-                        _purge(artifact_store, record)
-                        if _record_by_id(artifact_store, record.artifact_id).state == "PURGED":
-                            purged.append(record.artifact_id)
+                    # Purge is deliberately unreachable in production code.  The
+                    # policy field is descriptive, not an execution switch.
+                    purge_blocked.append(record.artifact_id)
             artifact_store.set_maintenance_state(last_attempt_at=now, last_result="ok")
         return {"ok": True, "action": "run_artifact_maintenance",
                 "workstation_id": config.workstation_id,

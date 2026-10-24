@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 import hashlib
 import json
 from pathlib import Path
@@ -55,13 +55,15 @@ class ArtifactProducerTests(unittest.TestCase):
             worker = jobs / "job.audio.json"
             worker.write_text(json.dumps({
                 "schema": "ARPHE_AUDIO_JOB_V2", "status": "COMPLETED",
+                "workstation_id": "PC_PERSONALE",
                 "source_fingerprint": digest(source), "output_path": str(output),
                 "output_sha256": digest(output),
             }), encoding="utf-8")
             parent = jobs / "job.json"
             parent.write_text(json.dumps({
                 "schema": "ARPHE_TIMELINE_DIALOGUE_CLEANUP_JOB_V1",
-                "status": "COMPLETED", "source_path": str(source),
+                "status": "COMPLETED", "workstation_id": "PC_PERSONALE",
+                "source_path": str(source),
                 "processed_path": str(output), "source_fingerprint": digest(source),
                 "output_fingerprint": digest(output), "audio_worker_manifest": str(worker),
                 "timeline_source": {"timeline_edit_fingerprint": "f" * 64},
@@ -78,6 +80,8 @@ class ArtifactProducerTests(unittest.TestCase):
             self.assertTrue(all(record.protection_class == "PROTECTED" for record in stored))
             derivative = next(record for record in stored if record.category == "AUDIO_DERIVATIVE")
             self.assertIn("fingerprint:" + digest(source), derivative.dependencies)
+            self.assertTrue(any(value.startswith("manifest-sha256:")
+                                for value in derivative.dependencies))
             self.assertEqual("PENDING", derivative.review_state)
             self.assertIn("HUMAN_LISTENING_REVIEW", derivative.hold_reasons)
 
@@ -101,7 +105,6 @@ class ArtifactProducerTests(unittest.TestCase):
             root = Path(directory)
             cfg = config_for(root)
             cfg.colorist_jobs_path.parent.mkdir(parents=True)
-            cfg.colorist_jobs_path.write_text("{\"revision\":1}", encoding="utf-8")
             job = new_colorist_job(
                 workstation_id="PC_PERSONALE", project_name="ARPHE_GATE",
                 timeline_name="ARPHE_REVIEW", timeline_identity="timeline-1",
@@ -112,9 +115,17 @@ class ArtifactProducerTests(unittest.TestCase):
                 cdl={"slope": "1 1 1", "offset": "0 0 0", "power": "1 1 1", "saturation": "1"},
             )
 
-            first = register_colorist_state(cfg, job)
-            cfg.colorist_jobs_path.write_text("{\"revision\":2}", encoding="utf-8")
-            second = register_colorist_state(cfg, replace(job, state="APPLIED"))
+            cfg.colorist_jobs_path.write_text(json.dumps({
+                "schema": "ARPHE_COLORIST_JOBS_V1", "workstation_id": "PC_PERSONALE",
+                "jobs": {job.colorist_job_id: asdict(job)},
+            }), encoding="utf-8")
+            first = register_colorist_state(cfg)
+            applied = replace(job, state="APPLIED")
+            cfg.colorist_jobs_path.write_text(json.dumps({
+                "schema": "ARPHE_COLORIST_JOBS_V1", "workstation_id": "PC_PERSONALE",
+                "jobs": {job.colorist_job_id: asdict(applied)},
+            }), encoding="utf-8")
+            second = register_colorist_state(cfg)
 
             self.assertEqual(first.artifact_id, second.artifact_id)
             self.assertNotEqual(first.sha256, second.sha256)

@@ -191,9 +191,13 @@ def _reject_links(path: Path) -> None:
 
 
 class ArtifactStore:
-    def __init__(self, path: Path, workstation_id: str):
+    def __init__(self, path: Path, workstation_id: str,
+                 managed_roots: dict[str, Path] | None = None):
         self.path = path.resolve()
         self.workstation_id = workstation_id
+        self.managed_roots = {
+            key: value.resolve() for key, value in (managed_roots or {}).items()
+        }
 
     def _empty(self) -> dict[str, Any]:
         return {
@@ -276,6 +280,8 @@ class ArtifactStore:
         created_at: datetime | None = None,
         policy_version: str | None = None,
     ) -> ArtifactRecord:
+        if category not in KNOWN_CATEGORIES:
+            raise ValueError("Categoria disposable non valida")
         with self._registration_lock():
             return self._register_path(
                 path, kind, category, "DISPOSABLE", producer, managed_root_id,
@@ -294,7 +300,7 @@ class ArtifactStore:
         review_state: str | None = None,
         hold_reasons: tuple[str, ...] = (),
         created_at: datetime | None = None,
-        refresh: bool = False,
+        refresh: bool = True,
     ) -> ArtifactRecord:
         if category not in PROTECTED_CATEGORIES:
             raise ValueError("Categoria protetta non valida")
@@ -310,6 +316,23 @@ class ArtifactStore:
                 created_at=created_at, dependencies=dependencies,
                 review_state=review_state, hold_reasons=hold_reasons, refresh=refresh,
             )
+
+    def register_protected_bundle(self, specs: tuple[dict[str, Any], ...]) -> tuple[ArtifactRecord, ...]:
+        """Register a complete protected bundle under one fail-closed lock."""
+        records: list[ArtifactRecord] = []
+        with self._registration_lock():
+            for spec in specs:
+                category = str(spec["category"])
+                if category not in PROTECTED_CATEGORIES:
+                    raise ValueError("Categoria protetta non valida")
+                records.append(self._register_path(
+                    Path(spec["path"]), str(spec.get("kind", "file")), category,
+                    "PROTECTED", str(spec["producer"]), str(spec["managed_root_id"]),
+                    dependencies=tuple(spec.get("dependencies", ())),
+                    review_state=spec.get("review_state"),
+                    hold_reasons=tuple(spec.get("hold_reasons", ())), refresh=True,
+                ))
+        return tuple(records)
 
     def _register_path(
         self,
@@ -328,8 +351,21 @@ class ArtifactStore:
         hold_reasons: tuple[str, ...] = (),
         refresh: bool = False,
     ) -> ArtifactRecord:
+        if protection_class == "DISPOSABLE" and category not in KNOWN_CATEGORIES:
+            raise ValueError("Categoria disposable non valida")
+        if protection_class == "PROTECTED" and category not in PROTECTED_CATEGORIES:
+            raise ValueError("Categoria protetta non valida")
         _reject_links(path)
         canonical = path.resolve(strict=True)
+        if self.managed_roots:
+            root = self.managed_roots.get(managed_root_id)
+            if root is None:
+                raise ValueError("Radice gestita sconosciuta")
+            _reject_links(root)
+            try:
+                canonical.relative_to(root.resolve(strict=True))
+            except ValueError as exc:
+                raise ValueError("Artefatto fuori dalla radice gestita") from exc
         if kind == "file" and not canonical.is_file():
             raise ValueError("Artefatto file non valido")
         if kind == "directory" and not canonical.is_dir():
@@ -340,12 +376,16 @@ class ArtifactStore:
         for artifact_id, raw in data["artifacts"].items():
             existing = _record(raw)
             if existing.path == str(canonical) and existing.state != "PURGED":
-                if not refresh:
+                if not refresh and not (
+                    existing.protection_class == "DISPOSABLE" and protection_class == "PROTECTED"
+                ):
                     return existing
-                if existing.protection_class != "PROTECTED" or protection_class != "PROTECTED":
+                if protection_class != "PROTECTED":
                     raise ValueError("Solo gli artefatti protetti possono essere aggiornati")
                 updated = ArtifactRecord(
-                    **{**asdict(existing), "category": category, "producer": producer,
+                    **{**asdict(existing), "category": category,
+                       "protection_class": "PROTECTED", "producer": producer,
+                       "managed_root_id": managed_root_id, "state": "ACTIVE",
                        "size_bytes": size, "sha256": digest,
                        "dependencies": tuple(dependencies), "review_state": review_state,
                        "hold_reasons": tuple(hold_reasons)}
@@ -408,4 +448,15 @@ class ArtifactStore:
 
 
 def artifact_store_for(config: CreativeConfig) -> ArtifactStore:
-    return ArtifactStore(config.artifact_registry_path, config.workstation_id)
+    candidates = {
+        "render_root": getattr(config, "render_root", None),
+        "runtime_log_root": getattr(config, "runtime_log_root", None),
+        "audio_root": getattr(config, "audio_root", None),
+        "audio_jobs_root": getattr(config, "audio_jobs_root", None),
+        "profile_root": config.artifact_registry_path.parent,
+        "asset_root": getattr(config, "asset_root", None),
+        "resolve_archive_root": getattr(config, "resolve_archive_root", None),
+    }
+    return ArtifactStore(config.artifact_registry_path, config.workstation_id, {
+        key: value for key, value in candidates.items() if isinstance(value, Path)
+    })

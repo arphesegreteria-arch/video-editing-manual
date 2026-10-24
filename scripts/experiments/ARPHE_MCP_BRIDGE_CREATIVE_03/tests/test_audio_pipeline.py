@@ -270,12 +270,11 @@ class AudioPipelineTests(unittest.TestCase):
                 json.dumps({
                     "schema": "ARPHE_AUDIO_JOB_V2", "job_id": job_id,
                     "status": "COMPLETED", "source_fingerprint": "a" * 64,
+                    "workstation_id": cfg.workstation_id,
                     "output_path": str(audio), "output_sha256": file_sha256(audio),
                 }), encoding="utf-8")
             self.assertTrue(audio_job(cfg, job_id)["ok"])
-            records = ArtifactStore(cfg.artifact_registry_path, cfg.workstation_id).records()
-            self.assertEqual({"AUDIO_DERIVATIVE", "AUDIO_MANIFEST"},
-                             {record.category for record in records})
+            self.assertFalse(cfg.artifact_registry_path.exists())
             with self.assertRaises(ValidationError):
                 audio_job(cfg, "../escape")
 

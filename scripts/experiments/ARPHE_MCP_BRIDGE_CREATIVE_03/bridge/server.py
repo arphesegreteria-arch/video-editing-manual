@@ -266,7 +266,10 @@ BRANDED_LONGFORM_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "branded_
 
 
 def _colorist_store(config: Any) -> ColoristJobStore:
-    return ColoristJobStore(config.colorist_jobs_path, config.workstation_id)
+    return ColoristJobStore(
+        config.colorist_jobs_path, config.workstation_id,
+        on_save=lambda _job: register_colorist_state(config),
+    )
 
 
 def _register_colorist_state(config: Any, job: Any) -> Any:

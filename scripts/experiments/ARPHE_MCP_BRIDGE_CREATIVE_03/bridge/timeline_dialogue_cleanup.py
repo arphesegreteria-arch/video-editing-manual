@@ -484,6 +484,8 @@ def get_timeline_dialogue_cleanup_job(
             "source_name": Path(payload["source_path"]).name,
             "source_fingerprint": digest,
             "output_path": str(output),
+            "workstation_id": config.workstation_id,
+            "creative_config_path": str(config.path.resolve()),
         }
         _atomic_json(worker_manifest, worker_payload)
         payload.update(

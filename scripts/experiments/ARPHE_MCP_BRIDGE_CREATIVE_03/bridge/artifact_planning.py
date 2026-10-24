@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .artifact_hygiene import validate_managed_path
-from .artifact_records import ArtifactPolicy, ArtifactRecord, ArtifactStore, sha256_file
+from .artifact_records import (
+    ArtifactPolicy, ArtifactRecord, ArtifactStore, RegistrationLockedError, sha256_file,
+)
 from .config import CreativeConfig
 
 
@@ -60,7 +62,7 @@ def _iter_recursive_files(root: Path) -> Iterable[Path]:
     return tuple(result)
 
 
-def scan_artifacts(config: CreativeConfig, store: ArtifactStore) -> dict[str, Any]:
+def _scan_artifacts_unlocked(config: CreativeConfig, store: ArtifactStore) -> dict[str, Any]:
     roots = _root_paths(config)
     records = store.records()
     known = {Path(record.path).resolve(strict=False) for record in records
@@ -118,6 +120,42 @@ def scan_artifacts(config: CreativeConfig, store: ArtifactStore) -> dict[str, An
             "summary": summary, "items": items, "writes": False}
 
 
+def scan_artifacts(config: CreativeConfig, store: ArtifactStore) -> dict[str, Any]:
+    try:
+        with store.registration_guard():
+            return _scan_artifacts_unlocked(config, store)
+    except RegistrationLockedError:
+        return {"ok": False, "action": "scan_artifacts", "error_code": "REGISTRATION_LOCKED",
+                "roots": inventory_roots(config), "summary": {}, "items": [], "writes": False}
+
+
+def _active_system_holds(config: CreativeConfig) -> tuple[str, ...]:
+    holds: list[str] = []
+    active = {"QUEUED", "RUNNING", "RENDERING", "PROCESSING", "APPLYING",
+              "PREPARED", "APPROVED"}
+    for path in _iter_recursive_files(config.audio_jobs_root):
+        if path.suffix.lower() != ".json":
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+            if isinstance(payload, dict) and str(payload.get("status") or "").upper() in active:
+                holds.append("ACTIVE_AUDIO_JOB")
+                break
+        except (OSError, json.JSONDecodeError):
+            holds.append("AUDIO_JOB_STATE_UNREADABLE")
+            break
+    if config.colorist_jobs_path.exists():
+        try:
+            payload = json.loads(config.colorist_jobs_path.read_text(encoding="utf-8-sig"))
+            jobs = payload.get("jobs", {}) if isinstance(payload, dict) else {}
+            if any(str(value.get("state") or "").upper() in active
+                   for value in jobs.values() if isinstance(value, dict)):
+                holds.append("ACTIVE_COLORIST_JOB")
+        except (OSError, json.JSONDecodeError):
+            holds.append("COLORIST_STATE_UNREADABLE")
+    return tuple(dict.fromkeys(holds))
+
+
 def simulate_maintenance(config: CreativeConfig, store: ArtifactStore,
                          policy: ArtifactPolicy, now_utc: datetime,
                          *, active_job_ids: tuple[str, ...]) -> dict[str, Any]:
@@ -128,7 +166,21 @@ def simulate_maintenance(config: CreativeConfig, store: ArtifactStore,
     quarantine_candidates: list[str] = []
     quarantine_bytes = 0
     purge_blocked_bytes = 0
-    for record in store.records():
+    try:
+        guard = store.registration_guard()
+        guard.__enter__()
+    except RegistrationLockedError:
+        return {"ok": False, "action": "simulate_artifact_maintenance",
+                "error_code": "REGISTRATION_LOCKED", "writes": False, "items": [],
+                "quarantine_candidates": [], "purge_candidates": [],
+                "potential_quarantine_bytes": 0, "purge_blocked_bytes": 0}
+    try:
+        records = store.records()
+        global_holds = _active_system_holds(config)
+        scan = _scan_artifacts_unlocked(config, store)
+    finally:
+        guard.__exit__(None, None, None)
+    for record in records:
         root = roots.get(record.managed_root_id)
         display = f"{record.managed_root_id}:invalid"
         state = "HELD_PROTECTED" if record.protection_class == "PROTECTED" else "ACTIVE"
@@ -145,6 +197,8 @@ def simulate_maintenance(config: CreativeConfig, store: ArtifactStore,
                     state = "BLOCKED_HASH_DRIFT"
                 elif record.protection_class == "PROTECTED":
                     state = "HELD_REVIEW" if record.review_state == "PENDING" else "HELD_PROTECTED"
+                elif global_holds:
+                    state = "HELD_ACTIVE_SYSTEM"
                 elif record.batch_id in active:
                     state = "HELD_ACTIVE_JOB"
                 elif record.dependencies or record.hold_reasons:
@@ -172,12 +226,14 @@ def simulate_maintenance(config: CreativeConfig, store: ArtifactStore,
         items.append({"artifact_id": record.artifact_id, "category": record.category,
                       "state": state, "display_path": display,
                       "bytes": int(record.size_bytes or 0)})
+    items.extend(item for item in scan["items"] if item["artifact_id"] is None)
     return {
         "ok": True, "action": "simulate_artifact_maintenance", "writes": False,
         "purge_enabled": False, "items": items,
         "quarantine_candidates": quarantine_candidates, "purge_candidates": [],
         "potential_quarantine_bytes": quarantine_bytes,
         "purge_blocked_bytes": purge_blocked_bytes,
+        "global_holds": list(global_holds),
     }
 
 
@@ -212,6 +268,8 @@ def plan_legacy_migration(config: CreativeConfig) -> dict[str, Any]:
             if not isinstance(payload, dict) or payload.get("status") != "COMPLETED":
                 continue
             schema = payload.get("schema")
+            if payload.get("workstation_id") != config.workstation_id:
+                raise ValueError("workstation")
             if schema == "ARPHE_LISTENING_VARIANT_V1":
                 source = verified_entry(payload.get("source"))
                 reference = verified_entry(payload.get("reference_v5"))
@@ -237,6 +295,10 @@ def plan_legacy_migration(config: CreativeConfig) -> dict[str, Any]:
                 errors.append({"display_path": "audio_jobs_root:" + selected.relative_to(root).as_posix(),
                                "error_code": "MANUAL_REVIEW_SCHEMA"})
                 continue
+            source_fingerprint = payload.get("source_fingerprint")
+            if (not isinstance(source_fingerprint, str) or len(source_fingerprint) != 64
+                    or any(ch not in "0123456789abcdefABCDEF" for ch in source_fingerprint)):
+                raise ValueError("source fingerprint")
             output = validate_managed_path(Path(str(payload.get("output_path") or "")),
                                            config.audio_root.resolve())
             if sha256_file(output) != payload.get("output_sha256"):
@@ -247,16 +309,18 @@ def plan_legacy_migration(config: CreativeConfig) -> dict[str, Any]:
             errors.append({"display_path": "audio_jobs_root:blocked",
                            "error_code": "MANUAL_REVIEW_FINGERPRINT_OR_PATH"})
     colorist = config.colorist_jobs_path
-    if colorist.is_file():
+    if colorist.exists():
         try:
-            payload = json.loads(colorist.read_text(encoding="utf-8-sig"))
+            selected_colorist = validate_managed_path(
+                colorist, config.artifact_registry_path.parent.resolve())
+            payload = json.loads(selected_colorist.read_text(encoding="utf-8-sig"))
             if payload.get("schema") == "ARPHE_COLORIST_JOBS_V1":
-                propose("COLORIST_STATE", colorist.resolve(), "profile_root",
+                propose("COLORIST_STATE", selected_colorist, "profile_root",
                         config.artifact_registry_path.parent.resolve())
             else:
                 errors.append({"display_path": "profile_root:colorist_jobs.json",
                                "error_code": "MANUAL_REVIEW_SCHEMA"})
-        except (OSError, json.JSONDecodeError):
+        except (OSError, ValueError, json.JSONDecodeError):
             errors.append({"display_path": "profile_root:colorist_jobs.json",
                            "error_code": "MANUAL_REVIEW_SCHEMA"})
     return {"ok": not errors, "action": "plan_legacy_migration", "writes": False,

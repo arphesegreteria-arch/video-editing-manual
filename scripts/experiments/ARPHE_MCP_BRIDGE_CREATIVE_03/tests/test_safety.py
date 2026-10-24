@@ -211,8 +211,10 @@ class SafetyTests(unittest.TestCase):
             config = load_config(path)
             self.assertEqual(path.resolve(), config.path)
             self.assertEqual("PC_PERSONALE", config.workstation_id)
-            self.assertEqual(path.parent / "resolve-archives", config.resolve_archive_root)
-            self.assertEqual(path.parent / "resolve-retirements.json",
+            self.assertEqual(
+                (path.parent / "resolve-archives").resolve(), config.resolve_archive_root)
+            self.assertEqual(
+                (path.parent / "resolve-retirements.json").resolve(),
                              config.resolve_retirement_registry_path)
             self.assertFalse(config.flags["CAP_RESOLVE_RETIREMENT"])
 

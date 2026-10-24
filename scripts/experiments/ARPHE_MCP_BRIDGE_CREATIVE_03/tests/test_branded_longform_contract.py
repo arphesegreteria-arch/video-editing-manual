@@ -52,8 +52,10 @@ class BrandedLongformContractTests(unittest.TestCase):
                 "feature_flags": {},
             }), encoding="utf-8")
             config = load_config(config_path)
-        self.assertEqual(root / "state" / "branded_longform_jobs.json", config.branded_longform_jobs_path)
-        self.assertEqual(root / "state" / "branded_longform_journal.jsonl", config.branded_longform_journal_path)
+        self.assertEqual((root / "state" / "branded_longform_jobs.json").resolve(),
+                         config.branded_longform_jobs_path)
+        self.assertEqual((root / "state" / "branded_longform_journal.jsonl").resolve(),
+                         config.branded_longform_journal_path)
 
 
 if __name__ == "__main__":

@@ -175,7 +175,7 @@ class ArtifactStoreTests(unittest.TestCase):
             config = config_for(Path(directory))
             store = artifact_store_for(config)
 
-            self.assertEqual(config.artifact_registry_path, store.path)
+            self.assertEqual(config.artifact_registry_path.resolve(), store.path)
             self.assertEqual("PC_PERSONALE", store.workstation_id)
 
 

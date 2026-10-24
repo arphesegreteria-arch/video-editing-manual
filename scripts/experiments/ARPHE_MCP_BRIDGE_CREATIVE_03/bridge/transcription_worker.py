@@ -78,9 +78,14 @@ def _load_checkpoint(output: Path, source: Path, fingerprint: str, model_name: s
         raise ValueError(f"Checkpoint transcript non leggibile: {exc}") from exc
     source_data = payload.get("source") if isinstance(payload, dict) else None
     transcription = payload.get("transcription") if isinstance(payload, dict) else None
+    try:
+        checkpoint_source = Path(source_data.get("path", "")).expanduser().resolve(strict=True) \
+            if isinstance(source_data, dict) else None
+    except (OSError, TypeError, ValueError):
+        checkpoint_source = None
     if (not isinstance(payload, dict) or payload.get("schema") != SCHEMA
             or not isinstance(source_data, dict) or source_data.get("fingerprint") != fingerprint
-            or source_data.get("path") != str(source) or not isinstance(transcription, dict)
+            or checkpoint_source != source or not isinstance(transcription, dict)
             or transcription.get("model") != model_name
             or transcription.get("requested_language") != language
             or not isinstance(payload.get("segments"), list)):

@@ -54,7 +54,7 @@ class ResolveRetirementToolTests(unittest.IsolatedAsyncioTestCase):
                     "kind": "project", "project_name": "ARPHE_TEST", "timeline_name": None,
                 })
             self.assertEqual(expected, result.structured_content)
-            self.assertEqual(config.resolve_retirement_registry_path,
+            self.assertEqual(config.resolve_retirement_registry_path.resolve(),
                              operation.call_args.args[4].path)
 
 

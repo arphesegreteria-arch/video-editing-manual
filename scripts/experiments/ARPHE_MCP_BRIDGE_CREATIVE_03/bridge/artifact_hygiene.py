@@ -43,15 +43,16 @@ def validate_managed_path(path: Path, root: Path, *, allow_directory: bool = Fal
         raise ValueError("Percorso fuori dal managed root") from exc
     if common != root_resolved:
         raise ValueError("Percorso fuori dal managed root")
-    try:
-        relative = selected_resolved.relative_to(root_resolved)
-    except ValueError as exc:
-        raise ValueError("Percorso fuori dal managed root") from exc
-    current = root_resolved
-    for part in relative.parts:
-        current /= part
+    current = selected.absolute()
+    while True:
         if current.exists() and (current.is_symlink() or _is_reparse(current)):
             raise ValueError("Percorso symlink o reparse non consentito")
+        if current.resolve(strict=False) == root_resolved:
+            break
+        parent = current.parent
+        if parent == current:
+            raise ValueError("Percorso fuori dal managed root")
+        current = parent
     resolved = selected_resolved
     if resolved.exists():
         if allow_directory and not resolved.is_dir():

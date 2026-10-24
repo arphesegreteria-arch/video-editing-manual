@@ -42,34 +42,7 @@ jobs:
         run: python -m unittest discover -s scripts/windows_bridge/tests
 
       - name: Verify closed Colorist and dialogue catalog
-        shell: python
+        run: >-
+          python -m unittest
+          tests.test_safety.SafetyTests.test_colorist_and_dialogue_catalog_is_closed
         working-directory: scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03
-        run: |
-          from bridge.tool_catalog import EXPOSED_TOOL_NAMES
-
-          expected = {
-              "inspect_colorist_context",
-              "prepare_colorist_plan",
-              "inspect_colorist_plan",
-              "approve_colorist_plan",
-              "apply_colorist_plan",
-              "preview_colorist_version",
-              "restore_colorist_preview",
-              "submit_colorist_review",
-              "start_timeline_dialogue_cleanup_test",
-              "get_timeline_dialogue_cleanup_job",
-          }
-          residual_adv = {
-              "create_audio_seam_test",
-              "create_caption_test",
-              "start_timeline_audio_transcription",
-              "get_timeline_audio_transcription_job",
-              "inspect_timeline_edit_points",
-              "reconcile_legacy_render_batch",
-          }
-
-          names = set(EXPOSED_TOOL_NAMES)
-          assert len(EXPOSED_TOOL_NAMES) == 113
-          assert len(names) == 113
-          assert expected <= names
-          assert residual_adv.isdisjoint(names)

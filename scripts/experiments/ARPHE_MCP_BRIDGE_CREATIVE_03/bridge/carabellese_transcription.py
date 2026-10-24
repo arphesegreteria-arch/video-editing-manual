@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -91,8 +92,36 @@ def _launch(manifest_path: Path) -> int:
 
 
 def _pid_is_running(value: object) -> bool:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+    if (isinstance(value, bool) or not isinstance(value, int)
+            or value <= 0 or value > 0xFFFFFFFF):
         return False
+    if os.name == "nt":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        open_process = kernel32.OpenProcess
+        open_process.argtypes = (ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong)
+        open_process.restype = ctypes.c_void_p
+        wait_for_single_object = kernel32.WaitForSingleObject
+        wait_for_single_object.argtypes = (ctypes.c_void_p, ctypes.c_ulong)
+        wait_for_single_object.restype = ctypes.c_ulong
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = (ctypes.c_void_p,)
+        close_handle.restype = ctypes.c_int
+
+        # SYNCHRONIZE lets WaitForSingleObject distinguish a terminated process
+        # even when its real exit code is STILL_ACTIVE (259).
+        handle = open_process(0x00101000, 0, value)
+        if not handle:
+            # ERROR_INVALID_PARAMETER is the documented definite missing-PID
+            # result. Access denied and all other errors are indeterminate, so
+            # treat them as running to prevent duplicate worker launches.
+            return ctypes.get_last_error() != 87
+        try:
+            state = wait_for_single_object(handle, 0)
+            if state == 0:  # WAIT_OBJECT_0: the process object is signaled/terminated.
+                return False
+            return True  # WAIT_TIMEOUT or an indeterminate WAIT_FAILED.
+        finally:
+            close_handle(handle)
     try:
         os.kill(value, 0)
     except PermissionError:

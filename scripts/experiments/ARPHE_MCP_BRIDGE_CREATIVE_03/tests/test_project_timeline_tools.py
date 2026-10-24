@@ -248,6 +248,22 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
         self.assertTrue(set_visibility_window(FakeComp(), merge, 10, 20))
         self.assertEqual({0: 0.0, 9: 0.0, 10: 1.0, 19: 1.0, 20: 0.0}, merge.Blend)
 
+    def test_visibility_window_rejects_silently_dropped_keyframes(self):
+        class SilentDropSpline:
+            def __setitem__(self, frame, value):
+                pass
+            def __getitem__(self, frame):
+                return 0.0
+
+        class FakeComp:
+            def BezierSpline(self):
+                return SilentDropSpline()
+
+        class FakeMerge:
+            Blend = None
+
+        self.assertFalse(set_visibility_window(FakeComp(), FakeMerge(), 10, 20))
+
 
 if __name__ == "__main__":
     unittest.main()

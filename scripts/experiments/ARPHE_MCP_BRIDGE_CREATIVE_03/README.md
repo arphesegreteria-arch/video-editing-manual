@@ -22,6 +22,19 @@ Le feature progressive si modificano nella config locale, senza cambiare lo sche
 `set_feature_flag.ps1 -WorkstationId <ID> -ProfilePath <profilo.local.json>`; dopo la modifica
 riavviare il runtime Creative03.
 
+## Raddrizzamento esplicito Vertical Social
+
+L'azione generica `REFRAME` può includere `zoom`, `rotation_keys` e `center_keys` per correggere una
+ripresa leggermente inclinata o oscillante. I punti sono frame assoluti della timeline; gli angoli
+sono in gradi e le coordinate `x/y` sono normalizzate. Ogni lista deve essere ordinata e ancorare
+esattamente il primo e l'ultimo frame del range approvato. Il bridge rifiuta angoli oltre `+/-7.5`
+gradi, coordinate fuori da `0.1..0.9`, zoom fuori da `1.0..1.15`, valori impliciti e punti fuori
+range. Le coordinate devono provenire da misure esplicite fornite dal chiamante: il bridge non
+riconosce automaticamente soggetti o orizzonti. Resolve conserva la rotazione in `BezierSpline` e
+la posizione bidimensionale in un modificatore `Path` Fusion, verificando ogni punto sulla sola
+timeline provvisoria del piano approvato. La sorgente non viene modificata e il progetto non viene
+salvato automaticamente.
+
 Stato: **50 TEST PASS / GATE A-B PASS / GATE C STATIC PASS / GATE D PASS / REVIEW SEQUENCE PASS /
 GATE E SEQUENCE TRANSITION PASS / PAPER STACK + GATES F-G PENDING**.
 
@@ -48,6 +61,22 @@ scartato quando peggiora l'ascolto.
 `create_edge_fade_test` duplica una timeline con una sola clip V1/A1 e applica un fade video Fusion
 e un WAV audio derivato con fade lineari. Il preset predefinito è 6/8 frame video e 4/10 frame audio;
 la timeline sorgente resta intatta e il progetto non viene salvato automaticamente.
+`create_audio_seam_test` è separato e serve ai tagli interni A1: richiede i frame di taglio espliciti,
+duplica la timeline e applica soltanto sulla copia un `Cross Fade 0 dB` nativo, centrato (2 frame per
+default). Legge di nuovo ogni transizione creata; se Resolve ne rifiuta una o il read-back non torna,
+elimina la copia di prova, ripristina la timeline sorgente e non salva il progetto.
+`start_timeline_audio_transcription` e `get_timeline_audio_transcription_job` producono una trascrizione
+con timestamp parola per parola partendo esclusivamente dal WAV PCM 48 kHz audio-only della timeline Resolve
+indicata. Il job seleziona e avvia soltanto il proprio render, conserva gli altri job, ripristina timeline,
+formato e impostazioni Deliver tramite un preset temporaneo eliminato dopo il ripristino, e non salva il
+progetto. Non dipende da `GetRenderSettings`, assente nell'API Resolve 21.1.1. La trascrizione è legata a workstation, progetto,
+ID timeline, impronta del montaggio, durata e impronta del WAV.
+`create_caption_test` è una primitiva generica per una copia di test: accetta soltanto una trascrizione
+completa prodotta dall'audio della stessa timeline e ancora coerente con il montaggio corrente, usa una mappa
+1:1 dell'intera durata e applica un solo layer Fusion del Graphic Kit. Una trascrizione di un media sorgente,
+di un'altra timeline o di una versione precedente del montaggio viene respinta prima della duplicazione.
+Non crea CTA; il cutoff è obbligatorio e dichiarato dal chiamante. Non contiene nomi di progetti, timeline,
+CTA o timestamp specifici. In caso di errore Fusion elimina la copia caption e ripristina la sorgente.
 `apply_longform_edit_plan` accetta inoltre `full_timeline_name` e `apply_edge_fades`: può creare nello
 stesso progetto una timeline integrale con audio restaurato e applicare il preset edge fade a ogni
 timeline individuale. Il master concatenato resta privo di fade interni.

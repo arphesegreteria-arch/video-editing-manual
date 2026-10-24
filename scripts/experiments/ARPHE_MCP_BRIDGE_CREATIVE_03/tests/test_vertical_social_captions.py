@@ -57,6 +57,105 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "CTA"):
             validate_caption_action(crossing, 60)
 
+    def test_caption_schema_rejects_when_cutoff_removes_every_cue(self):
+        from bridge.vertical_social_captions import validate_caption_action
+        action = self.action()
+        action["caption_cutoff_frame"] = 0
+        with self.assertRaisesRegex(Exception, "prima del cutoff"):
+            validate_caption_action(action, 60)
+
+    def test_karaoke_rejects_upper_geometry_until_it_has_scaled_safe_bounds(self):
+        from bridge.vertical_social_captions import validate_caption_action
+        action = self.action()
+        action["style"] = {"caption_mode": "KARAOKE_WORD", "uppercase": True,
+                           "font_scale": 1.2}
+        with self.assertRaisesRegex(Exception, "LOWER"):
+            validate_caption_action(action, 60)
+
+    def test_phrase_karaoke_validates_fixed_phrase_and_word_windows(self):
+        from bridge.vertical_social_captions import validate_caption_action
+        action = self.action()
+        action["cues"] = [{
+            "cue_id": "c1", "start_frame": 0, "end_frame": 20,
+            "text": "CIAO MONDO", "position": "LOWER",
+            "words": [
+                {"text": "CIAO", "start_frame": 0, "end_frame": 8},
+                {"text": "MONDO", "start_frame": 8, "end_frame": 20},
+            ],
+        }]
+        action["style"] = {"caption_mode": "KARAOKE_PHRASE", "uppercase": True,
+                           "font_scale": 1.2}
+        result = validate_caption_action(action, 60)
+        self.assertEqual("CIAO MONDO", result["cues"][0]["text"])
+        self.assertEqual(((0, 8), (8, 20)),
+                         tuple(word["range"] for word in result["cues"][0]["words"]))
+        self.assertEqual(40, 60 - result["cues"][-1]["range"][1])
+
+    def test_phrase_karaoke_requires_uppercase_and_twenty_percent_scale(self):
+        from bridge.vertical_social_captions import validate_caption_action
+        action = self.action()
+        action["cues"] = [{"cue_id": "c1", "start_frame": 0, "end_frame": 20,
+                           "text": "CIAO", "position": "LOWER",
+                           "words": [{"text": "CIAO", "start_frame": 0, "end_frame": 20}]}]
+        action["style"] = {"caption_mode": "KARAOKE_PHRASE", "uppercase": False,
+                           "font_scale": 1.2}
+        with self.assertRaisesRegex(Exception, "maiuscolo"):
+            validate_caption_action(action, 60)
+        action["style"] = {"caption_mode": "KARAOKE_PHRASE", "uppercase": True,
+                           "font_scale": 1.1}
+        with self.assertRaisesRegex(Exception, "1.2"):
+            validate_caption_action(action, 60)
+
+    def test_phrase_word_slots_keep_long_words_inside_two_row_safe_card(self):
+        from bridge.vertical_social_captions import phrase_word_slots, measured_satoshi_bold_width
+        slots = phrase_word_slots(
+            ["SOPRATTUTTO", "TANTISSIME", "EFFETTIVAMENTE", "C'È"], 1.2)
+        self.assertEqual(4, len(slots))
+        self.assertLessEqual(len({slot["row"] for slot in slots}), 2)
+        self.assertGreaterEqual(measured_satoshi_bold_width("COSTRUIAMO", 1.2), 0.29)
+        self.assertTrue(all(0.15 <= slot["x"] - slot["width"] / 2
+                            and slot["x"] + slot["width"] / 2 <= 0.77 for slot in slots))
+        for row in {slot["row"] for slot in slots}:
+            row_slots = [slot for slot in slots if slot["row"] == row]
+            for left, right in zip(row_slots, row_slots[1:]):
+                self.assertLessEqual(left["x"] + left["width"] / 2 + 0.015,
+                                     right["x"] - right["width"] / 2)
+
+    def test_satoshi_measurement_releases_font_when_screen_dc_allocation_fails(self):
+        from bridge.vertical_social_captions import measured_satoshi_bold_width
+
+        class Function:
+            def __init__(self, result=None): self.result = result; self.calls = []
+            def __call__(self, *args): self.calls.append(args); return self.result
+
+        gdi = SimpleNamespace(
+            CreateFontW=Function(123), SelectObject=Function(), GetTextFaceW=Function(),
+            GetTextExtentPoint32W=Function(), DeleteObject=Function(1))
+        user = SimpleNamespace(GetDC=Function(0), ReleaseDC=Function(1))
+        with patch("bridge.vertical_social_captions.ctypes.WinDLL",
+                   side_effect=[gdi, user]):
+            with self.assertRaisesRegex(Exception, "non misurabile"):
+                measured_satoshi_bold_width("TEST", 1.2)
+        self.assertEqual([(123,)], gdi.DeleteObject.calls)
+
+    def test_satoshi_measurement_releases_resources_when_font_selection_fails(self):
+        from bridge.vertical_social_captions import measured_satoshi_bold_width
+
+        class Function:
+            def __init__(self, result=None): self.result = result; self.calls = []
+            def __call__(self, *args): self.calls.append(args); return self.result
+
+        gdi = SimpleNamespace(
+            CreateFontW=Function(123), SelectObject=Function(0), GetTextFaceW=Function(),
+            GetTextExtentPoint32W=Function(), DeleteObject=Function(1))
+        user = SimpleNamespace(GetDC=Function(456), ReleaseDC=Function(1))
+        with patch("bridge.vertical_social_captions.ctypes.WinDLL",
+                   side_effect=[gdi, user]):
+            with self.assertRaisesRegex(Exception, "non selezionabile"):
+                measured_satoshi_bold_width("TEST", 1.2)
+        self.assertEqual([(123,)], gdi.DeleteObject.calls)
+        self.assertEqual([(None, 456)], user.ReleaseDC.calls)
+
     def test_lower_caption_text_frame_is_contained_inside_its_safe_card(self):
         from bridge.vertical_social_captions import lower_caption_layout
         layout = lower_caption_layout()
@@ -115,12 +214,261 @@ class VerticalSocialCaptionTests(unittest.TestCase):
     def test_caption_executor_uses_one_full_timeline_composition(self):
         from bridge.vertical_social_captions import apply_caption_action
         cfg = SimpleNamespace(palette={"burgundy": "#6C2438", "white": "#FFFFFF"})
+        timeline = SimpleNamespace(
+            GetStartFrame=lambda: 0, GetEndFrame=lambda: 60, GetName=lambda: "ARPHE_TEST")
         with patch("bridge.vertical_social_captions.create_overlay_composition", return_value=(object(), object())) as create, \
              patch("bridge.vertical_social_captions.build_caption_graph", return_value={"cue_count": 2, "text_readback": True}) as build:
-            result = apply_caption_action(object(), object(), cfg, self.action(), 60)
+            result = apply_caption_action(object(), timeline, cfg, self.action(), 60)
         create.assert_called_once()
         build.assert_called_once()
         self.assertEqual(2, result["cue_count"])
+
+    def test_phrase_cues_split_before_they_require_a_third_safe_row(self):
+        from bridge.vertical_social_captions import split_phrase_cues_for_layout
+        from bridge.safety import ValidationError
+
+        cue = {
+            "cue_id": "caption_001", "range": (10, 30), "text": "UNO DUE TRE QUATTRO",
+            "position": "LOWER", "words": (
+                {"text": "UNO", "range": (10, 14)},
+                {"text": "DUE", "range": (14, 18)},
+                {"text": "TRE", "range": (18, 24)},
+                {"text": "QUATTRO", "range": (24, 30)},
+            ),
+        }
+
+        def slots(words, _scale):
+            if len(words) > 2:
+                raise ValidationError("Frase KARAOKE_PHRASE richiede più di due righe")
+            return [{"row": 0, "width": 0.2, "x": 0.46, "y": 0.27} for _ in words]
+
+        with patch("bridge.vertical_social_captions.phrase_word_slots", side_effect=slots):
+            result = split_phrase_cues_for_layout((cue,), 1.2)
+
+        self.assertEqual(("UNO DUE", "TRE QUATTRO"), tuple(item["text"] for item in result))
+        self.assertEqual(((10, 18), (18, 30)), tuple(item["range"] for item in result))
+        self.assertEqual(("caption_001_01", "caption_001_02"),
+                         tuple(item["cue_id"] for item in result))
+
+    def test_caption_executor_uses_absolute_carrier_and_local_fusion_cue_frames(self):
+        from bridge.vertical_social_captions import apply_caption_action
+
+        timeline = SimpleNamespace(
+            GetStartFrame=lambda: 108000,
+            GetEndFrame=lambda: 108060,
+            GetName=lambda: "ARPHE_TEST",
+        )
+        item = SimpleNamespace(GetName=lambda: "ARPHE_CAPTIONS")
+        cfg = SimpleNamespace(palette={"burgundy": "#6C2438", "white": "#FFFFFF"})
+        with patch("bridge.vertical_social_captions.create_overlay_composition",
+                   return_value=(item, object())) as create, \
+             patch("bridge.vertical_social_captions.build_caption_graph",
+                   return_value={"cue_count": 2, "text_readback": True}) as build:
+            result = apply_caption_action(object(), timeline, cfg, self.action(), 60)
+
+        self.assertEqual((108000, 108060), create.call_args.args[3:5])
+        local_cues = build.call_args.args[1]
+        self.assertEqual(((0, 20), (30, 60)),
+                         tuple(cue["range"] for cue in local_cues))
+        self.assertEqual([108000, 108060], result["range"])
+
+    def test_caption_graph_uses_resolve_owned_keyframes_for_cue_visibility(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self):
+                self.values = {}
+            def SetInput(self, key, value, *args):
+                self.values[key] = value
+            def GetInput(self, key):
+                return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self):
+                return {}
+
+        outer = Tool()
+        cue = ({"cue_id": "c1", "range": (3, 7), "text": "Testo", "position": "LOWER"},)
+        palette = {"black": "#000000", "burgundy": "#6C2438", "white": "#FFFFFF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool", side_effect=lambda *args: Tool()), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=outer):
+            build_caption_graph(Comp(), cue, palette)
+
+        self.assertEqual({0: 0.0, 2: 0.0, 3: 1.0, 6: 1.0, 7: 0.0}, outer.Blend)
+
+    def test_karaoke_graph_uses_kit_highlight_and_twenty_percent_larger_safe_text(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self, name=""):
+                self.name = name; self.values = {}
+            def SetInput(self, key, value, *args): self.values[key] = value
+            def GetInput(self, key): return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self): return {}
+
+        created = {}
+        def new_tool(comp, kind, name):
+            tool = Tool(name); created[name] = tool; return tool
+
+        cue = ({"cue_id": "c1", "range": (3, 7), "text": "C'È", "position": "LOWER"},)
+        palette = {"black": "#111111", "burgundy": "#6C2438",
+                   "white": "#FFFFFF", "cream": "#EFE3CF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool", side_effect=new_tool), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=Tool()):
+            try:
+                result = build_caption_graph(Comp(), cue, palette,
+                                             caption_mode="KARAOKE_WORD", font_scale=1.2)
+            except TypeError as exc:
+                self.fail(f"stile karaoke generico non implementato: {exc}")
+
+        text = created["ARPHE_CAPTION_001_TEXT"]
+        self.assertEqual("C'È", text.values["StyledText"])
+        self.assertAlmostEqual(0.060, text.values["Size"], places=6)
+        self.assertAlmostEqual(239 / 255, text.values["Red1"], places=6)
+        self.assertLessEqual(result["lower_layout"]["bounds"]["bottom"], 0.82)
+        self.assertEqual("cream", result["highlight_role"])
+
+    def test_caption_graph_rejects_silent_style_readback_mismatch(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self, name=""):
+                self.name = name; self.values = {}
+            def SetInput(self, key, value, *args): self.values[key] = value
+            def GetInput(self, key):
+                if self.name.endswith("_TEXT") and key == "Size":
+                    return 0.01
+                return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self): return {}
+
+        cue = ({"cue_id": "c1", "range": (3, 7), "text": "TEST", "position": "LOWER"},)
+        palette = {"black": "#111111", "burgundy": "#6C2438",
+                   "white": "#FFFFFF", "cream": "#EFE3CF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool",
+                   side_effect=lambda comp, kind, name: Tool(name)), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=Tool()):
+            with self.assertRaisesRegex(Exception, "Read-back stile"):
+                build_caption_graph(Comp(), cue, palette,
+                                    caption_mode="KARAOKE_WORD", font_scale=1.2)
+
+    def test_phrase_karaoke_keeps_full_phrase_and_moves_only_active_highlight(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self, name=""):
+                self.name = name; self.values = {}
+            def SetInput(self, key, value, *args): self.values[key] = value
+            def GetInput(self, key): return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self): return {}
+
+        created = {}
+        def new_tool(comp, kind, name):
+            tool = Tool(name); created[name] = tool; return tool
+
+        cue = ({
+            "cue_id": "c1", "range": (3, 11),
+            "text": "SOPRATTUTTO TANTISSIME EFFETTIVAMENTE C'È", "position": "LOWER",
+            "words": (
+                {"text": "SOPRATTUTTO", "range": (3, 5)},
+                {"text": "TANTISSIME", "range": (5, 7)},
+                {"text": "EFFETTIVAMENTE", "range": (7, 9)},
+                {"text": "C'È", "range": (9, 11)},
+            ),
+        },)
+        palette = {"black": "#111111", "burgundy": "#6C2438", "beige": "#D7C2A6",
+                   "white": "#FFFFFF", "cream": "#EFE3CF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool", side_effect=new_tool), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=Tool()):
+            result = build_caption_graph(Comp(), cue, palette,
+                                         caption_mode="KARAOKE_PHRASE", font_scale=1.2)
+
+        first_base = created["ARPHE_CAPTION_001_WORD_001_BASE"]
+        first_active = created["ARPHE_CAPTION_001_WORD_001_ACTIVE"]
+        second_base = created["ARPHE_CAPTION_001_WORD_002_BASE"]
+        second_active = created["ARPHE_CAPTION_001_WORD_002_ACTIVE"]
+        self.assertEqual(("SOPRATTUTTO", "TANTISSIME"),
+                         (first_base.values["StyledText"], second_base.values["StyledText"]))
+        self.assertEqual(first_base.values["Center"], first_active.values["Center"])
+        self.assertEqual(second_base.values["Center"], second_active.values["Center"])
+        self.assertEqual({0: 0.0, 2: 0.0, 3: 1.0, 4: 1.0, 5: 0.0},
+                         created["ARPHE_CAPTION_001_WORD_001_ACTIVE_MERGE"].Blend)
+        self.assertEqual({0: 0.0, 4: 0.0, 5: 1.0, 6: 1.0, 7: 0.0},
+                         created["ARPHE_CAPTION_001_WORD_002_ACTIVE_MERGE"].Blend)
+        self.assertEqual(4, result["active_word_count"])
+        self.assertTrue(result["phrase_stable"])
+        self.assertEqual(0.16, result["lower_layout"]["height"])
+        self.assertLessEqual(result["lower_layout"]["bounds"]["bottom"], 0.82)
+
+    def test_phrase_card_karaoke_moves_burgundy_card_behind_spoken_word(self):
+        from bridge.vertical_social_captions import build_caption_graph
+
+        class Tool:
+            def __init__(self, name=""):
+                self.name = name; self.values = {}
+            def SetInput(self, key, value, *args): self.values[key] = value
+            def GetInput(self, key): return self.values.get(key)
+
+        class Comp:
+            def BezierSpline(self): return {}
+
+        created = {}
+        def new_tool(comp, kind, name):
+            tool = Tool(name); created[name] = tool; return tool
+
+        cue = ({
+            "cue_id": "c1", "range": (3, 11),
+            "text": "SOPRATTUTTO TANTISSIME EFFETTIVAMENTE C'È", "position": "LOWER",
+            "words": (
+                {"text": "SOPRATTUTTO", "range": (3, 5)},
+                {"text": "TANTISSIME", "range": (5, 7)},
+                {"text": "EFFETTIVAMENTE", "range": (7, 9)},
+                {"text": "C'È", "range": (9, 11)},
+            ),
+        },)
+        palette = {"black": "#111111", "burgundy": "#6C2438", "beige": "#D7C2A6",
+                   "white": "#FFFFFF", "cream": "#EFE3CF"}
+        with patch("bridge.vertical_social_captions._media_out", return_value=Tool()), \
+             patch("bridge.vertical_social_captions._new_tool", side_effect=new_tool), \
+             patch("bridge.vertical_social_captions.connect_input", return_value=True), \
+             patch("bridge.vertical_social_captions.add_layer", return_value=Tool()):
+            result = build_caption_graph(
+                Comp(), cue, palette, caption_mode="KARAOKE_PHRASE_CARD", font_scale=1.2)
+
+        self.assertNotIn("ARPHE_CAPTION_001_BG", created)
+        for word_index, expected_blend in enumerate((
+                {0: 0.0, 2: 0.0, 3: 1.0, 4: 1.0, 5: 0.0},
+                {0: 0.0, 4: 0.0, 5: 1.0, 6: 1.0, 7: 0.0},
+                {0: 0.0, 6: 0.0, 7: 1.0, 8: 1.0, 9: 0.0}), start=1):
+            stem = f"ARPHE_CAPTION_001_WORD_{word_index:03d}"
+            base = created[f"{stem}_BASE"]
+            shadow = created[f"{stem}_BASE_SHADOW"]
+            mask = created[f"{stem}_HIGHLIGHT_MASK"]
+            self.assertEqual(base.values["StyledText"], shadow.values["StyledText"])
+            self.assertEqual(base.values["Size"], shadow.values["Size"])
+            self.assertNotEqual(base.values["Center"], shadow.values["Center"])
+            self.assertEqual(base.values["Center"], mask.values["Center"])
+            self.assertGreater(mask.values["Width"], base.values["LayoutWidth"])
+            self.assertEqual(expected_blend, created[f"{stem}_HIGHLIGHT_MERGE"].Blend)
+            self.assertEqual(expected_blend, created[f"{stem}_ACTIVE_MERGE"].Blend)
+        self.assertEqual("burgundy", result["highlight_card_role"])
+        self.assertEqual("white", result["base_role"])
+        self.assertTrue(result["inactive_contrast_guard"])
+        self.assertFalse(result["full_phrase_card"])
+        self.assertTrue(result["phrase_stable"])
 
     def test_edit_fingerprint_changes_when_same_length_media_is_replaced(self):
         from bridge.vertical_social_captions import timeline_edit_fingerprint

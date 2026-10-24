@@ -30,9 +30,17 @@ def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Reg
         return {"ok": False, "action": f"add_{kind}_asset", "stage": "import", "asset_name": selected.name}
     media_item = imported[0]
     pool = safe_call(project, "GetMediaPool")
-    appended = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": media_item, "recordFrame": start,
-                                                       "endFrame": end - start, "mediaType": 1,
-                                                       "trackIndex": int(track_index)}])
+    timeline_start = int(safe_call(timeline, "GetStartFrame") or 0)
+    record_start = timeline_start + start
+    payload = {"mediaPoolItem": media_item, "startFrame": 0,
+               "recordFrame": record_start, "endFrame": end - start}
+    if kind != "video":
+        payload.update({"mediaType": 1, "trackIndex": int(track_index)})
+    appended = safe_call(pool, "AppendToTimeline", [payload])
+    if not appended or any(int(safe_call(item, "GetStart") or -1) != record_start
+                           or int(safe_call(item, "GetEnd") or -1) != record_start + end - start
+                           for item in appended):
+        raise ValidationError("Inserimento asset video non verificabile")
     created_name = arphe_name(selected.stem, "ASSET")
     for item in appended or []:
         safe_call(item, "SetName", created_name)

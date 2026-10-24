@@ -117,7 +117,7 @@ def create_provisional_cut_timeline(project: object, source_timeline: object, pl
         raise ValidationError("Creazione timeline provvisoria Vertical Social fallita")
     if not _resolve_call(project, "SetCurrentTimeline", provisional):
         raise ValidationError("Impossibile selezionare la timeline provvisoria")
-    record = 0
+    record = int(_resolve_call(provisional, "GetStartFrame") or 0)
     for start, end in keep:
         for media_type in (1, 2):
             appended = _resolve_call(pool, "AppendToTimeline", [{

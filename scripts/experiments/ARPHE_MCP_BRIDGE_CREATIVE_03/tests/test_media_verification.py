@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from bridge.media_verification import (MediaProbe, RenderExpectation, probe_media,
-                                       verify_and_promote_batch, verify_media)  # noqa: E402
+                                       reconcile_legacy_render_batch, verify_and_promote_batch,
+                                       verify_media)  # noqa: E402
 from bridge.registry import Registry  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 from tests.test_render_batches import configured, fixtures  # noqa: E402
@@ -100,6 +101,42 @@ class MediaVerificationTests(unittest.TestCase):
                               video_profile="High")
             with patch("bridge.media_verification.probe_media", return_value=good):
                 self.assertTrue(verify_and_promote_batch(project, configured(root), restarted, batch.batch_id)["ok"])
+
+    def test_legacy_double_extension_reconciles_only_after_dry_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry, batch, project = self._rendering_batch(root)
+            legacy_name = "ARPHE_OUTPUT.mp4.mp4"
+            batch = replace(batch, expected_outputs=(legacy_name,), evidence={
+                "expected_durations": {legacy_name: "300"},
+                "job_snapshots": {"job-1": {"OutputFilename": "ARPHE_OUTPUT.mp4"}},
+            })
+            registry.save_render_batch(batch)
+            good = MediaProbe("mp4", "h264", 1920, 1080, Fraction(30000, 1001), Fraction(300), "aac", 48000,
+                              video_profile="High")
+            with patch("bridge.media_verification.probe_media", return_value=good):
+                preview = reconcile_legacy_render_batch(project, registry, batch.batch_id)
+                self.assertTrue(preview["eligible"])
+                self.assertEqual("RENDERING", registry.render_batch(batch.batch_id).status)
+                result = reconcile_legacy_render_batch(project, registry, batch.batch_id, dry_run=False)
+            updated = registry.render_batch(batch.batch_id)
+            self.assertTrue(result["ok"])
+            self.assertEqual("VERIFYING", updated.status)
+            self.assertEqual(("ARPHE_OUTPUT.mp4",), updated.expected_outputs)
+            self.assertEqual("ARPHE_OUTPUT.mp4.mp4", updated.evidence["legacy_expected_outputs"] [0])
+            self.assertTrue((Path(batch.staging_directory) / "ARPHE_OUTPUT.mp4").exists())
+
+    def test_legacy_reconcile_rejects_nonterminal_job_without_state_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); registry, batch, project = self._rendering_batch(root)
+            batch = replace(batch, expected_outputs=("ARPHE_OUTPUT.mp4.mp4",), evidence={
+                "expected_durations": {"ARPHE_OUTPUT.mp4.mp4": "300"},
+                "job_snapshots": {"job-1": {"OutputFilename": "ARPHE_OUTPUT.mp4"}},
+            })
+            registry.save_render_batch(batch)
+            project.GetRenderJobStatus = lambda _job_id: {"JobStatus": "Rendering"}
+            with self.assertRaisesRegex(ValidationError, "completati"):
+                reconcile_legacy_render_batch(project, registry, batch.batch_id)
+            self.assertEqual("RENDERING", registry.render_batch(batch.batch_id).status)
 
     def test_multi_file_promotion_rolls_back_if_second_move_fails(self):
         with tempfile.TemporaryDirectory() as directory:

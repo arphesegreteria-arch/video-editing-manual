@@ -110,7 +110,14 @@ from .creative_tools import (add_end_card as do_add_end_card,
                              set_review_highlight as do_set_review_highlight)
 from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_frames,
                                inspect_fusion_graph as do_inspect_fusion_graph)
+from .edit_point_inspection import inspect_edit_points as do_inspect_edit_points
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
+from .audio_seam_transitions import create_audio_seam_test as do_create_audio_seam_test
+from .caption_test import create_caption_test as do_create_caption_test
+from .timeline_transcription import (
+    get_timeline_audio_transcription_job as do_get_timeline_audio_transcription_job,
+    start_timeline_audio_transcription as do_start_timeline_audio_transcription,
+)
 from .editorial_workflows import (EditorialBrief, load_render_profile_registry,
                                   load_workflow_registry,
                                   resolve_delivery_profile,
@@ -173,7 +180,8 @@ from .resolve_retirement import (
     recover_retirement as do_recover_resolve_retirement,
     retirement_store_for,
 )
-from .media_verification import verify_and_promote_batch as do_verify_render_batch
+from .media_verification import (reconcile_legacy_render_batch as do_reconcile_legacy_render_batch,
+                                 verify_and_promote_batch as do_verify_render_batch)
 from .maintenance_scheduler import start_lazy_maintenance
 from .resolve_connection import RESOLVE_ACCESS_LOCK, context, safe_call
 from .safety import PlaybackFpsActionRequired, ValidationError
@@ -1273,6 +1281,16 @@ def verify_render_batch(batch_id: str) -> dict[str, Any]:
 
 
 @mcp.tool(annotations=SAFE_WRITE)
+def reconcile_legacy_render_batch(batch_id: str, dry_run: bool = True) -> dict[str, Any]:
+    """Audit and repair only a verified legacy duplicated container suffix; never moves media."""
+    try:
+        _, _, project, _, _, registry, error = _runtime()
+        if error: return error
+        return _call(do_reconcile_legacy_render_batch, project, registry, batch_id, dry_run)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
 def cancel_render_batch(batch_id: str, operator_role: str) -> dict[str, Any]:
     """Cancel only jobs owned by the named batch; technical role required."""
     try:
@@ -1731,6 +1749,59 @@ def create_edge_fade_test(source_timeline: str, target_name: str,
     except Exception as exc: return _error(exc)
 
 
+@mcp.tool(annotations=SAFE_WRITE)
+def create_audio_seam_test(source_timeline: str, target_name: str, cut_frames: list[int],
+                           duration_frames: int = 2) -> dict[str, Any]:
+    """Duplicate a timeline and apply native audio cross-fades at verified A1 cut frames only."""
+    try:
+        _, _, project, _, config, registry, error = _runtime()
+        if error: return error
+        return _call(do_create_audio_seam_test, project, config, registry, source_timeline,
+                     target_name, cut_frames, duration_frames)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def create_caption_test(source_timeline: str, target_name: str, transcript_file: str,
+                        source_spans: list[dict[str, int]], caption_cutoff_frame: int,
+                        caption_mode: str = "STANDARD", uppercase: bool = False,
+                        font_scale: float = 1.0,
+                        replace_existing_captions: bool = False) -> dict[str, Any]:
+    """Create a no-save standard or word-karaoke caption copy from an explicit transcript map."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_create_caption_test, project, config, registry, source_timeline,
+                         target_name, transcript_file, source_spans, caption_cutoff_frame,
+                         caption_mode, uppercase, font_scale, replace_existing_captions)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def start_timeline_audio_transcription(source_timeline: str, model: str = "small",
+                                       language: str = "it") -> dict[str, Any]:
+    """Render and transcribe only the exact audio heard on one allowed timeline."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_start_timeline_audio_transcription, project, config, registry,
+                         source_timeline, model, language)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def get_timeline_audio_transcription_job(job_id: str) -> dict[str, Any]:
+    """Advance or read an owned timeline-audio transcription job."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_get_timeline_audio_transcription_job, project, config, registry, job_id)
+    except Exception as exc: return _error(exc)
+
+
 @mcp.tool(annotations=READ_ONLY)
 def get_creative_status() -> dict[str, Any]:
     """Read project, timeline, duration, track/Fusion counts and capability flags."""
@@ -1754,6 +1825,22 @@ def get_creative_status() -> dict[str, Any]:
                 "fusion_composition_count": fusion_count,
                 "feature_flags": feature_report(config, manager, project, timeline)}
     except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_timeline_edit_points() -> dict[str, Any]:
+    """Read exact A/V edit boundaries without changing the open timeline."""
+    try:
+        _, _, project, timeline, _, _, error = _runtime()
+        if error:
+            return error
+        if project is None or timeline is None:
+            return {"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}
+        return {"ok": True, "project": safe_call(project, "GetName"),
+                "timeline": safe_call(timeline, "GetName"),
+                **do_inspect_edit_points(timeline)}
+    except Exception as exc:
+        return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)

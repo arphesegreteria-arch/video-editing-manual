@@ -53,6 +53,53 @@ class Pool:
 
 
 class MusicBedTests(unittest.TestCase):
+    def test_video_asset_uses_relative_range_on_nonzero_timeline(self):
+        from bridge.asset_tools import add_asset
+        from bridge.registry import Registry
+
+        class VideoTimeline:
+            def __init__(self): self.video, self.audio = [[]], [[]]
+            def GetName(self): return "ARPHE_TEST"
+            def GetStartFrame(self): return 108000
+            def GetTrackCount(self, kind): return 1
+            def GetItemListInTrack(self, kind, index):
+                return (self.video if kind == "video" else self.audio)[index - 1]
+
+        class VideoPool:
+            def __init__(self, timeline): self.timeline, self.payload = timeline, None
+            def ImportMedia(self, paths): return [object()]
+            def CreateEmptyTimeline(self, name): return None
+            def AppendToTimeline(self, entries):
+                self.payload = entries[0]
+                end = self.payload["recordFrame"] + self.payload["endFrame"] - self.payload.get("startFrame", 0)
+                video = Item("source video", self.payload["recordFrame"], end)
+                audio = Item("source audio", self.payload["recordFrame"], end)
+                self.timeline.video[0].append(video); self.timeline.audio[0].append(audio)
+                return [video, audio]
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); media = root / "source.mp4"; media.write_bytes(b"video")
+            timeline = VideoTimeline(); pool = VideoPool(timeline)
+            project = SimpleNamespace(GetName=lambda: "ARPHE_PROJECT", GetMediaPool=lambda: pool,
+                                      GetMediaStorage=lambda: None, GetSetting=lambda _k: "",
+                                      SetSetting=lambda _k, _v: True, SetCurrentTimeline=lambda _t: True,
+                                      GetTimelineCount=lambda: 1, GetTimelineByIndex=lambda _i: timeline)
+            config = SimpleNamespace(flags={**DEFAULT_FLAGS, "CAP_ASSETS": True}, asset_root=root,
+                                     media_roots=(), allowed_timelines=frozenset())
+            registry = Registry(root / "state.json"); registry.add_timeline("ARPHE_PROJECT", "ARPHE_TEST")
+
+            result = add_asset(project, timeline, config, registry, str(media), "video", 0, 732, 1)
+
+            self.assertTrue(result["ok"])
+            self.assertEqual(108000, pool.payload["recordFrame"])
+            self.assertEqual(0, pool.payload["startFrame"])
+            self.assertEqual(732, pool.payload["endFrame"])
+            self.assertNotIn("mediaType", pool.payload)
+            self.assertEqual((108000, 108732),
+                             (timeline.video[0][0].GetStart(), timeline.video[0][0].GetEnd()))
+            self.assertEqual((108000, 108732),
+                             (timeline.audio[0][0].GetStart(), timeline.audio[0][0].GetEnd()))
+
     def test_places_owned_music_and_second_call_is_idempotent(self):
         from bridge.asset_tools import set_music_bed
         from bridge.registry import Registry

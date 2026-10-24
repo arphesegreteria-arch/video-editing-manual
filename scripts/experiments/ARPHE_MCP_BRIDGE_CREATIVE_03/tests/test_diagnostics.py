@@ -72,6 +72,7 @@ class DiagnosticTests(unittest.TestCase):
     def _config(root: Path):
         return SimpleNamespace(
             render_root=root,
+            allowed_projects=[],
             allowed_timelines=[],
             artifact_registry_path=root / "artifact_registry.json",
             workstation_id="PC_PERSONALE",
@@ -112,6 +113,57 @@ class DiagnosticTests(unittest.TestCase):
             self.assertEqual(2, len(records))
             self.assertEqual({"DIAGNOSTIC_CAPTURE"}, {record.category for record in records})
             self.assertEqual({"capture_timeline_frames"}, {record.producer for record in records})
+
+    def test_capture_accepts_explicitly_allowlisted_project_without_arphe_prefix(self):
+        class AllowlistedProject(FakeProject):
+            def GetName(self):
+                return "advbeppe"
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = self._config(Path(directory))
+            config.allowed_projects = ["advbeppe"]
+            config.allowed_timelines = ["ARPHE_TEST_TIMELINE"]
+            result = capture_timeline_frames(
+                FakeResolve(), AllowlistedProject(), FakeTimeline(), config, FakeRegistry(), [45]
+            )
+
+        self.assertTrue(result[0]["ok"])
+        self.assertEqual("advbeppe", result[0]["project"])
+
+    def test_capture_still_rejects_project_without_prefix_or_explicit_allowlist(self):
+        class ForeignProject(FakeProject):
+            def GetName(self):
+                return "foreign-project"
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = self._config(Path(directory))
+            config.allowed_timelines = ["ARPHE_TEST_TIMELINE"]
+            with self.assertRaisesRegex(ValidationError, "progetto deve iniziare con ARPHE_"):
+                capture_timeline_frames(
+                    FakeResolve(), ForeignProject(), FakeTimeline(), config, FakeRegistry(), [45]
+                )
+
+    def test_capture_accepts_verified_bridge_owned_vertical_provisional(self):
+        suffix = "D8F1AA1A931A4218A0FCD2F080DA678C"
+        timeline_name = f"__ARPHE_VERTICAL_VERTICAL_{suffix}"
+
+        class ProvisionalTimeline(FakeTimeline):
+            def GetName(self): return timeline_name
+
+        class ProvisionalRegistry(FakeRegistry):
+            def timeline_allowed(self, project, timeline): return False
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = self._config(Path(directory))
+            config.vertical_social_plans_path = Path(directory) / "plans.json"
+            evidence = {"actions": [{"state": "VERIFIED", "evidence": {"timeline": timeline_name}}]}
+            with patch("bridge.vertical_social_workflow.inspect_vertical_social_plan",
+                       return_value=evidence):
+                result = capture_timeline_frames(
+                    FakeResolve(), FakeProject(), ProvisionalTimeline(), config,
+                    ProvisionalRegistry(), [0],
+                )
+        self.assertTrue(result[0]["ok"])
 
     def test_capture_does_not_prune_older_registered_or_unregistered_images(self):
         with tempfile.TemporaryDirectory() as directory:

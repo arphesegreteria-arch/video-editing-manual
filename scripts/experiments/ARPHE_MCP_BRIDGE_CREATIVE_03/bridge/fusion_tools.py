@@ -216,7 +216,11 @@ def set_visibility_window(comp: Any, merge: Any, start_frame: int, end_frame: in
         blend[start] = 1.0
         blend[end - 1] = 1.0
         blend[end] = 0.0
-        return True
+        expected = {start: 1.0, end - 1: 1.0, end: 0.0}
+        if start > 0:
+            expected.update({0: 0.0, start - 1: 0.0})
+        return all(abs(float(blend[frame]) - value) < 1e-6
+                   for frame, value in expected.items())
     except Exception:
         return False
 

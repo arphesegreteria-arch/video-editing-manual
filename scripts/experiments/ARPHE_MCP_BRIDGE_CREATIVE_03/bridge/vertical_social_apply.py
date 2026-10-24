@@ -31,10 +31,12 @@ def find_provisional_timeline(project: object, plan_id: str) -> object:
 
 
 def _exact_video_item(timeline: object, start: int, end: int) -> object:
+    timeline_start = int(safe_call(timeline, "GetStartFrame") or 0)
+    absolute_start, absolute_end = timeline_start + start, timeline_start + end
     matches = [
         item for item in (safe_call(timeline, "GetItemListInTrack", "video", 1) or [])
-        if safe_call(item, "GetStart") == start
-        and safe_call(item, "GetEnd") == end
+        if safe_call(item, "GetStart") == absolute_start
+        and safe_call(item, "GetEnd") == absolute_end
     ]
     if len(matches) != 1:
         raise ValidationError("REFRAME deve coincidere con i confini di una clip provvisoria")
@@ -53,4 +55,13 @@ def apply_reframe_action(timeline: object, action: dict[str, Any], total_frames:
     return {"ok": True, "action_id": str(action["action_id"]),
             "timeline": str(safe_call(timeline, "GetName") or ""),
             "range": [start, end], "anchor": validated["anchor"],
+            "zoom": validated["zoom"],
+            "rotation_keys": [
+                {"frame": frame, "angle": angle}
+                for frame, angle in validated["rotation_keys"]
+            ],
+            "center_keys": [
+                {"frame": frame, "x": x, "y": y}
+                for frame, x, y in validated["center_keys"]
+            ],
             "output": transform["output"]}

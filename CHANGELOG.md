@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## 2026-10-22 — Sottotitoli ADV da trascrizione Longform
+
+- Il generatore generico mantiene uniti i token con apostrofo prodotti dalla trascrizione
+  parola-per-parola (per esempio `c` + `'è`) anche quando cadono sul limite di un cue.
+- La stessa primitiva generica supporta ora una variante `KARAOKE_WORD`: timing per parola,
+  maiuscolo opzionale, scala tipografica massima `1.2` con safe-zone verificata e sostituzione
+  strettamente limitata al layer caption posseduto dal bridge sulla copia.
+- Aggiunta `KARAOKE_PHRASE`: conserva i cue/frasi standard visibili e immobili,
+  sovrappone soltanto la parola attiva usando gli stessi timestamp e limita il layout
+  a due righe nella safe zone; non crea CTA e non salva il progetto.
+- Aggiunta `KARAOKE_PHRASE_CARD`: mantiene la frase completa e stabile senza card generale,
+  mentre un fondino bordeaux temporizzato segue soltanto la parola pronunciata; R7 e il
+  comportamento `KARAOKE_PHRASE` restano invariati. Le parole inattive sono bianche con una
+  leggera ombra scura per restare leggibili anche sui fondali chiari.
+- Regressioni dedicate; suite Creative completa: `563` test verdi e `2` skip
+  ambientali per privilegi symlink Windows.
+
 ## 2026-10-15 — Voice-over CTA tail
 
 - Aggiunta `move_voiceover_tail_to_cta`: safe write chiusa che duplica una timeline ARPHÈ,

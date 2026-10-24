@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +45,18 @@ def config_for(root: Path) -> CreativeConfig:
 
 
 class ArtifactPlanningTests(unittest.TestCase):
+    @staticmethod
+    def _filesystem_snapshot(root: Path) -> tuple[tuple[str, bool, int, str], ...]:
+        values = []
+        for path in sorted(root.rglob("*"), key=lambda value: value.relative_to(root).as_posix()):
+            relative = path.relative_to(root).as_posix()
+            if path.is_file():
+                values.append((relative, False, path.stat().st_mtime_ns,
+                               hashlib.sha256(path.read_bytes()).hexdigest()))
+            else:
+                values.append((relative, True, path.stat().st_mtime_ns, ""))
+        return tuple(values)
+
     def test_inventory_lists_cleanup_and_reference_only_roots(self):
         with tempfile.TemporaryDirectory() as directory:
             roots = {item["root_id"]: item["mode"]
@@ -77,6 +90,33 @@ class ArtifactPlanningTests(unittest.TestCase):
             self.assertTrue(any(value["state"] == "UNCLASSIFIED_PROTECTED"
                                 for value in simulation["items"]))
             self.assertEqual([], simulation["quarantine_candidates"])
+
+    def test_scan_and_simulation_never_attempt_or_leave_filesystem_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cfg = config_for(root)
+            cfg.audio_root.mkdir(parents=True)
+            (cfg.audio_root / "unknown.wav").write_bytes(b"unknown")
+            store = ArtifactStore(cfg.artifact_registry_path, cfg.workstation_id)
+            before = self._filesystem_snapshot(root)
+            real_open = __import__("os").open
+
+            def reject_registration_lock(path, flags, *args, **kwargs):
+                if Path(path) == store.registration_lock_path:
+                    raise AssertionError("read-only planning attempted registration lock write")
+                return real_open(path, flags, *args, **kwargs)
+
+            with patch("bridge.artifact_records.os.open", side_effect=reject_registration_lock):
+                scan = scan_artifacts(cfg, store)
+                simulation = simulate_maintenance(
+                    cfg, store, load_artifact_policy(cfg.artifact_policy_path),
+                    datetime(2026, 10, 24, tzinfo=UTC), active_job_ids=(),
+                )
+
+            self.assertTrue(scan["ok"])
+            self.assertTrue(simulation["ok"])
+            self.assertEqual(before, self._filesystem_snapshot(root))
+            self.assertFalse(store.registration_lock_path.exists())
 
     def test_crash_left_registration_lock_blocks_scan_and_simulation(self):
         with tempfile.TemporaryDirectory() as directory:

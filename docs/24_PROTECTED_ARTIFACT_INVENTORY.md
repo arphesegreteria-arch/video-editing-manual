@@ -71,6 +71,12 @@ questa fase è **0 byte**.
   il containment nella radice dichiarata.
 - Scansione e simulazione falliscono chiuse con un lock residuo e includono nel conteggio anche gli
   elementi sconosciuti protetti.
+- Scansione e simulazione non creano lock né altri file: confrontano un token read-only del registro
+  prima e dopo l'osservazione e falliscono con `REGISTRATION_CHANGED` se il contenuto cambia.
 - Qualunque job audio o Colorist attivo sospende le proposte di quarantena.
-- Suite isolata: 589 test eseguiti, tutti superati; 4 test saltati per dipendenze non disponibili.
+- Il controllo periodico ritenta al ciclo successivo dopo errori transitori di caricamento o audit.
+- Suite isolata: 591 test eseguiti, tutti superati; 4 test saltati per dipendenze non disponibili.
+
+La correzione read-only è stata verificata esclusivamente su radici temporanee. Non è stata eseguita
+una nuova scansione live e lo snapshot riportato sopra non autorizza classificazioni automatiche.
 

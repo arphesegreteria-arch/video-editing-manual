@@ -54,16 +54,15 @@ def start_lazy_maintenance(config_loader: Callable[[], CreativeConfig],
                 result = run_if_due(config)
                 write_audit(config.audit_log_path, "lazy_artifact_maintenance", result)
             except Exception as exc:
-                if config is None:
-                    return
-                try:
-                    write_audit(config.audit_log_path, "lazy_artifact_maintenance", {
-                        "ok": False,
-                        "stage": "runtime",
-                        "error_type": type(exc).__name__,
-                    })
-                except Exception:
-                    return
+                if config is not None:
+                    try:
+                        write_audit(config.audit_log_path, "lazy_artifact_maintenance", {
+                            "ok": False,
+                            "stage": "runtime",
+                            "error_type": type(exc).__name__,
+                        })
+                    except Exception:
+                        pass
             cycles += 1
             if max_cycles is not None and cycles >= max_cycles:
                 return

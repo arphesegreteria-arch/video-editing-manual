@@ -62,6 +62,16 @@ def _iter_recursive_files(root: Path) -> Iterable[Path]:
     return tuple(result)
 
 
+def _registry_read_token(store: ArtifactStore) -> tuple[bool, int, str]:
+    """Return a mutation-free registry token, failing closed around writers."""
+    if store.registration_lock_path.exists():
+        raise RegistrationLockedError("registrazione artefatti in corso")
+    if not store.path.is_file():
+        return False, 0, ""
+    stat_value = store.path.stat()
+    return True, stat_value.st_size, sha256_file(store.path)
+
+
 def _scan_artifacts_unlocked(config: CreativeConfig, store: ArtifactStore) -> dict[str, Any]:
     roots = _root_paths(config)
     records = store.records()
@@ -122,8 +132,14 @@ def _scan_artifacts_unlocked(config: CreativeConfig, store: ArtifactStore) -> di
 
 def scan_artifacts(config: CreativeConfig, store: ArtifactStore) -> dict[str, Any]:
     try:
-        with store.registration_guard():
-            return _scan_artifacts_unlocked(config, store)
+        before = _registry_read_token(store)
+        result = _scan_artifacts_unlocked(config, store)
+        after = _registry_read_token(store)
+        if before != after:
+            return {"ok": False, "action": "scan_artifacts",
+                    "error_code": "REGISTRATION_CHANGED", "roots": inventory_roots(config),
+                    "summary": {}, "items": [], "writes": False}
+        return result
     except RegistrationLockedError:
         return {"ok": False, "action": "scan_artifacts", "error_code": "REGISTRATION_LOCKED",
                 "roots": inventory_roots(config), "summary": {}, "items": [], "writes": False}
@@ -167,19 +183,21 @@ def simulate_maintenance(config: CreativeConfig, store: ArtifactStore,
     quarantine_bytes = 0
     purge_blocked_bytes = 0
     try:
-        guard = store.registration_guard()
-        guard.__enter__()
+        before = _registry_read_token(store)
+        records = store.records()
+        global_holds = _active_system_holds(config)
+        scan = _scan_artifacts_unlocked(config, store)
+        after = _registry_read_token(store)
+        if before != after:
+            return {"ok": False, "action": "simulate_artifact_maintenance",
+                    "error_code": "REGISTRATION_CHANGED", "writes": False, "items": [],
+                    "quarantine_candidates": [], "purge_candidates": [],
+                    "potential_quarantine_bytes": 0, "purge_blocked_bytes": 0}
     except RegistrationLockedError:
         return {"ok": False, "action": "simulate_artifact_maintenance",
                 "error_code": "REGISTRATION_LOCKED", "writes": False, "items": [],
                 "quarantine_candidates": [], "purge_candidates": [],
                 "potential_quarantine_bytes": 0, "purge_blocked_bytes": 0}
-    try:
-        records = store.records()
-        global_holds = _active_system_holds(config)
-        scan = _scan_artifacts_unlocked(config, store)
-    finally:
-        guard.__exit__(None, None, None)
     for record in records:
         root = roots.get(record.managed_root_id)
         display = f"{record.managed_root_id}:invalid"

@@ -9,7 +9,14 @@ import sys
 import uuid
 from typing import Any
 
-from .audio_worker import DISTANT_PRESET, LEVEL_PRESET, NATURAL_PRESET, PRESET, PRESETS
+from .audio_worker import (
+    DEREVERB_NATURAL_PRESET,
+    DISTANT_PRESET,
+    LEVEL_PRESET,
+    NATURAL_PRESET,
+    PRESET,
+    PRESETS,
+)
 from .audio_provenance import media_fingerprint
 from .config import CreativeConfig
 from .longform_tools import allowed_media
@@ -32,6 +39,7 @@ def start_audio_job(config: CreativeConfig, media_path: str, preset: str = PRESE
     label = (
         "DISTANT" if preset == DISTANT_PRESET
         else "LEVEL" if preset == LEVEL_PRESET
+        else "DEREVERB_NATURAL" if preset == DEREVERB_NATURAL_PRESET
         else "NATURAL" if preset == NATURAL_PRESET
         else "CLEAN"
     )

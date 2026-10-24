@@ -18,6 +18,7 @@ from .audio_worker import (
     PRESETS,
 )
 from .audio_provenance import media_fingerprint
+from .artifact_producers import register_completed_audio_job
 from .config import CreativeConfig
 from .longform_tools import allowed_media
 from .safety import ValidationError, arphe_name
@@ -65,6 +66,8 @@ def audio_job(config: CreativeConfig, job_id: str) -> dict[str, Any]:
     if not path.is_file():
         raise ValidationError("Job audio non trovato")
     result = json.loads(path.read_text(encoding="utf-8-sig"))
+    if result.get("status") == "COMPLETED":
+        register_completed_audio_job(config, path)
     result["ok"] = result.get("status") != "FAILED"
     result["action"] = "get_longform_audio_job"
     return result

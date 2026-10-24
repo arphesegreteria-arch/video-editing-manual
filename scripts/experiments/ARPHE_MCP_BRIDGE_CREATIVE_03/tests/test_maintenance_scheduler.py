@@ -49,6 +49,20 @@ class MaintenanceSchedulerTests(unittest.TestCase):
         thread.join(timeout=2)
         self.assertFalse(thread.is_alive())
 
+    def test_background_loop_rechecks_without_an_os_scheduler(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = config_for(Path(directory))
+            loader = Mock(return_value=config)
+
+            thread = start_lazy_maintenance(
+                loader, delay_seconds=0, interval_seconds=0.01, max_cycles=2
+            )
+            self.assertIsNotNone(thread)
+            thread.join(timeout=2)
+
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(2, loader.call_count)
+
     def test_server_run_reaches_mcp_even_if_lazy_start_fails(self):
         from bridge import server
         with patch("bridge.server.start_lazy_maintenance", side_effect=RuntimeError("thread unavailable")), \

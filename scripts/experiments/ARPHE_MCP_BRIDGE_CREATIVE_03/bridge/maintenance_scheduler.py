@@ -37,17 +37,25 @@ def run_if_due(config: CreativeConfig, *, now_utc: datetime | None = None) -> di
 
 
 def start_lazy_maintenance(config_loader: Callable[[], CreativeConfig],
-                           delay_seconds: float = 5) -> threading.Thread | None:
+                           delay_seconds: float = 5, *,
+                           interval_seconds: float = 3600,
+                           stop_event: threading.Event | None = None,
+                           max_cycles: int | None = None) -> threading.Thread | None:
+    stop = stop_event or threading.Event()
+
     def worker() -> None:
-        config: CreativeConfig | None = None
-        try:
-            if delay_seconds > 0:
-                time.sleep(delay_seconds)
-            config = config_loader()
-            result = run_if_due(config)
-            write_audit(config.audit_log_path, "lazy_artifact_maintenance", result)
-        except Exception as exc:
-            if config is not None:
+        if delay_seconds > 0 and stop.wait(delay_seconds):
+            return
+        cycles = 0
+        while not stop.is_set():
+            config: CreativeConfig | None = None
+            try:
+                config = config_loader()
+                result = run_if_due(config)
+                write_audit(config.audit_log_path, "lazy_artifact_maintenance", result)
+            except Exception as exc:
+                if config is None:
+                    return
                 try:
                     write_audit(config.audit_log_path, "lazy_artifact_maintenance", {
                         "ok": False,
@@ -55,7 +63,12 @@ def start_lazy_maintenance(config_loader: Callable[[], CreativeConfig],
                         "error_type": type(exc).__name__,
                     })
                 except Exception:
-                    pass
+                    return
+            cycles += 1
+            if max_cycles is not None and cycles >= max_cycles:
+                return
+            if stop.wait(interval_seconds):
+                return
 
     try:
         thread = threading.Thread(target=worker, name="arphe-artifact-maintenance", daemon=True)

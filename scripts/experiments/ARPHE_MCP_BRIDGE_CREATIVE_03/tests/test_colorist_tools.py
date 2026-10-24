@@ -63,6 +63,7 @@ def config_for(root: Path, enabled=False):
         root / "audit.jsonl", dict(DEFAULT_PALETTE), flags, frozenset(), frozenset(), "mp4", "H264",
         workstation_id="PC_PERSONALE", colorist_jobs_path=root / "colorist_jobs.json",
         colorist_presets_path=ROOT / "colorist_presets.json",
+        artifact_registry_path=root / "artifact_registry.json",
     )
 
 

@@ -232,6 +232,14 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                  sync_delta_seconds=sync_delta, output_sha256=file_sha256(output),
                  sample_rate=48000, channels=2)
     _save(job_path, state)
+    config_path = state.get("creative_config_path")
+    if config_path:
+        from .artifact_producers import register_completed_audio_job
+        from .config import load_config
+        config = load_config(Path(str(config_path)))
+        if state.get("workstation_id") != config.workstation_id:
+            raise ValueError("Manifest audio appartenente a un'altra workstation")
+        register_completed_audio_job(config, job_path)
 
 
 def main() -> int:

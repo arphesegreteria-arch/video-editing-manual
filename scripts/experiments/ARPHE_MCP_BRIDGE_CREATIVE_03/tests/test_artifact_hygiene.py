@@ -338,7 +338,22 @@ class ArtifactLifecycleTests(unittest.TestCase):
             self.assertEqual("QUARANTINED", current.state)
             self.assertTrue(Path(current.quarantine_path or "").exists())
 
-    def test_purge_requires_seven_complete_days_in_quarantine(self):
+    def test_crash_left_registration_lock_blocks_maintenance_without_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            created = datetime(2026, 10, 1, tzinfo=UTC)
+            config, store, _record, original = self._diagnostic(root, created)
+            store.registration_lock_path.write_text("crashed-producer", encoding="utf-8")
+
+            result = self._run(config, store, created + timedelta(days=2))
+
+            self.assertFalse(result["ok"])
+            self.assertEqual("REGISTRATION_LOCKED", result["error_code"])
+            self.assertTrue(original.exists())
+            self.assertEqual("crashed-producer",
+                             store.registration_lock_path.read_text(encoding="utf-8"))
+
+    def test_purge_stays_disabled_after_seven_complete_days_in_quarantine(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             created = datetime(2026, 10, 1, tzinfo=UTC)
@@ -351,8 +366,25 @@ class ArtifactLifecycleTests(unittest.TestCase):
             self.assertTrue(Path(store.records()[0].quarantine_path or "").exists())
 
             at_boundary = self._run(config, store, quarantined_at + timedelta(days=7))
-            self.assertEqual([record.artifact_id], at_boundary["purged"])
-            self.assertEqual("PURGED", store.records()[0].state)
+            self.assertEqual([], at_boundary["purged"])
+            self.assertEqual([record.artifact_id], at_boundary["purge_blocked"])
+            self.assertEqual("QUARANTINED", store.records()[0].state)
+
+    def test_in_memory_policy_cannot_reenable_purge(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            created = datetime(2026, 10, 1, tzinfo=UTC)
+            config, store, record, _ = self._diagnostic(root, created)
+            self._run(config, store, created + timedelta(days=1))
+            payload = Path(store.records()[0].quarantine_path or "")
+            policy = replace(load_artifact_policy(POLICY_PATH), purge_enabled=True)
+
+            result = run_maintenance(
+                config, store, ProjectRegistry(), policy, created + timedelta(days=8))
+
+            self.assertTrue(payload.exists())
+            self.assertEqual([], result["purged"])
+            self.assertEqual([record.artifact_id], result["purge_blocked"])
 
     def test_restore_returns_exact_item_and_collision_changes_nothing(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -526,7 +558,7 @@ class ArtifactLifecycleTests(unittest.TestCase):
             self.assertTrue(restored["ok"])
             self.assertTrue(destination.exists())
 
-    def test_pending_purge_before_delete_is_safely_retried(self):
+    def test_pending_purge_is_reconciled_without_delete_when_purge_disabled(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             created = datetime(2026, 10, 1, tzinfo=UTC)
@@ -542,8 +574,10 @@ class ArtifactLifecycleTests(unittest.TestCase):
             result = self._run(config, store, created + timedelta(days=8))
 
             self.assertTrue(result["ok"])
-            self.assertFalse(payload.exists())
-            self.assertEqual("PURGED", store.records()[0].state)
+            self.assertTrue(payload.exists())
+            self.assertEqual([record.artifact_id], result["purge_blocked"])
+            self.assertEqual("QUARANTINED", store.records()[0].state)
+            self.assertIsNone(store.pending_operation())
 
 
 if __name__ == "__main__":

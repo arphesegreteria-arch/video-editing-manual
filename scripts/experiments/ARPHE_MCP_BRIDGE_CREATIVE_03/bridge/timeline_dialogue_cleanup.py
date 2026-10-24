@@ -173,13 +173,18 @@ def _single_clip_structure(timeline: Any) -> dict[str, Any]:
     }
 
 
-def _matching_audio(timeline: Any, media: Any, start: int, end: int) -> list[Any]:
+def _media_id(media: Any) -> str:
     media_id = str(safe_call(media, "GetUniqueId") or "")
     if not media_id:
         raise ValidationError("Identità media audio non disponibile")
+    return media_id
+
+
+def _matching_audio(timeline: Any, media: Any, start: int, end: int) -> list[Any]:
+    media_id = _media_id(media)
     return [
         item for item in (safe_call(timeline, "GetItemListInTrack", "audio", 1) or [])
-        if str(safe_call(safe_call(item, "GetMediaPoolItem"), "GetUniqueId") or "") == media_id
+        if _media_id(safe_call(item, "GetMediaPoolItem")) == media_id
         and safe_call(item, "GetStart") == start
         and safe_call(item, "GetEnd") == end
     ]
@@ -274,7 +279,7 @@ def _apply_processed_audio(project: Any, config: CreativeConfig, registry: Any,
         verified = _single_clip_structure(timeline)
         if (verified["record_start"] != record_start or verified["record_end"] != record_end
                 or verified["video_media_id"] != source_info["video_media_id"]
-                or safe_call(replacement, "GetMediaPoolItem") is not processed_media):
+                or _media_id(safe_call(replacement, "GetMediaPoolItem")) != _media_id(processed_media)):
             raise ValidationError("Read-back timeline dialogo non conforme")
         processed_path = Path(str(safe_call(
             processed_media, "GetClipProperty", "File Path") or "")).resolve()

@@ -197,6 +197,8 @@ class TimelineDialogueCleanupTests(unittest.TestCase):
             Item(proxy, 100, 120), Item(foreign, 100, 120), Item(proxy, 120, 140),
         ])
         self.assertEqual([timeline.audio_items[0]], _matching_audio(timeline, canonical, 100, 120))
+        with self.assertRaisesRegex(ValidationError, "Identità"):
+            _matching_audio(timeline, Media("unknown.wav", "", "C:/ARPHE/unknown.wav"), 100, 120)
     def test_source_end_for_rollback_is_derived_from_verified_duration(self):
         module = cleanup_module(self)
         project = Project()

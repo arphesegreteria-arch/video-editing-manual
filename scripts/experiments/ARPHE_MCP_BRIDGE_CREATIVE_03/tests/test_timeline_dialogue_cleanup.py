@@ -271,6 +271,7 @@ class TimelineDialogueCleanupTests(unittest.TestCase):
             self.assertTrue(settings["ExportAudio"])
             self.assertEqual("lpcm", settings["AudioCodec"])
             self.assertEqual(48000, settings["AudioSampleRate"])
+            self.assertEqual(16, settings["AudioBitDepth"])
 
             manifest_path = (cfg.audio_jobs_root / "timeline-dialogue-cleanup" /
                              cfg.workstation_id / f"{result['job_id']}.json")
@@ -384,6 +385,24 @@ class TimelineDialogueCleanupTests(unittest.TestCase):
                              worker["source_fingerprint"])
             self.assertEqual(parent["processed_path"], worker["output_path"])
             self.assertEqual(4321, parent["audio_worker_pid"])
+
+    def test_render_completion_accepts_resolve_24_bit_pcm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module, cfg, project, started, manifest_path = self._start(Path(directory))
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            source_path = Path(manifest["source_path"])
+            with wave.open(str(source_path), "wb") as handle:
+                handle.setnchannels(2)
+                handle.setsampwidth(3)
+                handle.setframerate(48000)
+                handle.writeframes(b"\0" * 6 * int(48000 * 732 / 30))
+            project.jobs[-1]["JobStatus"] = "Complete"
+
+            with patch.object(module, "_launch_audio_worker", return_value=4321):
+                processing = module.get_timeline_dialogue_cleanup_job(
+                    project, cfg, Registry(cfg.state_path), started["job_id"])
+
+            self.assertEqual("PROCESSING", processing["status"])
 
     def test_missing_owned_render_is_persisted_as_interrupted_without_touching_foreign_job(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -500,6 +519,32 @@ class TimelineDialogueCleanupTests(unittest.TestCase):
             project.source.audio_items[0].end -= 1
 
             with self.assertRaisesRegex(ValidationError, "cambiata"):
+                module.get_timeline_dialogue_cleanup_job(
+                    project, cfg, Registry(cfg.state_path), started["job_id"])
+
+            self.assertEqual(2, len(project.timelines))
+
+    def test_source_audio_slip_refuses_apply_before_duplicate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module, cfg, project, started, _manifest_path = self._advance_to_applying(Path(directory))
+            project.source.audio_items[0].source_start += 12
+
+            with self.assertRaisesRegex(ValidationError, "cambiata"):
+                module.get_timeline_dialogue_cleanup_job(
+                    project, cfg, Registry(cfg.state_path), started["job_id"])
+
+            self.assertEqual(2, len(project.timelines))
+
+    def test_processed_audio_tamper_before_apply_blocks_without_duplicate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module, cfg, project, started, manifest_path = self._advance_to_applying(Path(directory))
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            processed_path = Path(payload["processed_path"])
+            tampered = bytearray(processed_path.read_bytes())
+            tampered[-1] ^= 1
+            processed_path.write_bytes(tampered)
+
+            with self.assertRaisesRegex(ValidationError, "Fingerprint WAV dialogo"):
                 module.get_timeline_dialogue_cleanup_job(
                     project, cfg, Registry(cfg.state_path), started["job_id"])
 

@@ -54,6 +54,12 @@ def write_worker_job(job: Path, source: Path, output: Path, preset: str) -> None
 
 
 class AudioPipelineTests(unittest.TestCase):
+    def test_dereverb_natural_v5_uses_contract_limiter_without_auto_level(self):
+        self.assertEqual(
+            "limit=0.891:attack=8:release=80:level=false",
+            audio_worker._limiter_options("ARPHE_DIALOGUE_DEREVERB_NATURAL_V5"),
+        )
+
     def test_dereverb_natural_v5_emits_synchronized_bounded_pcm(self):
         """Catches an absent/misrouted V5 preset or a lossy output contract."""
         with tempfile.TemporaryDirectory() as directory:

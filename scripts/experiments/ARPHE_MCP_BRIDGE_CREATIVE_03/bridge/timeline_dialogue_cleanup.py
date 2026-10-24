@@ -115,12 +115,12 @@ def _strict_wav_evidence(path: Path, expected_seconds: float, fps: float) -> tup
             compression = handle.getcomptype()
     except (OSError, wave.Error) as exc:
         raise ValidationError(f"WAV dialogo non leggibile: {exc}") from exc
-    if compression != "NONE" or width != 2:
-        raise ValidationError("Il WAV dialogo deve essere PCM s16")
+    if compression != "NONE" or width not in {2, 3}:
+        raise ValidationError("Il WAV dialogo deve essere PCM s16 o s24")
     if channels != 2:
         raise ValidationError("Il WAV dialogo deve essere stereo")
     if rate != 48000 or frames <= 0:
-        raise ValidationError("Il WAV dialogo deve essere stereo PCM s16 a 48 kHz")
+        raise ValidationError("Il WAV dialogo deve essere stereo PCM a 48 kHz")
     duration = frames / rate
     if abs(duration - expected_seconds) > (1.0 / fps):
         raise ValidationError("Durata WAV dialogo non coincide con la timeline")
@@ -211,9 +211,22 @@ def _remove_matching_audio(timeline: Any, media: Any, start: int, end: int) -> N
 def _apply_processed_audio(project: Any, config: CreativeConfig, registry: Any,
                            payload: dict[str, Any]) -> dict[str, object]:
     source_info = payload["timeline_source"]
+    expected_seconds = float(source_info["duration_frames"]) / float(source_info["fps"])
+    output_digest, _ = _strict_wav_evidence(
+        Path(payload["processed_path"]), expected_seconds, float(source_info["fps"])
+    )
+    if output_digest != payload.get("output_fingerprint"):
+        raise ValidationError("Fingerprint WAV dialogo non corrispondente prima dell'applicazione")
     source = find_timeline(project, str(source_info["timeline_name"]))
     if (source is None or str(safe_call(source, "GetUniqueId") or "") != source_info["timeline_id"]
             or timeline_edit_fingerprint(source) != source_info["timeline_edit_fingerprint"]):
+        raise ValidationError("La timeline sorgente è cambiata prima dell'applicazione")
+    source_structure = _single_clip_structure(source)
+    structure_keys = (
+        "record_start", "record_end", "video_media_id", "audio_media_id",
+        "audio_source_start", "audio_source_end",
+    )
+    if any(source_structure[key] != source_info[key] for key in structure_keys):
         raise ValidationError("La timeline sorgente è cambiata prima dell'applicazione")
     duplicated = duplicate_timeline(
         project, config, registry, str(source_info["timeline_name"]), None,
@@ -225,16 +238,18 @@ def _apply_processed_audio(project: Any, config: CreativeConfig, registry: Any,
     if timeline is None or safe_call(timeline, "GetName") != payload["target_timeline"]:
         raise RuntimeError("Timeline duplicata non selezionata")
     structure = _single_clip_structure(timeline)
-    if (structure["record_start"] != source_info["record_start"]
-            or structure["record_end"] != source_info["record_end"]
-            or structure["video_media_id"] != source_info["video_media_id"]
-            or structure["audio_media_id"] != source_info["audio_media_id"]):
+    if any(structure[key] != source_info[key] for key in structure_keys):
         raise ValidationError("La copia timeline non corrisponde alla sorgente verificata")
     original = (safe_call(timeline, "GetItemListInTrack", "audio", 1) or [None])[0]
     original_media = safe_call(original, "GetMediaPoolItem") if original else None
     if original is None or original_media is None:
         raise ValidationError("A1 originale della copia non disponibile")
     pool = safe_call(project, "GetMediaPool")
+    import_digest, _ = _strict_wav_evidence(
+        Path(payload["processed_path"]), expected_seconds, float(source_info["fps"])
+    )
+    if import_digest != payload.get("output_fingerprint"):
+        raise ValidationError("Fingerprint WAV dialogo non corrispondente prima dell'import")
     imported = safe_call(pool, "ImportMedia", [str(Path(payload["processed_path"]).resolve())]) or []
     if len(imported) != 1:
         raise RuntimeError("Import WAV dialogo fallito")
@@ -349,6 +364,7 @@ def start_timeline_dialogue_cleanup_test(
             "ExportAudio": True,
             "AudioCodec": "lpcm",
             "AudioSampleRate": 48000,
+            "AudioBitDepth": 16,
         }
         if not safe_call(project, "SetRenderSettings", settings):
             raise ValidationError("Impostazioni audio timeline rifiutate da Resolve")

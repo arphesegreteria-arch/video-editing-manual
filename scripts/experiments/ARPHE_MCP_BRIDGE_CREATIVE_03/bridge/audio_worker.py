@@ -20,6 +20,14 @@ PRESETS = frozenset({PRESET, LEVEL_PRESET, DISTANT_PRESET, NATURAL_PRESET,
                      DEREVERB_NATURAL_PRESET})
 
 
+def _limiter_options(preset: str) -> str:
+    if preset == DISTANT_PRESET:
+        return "limit=0.8:attack=5:release=50:level=false"
+    if preset in {NATURAL_PRESET, DEREVERB_NATURAL_PRESET}:
+        return "limit=0.891:attack=8:release=80:level=false"
+    return "limit=0.891:attack=5:release=50"
+
+
 def _save(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent), text=True)
@@ -145,13 +153,7 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
                         "acompressor",
                         "threshold=0.125:ratio=3:attack=15:release=150:makeup=1.4",
                     )
-                limiter_options = (
-                    "limit=0.8:attack=5:release=50:level=false"
-                    if preset == DISTANT_PRESET
-                    else "limit=0.891:attack=8:release=80:level=false"
-                    if preset == NATURAL_PRESET
-                    else "limit=0.891:attack=5:release=50"
-                )
+                limiter_options = _limiter_options(preset)
                 limiter = graph.add("alimiter", limiter_options)
                 sink = graph.add("abuffersink")
                 source_node.link_to(highpass)

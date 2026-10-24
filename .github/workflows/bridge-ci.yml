@@ -34,6 +34,46 @@ jobs:
         run: python -m pip install -r requirements.txt
         working-directory: scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03
 
+      - name: Diagnose environment-sensitive bridge modules
+        continue-on-error: true
+        shell: python
+        working-directory: scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03
+        run: |
+          import subprocess
+          import sys
+
+          modules = (
+              "tests.test_artifact_hygiene",
+              "tests.test_artifact_records",
+              "tests.test_artifact_tools",
+              "tests.test_branded_longform_contract",
+              "tests.test_carabellese_contract",
+              "tests.test_carabellese_transcription",
+              "tests.test_colorist_jobs",
+          )
+          failed = []
+          for module in modules:
+              print(f"::group::{module}", flush=True)
+              try:
+                  completed = subprocess.run(
+                      [sys.executable, "-m", "unittest", module, "-v"],
+                      text=True,
+                      capture_output=True,
+                      timeout=60,
+                  )
+              except subprocess.TimeoutExpired as exc:
+                  print(exc.stdout or "", flush=True)
+                  print(exc.stderr or "", file=sys.stderr, flush=True)
+                  failed.append(f"{module}: timeout")
+              else:
+                  print(completed.stdout, flush=True)
+                  print(completed.stderr, file=sys.stderr, flush=True)
+                  if completed.returncode:
+                      failed.append(f"{module}: exit {completed.returncode}")
+              print("::endgroup::", flush=True)
+          if failed:
+              raise SystemExit("; ".join(failed))
+
       - name: Run creative bridge suite
         run: python -m unittest discover -s tests -v
         working-directory: scripts/experiments/ARPHE_MCP_BRIDGE_CREATIVE_03

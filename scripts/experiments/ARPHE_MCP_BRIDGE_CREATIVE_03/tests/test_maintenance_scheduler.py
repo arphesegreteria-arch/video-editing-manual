@@ -42,17 +42,26 @@ class MaintenanceSchedulerTests(unittest.TestCase):
             state = ArtifactStore(config.artifact_registry_path, config.workstation_id).maintenance_state()
             self.assertIsNone(state.last_attempt_at)
 
-    def test_background_failure_is_swallowed(self):
+    def test_background_startup_failure_does_not_start_a_worker(self):
         loader = Mock(side_effect=RuntimeError("secret path must not escape"))
         thread = start_lazy_maintenance(loader, delay_seconds=0, max_cycles=1)
-        self.assertIsNotNone(thread)
-        thread.join(timeout=2)
-        self.assertFalse(thread.is_alive())
+        self.assertIsNone(thread)
+        self.assertEqual(1, loader.call_count)
 
-    def test_background_loop_retries_after_transient_config_failure(self):
+    def test_disabled_gate_does_not_start_a_worker_or_write_audit(self):
         with tempfile.TemporaryDirectory() as directory:
             config = config_for(Path(directory))
-            loader = Mock(side_effect=[RuntimeError("temporary config read"), config])
+            loader = Mock(return_value=config)
+            with patch("bridge.maintenance_scheduler.write_audit") as audit:
+                thread = start_lazy_maintenance(loader, delay_seconds=0, max_cycles=1)
+            self.assertIsNone(thread)
+            self.assertEqual(1, loader.call_count)
+            audit.assert_not_called()
+
+    def test_enabled_background_loop_uses_initial_config_then_reloads(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = self._enabled(Path(directory))
+            loader = Mock(return_value=config)
 
             thread = start_lazy_maintenance(
                 loader, delay_seconds=0, interval_seconds=0.01, max_cycles=2
@@ -65,7 +74,7 @@ class MaintenanceSchedulerTests(unittest.TestCase):
 
     def test_background_loop_rechecks_without_an_os_scheduler(self):
         with tempfile.TemporaryDirectory() as directory:
-            config = config_for(Path(directory))
+            config = self._enabled(Path(directory))
             loader = Mock(return_value=config)
 
             thread = start_lazy_maintenance(

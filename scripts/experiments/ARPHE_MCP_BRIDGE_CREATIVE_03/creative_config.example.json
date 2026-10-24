@@ -49,7 +49,8 @@
     "CAP_CARABELLESE_CLEANUP": false,
     "CAP_VERTICAL_SOCIAL": false,
     "CAP_WORKFLOW_CONTROL_PLANE": false,
-    "CAP_COLORIST": false
+    "CAP_COLORIST": false,
+    "CAP_VOICE_ISOLATION": false
   },
   "palette": {
     "ivory": "#F7F2E8",

@@ -204,6 +204,9 @@ from .timeline_dialogue_cleanup import (
     get_timeline_dialogue_cleanup_job as do_get_timeline_dialogue_cleanup_job,
     start_timeline_dialogue_cleanup_test as do_start_timeline_dialogue_cleanup_test,
 )
+from .voice_isolation import (VoiceIsolationCapture, VoiceIsolationState, VoiceIsolationStore,
+                              VoiceIsolationTarget, apply_voice_isolation, capture_track,
+                              read_voice_isolation, restore_voice_isolation)
 
 
 mcp = MCPServer(
@@ -2472,6 +2475,93 @@ def recover_resolve_retirement(retirement_id: str) -> dict[str, Any]:
                          retirement_store_for(config), retirement_id, datetime.now(timezone.utc))
     except Exception as exc:
         return _error(exc)
+
+
+def _voice_store(config: Any) -> VoiceIsolationStore:
+    return VoiceIsolationStore(config.state_path.parent / "voice_isolation_jobs.json", config.workstation_id)
+
+
+def _require_voice_isolation_enabled(config: Any) -> None:
+    if not bool(config.flags.get("CAP_VOICE_ISOLATION")):
+        raise RuntimeError("CAP_VOICE_ISOLATION non attiva")
+
+
+def _voice_capture(job: dict[str, Any]) -> VoiceIsolationCapture:
+    target = VoiceIsolationTarget(**job["target"])
+    initial = VoiceIsolationState(job["initial"]["isEnabled"], job["initial"]["amount"])
+    return VoiceIsolationCapture(target, initial)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_voice_isolation(track_index: int) -> dict[str, Any]:
+    """Inspect documented Voice Isolation support and current state; no Resolve write."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, manager, project, timeline, config, _, error = _runtime()
+            if error: return error
+            capture = capture_track(project, timeline, track_index)
+            return {"ok": True, "action": "inspect_voice_isolation", "target": capture.target.__dict__,
+                    "current": capture.initial.as_dict(), "capability_enabled": bool(config.flags.get("CAP_VOICE_ISOLATION")),
+                    "capability_status": "PENDING"}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_voice_isolation(track_index: int, amount: int) -> dict[str, Any]:
+    """Persist the pre-change state for one exact audio track; does not modify Resolve."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            config = load_config()
+            _require_voice_isolation_enabled(config)
+            _, _, project, timeline, config, _, error = _runtime()
+            if error: return error
+            if config.workstation_id != "PC_PERSONALE": raise ValidationError("Voice Isolation solo PC_PERSONALE")
+            job = _voice_store(config).prepare(capture_track(project, timeline, track_index), amount)
+            return {"ok": True, "action": "prepare_voice_isolation", "voice_job_id": job["job_id"], "state": job["state"]}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_voice_isolation_job(voice_job_id: str) -> dict[str, Any]:
+    """Apply exactly one prepared Voice Isolation job, only when its local gate is enabled."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _require_voice_isolation_enabled(load_config())
+            _, manager, project, timeline, config, _, error = _runtime()
+            if error: return error
+            if config.workstation_id != "PC_PERSONALE": raise ValidationError("Voice Isolation solo PC_PERSONALE")
+            require_capability("CAP_VOICE_ISOLATION", config, manager, project, timeline)
+            store = _voice_store(config)
+            result = store.apply(voice_job_id, lambda job: apply_voice_isolation(
+                project, timeline, _voice_capture(job), job["requested"]["amount"]
+            ))
+            return {"ok": True, "action": "apply_voice_isolation", "current": result.current.as_dict()}
+        except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def restore_voice_isolation_job(voice_job_id: str) -> dict[str, Any]:
+    """Restore only the recorded state after exact target and state read-back validation."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _require_voice_isolation_enabled(load_config())
+            _, manager, project, timeline, config, _, error = _runtime()
+            if error: return error
+            if config.workstation_id != "PC_PERSONALE": raise ValidationError("Voice Isolation solo PC_PERSONALE")
+            require_capability("CAP_VOICE_ISOLATION", config, manager, project, timeline)
+            store = _voice_store(config)
+            def restore_operation(job: dict[str, Any]):
+                capture = _voice_capture(job)
+                expected = VoiceIsolationState(job["requested"]["isEnabled"], job["requested"]["amount"])
+                current = read_voice_isolation(project, timeline, capture)
+                if job["state"] == "RESTORING" and current.current == capture.initial:
+                    return current
+                return restore_voice_isolation(project, timeline, capture, expected)
+            result, idempotent = store.restore(voice_job_id, restore_operation)
+            if idempotent:
+                return {"ok": True, "action": "restore_voice_isolation", "idempotent": True}
+            return {"ok": True, "action": "restore_voice_isolation", "current": result.current.as_dict()}
+        except Exception as exc: return _error(exc)
 
 
 def run() -> None:

@@ -110,6 +110,8 @@ class SafetyTests(unittest.TestCase):
             "approve_colorist_plan", "apply_colorist_plan", "preview_colorist_version",
             "restore_colorist_preview", "submit_colorist_review",
             "start_timeline_dialogue_cleanup_test", "get_timeline_dialogue_cleanup_job",
+            "inspect_voice_isolation", "prepare_voice_isolation",
+            "apply_voice_isolation_job", "restore_voice_isolation_job",
         }
         residual_adv = {
             "create_audio_seam_test", "create_caption_test",
@@ -118,8 +120,8 @@ class SafetyTests(unittest.TestCase):
         }
 
         names = set(EXPOSED_TOOL_NAMES)
-        self.assertEqual(113, len(EXPOSED_TOOL_NAMES))
-        self.assertEqual(113, len(names))
+        self.assertEqual(117, len(EXPOSED_TOOL_NAMES))
+        self.assertEqual(117, len(names))
         self.assertTrue(expected.issubset(names))
         self.assertTrue(residual_adv.isdisjoint(names))
 

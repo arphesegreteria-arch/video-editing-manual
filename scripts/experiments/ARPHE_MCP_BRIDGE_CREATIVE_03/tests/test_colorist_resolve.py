@@ -102,8 +102,12 @@ class FakeProject:
     def GetName(self): return "ARPHE_TEST"
 
 
-CDL = {"NodeIndex": 1, "Slope": "1 1 1", "Offset": "0 0 0",
-       "Power": "1 1 1", "Saturation": "1"}
+CDL_A = {"NodeIndex": 1, "Slope": "1.000000 1.000000 1.000000",
+         "Offset": "-0.000000 -0.000000 -0.000000",
+         "Power": "1.000000 1.000000 1.000000", "Saturation": "1.000000"}
+CDL_B = {"NodeIndex": 1, "Slope": "1.100000 1.000000 0.900000",
+         "Offset": "0.000000 0.000000 0.000000",
+         "Power": "1.000000 1.000000 1.000000", "Saturation": "0.950000"}
 
 
 def approved_job(clips, *, reference="clip-a", drx=None):
@@ -116,7 +120,20 @@ def approved_job(clips, *, reference="clip-a", drx=None):
             "relative_path": "looks/look.drx", "size": 7, "sha256": "0" * 64,
         }),
         before_versions={clip.clip_id: {"versionName": "Original", "versionType": 0} for clip in clips},
-        cdl=CDL,
+        cdl={}, plan_schema="ARPHE_COLORIST_PLAN_V2",
+        matching_strategy="PER_CLIP_MEASURED",
+        adjustments_by_clip={
+            clip.clip_id: {"temperature": 0.0, "tint": 0.0, "exposure_stops": 0.0,
+                           "contrast": 0.0, "saturation": 1.0}
+            for clip in clips
+        },
+        observations_by_clip={
+            clip.clip_id: {"source": "SCOPES", "sample_frames": [10],
+                           "neutral_rgb": [0.5, 0.5, 0.5]}
+            for clip in clips
+        },
+        cdl_by_clip={clip.clip_id: (CDL_A if index == 0 else CDL_B)
+                     for index, clip in enumerate(clips)},
     )
     approved = approve_colorist_job(prepared, prepared.plan_fingerprint, "ALESSIO")
     return record_colorist_apply_started(approved)
@@ -131,18 +148,26 @@ class ColoristResolveTests(unittest.TestCase):
         self.assertTrue(result["technically_available"])
         self.assertEqual([], clips[0].add_calls)
 
-    def test_apply_creates_local_versions_and_copies_reference_grade_to_explicit_targets(self):
+    def test_v2_apply_creates_local_versions_and_applies_distinct_cdl_to_each_clip(self):
         clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]
         result = apply_colorist_job(FakeProject(), FakeTimeline(clips), approved_job(clips))
         self.assertTrue(result["ok"])
         self.assertEqual(1, len(clips[0].cdl_calls))
-        self.assertEqual(0, len(clips[1].cdl_calls))
-        self.assertEqual([["clip-b"]], clips[0].copy_calls)
-        self.assertEqual(CDL, clips[0].cdl_calls[0])
+        self.assertEqual(1, len(clips[1].cdl_calls))
+        self.assertEqual([], clips[0].copy_calls)
+        self.assertEqual([], clips[1].copy_calls)
+        self.assertEqual(CDL_A, clips[0].cdl_calls[0])
+        self.assertEqual(CDL_B, clips[1].cdl_calls[0])
         self.assertTrue(all(call[1] == 0 for clip in clips for call in clip.add_calls))
         self.assertEqual({"clip-a", "clip-b"}, {item["clip_id"] for item in result["evidence"]})
+        self.assertTrue(all(item["cdl_applied_directly"] for item in result["evidence"]))
+        self.assertEqual(
+            {"553ac1acbd222db636a44c2a26ff768f048d22b8e6706a02f444d6edae322b3e",
+             "ec878e28769c7a5377b7380f053b0d17ce5eb88342224b30de9d700026f4248a"},
+            {item["cdl_sha256"] for item in result["evidence"]},
+        )
 
-    def test_optional_drx_is_applied_only_to_reference_before_multicam_copy(self):
+    def test_optional_drx_is_applied_independently_to_every_v2_clip(self):
         clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]
         with tempfile.TemporaryDirectory() as directory:
             drx = Path(directory) / "look.drx"
@@ -151,7 +176,18 @@ class ColoristResolveTests(unittest.TestCase):
                                         approved_job(clips, drx="ARPHE_LOOK"), drx_path=drx)
         self.assertTrue(result["ok"])
         self.assertEqual([(str(drx.resolve()), 0, False)], clips[0].graph.drx_calls)
-        self.assertEqual([], clips[1].graph.drx_calls)
+        self.assertEqual([(str(drx.resolve()), 0, False)], clips[1].graph.drx_calls)
+
+    def test_v2_partial_cdl_failure_restores_every_previous_version_without_copygrades(self):
+        clips = [FakeClip("clip-a", "Camera A"),
+                 FakeClip("clip-b", "Camera B", cdl_ok=False)]
+        result = apply_colorist_job(FakeProject(), FakeTimeline(clips), approved_job(clips))
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["recoverable"])
+        self.assertEqual("Original", clips[0].current)
+        self.assertEqual("Original", clips[1].current)
+        self.assertEqual([], clips[0].copy_calls)
+        self.assertEqual([], clips[1].copy_calls)
 
     def test_version_collision_or_stale_context_stops_before_any_write(self):
         clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]

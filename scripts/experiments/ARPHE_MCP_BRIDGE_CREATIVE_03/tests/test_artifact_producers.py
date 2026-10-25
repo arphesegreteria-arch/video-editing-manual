@@ -112,7 +112,10 @@ class ArtifactProducerTests(unittest.TestCase):
                 preset_name="ARPHE_CLEAN_NEUTRAL", drx_preset_name=None,
                 drx_asset_identity=None,
                 before_versions={"clip-1": {"versionName": "V1", "versionType": 0}},
-                cdl={"slope": "1 1 1", "offset": "0 0 0", "power": "1 1 1", "saturation": "1"},
+                cdl={
+                    "NodeIndex": "1", "Slope": "1 1 1", "Offset": "0 0 0",
+                    "Power": "1 1 1", "Saturation": "1",
+                },
             )
 
             cfg.colorist_jobs_path.write_text(json.dumps({

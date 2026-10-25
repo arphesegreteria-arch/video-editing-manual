@@ -51,8 +51,8 @@ Stati ammessi:
 | Creative 03: motion preset/card stack | PARTIAL | Gate D SUPPORTED; Gate E sequence transition PASS con overlap 10 frame e opacità sul Transform, confini 37/75/112 e finale 149 senza buchi; `ARPHE_PAPER_STACK` helper PENDING |
 | Creative 03: asset allowlisted | PENDING | Implementato dietro `CAP_ASSETS=false`; import/placement da verificare |
 | Creative 03: render preview | PENDING | Implementato dietro `CAP_RENDER=false`; non abilitare prima del Gate G |
-| Colorist: versioni colore locali + CDL | PENDING | Codice e test offline; API Resolve 21 installata conferma `AddVersion`, `LoadVersionByName`, `SetCDL`. `CAP_COLORIST=false`; gate nativo disposable non eseguito |
-| Colorist: matching multicamera | PENDING | Copia da riferimento esplicito con `CopyGrades` su nuove versioni locali; nessun auto-match, gate nativo non eseguito |
+| Colorist: versioni colore locali + CDL | PENDING | V2 offline applica CDL fingerprint-bound distinti per clip su nuove versioni locali; API Resolve 21 confermata, `CAP_COLORIST=false`; nuovo gate nativo disposable richiesto |
+| Colorist: matching multicamera | PENDING | V2 usa correzioni misurate e CDL diretti per camera; il riferimento è comparativo e `CopyGrades` non è usato dai nuovi piani. Nessun auto-match; gate nativo e review umana richiesti |
 | Colorist: preset DRX allowlisted | PENDING | `Graph.ApplyGradeFromDRX` confermata negli stub Resolve 21; nessun DRX configurato o validato visivamente |
 | Colorist: preview prima/dopo | PENDING | Toggle reversibile tra versioni locali registrate; nessun cambio pagina/playhead, cattura o render; gate umano richiesto |
 | Fairlight: Voice Isolation via scripting | PENDING | Resolve 21.1 installato documenta `Get/SetVoiceIsolationState` su traccia e clip; nessun probe live eseguito. `Amount` è generico e non è un controllo de-reverb separato |

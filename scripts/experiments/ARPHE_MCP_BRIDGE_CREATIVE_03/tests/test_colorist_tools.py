@@ -71,7 +71,8 @@ class ColoristToolTests(unittest.IsolatedAsyncioTestCase):
     def test_tool_signatures_are_closed_and_accept_no_paths_or_raw_cdl(self):
         self.assertEqual([], list(inspect.signature(server.inspect_colorist_context).parameters))
         self.assertEqual(
-            ["clip_ids", "reference_clip_id", "adjustments", "preset_name", "drx_preset_name"],
+            ["clip_ids", "reference_clip_id", "adjustments", "preset_name", "drx_preset_name",
+             "adjustments_by_clip", "observations_by_clip"],
             list(inspect.signature(server.prepare_colorist_plan).parameters),
         )
         self.assertEqual(["colorist_job_id", "expected_plan_fingerprint", "operator_role"],
@@ -145,6 +146,63 @@ class ColoristToolTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertFalse(applied["ok"])
             self.assertIn("CAP_COLORIST", applied["error"])
+            self.assertEqual([], timeline.clips[0].add_calls)
+
+    def test_prepare_v2_binds_measured_per_clip_corrections_without_resolve_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = config_for(root, enabled=False)
+            project, timeline = FakeProject(), FakeTimeline()
+            registry = Registry(config.state_path)
+            registry.add_project("ARPHE_TEST")
+            registry.add_timeline("ARPHE_TEST", "ARPHE_COLOR_TEST")
+            runtime = (object(), object(), project, timeline, config, registry, None)
+            with patch("bridge.server._runtime", return_value=runtime), patch(
+                "bridge.server.load_config", return_value=config
+            ):
+                prepared = server.prepare_colorist_plan(
+                    ["clip-a", "clip-b"], "clip-a", {}, "ARPHE_CLEAN_NEUTRAL", None,
+                    {
+                        "clip-a": {"temperature": -0.1, "exposure_stops": 0.1},
+                        "clip-b": {"temperature": 0.2, "exposure_stops": -0.15},
+                    },
+                    {
+                        "clip-a": {"source": "SCOPES", "sample_frames": [10, 50],
+                                   "neutral_rgb": [0.51, 0.50, 0.48]},
+                        "clip-b": {"source": "REGISTERED_STILL", "sample_frames": [20],
+                                   "luma_percentiles": [0.08, 0.44, 0.9]},
+                    },
+                )
+                inspected = server.inspect_colorist_plan(prepared["colorist_job_id"])
+
+            self.assertTrue(prepared["ok"])
+            self.assertEqual("ARPHE_COLORIST_PLAN_V2", inspected["plan_schema"])
+            self.assertEqual("PER_CLIP_MEASURED", prepared["matching_strategy"])
+            self.assertNotEqual(prepared["cdl_by_clip"]["clip-a"],
+                                prepared["cdl_by_clip"]["clip-b"])
+            self.assertEqual({"clip-a", "clip-b"}, set(prepared["cdl_sha256_by_clip"]))
+            self.assertEqual([], timeline.clips[0].add_calls)
+            self.assertEqual([], timeline.clips[1].add_calls)
+
+    def test_prepare_v2_rejects_incomplete_observations_before_persistence_or_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = config_for(root, enabled=False)
+            project, timeline = FakeProject(), FakeTimeline()
+            registry = Registry(config.state_path)
+            registry.add_project("ARPHE_TEST")
+            registry.add_timeline("ARPHE_TEST", "ARPHE_COLOR_TEST")
+            runtime = (object(), object(), project, timeline, config, registry, None)
+            with patch("bridge.server._runtime", return_value=runtime):
+                result = server.prepare_colorist_plan(
+                    ["clip-a", "clip-b"], "clip-a", {}, "ARPHE_CLEAN_NEUTRAL", None,
+                    {"clip-a": {}, "clip-b": {}},
+                    {"clip-a": {"source": "SCOPES", "sample_frames": [10],
+                                "neutral_rgb": [0.5, 0.5, 0.5]}},
+                )
+            self.assertFalse(result["ok"])
+            self.assertIn("esattamente", result["error"])
+            self.assertFalse(config.colorist_jobs_path.exists())
             self.assertEqual([], timeline.clips[0].add_calls)
 
     def test_arphe_prefix_is_not_authorization_without_registry_or_allowlist(self):
@@ -251,6 +309,8 @@ class ColoristToolTests(unittest.IsolatedAsyncioTestCase):
                     "clip_id": "clip-a", "before_version": "Original",
                     "after_version": names["clip-a"], "reference_clip_id": "clip-a",
                     "cdl_applied_directly": True, "drx_preset_name": None,
+                    "matching_strategy": "UNIFORM_MANUAL",
+                    "cdl_sha256": "553ac1acbd222db636a44c2a26ff768f048d22b8e6706a02f444d6edae322b3e",
                 },)
                 with patch("bridge.server.do_apply_colorist_job", return_value={
                     "ok": True, "evidence": evidence,

@@ -26,6 +26,10 @@ NEUTRAL = {
     "contrast": 0.0,
     "saturation": 1.0,
 }
+OBSERVATION_KEYS = {
+    "source", "sample_frames", "neutral_rgb", "luma_percentiles", "mean_saturation",
+}
+OBSERVATION_SOURCES = {"SCOPES", "REGISTERED_STILL"}
 
 
 def _number(value: object, name: str, minimum: float, maximum: float) -> float:
@@ -119,6 +123,93 @@ def build_cdl(adjustments: Mapping[str, object], preset_name: str,
         "Power": "1.000000 1.000000 1.000000",
         "Saturation": f"{combined['saturation']:.6f}",
     }
+
+
+def _normalized_triplet(value: object, name: str) -> list[float]:
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        raise ValidationError(f"{name} deve contenere tre valori")
+    return [_number(item, name, 0.0, 1.0) for item in value]
+
+
+def _normalize_observation(raw: object) -> dict[str, object]:
+    if not isinstance(raw, Mapping) or set(raw) - OBSERVATION_KEYS:
+        raise ValidationError("Osservazione tecnica Colorist malformata")
+    if raw.get("source") not in OBSERVATION_SOURCES:
+        raise ValidationError("Sorgente osservazione Colorist non consentita")
+    frames = raw.get("sample_frames")
+    if (not isinstance(frames, (list, tuple)) or not 1 <= len(frames) <= 3
+            or any(isinstance(frame, bool) or not isinstance(frame, int) or frame < 0
+                   for frame in frames)):
+        raise ValidationError("sample_frames Colorist non validi")
+    normalized: dict[str, object] = {
+        "source": str(raw["source"]),
+        "sample_frames": sorted(set(frames)),
+    }
+    if "neutral_rgb" in raw:
+        normalized["neutral_rgb"] = _normalized_triplet(raw["neutral_rgb"], "neutral_rgb")
+    if "luma_percentiles" in raw:
+        percentiles = _normalized_triplet(raw["luma_percentiles"], "luma_percentiles")
+        if not percentiles[0] < percentiles[1] < percentiles[2]:
+            raise ValidationError("luma_percentiles deve rispettare p10 < p50 < p90")
+        normalized["luma_percentiles"] = percentiles
+    if "mean_saturation" in raw:
+        normalized["mean_saturation"] = _number(
+            raw["mean_saturation"], "mean_saturation", 0.0, 1.0,
+        )
+    if set(normalized) == {"source", "sample_frames"}:
+        raise ValidationError("Osservazione Colorist priva di misure")
+    return normalized
+
+
+def build_clip_corrections(
+    clip_ids: tuple[str, ...] | list[str],
+    adjustments: Mapping[str, object],
+    adjustments_by_clip: Mapping[str, Mapping[str, object]] | None,
+    observations_by_clip: Mapping[str, Mapping[str, object]] | None,
+    preset_name: str,
+    presets: Mapping[str, Mapping[str, object]],
+) -> tuple[str, dict[str, dict[str, float]], dict[str, dict[str, object]],
+           dict[str, dict[str, object]]]:
+    clips = tuple(clip_ids)
+    if (not clips or len(set(clips)) != len(clips)
+            or any(not isinstance(clip_id, str) or not clip_id for clip_id in clips)):
+        raise ValidationError("clip_ids Colorist vuoti, duplicati o non validi")
+    targets = set(clips)
+    if adjustments_by_clip is None:
+        if observations_by_clip not in (None, {}):
+            raise ValidationError("Le osservazioni per clip richiedono correzioni per clip")
+        normalized = _validate_adjustments(adjustments)
+        by_clip = {clip_id: dict(normalized) for clip_id in clips}
+        cdls = {clip_id: build_cdl(normalized, preset_name, presets) for clip_id in clips}
+        return "UNIFORM_MANUAL", by_clip, {}, cdls
+
+    if adjustments:
+        raise ValidationError("La correzione globale deve essere vuota con adjustments_by_clip")
+    if (not isinstance(adjustments_by_clip, Mapping)
+            or set(adjustments_by_clip) != targets):
+        raise ValidationError("adjustments_by_clip deve coprire esattamente i clip selezionati")
+    if (not isinstance(observations_by_clip, Mapping)
+            or set(observations_by_clip) != targets):
+        raise ValidationError("observations_by_clip deve coprire esattamente i clip selezionati")
+
+    by_clip: dict[str, dict[str, float]] = {}
+    observations: dict[str, dict[str, object]] = {}
+    cdls: dict[str, dict[str, object]] = {}
+    for clip_id in clips:
+        raw_adjustments = adjustments_by_clip[clip_id]
+        normalized = _validate_adjustments(raw_adjustments)
+        by_clip[clip_id] = normalized
+        observations[clip_id] = _normalize_observation(observations_by_clip[clip_id])
+        cdls[clip_id] = build_cdl(normalized, preset_name, presets)
+    return "PER_CLIP_MEASURED", by_clip, observations, cdls
+
+
+def cdl_digest(cdl: Mapping[str, object]) -> str:
+    if not isinstance(cdl, Mapping):
+        raise ValidationError("CDL Colorist non valido")
+    canonical = json.dumps(cdl, ensure_ascii=True, sort_keys=True,
+                           separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def plan_fingerprint(payload: Mapping[str, Any]) -> str:

@@ -113,7 +113,7 @@ class ArtifactProducerTests(unittest.TestCase):
                 drx_asset_identity=None,
                 before_versions={"clip-1": {"versionName": "V1", "versionType": 0}},
                 cdl={
-                    "NodeIndex": "1", "Slope": "1 1 1", "Offset": "0 0 0",
+                    "NodeIndex": 1, "Slope": "1 1 1", "Offset": "0 0 0",
                     "Power": "1 1 1", "Saturation": "1",
                 },
             )

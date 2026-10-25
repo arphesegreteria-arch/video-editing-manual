@@ -31,6 +31,30 @@ class Fake:
 
 
 class FeatureFlagTests(unittest.TestCase):
+    def test_colorist_v2_availability_uses_only_direct_cdl_api(self):
+        class DirectColorClip:
+            def __getattr__(self, name):
+                if name in {
+                    "GetUniqueId", "GetName", "GetCurrentVersion", "GetVersionNameList",
+                    "AddVersion", "LoadVersionByName", "SetCDL",
+                }:
+                    return lambda *_args: True
+                raise AttributeError(name)
+
+        class DirectColorTimeline(Fake):
+            def GetTrackCount(self, _kind):
+                return 1
+
+            def GetItemListInTrack(self, _kind, _index):
+                return [DirectColorClip()]
+
+        config = CreativeConfig(Path("config"), Path("assets"), Path("renders"), Path("state"),
+                                Path("audit"), dict(DEFAULT_PALETTE), dict(DEFAULT_FLAGS),
+                                frozenset(), frozenset(), "mp4", "H264")
+        capabilities = report(config, Fake(), Fake(), DirectColorTimeline())
+
+        self.assertTrue(capabilities["CAP_COLORIST"]["technically_available"])
+
     def test_flags_separate_enabled_available_and_validated(self):
         config = CreativeConfig(Path("config"), Path("assets"), Path("renders"), Path("state"), Path("audit"),
                                 dict(DEFAULT_PALETTE), dict(DEFAULT_FLAGS), frozenset(), frozenset(), "mp4", "H264")

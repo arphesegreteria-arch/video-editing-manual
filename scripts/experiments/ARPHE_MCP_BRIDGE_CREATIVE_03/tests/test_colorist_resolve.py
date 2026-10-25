@@ -148,6 +148,20 @@ class ColoristResolveTests(unittest.TestCase):
         self.assertTrue(result["technically_available"])
         self.assertEqual([], clips[0].add_calls)
 
+    def test_v2_without_drx_does_not_require_legacy_copy_or_node_graph_api(self):
+        clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]
+        for clip in clips:
+            clip.CopyGrades = None
+            clip.GetNodeGraph = None
+
+        inspected = inspect_colorist_context(FakeProject(), FakeTimeline(clips))
+        applied = apply_colorist_job(FakeProject(), FakeTimeline(clips), approved_job(clips))
+
+        self.assertTrue(inspected["technically_available"])
+        self.assertFalse(inspected["clips"][0]["api"]["CopyGrades"])
+        self.assertFalse(inspected["clips"][0]["api"]["GetNodeGraph"])
+        self.assertTrue(applied["ok"])
+
     def test_v2_apply_creates_local_versions_and_applies_distinct_cdl_to_each_clip(self):
         clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]
         result = apply_colorist_job(FakeProject(), FakeTimeline(clips), approved_job(clips))

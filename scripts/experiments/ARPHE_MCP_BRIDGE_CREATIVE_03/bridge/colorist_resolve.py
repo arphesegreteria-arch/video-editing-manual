@@ -8,10 +8,11 @@ from .colorist_model import cdl_digest
 from .safety import ValidationError
 
 
-CLIP_METHODS = (
+CORE_CLIP_METHODS = (
     "GetUniqueId", "GetName", "GetCurrentVersion", "GetVersionNameList",
-    "AddVersion", "LoadVersionByName", "SetCDL", "GetNodeGraph", "CopyGrades",
+    "AddVersion", "LoadVersionByName", "SetCDL",
 )
+CLIP_METHODS = CORE_CLIP_METHODS + ("GetNodeGraph", "CopyGrades")
 
 
 def _call(obj: Any, name: str, *args: Any) -> Any:
@@ -71,7 +72,7 @@ def inspect_colorist_context(project: Any, timeline: Any) -> dict[str, Any]:
     available = True
     for clip_id, clip in clips.items():
         methods = {name: callable(getattr(clip, name, None)) for name in CLIP_METHODS}
-        available = available and all(methods.values())
+        available = available and all(methods[name] for name in CORE_CLIP_METHODS)
         version = None
         try:
             version = _current_version(clip)
@@ -118,9 +119,14 @@ def apply_colorist_job(project: Any, timeline: Any, job: ColoristJob,
     drx_targets = (list(job.clip_ids) if job.plan_schema == PLAN_V2 else
                    ([job.reference_clip_id] if job.reference_clip_id is not None
                     else list(job.clip_ids)))
+    required_methods = list(CORE_CLIP_METHODS)
+    if job.plan_schema != PLAN_V2 and job.reference_clip_id is not None:
+        required_methods.append("CopyGrades")
+    if drx_path is not None:
+        required_methods.append("GetNodeGraph")
     for clip_id in job.clip_ids:
         clip = clips[clip_id]
-        if not all(callable(getattr(clip, name, None)) for name in CLIP_METHODS):
+        if not all(callable(getattr(clip, name, None)) for name in required_methods):
             raise ValidationError(f"API Colorist incompleta per {clip_id}")
         if _current_version(clip) != job.before_versions[clip_id]:
             raise ValidationError(f"Versione colore stale per {clip_id}")

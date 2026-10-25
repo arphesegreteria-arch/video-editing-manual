@@ -11,7 +11,12 @@ import threading
 from typing import Any, Callable, Mapping, Sequence
 from uuid import uuid4
 
-from .colorist_model import cdl_digest, plan_fingerprint
+from .colorist_model import (
+    cdl_digest,
+    plan_fingerprint,
+    validate_normalized_adjustments,
+    validate_normalized_observation,
+)
 from .safety import ValidationError
 
 
@@ -224,12 +229,16 @@ def _validate(job: ColoristJob) -> None:
     else:
         if job.adjustments or job.cdl:
             raise ValidationError("I campi globali V1 devono essere vuoti nei piani V2")
+        for adjustments in job.adjustments_by_clip.values():
+            validate_normalized_adjustments(adjustments)
         if job.matching_strategy == "UNIFORM_MANUAL":
             if job.observations_by_clip:
                 raise ValidationError("Un piano uniforme non accetta osservazioni per clip")
         elif job.matching_strategy == "PER_CLIP_MEASURED":
             if set(job.observations_by_clip) != targets:
                 raise ValidationError("Le osservazioni devono coprire esattamente i target")
+            for observation in job.observations_by_clip.values():
+                validate_normalized_observation(observation)
         else:
             raise ValidationError("Strategia matching Colorist V2 non consentita")
     if not HEX64.fullmatch(job.plan_fingerprint):

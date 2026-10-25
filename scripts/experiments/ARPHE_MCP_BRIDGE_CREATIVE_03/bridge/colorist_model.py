@@ -161,6 +161,44 @@ def _normalize_observation(raw: object) -> dict[str, object]:
     return normalized
 
 
+def validate_normalized_adjustments(raw: Mapping[str, object]) -> None:
+    normalized = _validate_adjustments(raw, allow_missing=False)
+    if dict(raw) != normalized:
+        raise ValidationError("Correzioni Colorist non canoniche")
+
+
+def validate_normalized_observation(raw: Mapping[str, object]) -> None:
+    if dict(raw) != _normalize_observation(raw):
+        raise ValidationError("Osservazione Colorist non canonica")
+
+
+def validate_cdl(cdl: Mapping[str, object]) -> None:
+    required = {"NodeIndex", "Slope", "Offset", "Power", "Saturation"}
+    if not isinstance(cdl, Mapping) or set(cdl) != required:
+        raise ValidationError("CDL Colorist malformato")
+    node = cdl["NodeIndex"]
+    if isinstance(node, bool) or not isinstance(node, int) or node < 1:
+        raise ValidationError("NodeIndex CDL non valido")
+
+    for name in ("Slope", "Offset", "Power"):
+        raw = cdl[name]
+        if not isinstance(raw, str) or len(raw.split()) != 3:
+            raise ValidationError(f"{name} CDL deve contenere tre valori")
+        try:
+            values = [float(value) for value in raw.split()]
+        except ValueError:
+            raise ValidationError(f"{name} CDL non numerico") from None
+        if not all(math.isfinite(value) for value in values):
+            raise ValidationError(f"{name} CDL non finito")
+        if name in {"Slope", "Power"} and not all(value > 0.0 for value in values):
+            raise ValidationError(f"{name} CDL deve essere positivo")
+
+    saturation = cdl["Saturation"]
+    if not isinstance(saturation, str):
+        raise ValidationError("Saturation CDL non valida")
+    _number(saturation, "Saturation CDL", 0.0, 2.0)
+
+
 def build_clip_corrections(
     clip_ids: tuple[str, ...] | list[str],
     adjustments: Mapping[str, object],
@@ -205,8 +243,7 @@ def build_clip_corrections(
 
 
 def cdl_digest(cdl: Mapping[str, object]) -> str:
-    if not isinstance(cdl, Mapping):
-        raise ValidationError("CDL Colorist non valido")
+    validate_cdl(cdl)
     canonical = json.dumps(cdl, ensure_ascii=True, sort_keys=True,
                            separators=(",", ":"), allow_nan=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

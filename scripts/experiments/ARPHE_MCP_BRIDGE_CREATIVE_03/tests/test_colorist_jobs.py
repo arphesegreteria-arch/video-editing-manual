@@ -332,6 +332,28 @@ class ColoristJobTests(unittest.TestCase):
         self.assertEqual(original.plan_fingerprint, reordered.plan_fingerprint)
         self.assertNotEqual(original.plan_fingerprint, changed.plan_fingerprint)
 
+    def test_v2_rejects_malformed_embedded_correction_data(self):
+        invalid_adjustments = {
+            "clip-a": {**job().adjustments_by_clip["clip-a"], "temperature": True},
+            "clip-b": job().adjustments_by_clip["clip-b"],
+        }
+        invalid_observations = {
+            "clip-a": {"source": "FILE", "sample_frames": [10],
+                       "neutral_rgb": [0.5, 0.5, 0.5]},
+            "clip-b": job().observations_by_clip["clip-b"],
+        }
+        invalid_cdls = {
+            "clip-a": {**CDL_A, "Slope": "nan 1 1"},
+            "clip-b": CDL_B,
+        }
+        for override in (
+            {"adjustments_by_clip": invalid_adjustments},
+            {"observations_by_clip": invalid_observations},
+            {"cdl_by_clip": invalid_cdls},
+        ):
+            with self.subTest(override=next(iter(override))), self.assertRaises(ValidationError):
+                job(**override)
+
     def test_v2_apply_evidence_rejects_wrong_clip_digest(self):
         prepared = job()
         approved = approve_colorist_job(prepared, prepared.plan_fingerprint, "ALESSIO")

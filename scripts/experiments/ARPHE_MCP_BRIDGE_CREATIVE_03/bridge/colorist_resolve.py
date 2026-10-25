@@ -3,14 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .colorist_jobs import ColoristJob, after_version_names
+from .colorist_jobs import PLAN_V2, ColoristJob, after_version_names
+from .colorist_model import cdl_digest
 from .safety import ValidationError
 
 
-CLIP_METHODS = (
+CORE_CLIP_METHODS = (
     "GetUniqueId", "GetName", "GetCurrentVersion", "GetVersionNameList",
-    "AddVersion", "LoadVersionByName", "SetCDL", "GetNodeGraph", "CopyGrades",
+    "AddVersion", "LoadVersionByName", "SetCDL",
 )
+CLIP_METHODS = CORE_CLIP_METHODS + ("GetNodeGraph", "CopyGrades")
 
 
 def _call(obj: Any, name: str, *args: Any) -> Any:
@@ -70,7 +72,7 @@ def inspect_colorist_context(project: Any, timeline: Any) -> dict[str, Any]:
     available = True
     for clip_id, clip in clips.items():
         methods = {name: callable(getattr(clip, name, None)) for name in CLIP_METHODS}
-        available = available and all(methods.values())
+        available = available and all(methods[name] for name in CORE_CLIP_METHODS)
         version = None
         try:
             version = _current_version(clip)
@@ -114,10 +116,17 @@ def apply_colorist_job(project: Any, timeline: Any, job: ColoristJob,
         raise ValidationError("Asset DRX Colorist non valido")
 
     after_names = after_version_names(job)
-    drx_targets = ([job.reference_clip_id] if job.reference_clip_id is not None else list(job.clip_ids))
+    drx_targets = (list(job.clip_ids) if job.plan_schema == PLAN_V2 else
+                   ([job.reference_clip_id] if job.reference_clip_id is not None
+                    else list(job.clip_ids)))
+    required_methods = list(CORE_CLIP_METHODS)
+    if job.plan_schema != PLAN_V2 and job.reference_clip_id is not None:
+        required_methods.append("CopyGrades")
+    if drx_path is not None:
+        required_methods.append("GetNodeGraph")
     for clip_id in job.clip_ids:
         clip = clips[clip_id]
-        if not all(callable(getattr(clip, name, None)) for name in CLIP_METHODS):
+        if not all(callable(getattr(clip, name, None)) for name in required_methods):
             raise ValidationError(f"API Colorist incompleta per {clip_id}")
         if _current_version(clip) != job.before_versions[clip_id]:
             raise ValidationError(f"Versione colore stale per {clip_id}")
@@ -145,7 +154,10 @@ def apply_colorist_job(project: Any, timeline: Any, job: ColoristJob,
             if _call(clip, "LoadVersionByName", after_name, 0) is not True:
                 raise RuntimeError(f"LoadVersionByName fallita per {clip_id}")
 
-        if job.reference_clip_id is not None:
+        if job.plan_schema == PLAN_V2:
+            for clip_id in job.clip_ids:
+                _apply_to_clip(clips[clip_id], job.cdl_by_clip[clip_id], drx_path)
+        elif job.reference_clip_id is not None:
             reference = clips[job.reference_clip_id]
             _apply_to_clip(reference, job.cdl, drx_path)
             targets = [clips[clip_id] for clip_id in job.clip_ids if clip_id != job.reference_clip_id]
@@ -158,14 +170,22 @@ def apply_colorist_job(project: Any, timeline: Any, job: ColoristJob,
         for clip_id in job.clip_ids:
             if _current_version(clips[clip_id])["versionName"] != after_names[clip_id]:
                 raise RuntimeError(f"Read-back versione fallito per {clip_id}")
-            evidence.append({
+            item = {
                 "clip_id": clip_id,
                 "before_version": job.before_versions[clip_id]["versionName"],
                 "after_version": after_names[clip_id],
                 "reference_clip_id": job.reference_clip_id,
-                "cdl_applied_directly": job.reference_clip_id is None or clip_id == job.reference_clip_id,
+                "cdl_applied_directly": (True if job.plan_schema == PLAN_V2
+                                         else job.reference_clip_id is None
+                                         or clip_id == job.reference_clip_id),
                 "drx_preset_name": job.drx_preset_name,
-            })
+            }
+            if job.plan_schema == PLAN_V2:
+                item.update({
+                    "matching_strategy": job.matching_strategy,
+                    "cdl_sha256": cdl_digest(job.cdl_by_clip[clip_id]),
+                })
+            evidence.append(item)
         return {"ok": True, "colorist_job_id": job.colorist_job_id,
                 "plan_fingerprint": job.plan_fingerprint, "evidence": evidence}
     except Exception as exc:

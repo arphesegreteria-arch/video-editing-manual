@@ -35,7 +35,7 @@ from .colorist_jobs import (
     record_colorist_preview_start,
     record_colorist_review,
 )
-from .colorist_model import build_cdl, load_colorist_presets
+from .colorist_model import build_clip_corrections, cdl_digest, load_colorist_presets
 from .colorist_resolve import (
     apply_colorist_job as do_apply_colorist_job,
     inspect_colorist_context as do_inspect_colorist_context,
@@ -346,7 +346,9 @@ def inspect_colorist_context() -> dict[str, Any]:
 @mcp.tool(annotations=SAFE_WRITE)
 def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
                           adjustments: dict[str, Any], preset_name: str = "ARPHE_CLEAN_NEUTRAL",
-                          drx_preset_name: str | None = None) -> dict[str, Any]:
+                          drx_preset_name: str | None = None,
+                          adjustments_by_clip: dict[str, dict[str, Any]] | None = None,
+                          observations_by_clip: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
     """Prepare a fingerprint-bound Colorist plan locally; performs no Resolve write."""
     with RESOLVE_ACCESS_LOCK:
         try:
@@ -360,7 +362,10 @@ def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
             if reference_clip_id is not None and reference_clip_id not in clip_ids:
                 raise ValidationError("reference_clip_id deve appartenere ai clip selezionati")
             registry = load_colorist_presets(config.colorist_presets_path)
-            cdl = build_cdl(adjustments, preset_name, registry["presets"])
+            strategy, clip_adjustments, observations, clip_cdls = build_clip_corrections(
+                tuple(clip_ids), adjustments, adjustments_by_clip, observations_by_clip,
+                preset_name, registry["presets"],
+            )
             drx_path = _resolve_colorist_drx(config, registry, drx_preset_name)
             drx_identity = _colorist_drx_identity(config, drx_path)
             before = {clip_id: available[clip_id]["current_version"] for clip_id in clip_ids}
@@ -368,9 +373,12 @@ def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
                 workstation_id=config.workstation_id,
                 project_name=context_card["project_name"], timeline_name=context_card["timeline_name"],
                 timeline_identity=context_card["timeline_identity"], clip_ids=tuple(clip_ids),
-                reference_clip_id=reference_clip_id, adjustments=adjustments,
+                reference_clip_id=reference_clip_id, adjustments={},
                 preset_name=preset_name, drx_preset_name=drx_preset_name,
-                drx_asset_identity=drx_identity, before_versions=before, cdl=cdl,
+                drx_asset_identity=drx_identity, before_versions=before, cdl={},
+                plan_schema="ARPHE_COLORIST_PLAN_V2", matching_strategy=strategy,
+                adjustments_by_clip=clip_adjustments, observations_by_clip=observations,
+                cdl_by_clip=clip_cdls,
             )
             saved = _register_colorist_state(config, _colorist_store(config).create(job))
             return {"ok": True, "action": "prepare_colorist_plan",
@@ -378,7 +386,16 @@ def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
                     "state": saved.state, "plan_fingerprint": saved.plan_fingerprint,
                     "clip_ids": list(saved.clip_ids), "reference_clip_id": saved.reference_clip_id,
                     "preset_name": saved.preset_name, "drx_preset_name": saved.drx_preset_name,
-                    "cdl": saved.cdl, "requires_human_approval": True}
+                    "plan_schema": saved.plan_schema,
+                    "matching_strategy": saved.matching_strategy,
+                    "adjustments_by_clip": saved.adjustments_by_clip,
+                    "observations_by_clip": saved.observations_by_clip,
+                    "cdl_by_clip": saved.cdl_by_clip,
+                    "cdl_sha256_by_clip": {
+                        clip_id: cdl_digest(saved.cdl_by_clip[clip_id])
+                        for clip_id in saved.clip_ids
+                    },
+                    "requires_human_approval": True}
         except Exception as exc: return _error(exc)
 
 

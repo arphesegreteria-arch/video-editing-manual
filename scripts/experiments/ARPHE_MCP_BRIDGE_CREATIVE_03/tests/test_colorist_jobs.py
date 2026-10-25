@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 import sys
@@ -28,7 +28,41 @@ from bridge.colorist_jobs import (  # noqa: E402
 from bridge.safety import ValidationError  # noqa: E402
 
 
-def job():
+CDL_A = {
+    "NodeIndex": 1,
+    "Slope": "1.000000 1.000000 1.000000",
+    "Offset": "-0.000000 -0.000000 -0.000000",
+    "Power": "1.000000 1.000000 1.000000",
+    "Saturation": "1.000000",
+}
+CDL_B = {
+    "NodeIndex": 1,
+    "Slope": "1.100000 1.000000 0.900000",
+    "Offset": "0.000000 0.000000 0.000000",
+    "Power": "1.000000 1.000000 1.000000",
+    "Saturation": "0.950000",
+}
+
+
+def job(**overrides):
+    values = dict(
+        plan_schema="ARPHE_COLORIST_PLAN_V2",
+        matching_strategy="PER_CLIP_MEASURED",
+        adjustments_by_clip={
+            "clip-a": {"temperature": 0.1, "tint": 0.0, "exposure_stops": 0.0,
+                       "contrast": 0.0, "saturation": 1.0},
+            "clip-b": {"temperature": -0.1, "tint": 0.0, "exposure_stops": 0.1,
+                       "contrast": 0.0, "saturation": 1.0},
+        },
+        observations_by_clip={
+            "clip-a": {"source": "SCOPES", "sample_frames": [10],
+                       "neutral_rgb": [0.5, 0.5, 0.48]},
+            "clip-b": {"source": "SCOPES", "sample_frames": [10],
+                       "neutral_rgb": [0.46, 0.49, 0.52]},
+        },
+        cdl_by_clip={"clip-a": CDL_A, "clip-b": CDL_B},
+    )
+    values.update(overrides)
     return new_colorist_job(
         workstation_id="PC_PERSONALE",
         project_name="ARPHE_TEST",
@@ -36,7 +70,7 @@ def job():
         timeline_identity="timeline-123",
         clip_ids=("clip-a", "clip-b"),
         reference_clip_id="clip-a",
-        adjustments={"temperature": 0.1},
+        adjustments={},
         preset_name="ARPHE_CLEAN_NEUTRAL",
         drx_preset_name=None,
         drx_asset_identity=None,
@@ -44,9 +78,44 @@ def job():
             "clip-a": {"versionName": "Original", "versionType": 0},
             "clip-b": {"versionName": "Original", "versionType": 0},
         },
-        cdl={"NodeIndex": 1, "Slope": "1 1 1", "Offset": "0 0 0",
-             "Power": "1 1 1", "Saturation": "1"},
+        cdl={},
+        **values,
     )
+
+
+def legacy_job():
+    return new_colorist_job(
+        workstation_id="PC_PERSONALE", project_name="ARPHE_TEST",
+        timeline_name="ARPHE_COLOR_TEST", timeline_identity="timeline-123",
+        clip_ids=("clip-a", "clip-b"), reference_clip_id="clip-a",
+        adjustments={"temperature": 0.1}, preset_name="ARPHE_CLEAN_NEUTRAL",
+        drx_preset_name=None, drx_asset_identity=None,
+        before_versions={
+            "clip-a": {"versionName": "Original", "versionType": 0},
+            "clip-b": {"versionName": "Original", "versionType": 0},
+        },
+        cdl=CDL_A,
+    )
+
+
+def evidence_for(current):
+    names = after_version_names(current)
+    if current.plan_schema == "ARPHE_COLORIST_PLAN_V1":
+        return tuple({
+            "clip_id": clip_id, "before_version": "Original", "after_version": names[clip_id],
+            "reference_clip_id": "clip-a", "cdl_applied_directly": clip_id == "clip-a",
+            "drx_preset_name": None,
+        } for clip_id in current.clip_ids)
+    digests = {
+        "clip-a": "553ac1acbd222db636a44c2a26ff768f048d22b8e6706a02f444d6edae322b3e",
+        "clip-b": "ec878e28769c7a5377b7380f053b0d17ce5eb88342224b30de9d700026f4248a",
+    }
+    return tuple({
+        "clip_id": clip_id, "before_version": "Original", "after_version": names[clip_id],
+        "reference_clip_id": "clip-a", "cdl_applied_directly": True,
+        "drx_preset_name": None, "matching_strategy": "PER_CLIP_MEASURED",
+        "cdl_sha256": digests[clip_id],
+    } for clip_id in current.clip_ids)
 
 
 class ColoristJobTests(unittest.TestCase):
@@ -95,12 +164,7 @@ class ColoristJobTests(unittest.TestCase):
         self.assertEqual("COLORIST", approved.operator_role)
 
         applying = record_colorist_apply_started(approved)
-        names = after_version_names(applying)
-        applied = record_colorist_apply(applying, tuple({
-            "clip_id": clip_id, "before_version": "Original", "after_version": names[clip_id],
-            "reference_clip_id": "clip-a", "cdl_applied_directly": clip_id == "clip-a",
-            "drx_preset_name": None,
-        } for clip_id in applying.clip_ids))
+        applied = record_colorist_apply(applying, evidence_for(applying))
         self.assertEqual("APPLIED", applied.state)
         accepted = record_colorist_review(applied, True, "ALESSIO")
         self.assertEqual("ACCEPTED", accepted.state)
@@ -112,12 +176,7 @@ class ColoristJobTests(unittest.TestCase):
             record_colorist_review(prepared, False, "ALESSIO")
         approved = approve_colorist_job(prepared, prepared.plan_fingerprint, "ALESSIO")
         applying = record_colorist_apply_started(approved)
-        names = after_version_names(applying)
-        applied = record_colorist_apply(applying, tuple({
-            "clip_id": clip_id, "before_version": "Original", "after_version": names[clip_id],
-            "reference_clip_id": "clip-a", "cdl_applied_directly": clip_id == "clip-a",
-            "drx_preset_name": None,
-        } for clip_id in applying.clip_ids))
+        applied = record_colorist_apply(applying, evidence_for(applying))
         rejected = record_colorist_review(applied, False, "ALESSIO")
         self.assertEqual("REJECTED", rejected.state)
         with self.assertRaises(ValidationError):
@@ -234,7 +293,8 @@ class ColoristJobTests(unittest.TestCase):
             record_colorist_apply(applying, ({
                 "clip_id": "clip-a", "before_version": "Original", "after_version": "Foreign",
                 "reference_clip_id": "clip-a", "cdl_applied_directly": True,
-                "drx_preset_name": None,
+                "drx_preset_name": None, "matching_strategy": "PER_CLIP_MEASURED",
+                "cdl_sha256": "553ac1acbd222db636a44c2a26ff768f048d22b8e6706a02f444d6edae322b3e",
             },))
 
     def test_review_requires_preview_restore_and_manual_failure_is_distinct(self):
@@ -242,11 +302,7 @@ class ColoristJobTests(unittest.TestCase):
         approved = approve_colorist_job(prepared, prepared.plan_fingerprint, "ALESSIO")
         applying = record_colorist_apply_started(approved)
         names = after_version_names(applying)
-        applied = record_colorist_apply(applying, tuple({
-            "clip_id": clip_id, "before_version": "Original", "after_version": names[clip_id],
-            "reference_clip_id": "clip-a", "cdl_applied_directly": clip_id == "clip-a",
-            "drx_preset_name": None,
-        } for clip_id in applying.clip_ids))
+        applied = record_colorist_apply(applying, evidence_for(applying))
         previewing = record_colorist_preview_start(applied, "clip-a", names["clip-a"])
         with self.assertRaisesRegex(ValidationError, "preview"):
             record_colorist_review(previewing, True, "ALESSIO")
@@ -257,6 +313,87 @@ class ColoristJobTests(unittest.TestCase):
             "created_versions": [], "restored_clip_ids": [],
         })
         self.assertEqual("FAILED_MANUAL", failed.state)
+
+    def test_v2_fingerprint_binds_each_clip_correction_and_is_order_stable(self):
+        original = job()
+        reordered = job(
+            adjustments_by_clip={
+                "clip-b": original.adjustments_by_clip["clip-b"],
+                "clip-a": original.adjustments_by_clip["clip-a"],
+            },
+            observations_by_clip={
+                "clip-b": original.observations_by_clip["clip-b"],
+                "clip-a": original.observations_by_clip["clip-a"],
+            },
+            cdl_by_clip={"clip-b": CDL_B, "clip-a": CDL_A},
+        )
+        changed = job(cdl_by_clip={"clip-a": CDL_A, "clip-b": CDL_A})
+        self.assertEqual("ARPHE_COLORIST_PLAN_V2", original.plan_schema)
+        self.assertEqual(original.plan_fingerprint, reordered.plan_fingerprint)
+        self.assertNotEqual(original.plan_fingerprint, changed.plan_fingerprint)
+
+    def test_v2_rejects_malformed_embedded_correction_data(self):
+        invalid_adjustments = {
+            "clip-a": {**job().adjustments_by_clip["clip-a"], "temperature": True},
+            "clip-b": job().adjustments_by_clip["clip-b"],
+        }
+        invalid_observations = {
+            "clip-a": {"source": "FILE", "sample_frames": [10],
+                       "neutral_rgb": [0.5, 0.5, 0.5]},
+            "clip-b": job().observations_by_clip["clip-b"],
+        }
+        invalid_cdls = {
+            "clip-a": {**CDL_A, "Slope": "nan 1 1"},
+            "clip-b": CDL_B,
+        }
+        for override in (
+            {"adjustments_by_clip": invalid_adjustments},
+            {"observations_by_clip": invalid_observations},
+            {"cdl_by_clip": invalid_cdls},
+        ):
+            with self.subTest(override=next(iter(override))), self.assertRaises(ValidationError):
+                job(**override)
+
+    def test_v2_apply_evidence_rejects_wrong_clip_digest(self):
+        prepared = job()
+        approved = approve_colorist_job(prepared, prepared.plan_fingerprint, "ALESSIO")
+        applying = record_colorist_apply_started(approved)
+        evidence = list(evidence_for(applying))
+        evidence[1] = {**evidence[1], "cdl_sha256": evidence[0]["cdl_sha256"]}
+        with self.assertRaisesRegex(ValidationError, "CDL"):
+            record_colorist_apply(applying, evidence)
+
+    def test_legacy_applied_record_keeps_fingerprint_and_can_finish_review(self):
+        prepared = legacy_job()
+        approved = approve_colorist_job(prepared, prepared.plan_fingerprint, "ALESSIO")
+        with self.assertRaisesRegex(ValidationError, "V1"):
+            record_colorist_apply_started(approved)
+
+        applying = replace(
+            approved, state="APPLYING",
+            state_timestamps={**approved.state_timestamps, "APPLYING": "2026-10-24T00:00:00Z"},
+        )
+        applied = record_colorist_apply(applying, evidence_for(applying))
+        legacy_payload = asdict(applied)
+        for field in ("plan_schema", "matching_strategy", "adjustments_by_clip",
+                      "observations_by_clip", "cdl_by_clip"):
+            legacy_payload.pop(field)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "colorist.json"
+            path.write_text(json.dumps({
+                "schema": "ARPHE_COLORIST_JOBS_V1", "workstation_id": "PC_PERSONALE",
+                "jobs": {applied.colorist_job_id: legacy_payload},
+            }), encoding="utf-8")
+            store = ColoristJobStore(path, "PC_PERSONALE")
+            loaded = store.get(applied.colorist_job_id, "PC_PERSONALE")
+            self.assertEqual("ARPHE_COLORIST_PLAN_V1", loaded.plan_schema)
+            self.assertEqual(applied.plan_fingerprint, loaded.plan_fingerprint)
+            accepted = record_colorist_review(loaded, True, "ALESSIO")
+            saved = store.save(accepted, loaded.revision)
+            self.assertEqual("ACCEPTED", saved.state)
+            self.assertEqual(applied.plan_fingerprint,
+                             store.get(applied.colorist_job_id, "PC_PERSONALE").plan_fingerprint)
 
 
 if __name__ == "__main__":

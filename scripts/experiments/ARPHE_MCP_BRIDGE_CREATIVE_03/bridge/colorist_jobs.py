@@ -11,11 +11,18 @@ import threading
 from typing import Any, Callable, Mapping, Sequence
 from uuid import uuid4
 
-from .colorist_model import plan_fingerprint
+from .colorist_model import (
+    cdl_digest,
+    plan_fingerprint,
+    validate_normalized_adjustments,
+    validate_normalized_observation,
+)
 from .safety import ValidationError
 
 
 SCHEMA = "ARPHE_COLORIST_JOBS_V1"
+PLAN_V1 = "ARPHE_COLORIST_PLAN_V1"
+PLAN_V2 = "ARPHE_COLORIST_PLAN_V2"
 JOB_ID = re.compile(r"^colorist_[0-9a-f]{16}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 STATES = {"PREPARED", "APPROVED", "APPLYING", "FAILED_RECOVERABLE", "FAILED_MANUAL",
@@ -45,6 +52,11 @@ class ColoristJob:
     drx_asset_identity: dict[str, object] | None
     before_versions: dict[str, dict[str, object]]
     cdl: dict[str, object]
+    plan_schema: str
+    matching_strategy: str
+    adjustments_by_clip: dict[str, dict[str, object]]
+    observations_by_clip: dict[str, dict[str, object]]
+    cdl_by_clip: dict[str, dict[str, object]]
     plan_fingerprint: str
     operator_role: str | None
     apply_evidence: tuple[dict[str, object], ...]
@@ -55,11 +67,12 @@ class ColoristJob:
     state_timestamps: dict[str, str]
 
 
-def _plan_payload(*, workstation_id: str, project_name: str, timeline_name: str,
-                  timeline_identity: str, clip_ids: Sequence[str], reference_clip_id: str | None,
-                  adjustments: Mapping[str, object], preset_name: str, drx_preset_name: str | None,
-                  drx_asset_identity: Mapping[str, object] | None,
-                  before_versions: Mapping[str, Mapping[str, object]], cdl: Mapping[str, object]) -> dict[str, Any]:
+def _plan_payload_v1(*, workstation_id: str, project_name: str, timeline_name: str,
+                     timeline_identity: str, clip_ids: Sequence[str], reference_clip_id: str | None,
+                     adjustments: Mapping[str, object], preset_name: str, drx_preset_name: str | None,
+                     drx_asset_identity: Mapping[str, object] | None,
+                     before_versions: Mapping[str, Mapping[str, object]],
+                     cdl: Mapping[str, object]) -> dict[str, Any]:
     return {
         "workstation_id": workstation_id,
         "project_name": project_name,
@@ -76,8 +89,63 @@ def _plan_payload(*, workstation_id: str, project_name: str, timeline_name: str,
     }
 
 
+def _plan_payload_v2(*, workstation_id: str, project_name: str, timeline_name: str,
+                     timeline_identity: str, clip_ids: Sequence[str], reference_clip_id: str | None,
+                     preset_name: str, drx_preset_name: str | None,
+                     drx_asset_identity: Mapping[str, object] | None,
+                     before_versions: Mapping[str, Mapping[str, object]],
+                     matching_strategy: str,
+                     adjustments_by_clip: Mapping[str, Mapping[str, object]],
+                     observations_by_clip: Mapping[str, Mapping[str, object]],
+                     cdl_by_clip: Mapping[str, Mapping[str, object]]) -> dict[str, Any]:
+    return {
+        "plan_schema": PLAN_V2,
+        "workstation_id": workstation_id,
+        "project_name": project_name,
+        "timeline_name": timeline_name,
+        "timeline_identity": timeline_identity,
+        "clip_ids": list(clip_ids),
+        "reference_clip_id": reference_clip_id,
+        "preset_name": preset_name,
+        "drx_preset_name": drx_preset_name,
+        "drx_asset_identity": None if drx_asset_identity is None else dict(drx_asset_identity),
+        "before_versions": {key: dict(value) for key, value in before_versions.items()},
+        "matching_strategy": matching_strategy,
+        "adjustments_by_clip": {key: dict(value) for key, value in adjustments_by_clip.items()},
+        "observations_by_clip": {key: dict(value) for key, value in observations_by_clip.items()},
+        "cdl_by_clip": {key: dict(value) for key, value in cdl_by_clip.items()},
+    }
+
+
 def new_colorist_job(**kwargs: Any) -> ColoristJob:
-    payload = _plan_payload(**kwargs)
+    plan_schema = kwargs.pop("plan_schema", PLAN_V1)
+    if plan_schema == PLAN_V2:
+        matching_strategy = kwargs.pop("matching_strategy")
+        adjustments_by_clip = kwargs.pop("adjustments_by_clip")
+        observations_by_clip = kwargs.pop("observations_by_clip")
+        cdl_by_clip = kwargs.pop("cdl_by_clip")
+        legacy_adjustments = dict(kwargs.pop("adjustments"))
+        legacy_cdl = dict(kwargs.pop("cdl"))
+        if legacy_adjustments or legacy_cdl:
+            raise ValidationError("I campi globali V1 devono essere vuoti nei piani V2")
+        payload = _plan_payload_v2(
+            **kwargs, matching_strategy=matching_strategy,
+            adjustments_by_clip=adjustments_by_clip,
+            observations_by_clip=observations_by_clip, cdl_by_clip=cdl_by_clip,
+        )
+    elif plan_schema == PLAN_V1:
+        payload = _plan_payload_v1(**kwargs)
+        legacy_adjustments = dict(payload["adjustments"])
+        legacy_cdl = dict(payload["cdl"])
+        matching_strategy = ("LEGACY_COPY_REFERENCE" if payload["reference_clip_id"] is not None
+                             else "UNIFORM_MANUAL")
+        adjustments_by_clip = {
+            str(clip_id): dict(legacy_adjustments) for clip_id in payload["clip_ids"]
+        }
+        observations_by_clip = {}
+        cdl_by_clip = {str(clip_id): dict(legacy_cdl) for clip_id in payload["clip_ids"]}
+    else:
+        raise ValidationError("Schema piano Colorist non supportato")
     created = _now()
     job = ColoristJob(
         colorist_job_id="colorist_" + uuid4().hex[:16],
@@ -89,13 +157,18 @@ def new_colorist_job(**kwargs: Any) -> ColoristJob:
         timeline_identity=str(payload["timeline_identity"]),
         clip_ids=tuple(str(value) for value in payload["clip_ids"]),
         reference_clip_id=None if payload["reference_clip_id"] is None else str(payload["reference_clip_id"]),
-        adjustments=dict(payload["adjustments"]),
+        adjustments=legacy_adjustments,
         preset_name=str(payload["preset_name"]),
         drx_preset_name=None if payload["drx_preset_name"] is None else str(payload["drx_preset_name"]),
         drx_asset_identity=(None if payload["drx_asset_identity"] is None
                             else dict(payload["drx_asset_identity"])),
         before_versions={str(key): dict(value) for key, value in payload["before_versions"].items()},
-        cdl={str(key): value for key, value in payload["cdl"].items()},
+        cdl=legacy_cdl,
+        plan_schema=plan_schema,
+        matching_strategy=str(matching_strategy),
+        adjustments_by_clip={str(key): dict(value) for key, value in adjustments_by_clip.items()},
+        observations_by_clip={str(key): dict(value) for key, value in observations_by_clip.items()},
+        cdl_by_clip={str(key): dict(value) for key, value in cdl_by_clip.items()},
         plan_fingerprint=plan_fingerprint(payload),
         operator_role=None,
         apply_evidence=(),
@@ -131,6 +204,43 @@ def _validate(job: ColoristJob) -> None:
             raise ValidationError("Versione colore iniziale malformata")
         if not isinstance(version["versionName"], str) or not version["versionName"] or version["versionType"] != 0:
             raise ValidationError("Solo versioni colore locali valide sono supportate")
+    if job.plan_schema not in {PLAN_V1, PLAN_V2}:
+        raise ValidationError("Schema piano Colorist non supportato")
+    targets = set(job.clip_ids)
+    if set(job.adjustments_by_clip) != targets or set(job.cdl_by_clip) != targets:
+        raise ValidationError("Correzioni e CDL devono coprire esattamente i target")
+    if any(not isinstance(value, dict) for value in job.adjustments_by_clip.values()):
+        raise ValidationError("Correzioni per clip malformate")
+    required_cdl = {"NodeIndex", "Slope", "Offset", "Power", "Saturation"}
+    for cdl in job.cdl_by_clip.values():
+        if not isinstance(cdl, dict) or set(cdl) != required_cdl:
+            raise ValidationError("CDL per clip malformato")
+        try:
+            cdl_digest(cdl)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f"CDL per clip malformato: {exc}") from exc
+    if job.plan_schema == PLAN_V1:
+        expected_strategy = ("LEGACY_COPY_REFERENCE" if job.reference_clip_id is not None
+                             else "UNIFORM_MANUAL")
+        if (job.matching_strategy != expected_strategy or job.observations_by_clip
+                or any(value != job.adjustments for value in job.adjustments_by_clip.values())
+                or any(value != job.cdl for value in job.cdl_by_clip.values())):
+            raise ValidationError("Compatibilità piano Colorist V1 non valida")
+    else:
+        if job.adjustments or job.cdl:
+            raise ValidationError("I campi globali V1 devono essere vuoti nei piani V2")
+        for adjustments in job.adjustments_by_clip.values():
+            validate_normalized_adjustments(adjustments)
+        if job.matching_strategy == "UNIFORM_MANUAL":
+            if job.observations_by_clip:
+                raise ValidationError("Un piano uniforme non accetta osservazioni per clip")
+        elif job.matching_strategy == "PER_CLIP_MEASURED":
+            if set(job.observations_by_clip) != targets:
+                raise ValidationError("Le osservazioni devono coprire esattamente i target")
+            for observation in job.observations_by_clip.values():
+                validate_normalized_observation(observation)
+        else:
+            raise ValidationError("Strategia matching Colorist V2 non consentita")
     if not HEX64.fullmatch(job.plan_fingerprint):
         raise ValidationError("plan_fingerprint non valido")
     if (job.drx_preset_name is None) != (job.drx_asset_identity is None):
@@ -202,6 +312,8 @@ def _validate_apply_evidence(job: ColoristJob) -> None:
     seen: set[str] = set()
     required = {"clip_id", "before_version", "after_version", "reference_clip_id",
                 "cdl_applied_directly", "drx_preset_name"}
+    if job.plan_schema == PLAN_V2:
+        required |= {"matching_strategy", "cdl_sha256"}
     for item in job.apply_evidence:
         if set(item) != required:
             raise ValidationError("Record evidenza apply malformato")
@@ -209,13 +321,19 @@ def _validate_apply_evidence(job: ColoristJob) -> None:
         if not isinstance(clip_id, str) or clip_id not in expected_names or clip_id in seen:
             raise ValidationError("clip_id evidenza apply non valido o duplicato")
         seen.add(clip_id)
+        direct_expected = (True if job.plan_schema == PLAN_V2
+                           else job.reference_clip_id is None or clip_id == job.reference_clip_id)
         if (item.get("before_version") != job.before_versions[clip_id]["versionName"]
                 or item.get("after_version") != expected_names[clip_id]
                 or item.get("reference_clip_id") != job.reference_clip_id
                 or item.get("drx_preset_name") != job.drx_preset_name
-                or item.get("cdl_applied_directly")
-                is not (job.reference_clip_id is None or clip_id == job.reference_clip_id)):
+                or item.get("cdl_applied_directly") is not direct_expected):
             raise ValidationError("Evidenza apply non coerente con il piano")
+        if job.plan_schema == PLAN_V2 and (
+            item.get("matching_strategy") != job.matching_strategy
+            or item.get("cdl_sha256") != cdl_digest(job.cdl_by_clip[clip_id])
+        ):
+            raise ValidationError("Evidenza CDL non coerente con il piano")
 
 
 def approve_colorist_job(job: ColoristJob, expected_fingerprint: str, operator_role: str) -> ColoristJob:
@@ -237,6 +355,8 @@ def record_colorist_apply_started(job: ColoristJob) -> ColoristJob:
     _validate(job)
     if job.state != "APPROVED":
         raise ValidationError("Avvio apply Colorist richiede piano APPROVED")
+    if job.plan_schema == PLAN_V1:
+        raise ValidationError("Un piano Colorist V1 non può essere applicato: preparare un piano V2")
     applying = replace(job, state="APPLYING",
                        state_timestamps={**job.state_timestamps, "APPLYING": _now()})
     _validate(applying)
@@ -309,22 +429,51 @@ def record_colorist_review(job: ColoristJob, accepted: bool, operator_role: str)
 
 def _from_payload(raw: object) -> ColoristJob:
     fields = set(ColoristJob.__dataclass_fields__)
-    legacy_fields = fields - {"cancellation_evidence"}
-    if not isinstance(raw, dict) or (set(raw) != fields and set(raw) != legacy_fields):
+    compatibility_fields = {
+        "plan_schema", "matching_strategy", "adjustments_by_clip",
+        "observations_by_clip", "cdl_by_clip",
+    }
+    v1_fields = fields - compatibility_fields
+    allowed = {frozenset(fields), frozenset(fields - {"cancellation_evidence"}),
+               frozenset(v1_fields), frozenset(v1_fields - {"cancellation_evidence"})}
+    if not isinstance(raw, dict) or frozenset(raw) not in allowed:
         raise ValidationError("Record Colorist malformato")
     try:
+        clip_ids = tuple(str(value) for value in raw["clip_ids"])
+        reference_clip_id = (None if raw["reference_clip_id"] is None
+                             else str(raw["reference_clip_id"]))
+        adjustments = dict(raw["adjustments"])
+        cdl = {str(key): value for key, value in raw["cdl"].items()}
+        if "plan_schema" in raw:
+            plan_schema = str(raw["plan_schema"])
+            matching_strategy = str(raw["matching_strategy"])
+            adjustments_by_clip = {
+                str(key): dict(value) for key, value in raw["adjustments_by_clip"].items()
+            }
+            observations_by_clip = {
+                str(key): dict(value) for key, value in raw["observations_by_clip"].items()
+            }
+            cdl_by_clip = {str(key): dict(value) for key, value in raw["cdl_by_clip"].items()}
+        else:
+            plan_schema = PLAN_V1
+            matching_strategy = ("LEGACY_COPY_REFERENCE" if reference_clip_id is not None
+                                 else "UNIFORM_MANUAL")
+            adjustments_by_clip = {clip_id: dict(adjustments) for clip_id in clip_ids}
+            observations_by_clip = {}
+            cdl_by_clip = {clip_id: dict(cdl) for clip_id in clip_ids}
         job = ColoristJob(
             colorist_job_id=str(raw["colorist_job_id"]), workstation_id=str(raw["workstation_id"]),
             state=str(raw["state"]), revision=int(raw["revision"]), project_name=str(raw["project_name"]),
             timeline_name=str(raw["timeline_name"]), timeline_identity=str(raw["timeline_identity"]),
-            clip_ids=tuple(str(value) for value in raw["clip_ids"]),
-            reference_clip_id=None if raw["reference_clip_id"] is None else str(raw["reference_clip_id"]),
-            adjustments=dict(raw["adjustments"]), preset_name=str(raw["preset_name"]),
+            clip_ids=clip_ids, reference_clip_id=reference_clip_id,
+            adjustments=adjustments, preset_name=str(raw["preset_name"]),
             drx_preset_name=None if raw["drx_preset_name"] is None else str(raw["drx_preset_name"]),
             drx_asset_identity=(None if raw["drx_asset_identity"] is None
                                 else dict(raw["drx_asset_identity"])),
             before_versions={str(key): dict(value) for key, value in raw["before_versions"].items()},
-            cdl={str(key): value for key, value in raw["cdl"].items()},
+            cdl=cdl, plan_schema=plan_schema, matching_strategy=matching_strategy,
+            adjustments_by_clip=adjustments_by_clip,
+            observations_by_clip=observations_by_clip, cdl_by_clip=cdl_by_clip,
             plan_fingerprint=str(raw["plan_fingerprint"]),
             operator_role=None if raw["operator_role"] is None else str(raw["operator_role"]),
             apply_evidence=tuple(dict(item) for item in raw["apply_evidence"]),
@@ -339,14 +488,22 @@ def _from_payload(raw: object) -> ColoristJob:
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         raise ValidationError(f"Record Colorist malformato: {exc}") from exc
     _validate(job)
-    expected = plan_fingerprint(_plan_payload(
+    common = dict(
         workstation_id=job.workstation_id, project_name=job.project_name,
         timeline_name=job.timeline_name, timeline_identity=job.timeline_identity,
         clip_ids=job.clip_ids, reference_clip_id=job.reference_clip_id,
-        adjustments=job.adjustments, preset_name=job.preset_name,
-        drx_preset_name=job.drx_preset_name, before_versions=job.before_versions, cdl=job.cdl,
-        drx_asset_identity=job.drx_asset_identity,
-    ))
+        preset_name=job.preset_name, drx_preset_name=job.drx_preset_name,
+        before_versions=job.before_versions, drx_asset_identity=job.drx_asset_identity,
+    )
+    if job.plan_schema == PLAN_V1:
+        payload = _plan_payload_v1(**common, adjustments=job.adjustments, cdl=job.cdl)
+    else:
+        payload = _plan_payload_v2(
+            **common, matching_strategy=job.matching_strategy,
+            adjustments_by_clip=job.adjustments_by_clip,
+            observations_by_clip=job.observations_by_clip, cdl_by_clip=job.cdl_by_clip,
+        )
+    expected = plan_fingerprint(payload)
     if expected != job.plan_fingerprint:
         raise ValidationError("Record Colorist con fingerprint alterato")
     return job
@@ -433,7 +590,8 @@ class ColoristJobStore:
             immutable = (
                 "colorist_job_id", "workstation_id", "project_name", "timeline_name", "timeline_identity",
                 "clip_ids", "reference_clip_id", "adjustments", "preset_name", "drx_preset_name",
-                "drx_asset_identity", "before_versions", "cdl", "plan_fingerprint",
+                "drx_asset_identity", "before_versions", "cdl", "plan_schema", "matching_strategy",
+                "adjustments_by_clip", "observations_by_clip", "cdl_by_clip", "plan_fingerprint",
             )
             if any(getattr(job, name) != getattr(current, name) for name in immutable):
                 raise ValidationError("Identità immutabile Colorist modificata")

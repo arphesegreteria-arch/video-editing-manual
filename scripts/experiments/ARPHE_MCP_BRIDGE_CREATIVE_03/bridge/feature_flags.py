@@ -126,7 +126,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
                 clips.extend(timeline.GetItemListInTrack("video", track_index) or [])
             required = (
                 "GetUniqueId", "GetName", "GetCurrentVersion", "GetVersionNameList",
-                "AddVersion", "LoadVersionByName", "SetCDL", "GetNodeGraph", "CopyGrades",
+                "AddVersion", "LoadVersionByName", "SetCDL",
             )
             colorist_ok = bool(clips) and all(all(_method(clip, name) for name in required) for clip in clips)
         except Exception:

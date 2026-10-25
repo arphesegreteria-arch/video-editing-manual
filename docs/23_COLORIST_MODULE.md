@@ -62,13 +62,32 @@ Input pubblici consentiti:
 Il bridge genera internamente il CDL di node 1 (`NodeIndex` è un intero, come richiesto dagli stub
 Resolve 21). Nessun tool accetta un CDL libero, un node index, un LUT path o un DRX path.
 
+### Piano tecnico V2 per clip
+
+La V2 distingue `UNIFORM_MANUAL`, per un singolo clip o materiale già omogeneo, da
+`PER_CLIP_MEASURED`, in cui ogni clip riceve correzioni e CDL propri. Nel secondo caso il
+fingerprint comprende osservazioni da scope o still registrati: origine, da uno a tre frame
+campione e almeno una misura fra RGB neutro, percentili di luminanza o saturazione media.
+
+Il bridge conserva queste misure come evidenza ma non promette un white balance automatico
+oggettivo. Nei piani V2 `SetCDL` viene chiamato direttamente su ogni nuova versione locale e
+l'evidenza contiene strategia e SHA-256 del CDL specifico di ogni clip.
+
 ## Preset ARPHE
 
 Il registro `colorist_presets.json` contiene `ARPHE_CLEAN_NEUTRAL`, `ARPHE_WARM_PRESENCE` e `ARPHE_SOFT_LUXURY`. Sono preset sperimentali e non ancora look di produzione. I DRX opzionali sono dichiarati nello stesso registro come percorsi relativi all'`asset_root`; la configurazione iniziale non ne abilita alcuno. Durante la preparazione il piano lega percorso relativo, dimensione e SHA-256 del DRX. Qualunque modifica prima dell'apply blocca l'operazione prima di una write Resolve.
 
+Backlog approvato: dopo la validazione delle correzioni tecniche V2, individuare e sottoporre a
+review una piccola famiglia di preset ADV signature ARPHÈ coerenti con il Graphic Kit. Nessun look
+signature viene mescolato alla normalizzazione tecnica in questa fase.
+
 ## Matching multicamera
 
-Quando `reference_clip_id` è presente, il bridge crea una nuova versione locale su riferimento e target, applica CDL e DRX soltanto al riferimento, usa `CopyGrades` verso i target espliciti e verifica con read-back che ogni target sia ancora sulla nuova versione. Non effettua analisi automatica delle camere: la scelta del riferimento resta umana.
+Nei nuovi piani V2 `reference_clip_id` indica soltanto la camera rispetto alla quale valutare le
+altre. Ogni clip riceve direttamente il proprio CDL e l'eventuale DRX allowlisted; `CopyGrades` non
+è usato e il sistema non descrive come matching una semplice copia dello stesso grade. I job V1
+già applicati restano leggibili, confrontabili e revisionabili col fingerprint originale. Un V1
+ancora `PREPARED` o `APPROVED` deve invece essere annullato e ricreato come V2.
 
 ## Non distruttività e failure
 

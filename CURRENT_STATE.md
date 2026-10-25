@@ -1,16 +1,22 @@
 # CURRENT STATE
 
-## 2026-10-24 — Modulo Colorist: codice offline, gate nativo pending
+## 2026-10-25 — Modulo Colorist V2: correzioni tecniche per clip, gate nativo pending
 
-Implementato nel mirror sorgente un workflow Colorist chiuso con correzione tecnica CDL, preset
-ARPHE, DRX opzionale allowlisted, matching multicamera da riferimento esplicito, versioni colore
-locali before/after e review umana fingerprint-bound. La documentazione Resolve 21.1.1 installata
-conferma le firme usate (`AddVersion`, `LoadVersionByName`, `SetCDL`, `CopyGrades`,
-`GetNodeGraph`, `ApplyGradeFromDRX`). Il bridge non espone path, CDL o node editing arbitrari.
+La V2 offline sostituisce il precedente pseudo-matching basato sulla copia di un solo grade con
+correzioni tecniche e CDL distinti per clip/camera. Osservazioni da scope o still registrati,
+correzioni, CDL e relativi digest sono legati al fingerprint; ogni apply V2 usa `SetCDL`
+direttamente su nuove versioni locali. La camera di riferimento resta un riferimento visivo e i
+job V1 già applicati restano leggibili e revisionabili col fingerprint originale.
 
-`CAP_COLORIST=false` per default e stato `PENDING`. Nessuna installazione, riavvio, pubblicazione,
-chiamata Resolve o modifica al progetto live è stata eseguita. Il gate futuro richiede progetto
-usa-e-getta, editor fermo e consenso esplicito. Procedura: `docs/23_COLORIST_MODULE.md`.
+Restano invariati versioni before/after, rollback, preview con ripristino e review umana. Il bridge
+non espone path, CDL o node editing arbitrari e non dichiara automatici o oggettivi white balance e
+camera match.
+
+`CAP_COLORIST=false` per default e stato V2 `PENDING`. Nessuna installazione, riavvio,
+pubblicazione, chiamata Resolve o modifica a progetti/media è stata eseguita per la V2. Il nuovo
+gate richiede progetto usa-e-getta, editor fermo e consenso esplicito. Dopo quel gate resta nel
+backlog la definizione separata dei preset ADV signature ARPHÈ. Procedura:
+`docs/23_COLORIST_MODULE.md`.
 
 Ultimo aggiornamento: sessione 2026-10-10.
 

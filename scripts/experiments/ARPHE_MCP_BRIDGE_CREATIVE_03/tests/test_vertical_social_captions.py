@@ -32,7 +32,7 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         self.assertLessEqual(bounds["right"], 0.84)
         self.assertGreaterEqual(bounds["top"], 0.10)
         self.assertLessEqual(bounds["bottom"], 0.82)
-        self.assertEqual((0.12, 0.80, 0.69, 0.77),
+        self.assertEqual((0.12, 0.80, 0.695, 0.765),
                          (bounds["left"], bounds["right"], bounds["top"], bounds["bottom"]))
 
     def test_caption_cues_exclude_the_cta_and_reject_a_cue_crossing_it(self):

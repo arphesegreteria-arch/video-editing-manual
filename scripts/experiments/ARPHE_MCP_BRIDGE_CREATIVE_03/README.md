@@ -166,3 +166,11 @@ I render nuovi seguono il percorso chiuso `validate_editorial_brief` →
 `verify_render_batch`. `render_preview`, `start_longform_exports` e il vecchio
 pacchetto pubblicabile non avviano più render direttamente. Dopo l'aggiornamento
 del bridge occorre aggiornare lo schema strumenti nell'app prima dei test live.
+## Sottotitoli Vertical Social approvati
+
+Il percorso approvato è l'azione generica `CAPTIONS` dopo picture lock. Il grafo Fusion usa
+Satoshi maiuscolo, due sole misure (`0.050` standard e `0.065` evidenza), sfondo bordeaux
+karaoke e massimo due righe. Se una frase non entra, viene divisa temporalmente: niente fitting
+dinamico e nessun comando dedicato a un video.
+
+Vedi `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md` dalla radice della repository.

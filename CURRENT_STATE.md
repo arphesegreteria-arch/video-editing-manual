@@ -1,5 +1,16 @@
 # CURRENT STATE
 
+## 2026-10-31 — Sottotitoli Fusion ARPHÈ approvati
+
+Il workflow generico Vertical Social `CAPTIONS` è approvato su `PC_PERSONALE` dopo applicazione
+reale, controllo frame, render e revisione umana. Il contratto usa Satoshi Bold maiuscolo, una
+sola parola Bold Italic in evidenza, due misure fisse (`0.050` e `0.065`), massimo due righe e
+sfondo bordeaux karaoke sulla parola pronunciata. Le frasi troppo dense vengono separate
+temporalmente: non si riduce il corpo e non si creano comandi dedicati al video.
+
+Evidenza: `ARPHE_ADV_RICERCA_PERSONALE_REVIEW_V4_TWO_SIZES.mp4`.
+Procedura: `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`.
+
 ## 2026-10-25 — Modulo Colorist V2: correzioni tecniche per clip, gate nativo pending
 
 La V2 offline sostituisce il precedente pseudo-matching basato sulla copia di un solo grade con
@@ -18,7 +29,7 @@ gate richiede progetto usa-e-getta, editor fermo e consenso esplicito. Dopo quel
 backlog la definizione separata dei preset ADV signature ARPHÈ. Procedura:
 `docs/23_COLORIST_MODULE.md`.
 
-Ultimo aggiornamento: sessione 2026-10-10.
+Ultimo aggiornamento: sessione 2026-10-31.
 
 <a id="workflow-control-plane"></a>
 ## Workflow Control Plane — CODICE VALIDATO / ROLLOUT PENDING

@@ -36,12 +36,12 @@ Animare `Transform.Size` con `BezierSpline`.
 4. Python legge `TrackedCenter1`.
 5. Python applica lo yoyo.
 
-### CAPTION MOBILE — PARTIAL
+### CAPTIONS FUSION ARPHÈ — SUPPORTED / APPROVATO
 
 Il probe reale del 2026-10-02 ha confermato che `CreateSubtitlesFromAudio` crea la traccia
 nativa, ma lo styling completo Track Style/Inspector non è esposto in modo affidabile dalla API
-pubblica osservata. Per ADV verticali con stile ARPHÈ usare, finché il bridge non offre una
-primitiva dedicata, il fallback verificato:
+pubblica osservata. Per ADV verticali con stile ARPHÈ usare l'azione generica `CAPTIONS` del
+workflow Vertical Social, soltanto dopo picture lock:
 
 `traccia subtitle nativa → timing/testo → Text+ Fusion → render burn-in`
 
@@ -49,8 +49,12 @@ La composizione deve partire da un Background con alpha zero; ogni caption usa u
 `Blend.SetExpression("iif(time >= start and time < end, 1, 0)")`. Non affidarsi a un
 `BezierSpline` assegnato direttamente a Blend: nel test non è rimasto attivo.
 
-Preset mobile testato: Satoshi Bold, bianco, fondo bordeaux `#680C09`, Text+ size `0.050`,
-1080×1920/30. La fascia bassa è il default: box entro il 68–82% dell'altezza, centro al 76%
+Preset mobile approvato: frase intera in Satoshi Bold maiuscolo, bianco, fondo bordeaux
+`#680C09` soltanto dietro la parola pronunciata, Text+ size `0.050` standard e `0.065`
+evidenza Bold Italic. È ammessa al massimo una parola in evidenza e un massimo di due righe.
+Se la frase non entra, dividerla temporalmente: non usare fitting dinamico o misure intermedie.
+Padding card `0.016`, distanza minima fra parole/card `0.014`, formato 1080×1920/30.
+La fascia bassa è il default: box entro il 68–82% dell'altezza, centro al 76%
 (`Center.Y = 0.24` in Fusion), con almeno il 15% libero in basso. Se collide con un volto o con
 un elemento essenziale usare la fascia alta 8–20%; mai sovrapporre testo, padding o fondo a un
 volto. Mantenere la stessa fascia per una scena, evitando salti a ogni battuta.

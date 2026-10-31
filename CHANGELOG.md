@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-10-31 — Sottotitoli Fusion ARPHÈ a due misure
+
+- Approvato il percorso generico Vertical Social `CAPTIONS` dopo picture lock.
+- Il karaoke mostra l'intera frase e sposta lo sfondo bordeaux sulla parola pronunciata.
+- Le sole misure ammesse sono `0.050` standard e `0.065` evidenza; massimo due righe.
+- Se una frase non entra, viene divisa temporalmente senza ridurre il testo.
+- Aggiunti test per parole lunghe, padding, spaziatura, safe area, timing e posizione Fusion.
+- Verifica reale: `ARPHE_ADV_RICERCA_PERSONALE_REVIEW_V4_TWO_SIZES.mp4`, approvata su
+  `PC_PERSONALE`. Nessun comando o comportamento dedicato al singolo video.
+
 ## 2026-10-15 — Voice-over CTA tail
 
 - Aggiunta `move_voiceover_tail_to_cta`: safe write chiusa che duplica una timeline ARPHÈ,

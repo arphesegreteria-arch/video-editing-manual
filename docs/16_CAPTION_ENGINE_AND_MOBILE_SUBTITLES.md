@@ -1,8 +1,26 @@
 # 16 — Caption Engine e sottotitoli mobile
 
-Stato: **PARTIAL / TESTED SU UN PROGETTO REALE**
+Stato: **SUPPORTED / APPROVATO SU PC_PERSONALE**
 
-Ultimo test: 2026-10-02, `PC_PERSONALE`, Resolve Studio `21.0.4.5`.
+Ultimo test: 2026-10-31, `PC_PERSONALE`.
+
+## Standard approvato V4
+
+La review `ARPHE_ADV_RICERCA_PERSONALE_REVIEW_V4_TWO_SIZES.mp4` ha approvato il percorso
+generico `CAPTIONS` dopo picture lock:
+
+- testo sempre maiuscolo in **Satoshi Bold**;
+- massimo una parola rilevante per frase in **Satoshi Bold Italic**;
+- soltanto due misure Fusion: `0.050` standard e `0.065` evidenza;
+- frase intera visibile e sfondo bordeaux karaoke dietro la parola pronunciata;
+- padding orizzontale della card `0.016` e distanza minima fra card/parole `0.014`;
+- una riga quando possibile, altrimenti massimo due righe centrate e bilanciate;
+- separazione temporale quando due righe non bastano, mai riduzione dinamica del testo;
+- safe area `LOWER`/`UPPER` invariata e verifica frame obbligatoria.
+
+Il contratto è riusabile: non creare tool MCP, preset, comandi o eccezioni dedicati a un singolo
+video. Trascrizione, tagli, reframing, color e Fairlight devono essere chiusi prima di generare il
+layer Fusion. Rigenerare i sottotitoli non deve modificare audio, color o montaggio.
 
 Aggiornamento bridge: 2026-10-10, contratto Vertical Social v5. L'adattatore parametrico crea un
 solo carrier Fusion lungo quanto la timeline, limita ogni cue a 84 caratteri e due righe, conserva

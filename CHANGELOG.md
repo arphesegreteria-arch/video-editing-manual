@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-11-08 — Compatibilità DaVinci Resolve Studio 21.2
+
+- `capture_timeline_frames` usa la nuova API `Timeline.ExportFrame` quando disponibile, senza
+  cambiare pagina o playhead, e mantiene il percorso compatibile per Resolve precedenti.
+- La cattura dichiara il metodo effettivo e fallisce chiuso se l'API 21.2 è presente ma rifiuta
+  l'esportazione.
+- Colorist usa `GetCDL` come read-back condizionale delle correzioni e riporta soltanto il digest;
+  l'ispezione include anche lo stato abilitato dei nodi quando `GetNodeEnabled` è disponibile.
+- Documentato l'allineamento automatico del playback frame rate introdotto da Resolve 21.2.
+
 ## 2026-10-31 — Sottotitoli Fusion ARPHÈ a due misure
 
 - Approvato il percorso generico Vertical Social `CAPTIONS` dopo picture lock.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import math
 from typing import Any
 
 from .colorist_jobs import PLAN_V2, ColoristJob, after_version_names
@@ -12,7 +13,7 @@ CORE_CLIP_METHODS = (
     "GetUniqueId", "GetName", "GetCurrentVersion", "GetVersionNameList",
     "AddVersion", "LoadVersionByName", "SetCDL",
 )
-CLIP_METHODS = CORE_CLIP_METHODS + ("GetNodeGraph", "CopyGrades")
+CLIP_METHODS = CORE_CLIP_METHODS + ("GetNodeGraph", "CopyGrades", "GetCDL")
 
 
 def _call(obj: Any, name: str, *args: Any) -> Any:
@@ -20,6 +21,24 @@ def _call(obj: Any, name: str, *args: Any) -> Any:
     if not callable(method):
         return None
     return method(*args)
+
+
+def _cdl_equivalent(actual: dict[str, object], expected: dict[str, object]) -> bool:
+    try:
+        cdl_digest(actual)
+        cdl_digest(expected)
+        if actual["NodeIndex"] != expected["NodeIndex"]:
+            return False
+        for name in ("Slope", "Offset", "Power"):
+            left = [float(value) for value in str(actual[name]).split()]
+            right = [float(value) for value in str(expected[name]).split()]
+            if any(not math.isclose(a, b, rel_tol=1e-6, abs_tol=1e-6)
+                   for a, b in zip(left, right, strict=True)):
+                return False
+        return math.isclose(float(actual["Saturation"]), float(expected["Saturation"]),
+                            rel_tol=1e-6, abs_tol=1e-6)
+    except (KeyError, TypeError, ValueError, ValidationError):
+        return False
 
 
 def _clips(timeline: Any) -> dict[str, Any]:
@@ -78,6 +97,28 @@ def inspect_colorist_context(project: Any, timeline: Any) -> dict[str, Any]:
             version = _current_version(clip)
         except ValidationError:
             available = False
+        grade_readback = None
+        if methods["GetCDL"]:
+            try:
+                cdl = _call(clip, "GetCDL", 1)
+                if isinstance(cdl, dict):
+                    grade_readback = {"node_index": 1, "cdl_sha256": cdl_digest(cdl)}
+            except Exception:
+                grade_readback = None
+        graph_state = None
+        if methods["GetNodeGraph"]:
+            try:
+                graph = _call(clip, "GetNodeGraph")
+                node_count = _call(graph, "GetNumNodes") if graph is not None else None
+                get_enabled = getattr(graph, "GetNodeEnabled", None) if graph is not None else None
+                if isinstance(node_count, int) and not isinstance(node_count, bool) and node_count >= 0:
+                    enabled = None
+                    if callable(get_enabled):
+                        values = [get_enabled(index) for index in range(1, node_count + 1)]
+                        enabled = values if all(isinstance(value, bool) for value in values) else None
+                    graph_state = {"node_count": node_count, "enabled": enabled}
+            except Exception:
+                graph_state = None
         items.append({
             "clip_id": clip_id,
             "name": str(_call(clip, "GetName") or ""),
@@ -85,6 +126,8 @@ def inspect_colorist_context(project: Any, timeline: Any) -> dict[str, Any]:
             "end_frame": _call(clip, "GetEnd"),
             "current_version": version,
             "api": methods,
+            "grade_readback": grade_readback,
+            "graph_state": graph_state,
         })
     return {
         "ok": True,
@@ -99,6 +142,10 @@ def inspect_colorist_context(project: Any, timeline: Any) -> dict[str, Any]:
 def _apply_to_clip(clip: Any, cdl: dict[str, object], drx_path: Path | None) -> None:
     if _call(clip, "SetCDL", dict(cdl)) is not True:
         raise RuntimeError("SetCDL ha restituito false")
+    if callable(getattr(clip, "GetCDL", None)):
+        applied = _call(clip, "GetCDL", int(cdl["NodeIndex"]))
+        if not isinstance(applied, dict) or not _cdl_equivalent(applied, cdl):
+            raise RuntimeError("GetCDL non conferma la correzione applicata")
     if drx_path is not None:
         graph = _call(clip, "GetNodeGraph")
         if graph is None or _call(graph, "ApplyGradeFromDRX", str(drx_path.resolve()), 0, False) is not True:

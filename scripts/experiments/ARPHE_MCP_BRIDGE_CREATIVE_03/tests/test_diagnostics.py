@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 import sys
 import tempfile
@@ -41,6 +42,21 @@ class FakeTimeline:
         return True
 
 
+class FakeTimeline21_2(FakeTimeline):
+    def __init__(self):
+        super().__init__()
+        self.exports = []
+
+    def ExportFrame(self, frame_offset, options):
+        self.exports.append((frame_offset, dict(options)))
+        return {
+            "success": True,
+            "width": 1920,
+            "height": 1080,
+            "data": base64.b64encode(b"\xff\xd8\xffnative-jpg").decode("ascii"),
+        }
+
+
 class FakeResolve:
     def __init__(self):
         self.page = "fusion"
@@ -51,6 +67,14 @@ class FakeResolve:
     def OpenPage(self, page):
         self.page = page
         return True
+
+    def GetVersionString(self):
+        return "21.0.4.5"
+
+
+class FakeResolve21_2(FakeResolve):
+    def GetVersionString(self):
+        return "21.2.0.6"
 
 
 class FakeProject:
@@ -105,6 +129,7 @@ class DiagnosticTests(unittest.TestCase):
             self.assertTrue(result[0]["ok"])
             self.assertEqual([0, 2], [entry["frame_offset"] for entry in result[0]["captures"]])
             self.assertTrue(result[0]["playhead_restored"])
+            self.assertEqual("project_export_current_frame", result[0]["capture_method"])
             self.assertEqual("fusion", resolve.page)
             self.assertEqual(original_timecode, timeline.timecode)
             self.assertEqual(2, len(list((Path(directory) / "diagnostics").glob("*.jpg"))))
@@ -112,6 +137,33 @@ class DiagnosticTests(unittest.TestCase):
             self.assertEqual(2, len(records))
             self.assertEqual({"DIAGNOSTIC_CAPTURE"}, {record.category for record in records})
             self.assertEqual({"capture_timeline_frames"}, {record.producer for record in records})
+
+    def test_resolve_21_2_capture_uses_native_export_without_moving_page_or_playhead(self):
+        resolve = FakeResolve21_2()
+        timeline = FakeTimeline21_2()
+        original_timecode = timeline.timecode
+        with tempfile.TemporaryDirectory() as directory:
+            result = capture_timeline_frames(
+                resolve, FakeProject(), timeline, self._config(Path(directory)),
+                FakeRegistry(), [0, 119]
+            )
+        self.assertEqual("timeline_export_frame", result[0]["capture_method"])
+        self.assertTrue(result[0]["playhead_restored"])
+        self.assertEqual("fusion", resolve.page)
+        self.assertEqual(original_timecode, timeline.timecode)
+        self.assertEqual([0, 119], [entry[0] for entry in timeline.exports])
+        self.assertTrue(all(entry[1]["quality"] == 100 for entry in timeline.exports))
+
+    def test_resolve_21_2_capture_fails_closed_on_native_api_error(self):
+        timeline = FakeTimeline21_2()
+        timeline.ExportFrame = lambda *_args: {"success": False, "error": "render failed"}
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(RuntimeError, "render failed"):
+                capture_timeline_frames(
+                    FakeResolve21_2(), FakeProject(), timeline, self._config(Path(directory)),
+                    FakeRegistry(), [0]
+                )
+            self.assertEqual([], list((Path(directory) / "diagnostics").glob("*.jpg")))
 
     def test_capture_does_not_prune_older_registered_or_unregistered_images(self):
         with tempfile.TemporaryDirectory() as directory:

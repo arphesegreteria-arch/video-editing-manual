@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import binascii
 from pathlib import Path
+import re
 import time
 from typing import Any
 from uuid import uuid4
@@ -114,6 +117,49 @@ def _diagnostic_root(config: CreativeConfig) -> Path:
     return root
 
 
+def _timeline_export_frame(timeline: Any, frame_offset: int, path: Path) -> bool | None:
+    """Use the Resolve 21.1.2+ frame API when exposed by the live proxy.
+
+    ``None`` means the API is not available and the caller may use the legacy
+    playhead-based path. Once the method is exposed, a rejected or malformed
+    response fails closed instead of silently switching capture semantics.
+    """
+    export_frame = getattr(timeline, "ExportFrame", None)
+    if not callable(export_frame):
+        return None
+    try:
+        result = export_frame(frame_offset, {
+            "outputType": "encodedString",
+            "encodedImageFormat": "jpg",
+            "quality": 100,
+        })
+    except Exception as exc:
+        raise RuntimeError(f"ExportFrame 21.2 fallita al frame {frame_offset}: {exc}") from exc
+    if not isinstance(result, dict) or result.get("success") is not True:
+        error = result.get("error") if isinstance(result, dict) else None
+        detail = f": {error}" if isinstance(error, str) and error else ""
+        raise RuntimeError(f"ExportFrame 21.2 rifiutata al frame {frame_offset}{detail}")
+    encoded = result.get("data")
+    if not isinstance(encoded, str) or not encoded:
+        raise RuntimeError(f"ExportFrame 21.2 non ha restituito il frame {frame_offset}")
+    try:
+        payload = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError, TypeError) as exc:
+        raise RuntimeError(f"ExportFrame 21.2 ha restituito dati non validi al frame {frame_offset}") from exc
+    if not payload.startswith(b"\xff\xd8\xff"):
+        raise RuntimeError(f"ExportFrame 21.2 non ha restituito un JPEG al frame {frame_offset}")
+    path.write_bytes(payload)
+    return True
+
+
+def _supports_timeline_export_frame(resolve: Any, timeline: Any) -> bool:
+    version = safe_call(resolve, "GetVersionString") or safe_call(resolve, "GetVersion")
+    numbers = [int(value) for value in re.findall(r"\d+", str(version))[:3]]
+    while len(numbers) < 3:
+        numbers.append(0)
+    return tuple(numbers) >= (21, 1, 2) and callable(getattr(timeline, "ExportFrame", None))
+
+
 def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: CreativeConfig,
                             registry: Registry, frame_offsets: list[int]) -> list[Any]:
     project_name = str(safe_call(project, "GetName") or "")
@@ -125,14 +171,16 @@ def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: C
 
     start, fps, offsets = _validate_offsets(timeline, frame_offsets)
     output_root = _diagnostic_root(config)
-    previous_page = safe_call(resolve, "GetCurrentPage")
-    if not safe_call(resolve, "OpenPage", "edit"):
-        raise RuntimeError("Impossibile aprire la pagina Edit per la cattura")
-    previous_timecode = safe_call(timeline, "GetCurrentTimecode")
-    if not isinstance(previous_timecode, str) or not previous_timecode:
-        if isinstance(previous_page, str) and previous_page:
-            safe_call(resolve, "OpenPage", previous_page)
-        raise RuntimeError("Impossibile leggere il timecode corrente dalla pagina Edit")
+    native_capture = _supports_timeline_export_frame(resolve, timeline)
+    previous_page = safe_call(resolve, "GetCurrentPage") if not native_capture else None
+    previous_timecode = safe_call(timeline, "GetCurrentTimecode") if not native_capture else None
+    if not native_capture:
+        if not safe_call(resolve, "OpenPage", "edit"):
+            raise RuntimeError("Impossibile aprire la pagina Edit per la cattura")
+        if not isinstance(previous_timecode, str) or not previous_timecode:
+            if isinstance(previous_page, str) and previous_page:
+                safe_call(resolve, "OpenPage", previous_page)
+            raise RuntimeError("Impossibile leggere il timecode corrente dalla pagina Edit")
     captures: list[tuple[int, str, Path]] = []
     attempted_paths: list[Path] = []
     playhead_restored = False
@@ -140,12 +188,15 @@ def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: C
         stamp = f"{time.strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
         for offset in offsets:
             timecode = frame_to_timecode(start + offset, fps)
-            if not safe_call(timeline, "SetCurrentTimecode", timecode):
-                raise RuntimeError(f"Impossibile posizionare il playhead al frame {offset}")
             path = output_root / f"ARPHE_FRAME_{stamp}_{offset:06d}.jpg"
             attempted_paths.append(path)
-            if not safe_call(project, "ExportCurrentFrameAsStill", str(path)) or not path.is_file():
-                raise RuntimeError(f"Esportazione frame {offset} fallita")
+            if native_capture:
+                _timeline_export_frame(timeline, offset, path)
+            else:
+                if not safe_call(timeline, "SetCurrentTimecode", timecode):
+                    raise RuntimeError(f"Impossibile posizionare il playhead al frame {offset}")
+                if not safe_call(project, "ExportCurrentFrameAsStill", str(path)) or not path.is_file():
+                    raise RuntimeError(f"Esportazione frame {offset} fallita")
             captures.append((offset, timecode, path))
         store = artifact_store_for(config)
         for _, _, path in captures:
@@ -164,10 +215,13 @@ def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: C
                 pass
         raise
     finally:
-        if isinstance(previous_timecode, str) and previous_timecode:
-            playhead_restored = bool(safe_call(timeline, "SetCurrentTimecode", previous_timecode))
-        if isinstance(previous_page, str) and previous_page:
-            safe_call(resolve, "OpenPage", previous_page)
+        if native_capture:
+            playhead_restored = True
+        else:
+            if isinstance(previous_timecode, str) and previous_timecode:
+                playhead_restored = bool(safe_call(timeline, "SetCurrentTimecode", previous_timecode))
+            if isinstance(previous_page, str) and previous_page:
+                safe_call(resolve, "OpenPage", previous_page)
 
     result: list[Any] = [{
         "ok": True,
@@ -177,6 +231,8 @@ def capture_timeline_frames(resolve: Any, project: Any, timeline: Any, config: C
         "fps": fps,
         "captures": [{"frame_offset": offset, "timecode": timecode}
                      for offset, timecode, _ in captures],
+        "capture_method": ("timeline_export_frame" if native_capture
+                           else "project_export_current_frame"),
         "playhead_restored": playhead_restored,
         "output_paths_disclosed": False,
     }]

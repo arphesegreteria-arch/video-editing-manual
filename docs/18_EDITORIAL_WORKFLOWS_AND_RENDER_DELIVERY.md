@@ -52,6 +52,11 @@ contratto, la chat mostra il flag `PLAYBACK_FPS_ACTION_REQUIRED`, il valore trov
 richiesto e l'istruzione `Project Settings > Master Settings`. Fino al read-back conforme non
 vengono create né timeline, né directory di staging, né job render.
 
+Da Resolve Studio 21.2, l'API ufficiale aggiorna automaticamente
+`timelinePlaybackFrameRate` quando il bridge imposta `timelineFrameRate`. Il bridge continua a
+verificare entrambi i valori in lettura: l'automatismo elimina il passaggio manuale nei nuovi
+progetti, senza indebolire il controllo sulle timeline esistenti o sui runtime precedenti.
+
 Impostare manualmente una volta il default di DaVinci in `Project Settings > Master Settings`:
 `Timeline frame rate = 30` e `Playback frame rate = 30`, quindi salvare il preset/default prima
 di creare altre timeline. Il bridge ripete il read-back a ogni preparazione e applicazione del

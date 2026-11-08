@@ -37,6 +37,12 @@ La distribuzione locale di DaVinci Resolve Studio 21.1.1 espone nel file `DaVinc
 
 L'API pubblica non offre controlli completi equivalenti a tutte le primary wheels, né espone un comando automatico affidabile per white balance o camera match. La v1 traduce quindi correzioni numeriche limitate in ASC-CDL. Temperatura/tinta e contrasto sono approssimazioni deterministiche da calibrare visivamente nel gate nativo.
 
+Resolve Studio 21.2 aggiunge `TimelineItem.GetCDL` e `Graph.GetNodeEnabled`. Il bridge li usa in
+modo condizionale: `inspect_colorist_context` restituisce soltanto SHA-256 del CDL e stato booleano
+dei nodi, mentre l'apply confronta il read-back CDL con la correzione approvata. Un disaccordo
+attiva il normale rollback delle versioni. I runtime precedenti restano compatibili e continuano a
+usare la verifica di versione colore già esistente.
+
 ## Workflow pubblico
 
 1. `inspect_colorist_context` legge clip ID, versioni colore correnti, API disponibili e preset.

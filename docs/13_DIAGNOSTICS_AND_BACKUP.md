@@ -50,6 +50,13 @@ blocchi `ImageContent` JPEG; non inserire gli helper `Image` nel JSON strutturat
 stato validato end-to-end dalla chat sia sui frame `0`, `75` e `149`, sia sugli otto lati dei
 confini della sequenza V5, con ripristino del playhead.
 
+Da Resolve Studio 21.2 il bridge preferisce `Timeline.ExportFrame`, che esporta l'offset richiesto
+senza cambiare pagina o spostare il playhead. Il risultato dichiara
+`capture_method: timeline_export_frame`. Su versioni precedenti resta disponibile il percorso
+compatibile `project_export_current_frame`, con ripristino esplicito di pagina e playhead. Se la
+nuova API è presente ma rifiuta la cattura, il bridge fallisce chiuso e non cambia automaticamente
+semantica durante la stessa operazione.
+
 ## Backup su disco esterno
 
 Con Resolve aperto sul progetto ARPHE corrente:

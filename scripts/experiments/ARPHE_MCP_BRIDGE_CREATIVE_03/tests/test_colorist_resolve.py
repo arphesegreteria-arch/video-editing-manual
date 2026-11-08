@@ -29,6 +29,9 @@ class FakeGraph:
     def GetNumNodes(self):
         return 1
 
+    def GetNodeEnabled(self, node_index):
+        return node_index == 1
+
     def ApplyGradeFromDRX(self, path, mode, all_layers=False):
         self.drx_calls.append((path, mode, all_layers))
         return self.apply_ok
@@ -80,6 +83,11 @@ class FakeClip:
     def SetCDL(self, payload):
         self.cdl_calls.append(dict(payload))
         return self.cdl_ok
+
+    def GetCDL(self, node_index):
+        if node_index != 1:
+            return None
+        return dict(self.cdl_calls[-1] if self.cdl_calls else CDL_A)
 
     def CopyGrades(self, targets):
         self.copy_calls.append([target.clip_id for target in targets])
@@ -146,7 +154,20 @@ class ColoristResolveTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(["clip-a", "clip-b"], [item["clip_id"] for item in result["clips"]])
         self.assertTrue(result["technically_available"])
+        self.assertEqual(1, result["clips"][0]["grade_readback"]["node_index"])
+        self.assertEqual({"node_count": 1, "enabled": [True]},
+                         result["clips"][0]["graph_state"])
         self.assertEqual([], clips[0].add_calls)
+
+    def test_resolve_21_2_cdl_readback_mismatch_restores_previous_versions(self):
+        clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]
+        clips[1].GetCDL = lambda _node_index: CDL_A
+        result = apply_colorist_job(FakeProject(), FakeTimeline(clips), approved_job(clips))
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["recoverable"])
+        self.assertIn("GetCDL", result["error"])
+        self.assertEqual("Original", clips[0].current)
+        self.assertEqual("Original", clips[1].current)
 
     def test_v2_without_drx_does_not_require_legacy_copy_or_node_graph_api(self):
         clips = [FakeClip("clip-a", "Camera A"), FakeClip("clip-b", "Camera B")]

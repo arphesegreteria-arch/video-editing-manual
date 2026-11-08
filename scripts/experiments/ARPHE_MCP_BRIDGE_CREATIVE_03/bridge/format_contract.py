@@ -114,33 +114,43 @@ def apply_project_format(project: Any, contract: ResolvedFormat) -> dict[str, st
         "timelineResolutionWidth": str(contract.width),
         "timelineResolutionHeight": str(contract.height),
         "timelineFrameRate": _rate_label(contract.project_rate),
+        "timelinePlaybackFrameRate": _rate_label(contract.playback_rate),
     }
     previous = {key: safe_call(project, "GetSetting", key) for key in requested}
-    changed: list[str] = []
-    for key, value in requested.items():
+
+    def rollback() -> None:
+        # Restore playback last because restoring timelineFrameRate may update it implicitly.
+        for restore_key in requested:
+            if previous[restore_key] is not None:
+                safe_call(project, "SetSetting", restore_key, str(previous[restore_key]))
+
+    for key in ("timelineResolutionWidth", "timelineResolutionHeight", "timelineFrameRate"):
+        value = requested[key]
         if not safe_call(project, "SetSetting", key, value):
-            for restore_key in reversed(changed):
-                if previous[restore_key] is not None:
-                    safe_call(project, "SetSetting", restore_key, str(previous[restore_key]))
+            rollback()
             raise ValidationError(f"Resolve ha rifiutato {key}")
-        changed.append(key)
+    playback = safe_call(project, "GetSetting", "timelinePlaybackFrameRate")
+    if not _equivalent(playback, contract.playback_rate):
+        if not safe_call(project, "SetSetting", "timelinePlaybackFrameRate",
+                         requested["timelinePlaybackFrameRate"]):
+            rollback()
+            raise PlaybackFpsActionRequired(playback, requested["timelinePlaybackFrameRate"])
     actual = {key: safe_call(project, "GetSetting", key) for key in requested}
-    actual["timelinePlaybackFrameRate"] = safe_call(project, "GetSetting", "timelinePlaybackFrameRate")
     matches = (
         str(actual["timelineResolutionWidth"]) == str(contract.width)
         and str(actual["timelineResolutionHeight"]) == str(contract.height)
         and _equivalent(actual["timelineFrameRate"], contract.project_rate)
+        and _equivalent(actual["timelinePlaybackFrameRate"], contract.playback_rate)
     )
     if not matches:
+        rollback()
         raise ValidationError("Project format read-back non conforme")
-    require_project_playback(project, contract.playback_rate,
-                             actual=actual["timelinePlaybackFrameRate"])
     return {key: str(value) for key, value in actual.items()}
 
 
 def require_project_playback(project: Any, required: Fraction,
                              actual: object | None = None) -> str:
-    """Fail closed when Resolve's read-only playback rate needs operator action."""
+    """Fail closed when the current playback rate does not match the contract."""
     value = safe_call(project, "GetSetting", "timelinePlaybackFrameRate") if actual is None else actual
     if not _equivalent(value, required):
         raise PlaybackFpsActionRequired(value, _rate_label(required))

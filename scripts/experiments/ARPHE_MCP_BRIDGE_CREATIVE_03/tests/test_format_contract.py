@@ -85,6 +85,75 @@ class FormatContractTests(unittest.TestCase):
         self.assertNotIn(("timelinePlaybackFrameRate", "30"), project.calls)
         self.assertEqual("30", result["timelinePlaybackFrameRate"])
 
+    def test_resolve_21_2_playback_rate_is_written_when_needed(self):
+        project = FakeSettings()
+        project.settings.update({
+            "timelineResolutionWidth": "1920",
+            "timelineResolutionHeight": "1080",
+            "timelineFrameRate": "24",
+            "timelinePlaybackFrameRate": "24",
+        })
+        result = apply_project_format(
+            project, ResolvedFormat(1080, 1920, Fraction(30), Fraction(30)))
+        self.assertIn(("timelinePlaybackFrameRate", "30"), project.calls)
+        self.assertEqual("30", result["timelinePlaybackFrameRate"])
+
+    def test_automatic_playback_alignment_avoids_redundant_write(self):
+        class AutoPlayback(FakeSettings):
+            def SetSetting(self, key, value):
+                accepted = super().SetSetting(key, value)
+                if accepted and key == "timelineFrameRate":
+                    self.settings["timelinePlaybackFrameRate"] = value
+                return accepted
+
+        project = AutoPlayback()
+        project.settings["timelinePlaybackFrameRate"] = "24"
+        apply_project_format(project, ResolvedFormat(1080, 1920, Fraction(30), Fraction(30)))
+        self.assertNotIn(("timelinePlaybackFrameRate", "30"), project.calls)
+
+    def test_rejected_playback_write_rolls_back_the_complete_snapshot(self):
+        class RejectTargetPlayback(FakeSettings):
+            def SetSetting(self, key, value):
+                self.calls.append((key, value))
+                if key == "timelinePlaybackFrameRate" and value == "30":
+                    return False
+                self.settings[key] = value
+                return True
+
+        project = RejectTargetPlayback()
+        original = {
+            "timelineResolutionWidth": "1920",
+            "timelineResolutionHeight": "1080",
+            "timelineFrameRate": "24",
+            "timelinePlaybackFrameRate": "24",
+        }
+        project.settings.update(original)
+        with self.assertRaises(ValidationError):
+            apply_project_format(
+                project, ResolvedFormat(1080, 1920, Fraction(30), Fraction(30)))
+        self.assertEqual(original, project.settings)
+        self.assertIn(("timelinePlaybackFrameRate", "24"), project.calls)
+
+    def test_readback_mismatch_rolls_back_the_complete_snapshot(self):
+        class BadReadback(FakeSettings):
+            def GetSetting(self, key):
+                if key == "timelineResolutionWidth" and self.settings.get(key) == "1080":
+                    return "1079"
+                return super().GetSetting(key)
+
+        project = BadReadback()
+        original = {
+            "timelineResolutionWidth": "1920",
+            "timelineResolutionHeight": "1080",
+            "timelineFrameRate": "24",
+            "timelinePlaybackFrameRate": "24",
+        }
+        project.settings.update(original)
+        with self.assertRaisesRegex(ValidationError, "read-back"):
+            apply_project_format(
+                project, ResolvedFormat(1080, 1920, Fraction(30), Fraction(30)))
+        self.assertEqual(original, project.settings)
+
     def test_readback_mismatch_raises_before_editing(self):
         project = FakeSettings()
         contract = ResolvedFormat(1920, 1080, Fraction(30000, 1001), Fraction(30000, 1001))

@@ -220,7 +220,7 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
             self.assertEqual({"width": "1080", "height": "1920", "fps": "30", "playback_fps": "30"}, result["actual_settings"])
             self.assertEqual(1, project.pool.create_calls)
 
-    def test_playback_mismatch_returns_chat_action_flag_before_timeline_create(self):
+    def test_rejected_playback_write_returns_chat_action_flag_before_timeline_create(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             project = ReadOnlyPlaybackProject()
@@ -234,7 +234,8 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
             self.assertEqual("30", result.get("required_playback_fps"))
             self.assertIn("Project Settings", result.get("operator_action", ""))
             self.assertEqual(0, project.pool.create_calls)
-            self.assertNotIn(("timelinePlaybackFrameRate", "30"), project.set_calls)
+            self.assertIn(("timelinePlaybackFrameRate", "30"), project.set_calls)
+            self.assertIn(("timelinePlaybackFrameRate", "24"), project.set_calls)
 
     def test_visibility_window_has_hold_and_closed_boundaries(self):
         class FakeComp:

@@ -120,8 +120,8 @@ class SafetyTests(unittest.TestCase):
         }
 
         names = set(EXPOSED_TOOL_NAMES)
-        self.assertEqual(118, len(EXPOSED_TOOL_NAMES))
-        self.assertEqual(118, len(names))
+        self.assertEqual(122, len(EXPOSED_TOOL_NAMES))
+        self.assertEqual(122, len(names))
         self.assertTrue(expected.issubset(names))
         self.assertTrue(residual_adv.isdisjoint(names))
 

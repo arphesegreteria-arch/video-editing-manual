@@ -165,6 +165,10 @@ from .longform_tools import (apply_plan as do_apply_longform_plan,
                              transcript_chunk as do_transcript_chunk,
                              transcript_metadata as do_transcript_metadata,
                              validate_plan as do_validate_longform_plan)
+from .native_transcription21 import (
+    read_native_transcription21 as do_read_native_transcription21,
+    start_native_transcription21 as do_start_native_transcription21,
+)
 from .project_tools import (create_project as do_create_project,
                             save_project as do_save_project,
                             set_current_project as do_set_current_project)
@@ -197,6 +201,9 @@ from .resolve_retirement import (
 from .media_verification import verify_and_promote_batch as do_verify_render_batch
 from .maintenance_scheduler import start_lazy_maintenance
 from .resolve_connection import RESOLVE_ACCESS_LOCK, context, safe_call
+from .resolve21_compat import compatibility_card as do_resolve21_compatibility
+from .review_export21 import (export_review_frames21 as do_export_review_frames21,
+                              validate_review_target)
 from .safety import PlaybackFpsActionRequired, ValidationError
 from .timeline_tools import (create_safe_working_timeline as do_safe_timeline,
                              create_timeline as do_create_timeline,
@@ -1618,6 +1625,19 @@ def resolve_status() -> dict[str, Any]:
 
 
 @mcp.tool(annotations=READ_ONLY)
+def inspect_resolve21_compatibility() -> dict[str, Any]:
+    """Inspect Resolve 21 native API readiness without modifying the project."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            resolve, manager, project, timeline, _, _, error = _runtime()
+            if error and resolve is None:
+                return {**error, "state": "RESOLVE_UNREACHABLE"}
+            return do_resolve21_compatibility(resolve, manager, project, timeline)
+        except Exception as exc:
+            return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
 def get_feature_flags() -> dict[str, Any]:
     """Return configured, implemented, available and validated state separately."""
     with RESOLVE_ACCESS_LOCK:
@@ -1903,6 +1923,40 @@ def get_transcript_chunk(transcript_path: str, start_second: float,
     except Exception as exc: return _error(exc)
 
 
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def start_native_transcription21(clip_id: str,
+                                 use_speaker_detection: bool = True) -> dict[str, Any]:
+    """Start or resume native Resolve transcription for one current timeline clip."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, timeline, config, registry, error = _runtime()
+            if error:
+                return error
+            if not project or not timeline:
+                return {"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}
+            return _call(do_start_native_transcription21, project, timeline, config, registry,
+                         clip_id, use_speaker_detection)
+        except Exception as exc:
+            return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def read_native_transcription21(job_id: str, start_segment: int = 0,
+                                max_segments: int = 50) -> dict[str, Any]:
+    """Poll and read a bounded chunk from one native Resolve transcription job."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, timeline, config, registry, error = _runtime()
+            if error:
+                return error
+            if not project or not timeline:
+                return {"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}
+            return _call(do_read_native_transcription21, project, timeline, config, registry,
+                         job_id, start_segment, max_segments)
+        except Exception as exc:
+            return _error(exc)
+
+
 @mcp.tool(annotations=READ_ONLY)
 def validate_longform_edit_plan(clips: list[dict[str, Any]], fps: float = 30.0) -> dict[str, Any]:
     """Validate a non-destructive longform plan and convert seconds to source frames."""
@@ -2110,6 +2164,31 @@ def capture_timeline_frames(frame_offsets: list[int]) -> CallToolResult:
     except Exception as exc:
         result = [_error(exc)]
 
+    metadata = result[0]
+    content = [TextContent(type="text", text=json.dumps(metadata, ensure_ascii=False, indent=2))]
+    content.extend(item.to_image_content() for item in result[1:] if isinstance(item, Image))
+    return CallToolResult(content=content, structuredContent=metadata)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def export_review_frames21(frame_offsets: list[int], mode: str = "frames",
+                           roi: dict[str, float] | None = None,
+                           max_dimension: int = 1600, quality: int = 90) -> CallToolResult:
+    """Export native Resolve 21.2 frames or a labelled grid without moving the playhead."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, timeline, config, registry, error = _runtime()
+            if error:
+                result: list[Any] = [error]
+            elif not project or not timeline:
+                result = [{"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}]
+            else:
+                validate_review_target(project, timeline, config, registry)
+                result = do_export_review_frames21(
+                    timeline, frame_offsets, mode, roi, max_dimension, quality
+                )
+        except Exception as exc:
+            result = [_error(exc)]
     metadata = result[0]
     content = [TextContent(type="text", text=json.dumps(metadata, ensure_ascii=False, indent=2))]
     content.extend(item.to_image_content() for item in result[1:] if isinstance(item, Image))

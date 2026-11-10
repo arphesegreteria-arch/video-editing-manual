@@ -64,6 +64,15 @@ doppioni, perché il Text+ è già impresso nel video.
 
 Procedura, limiti e gate di promozione: `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md`.
 
+## Color ADV ARPHÈ: riferimento Social Plus
+
+Per uniformare la resa delle ADV, seguire lo
+[standard visivo Social Plus](23_COLORIST_MODULE.md#standard-visivo-social-plus).
+Il riferimento è Ibrido Social Plus V7: risultato simile tra i video, regolazioni calibrate sul
+singolo girato. Non applicare un preset numerico identico a tutte le sorgenti e non confondere
+una correzione parziale con il look completo. Verificare le capacità disponibili e confrontare
+il risultato con la review di riferimento prima dell'approvazione estetica.
+
 ## Regola estetica
 
 Il punto migliore da tracciare può non essere il punto migliore da mettere al centro.

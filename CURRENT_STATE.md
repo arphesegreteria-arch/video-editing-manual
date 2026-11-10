@@ -1,5 +1,15 @@
 # CURRENT STATE
 
+## 2026-11-10 — Social Plus come riferimento visivo ADV
+
+Per i video ADV ARPHÈ il riferimento estetico è **Ibrido Social Plus V7**. Le regolazioni devono
+essere calibrate sul singolo girato per ottenere una resa simile e riconoscibile, senza imporre
+valori numerici identici. Lo standard e i criteri di confronto sono in
+[Modulo Colorist: Social Plus](docs/23_COLORIST_MODULE.md#standard-visivo-social-plus).
+
+Decisione editoriale e documentale: nessuna modifica a preset, bridge, feature flag o gate
+tecnici. La disponibilità delle singole operazioni resta da verificare sul target corrente.
+
 ## 2026-10-31 — Sottotitoli Fusion ARPHÈ approvati
 
 Il workflow generico Vertical Social `CAPTIONS` è approvato su `PC_PERSONALE` dopo applicazione
@@ -29,7 +39,7 @@ gate richiede progetto usa-e-getta, editor fermo e consenso esplicito. Dopo quel
 backlog la definizione separata dei preset ADV signature ARPHÈ. Procedura:
 `docs/23_COLORIST_MODULE.md`.
 
-Ultimo aggiornamento: sessione 2026-10-31.
+Ultimo aggiornamento documentale: 2026-11-10. Le evidenze tecniche restano datate nelle rispettive sezioni.
 
 <a id="workflow-control-plane"></a>
 ## Workflow Control Plane — CODICE VALIDATO / ROLLOUT PENDING

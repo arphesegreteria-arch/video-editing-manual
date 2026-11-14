@@ -124,13 +124,21 @@ class FakeProject:
 
 
 class AssetToolTests(unittest.TestCase):
-    def config(self, root: Path):
-        return SimpleNamespace(
+    def config(self, root: Path, ownership: bool = False):
+        values = dict(
             flags={**DEFAULT_FLAGS, "CAP_ASSETS": True},
             asset_root=root,
             media_roots=(),
             allowed_timelines=frozenset(),
         )
+        if ownership:
+            values.update(
+                workstation_id="PC_PERSONALE",
+                timeline_element_control_path=root / "control.json",
+                timeline_element_handle_ttl_seconds=300,
+                timeline_element_removal_ttl_seconds=600,
+            )
+        return SimpleNamespace(**values)
 
     def registry(self):
         return SimpleNamespace(timeline_allowed=lambda _project, _timeline: True)
@@ -158,6 +166,38 @@ class AssetToolTests(unittest.TestCase):
                 "mediaType": 1,
                 "trackIndex": 2,
             }, pool.records[0])
+
+    def test_asset_registers_ownership_only_after_verified_readback(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            image = root / "chart.png"
+            image.write_bytes(b"png")
+            timeline = FakeTimeline()
+            pool = FakePool(timeline)
+            with patch("bridge.asset_tools.register_created_item", return_value={"ownership_id": "opaque"}) as register:
+                result = add_asset(
+                    FakeProject(pool), timeline, self.config(root, ownership=True), self.registry(),
+                    str(image), "image", 30, 120, 2,
+                )
+            self.assertTrue(result["ok"])
+            register.assert_called_once()
+            args = register.call_args.args
+            self.assertEqual(("video", 2), args[3:5])
+            self.assertEqual("add_image_asset", args[6])
+
+    def test_asset_registration_failure_never_reports_success(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            image = root / "chart.png"
+            image.write_bytes(b"png")
+            timeline = FakeTimeline()
+            pool = FakePool(timeline)
+            with patch("bridge.asset_tools.register_created_item", side_effect=ValidationError("store failed")):
+                with self.assertRaisesRegex(ValidationError, "store failed"):
+                    add_asset(
+                        FakeProject(pool), timeline, self.config(root, ownership=True), self.registry(),
+                        str(image), "image", 30, 120, 2,
+                    )
 
     def test_image_asset_rejects_unverified_timeline_range(self):
         with tempfile.TemporaryDirectory() as raw:

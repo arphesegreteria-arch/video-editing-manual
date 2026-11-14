@@ -5,6 +5,7 @@ from typing import Any
 from .safety import ValidationError
 from .longform_tools import allowed_media, import_media_item
 from .resolve_connection import safe_call
+from .timeline_element_control import register_created_item
 
 
 def _range(raw: object, label: str, maximum: int) -> tuple[int, int]:
@@ -60,5 +61,9 @@ def apply_provided_broll(resolve: object, project: object, timeline: object, con
                                                         "mediaType": 1, "trackIndex": track}]) or []
     if len(appended) != 1 or int(safe_call(appended[0], "GetDuration") or 0) != end - start:
         raise ValidationError("Read-back B-roll non corrisponde al piano")
+    register_created_item(
+        config, project, timeline, "video", track, appended[0],
+        "apply_vertical_social_broll", str(action.get("action_id") or "B_ROLL_PROVIDED"),
+    )
     return {"ok": True, "timeline": name, "track_index": track,
             "timeline_range": [start, end], "source_range": [source_start, source_end]}

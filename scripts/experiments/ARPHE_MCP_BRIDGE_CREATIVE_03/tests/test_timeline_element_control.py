@@ -17,6 +17,7 @@ from bridge.timeline_element_control import (
     execute_element_removal,
     inspect_elements,
     prepare_element_removal,
+    register_created_item,
     set_element_enabled,
     snapshot_fingerprint,
 )
@@ -200,6 +201,30 @@ class TimelineElementStoreTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     store.issue_handle(replace(snapshot(), start_frame=200, end_frame=250), now=NOW)
             self.assertEqual(previous, path.read_bytes())
+
+    def test_register_created_item_persists_exact_post_readback_ownership(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            timeline = LiveTimeline()
+            item = LiveItem(10, 40, "Caption overlay", "caption-media")
+            timeline.tracks["video"][1] = [item]
+            project = LiveProject(timeline)
+            config = SimpleNamespace(
+                workstation_id="PC_PERSONALE",
+                timeline_element_control_path=root / "control.json",
+                timeline_element_handle_ttl_seconds=300,
+                timeline_element_removal_ttl_seconds=600,
+            )
+            evidence = register_created_item(
+                config, project, timeline, "video", 1, item,
+                "create_vertical_social_caption", "caption-action-cap",
+            )
+            self.assertRegex(evidence["ownership_id"], r"^ownership_[0-9a-f]{32}$")
+            store = TimelineElementStore(root / "control.json", "PC_PERSONALE")
+            snap = capture_item_snapshot(
+                "PC_PERSONALE", project, timeline, "video", 1, item,
+            )
+            self.assertIsNotNone(store.matching_ownership(snap))
 
 
 class LiveMediaPoolItem:

@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -53,6 +54,32 @@ class Pool:
 
 
 class MusicBedTests(unittest.TestCase):
+    def test_verified_music_item_registers_timeline_ownership(self):
+        from bridge.asset_tools import set_music_bed
+        from bridge.registry import Registry
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw); (root / "dreamy.mp4").write_bytes(b"music")
+            timeline = Timeline()
+            project = SimpleNamespace(
+                GetName=lambda: "ARPHE_PROJECT", GetMediaPool=lambda: Pool(timeline),
+                GetMediaStorage=lambda: None, SetCurrentTimeline=lambda _t: True,
+                GetTimelineCount=lambda: 1, GetTimelineByIndex=lambda _n: timeline,
+                GetSetting=lambda _k: "", SetSetting=lambda _k, _v: True,
+            )
+            config = SimpleNamespace(
+                flags={**DEFAULT_FLAGS, "CAP_ASSETS": True}, asset_root=root,
+                allowed_timelines=frozenset(), timeline_element_control_path=root / "control.json",
+            )
+            registry = Registry(root / "state.json"); registry.add_timeline("ARPHE_PROJECT", "ARPHE_TEST")
+            with patch("bridge.asset_tools.register_created_item", return_value={"ownership_id": "opaque"}) as register:
+                result = set_music_bed(
+                    project, timeline, config, registry, str(root / "dreamy.mp4"), -24.0, 12, 12,
+                )
+            self.assertTrue(result["ok"])
+            register.assert_called_once()
+            self.assertEqual(("audio", 2), register.call_args.args[3:5])
+            self.assertEqual("set_music_bed", register.call_args.args[6])
+
     def test_places_owned_music_and_second_call_is_idempotent(self):
         from bridge.asset_tools import set_music_bed
         from bridge.registry import Registry

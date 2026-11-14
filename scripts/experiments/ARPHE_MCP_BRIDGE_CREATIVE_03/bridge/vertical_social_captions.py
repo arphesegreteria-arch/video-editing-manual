@@ -28,6 +28,7 @@ from .fusion_tools import (_media_out, _new_tool, _rgb, _set, _set_color,
 from .resolve_connection import safe_call
 from .safety import ValidationError
 from .vertical_social_overlay import create_overlay_composition
+from .timeline_element_control import register_created_item, timeline_item_track_index
 
 
 def lower_caption_layout() -> dict[str, Any]:
@@ -463,6 +464,11 @@ def apply_caption_action(project: object, timeline: object, config: Any,
     item, comp = create_overlay_composition(
         project, timeline, config, 0, total_frames, f"CAPTIONS_{action['action_id']}")
     graph = build_caption_graph(comp, plan["phrases"], config.palette)
+    register_created_item(
+        config, project, timeline, "video",
+        timeline_item_track_index(timeline, "video", item), item,
+        "apply_vertical_social_captions", str(action["action_id"]),
+    )
     return {"ok": True, "action_id": str(action["action_id"]),
             "timeline": str(safe_call(timeline, "GetName") or ""),
             "range": [0, total_frames], "timeline_item": str(safe_call(item, "GetName") or ""),

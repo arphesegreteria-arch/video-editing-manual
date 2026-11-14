@@ -4,6 +4,8 @@ from pathlib import Path
 import inspect
 import sys
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +20,8 @@ from bridge.creative_tools import (  # noqa: E402
     add_review_card,
     create_review_sequence,
 )
-from bridge.fusion_tools import connect_input  # noqa: E402
+from bridge.fusion_tools import connect_input, create_composition  # noqa: E402
+from bridge.config import DEFAULT_FLAGS, DEFAULT_PALETTE  # noqa: E402
 
 
 class FakeOutput:
@@ -195,6 +198,41 @@ class FusionGraphTests(unittest.TestCase):
         self.assertFalse(original.deleted)
         self.assertTrue(created.deleted)
         self.assertFalse(media_out.deleted)
+
+    def test_composition_registers_exact_item_only_after_graph_readback(self):
+        item = SimpleNamespace(
+            SetName=lambda _name: True,
+            GetName=lambda: "ARPHE_TEST_COMP",
+            GetUniqueId=lambda: "fusion-item-id",
+            GetDuration=lambda *_args: 100,
+            GetFusionCompByIndex=lambda _index: object(),
+        )
+        timeline = SimpleNamespace(
+            GetName=lambda: "ARPHE_TEST",
+            InsertFusionCompositionIntoTimeline=lambda: item,
+            GetTrackCount=lambda _kind: 1,
+            GetItemListInTrack=lambda _kind, _track: [item],
+        )
+        project = SimpleNamespace(GetName=lambda: "ARPHE_PROJECT")
+        config = SimpleNamespace(
+            flags={**DEFAULT_FLAGS, "CAP_FUSION": True},
+            allowed_timelines=frozenset(),
+            palette=DEFAULT_PALETTE,
+            timeline_element_control_path=Path("control.json"),
+        )
+        registry = SimpleNamespace(
+            timeline_allowed=lambda *_args: True,
+            add_element=lambda *_args: None,
+        )
+        with patch("bridge.fusion_tools._new_tool", return_value=object()), \
+             patch("bridge.fusion_tools._media_out", return_value=object()), \
+             patch("bridge.fusion_tools.connect_input", return_value=True), \
+             patch("bridge.fusion_tools.register_created_item", return_value={"ownership_id": "opaque"}) as register:
+            result = create_composition(project, timeline, config, registry, "TEST_COMP", 0, 100)
+        self.assertTrue(result["ok"])
+        register.assert_called_once()
+        self.assertEqual(("video", 1), register.call_args.args[3:5])
+        self.assertEqual("create_fusion_composition", register.call_args.args[6])
 
 
 if __name__ == "__main__":

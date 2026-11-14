@@ -8,6 +8,7 @@ from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, allowed_asset, allowed_music_asset, validate_frame_range, validate_music_settings
 from .safety import arphe_name
+from .timeline_element_control import register_created_item
 
 
 def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Registry, path: str,
@@ -75,6 +76,10 @@ def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Reg
         )
     created_name = arphe_name(selected.stem, "ASSET")
     safe_call(item, "SetName", created_name)
+    register_created_item(
+        config, project, timeline, "video", int(track_index), item,
+        f"add_{kind}_asset", created_name,
+    )
     return {"ok": True, "action": f"add_{kind}_asset", "asset_name": selected.name,
             "created_item_name": created_name, "timeline": timeline_name,
             "frame_range": [start, end], "track_index": int(track_index),
@@ -144,6 +149,10 @@ def set_music_bed(project: Any, timeline: Any, config: CreativeConfig, registry:
         raise ValidationError("Applicazione volume base musicale fallita")
     desired["track_index"] = track
     registry.save_music_bed(project_name, timeline_name, desired)
+    register_created_item(
+        config, project, timeline, "audio", track, item,
+        "set_music_bed", "ARPHE_MUSIC_BED",
+    )
     return {"ok": True, "action": "set_music_bed", "asset_name": selected.name,
             "status": "APPLIED", "track_index": track, "frame_range": [video_start, video_end],
             "absolute_path_returned": False}

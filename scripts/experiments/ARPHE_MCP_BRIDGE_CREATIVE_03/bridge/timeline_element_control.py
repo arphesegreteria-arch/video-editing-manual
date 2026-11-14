@@ -331,6 +331,18 @@ class TimelineElementStore:
         }
         with self._lock:
             data = self._load()
+            existing = [
+                dict(value) for value in data["ownership"].values()
+                if isinstance(value, dict)
+                and value.get("active") is True
+                and value.get("identity") == identity
+                and value.get("action") == record["action"]
+                and value.get("native_reference") == record["native_reference"]
+            ]
+            if len(existing) == 1:
+                return existing[0]
+            if len(existing) > 1:
+                raise ValidationError("Ownership duplicata nello store")
             data["ownership"][ownership_id] = record
             self._save(data)
         return dict(record)
@@ -525,6 +537,56 @@ def store_for_config(config: object) -> TimelineElementStore:
         int(getattr(config, "timeline_element_handle_ttl_seconds", 300)),
         int(getattr(config, "timeline_element_removal_ttl_seconds", 600)),
     )
+
+
+def timeline_item_track_index(
+    timeline: object, media_type: str, item: object
+) -> int:
+    if media_type not in {"video", "audio"}:
+        raise ValidationError("media_type deve essere video o audio")
+    matches: list[int] = []
+    count = _required_int(
+        safe_call(timeline, "GetTrackCount", media_type) or 0, "track_count"
+    )
+    for track in range(1, count + 1):
+        items = safe_call(timeline, "GetItemListInTrack", media_type, track)
+        if items is None:
+            raise ValidationError("Read-back traccia elemento creato non disponibile")
+        if any(candidate is item for candidate in list(items)):
+            matches.append(track)
+    if len(matches) != 1:
+        raise ValidationError("Elemento creato non presente su una sola traccia")
+    return matches[0]
+
+
+def register_created_item(
+    config: object,
+    project: object,
+    timeline: object,
+    media_type: str,
+    track_index: int,
+    item: object,
+    action: str,
+    native_reference: str,
+) -> dict[str, object]:
+    """Persist ownership only after a caller has completed its Resolve read-back.
+
+    Older tests and pre-migration callers may provide a config without the Task 5
+    store path.  That transitional shape cannot claim ownership and is reported
+    explicitly as unregistered; once Task 5 lands, every loaded config has a path.
+    """
+    if not isinstance(getattr(config, "timeline_element_control_path", None), Path):
+        return {"registered": False, "ownership_id": None}
+    store = store_for_config(config)
+    snapshot = capture_item_snapshot(
+        store.workstation_id, project, timeline, media_type, track_index, item
+    )
+    ownership = store.register_ownership(snapshot, action, native_reference)
+    return {
+        "registered": True,
+        "ownership_id": ownership["ownership_id"],
+        "identity_fingerprint": ownership["identity_fingerprint"],
+    }
 
 
 def _require_allowed_target(

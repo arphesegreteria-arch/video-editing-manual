@@ -48,10 +48,13 @@ EXPOSED_TOOL_NAMES = (
     "restore_colorist_preview", "submit_colorist_review",
     "inspect_voice_isolation", "prepare_voice_isolation",
     "apply_voice_isolation_job", "restore_voice_isolation_job",
+    "inspect_timeline_elements", "set_timeline_element_enabled",
+    "prepare_timeline_element_removal", "execute_timeline_element_removal",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {
     "run_python", "run_shell", "delete_project", "delete_timeline",
     "add_fusion_node", "add_any_node", "set_any_fusion_property", "eval_fusion_script",
+    "delete_clip", "delete_clips", "remove_timeline_item", "set_any_clip_property",
 }
 

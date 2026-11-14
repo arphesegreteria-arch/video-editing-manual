@@ -19,6 +19,7 @@ CAPABILITY_NAMES = (
     "CAP_VERTICAL_SOCIAL",
     "CAP_BRANDED_LONGFORM_EDITORIAL", "CAP_WORKFLOW_CONTROL_PLANE", "CAP_COLORIST",
     "CAP_VOICE_ISOLATION",
+    "CAP_TIMELINE_ELEMENT_CONTROL",
 )
 
 DEFAULT_PALETTE = {
@@ -52,6 +53,7 @@ DEFAULT_FLAGS = {
     "CAP_WORKFLOW_CONTROL_PLANE": False,
     "CAP_COLORIST": False,
     "CAP_VOICE_ISOLATION": False,
+    "CAP_TIMELINE_ELEMENT_CONTROL": False,
 }
 
 ALLOWED_RENDER_PAIRS = {("mp4", "H264"), ("mov", "ProRes422HQ")}
@@ -105,6 +107,9 @@ class CreativeConfig:
     workflow_control_jobs_path: Path = Path("workflow_control_jobs.json")
     colorist_jobs_path: Path = Path("colorist_jobs.json")
     colorist_presets_path: Path = Path("colorist_presets.json")
+    timeline_element_control_path: Path = Path("timeline_element_control.json")
+    timeline_element_handle_ttl_seconds: int = 300
+    timeline_element_removal_ttl_seconds: int = 600
 
 
 def _path(value: str, base: Path) -> Path:
@@ -116,6 +121,16 @@ def _registry_path(value: object, package_default: Path) -> Path:
         return package_default.resolve()
     selected = Path(os.path.expandvars(str(value))).expanduser()
     return (selected if selected.is_absolute() else package_default.parent / selected).resolve()
+
+
+def _bounded_ttl(raw: dict[str, Any], key: str, default: int,
+                 minimum: int, maximum: int) -> int:
+    value = raw.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"TTL {key} deve essere un intero")
+    if not minimum <= value <= maximum:
+        raise ValueError(f"TTL {key} deve essere tra {minimum} e {maximum} secondi")
+    return value
 
 
 def load_config(path: Path | None = None) -> CreativeConfig:
@@ -151,6 +166,12 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         raise ValueError("Coppia render_format/render_codec non consentita")
     state_path = _path(str(raw.get("state_path", "")), base / "creative_state.json")
     editorial_root = state_path.parent
+    timeline_element_handle_ttl_seconds = _bounded_ttl(
+        raw, "timeline_element_handle_ttl_seconds", 300, 30, 900
+    )
+    timeline_element_removal_ttl_seconds = _bounded_ttl(
+        raw, "timeline_element_removal_ttl_seconds", 600, 60, 1800
+    )
     return CreativeConfig(
         path=selected,
         asset_root=_path(str(raw.get("asset_root", "")), base / "assets"),
@@ -232,4 +253,10 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         colorist_presets_path=_registry_path(
             raw.get("colorist_presets_path"), package_root / "colorist_presets.json"
         ),
+        timeline_element_control_path=_path(
+            str(raw.get("timeline_element_control_path", "")),
+            base / "timeline_element_control.json",
+        ),
+        timeline_element_handle_ttl_seconds=timeline_element_handle_ttl_seconds,
+        timeline_element_removal_ttl_seconds=timeline_element_removal_ttl_seconds,
     )

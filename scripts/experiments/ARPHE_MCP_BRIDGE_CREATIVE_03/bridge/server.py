@@ -213,6 +213,13 @@ from .timeline_dialogue_cleanup import (
     get_timeline_dialogue_cleanup_job as do_get_timeline_dialogue_cleanup_job,
     start_timeline_dialogue_cleanup_test as do_start_timeline_dialogue_cleanup_test,
 )
+from .timeline_element_control import (
+    execute_element_removal as do_execute_timeline_element_removal,
+    inspect_elements as do_inspect_timeline_elements,
+    prepare_element_removal as do_prepare_timeline_element_removal,
+    set_element_enabled as do_set_timeline_element_enabled,
+    store_for_config as timeline_element_store_for,
+)
 from .voice_isolation import (VoiceIsolationCapture, VoiceIsolationState, VoiceIsolationStore,
                               VoiceIsolationTarget, apply_voice_isolation, capture_track,
                               read_voice_isolation, restore_voice_isolation)
@@ -266,6 +273,11 @@ def _call(operation: Callable[..., dict], *args: Any, **kwargs: Any) -> dict:
     except Exception:
         pass
     return result
+
+
+def _require_timeline_element_control(config: Any) -> None:
+    if not bool(config.flags.get("CAP_TIMELINE_ELEMENT_CONTROL", False)):
+        raise ValidationError("CAP_TIMELINE_ELEMENT_CONTROL non attiva nella config locale")
 
 
 EDITORIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "editorial_selection_contract.json"
@@ -1647,6 +1659,100 @@ def get_feature_flags() -> dict[str, Any]:
                     "connection": error, "capabilities": feature_report(config, manager, project, timeline)}
         except Exception as exc:
             return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_timeline_elements(
+    media_type: str | None = None,
+    track_index: int | None = None,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
+) -> dict[str, Any]:
+    """Inspect exact current timeline items and issue short-lived opaque handles."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, timeline, config, registry, error = _runtime()
+            if error:
+                return error
+            if project is None or timeline is None:
+                raise ValidationError("Serve una timeline corrente")
+            return _call(
+                do_inspect_timeline_elements,
+                project, timeline, config, registry, timeline_element_store_for(config),
+                media_type, track_index, start_frame, end_frame,
+            )
+        except Exception as exc:
+            return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def set_timeline_element_enabled(
+    element_id: str, fingerprint: str, enabled: bool
+) -> dict[str, Any]:
+    """Set only the enabled state of one fresh, unambiguous opaque item handle."""
+    try:
+        config = load_config()
+        _require_timeline_element_control(config)
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, timeline, error = context()
+            if error:
+                return error
+            if project is None or timeline is None:
+                raise ValidationError("Serve una timeline corrente")
+            return _call(
+                do_set_timeline_element_enabled,
+                project, timeline, config, Registry(config.state_path),
+                timeline_element_store_for(config), element_id, fingerprint, enabled,
+            )
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def prepare_timeline_element_removal(
+    element_id: str, fingerprint: str
+) -> dict[str, Any]:
+    """Prepare a short-lived removal proposal for one proven bridge-owned item."""
+    try:
+        config = load_config()
+        _require_timeline_element_control(config)
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, timeline, error = context()
+            if error:
+                return error
+            if project is None or timeline is None:
+                raise ValidationError("Serve una timeline corrente")
+            return _call(
+                do_prepare_timeline_element_removal,
+                project, timeline, config, Registry(config.state_path),
+                timeline_element_store_for(config), element_id, fingerprint,
+            )
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
+def execute_timeline_element_removal(
+    removal_id: str, proposal_fingerprint: str, operator_role: str
+) -> dict[str, Any]:
+    """Execute one prepared non-ripple removal; recovery never retargets another item."""
+    try:
+        config = load_config()
+        _require_timeline_element_control(config)
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, timeline, error = context()
+            if error:
+                return error
+            if project is None or timeline is None:
+                raise ValidationError("Serve una timeline corrente")
+            return _call(
+                do_execute_timeline_element_removal,
+                project, timeline, config, Registry(config.state_path),
+                timeline_element_store_for(config), removal_id,
+                proposal_fingerprint, operator_role,
+            )
+    except Exception as exc:
+        return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)

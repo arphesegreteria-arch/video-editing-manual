@@ -9,6 +9,9 @@
   "audio_jobs_root": "%LOCALAPPDATA%/ARPHE/Longform04/audio_jobs",
   "state_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/creative_state.json",
   "audit_log_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/audit.jsonl",
+  "timeline_element_control_path": "%LOCALAPPDATA%/ARPHE/CreativeBridge03/timeline_element_control.json",
+  "timeline_element_handle_ttl_seconds": 300,
+  "timeline_element_removal_ttl_seconds": 600,
   "workflow_registry_path": "editorial_workflows.json",
   "render_profile_registry_path": "render_profiles.json",
   "artifact_policy_path": "artifact_retention.json",
@@ -50,7 +53,8 @@
     "CAP_VERTICAL_SOCIAL": false,
     "CAP_WORKFLOW_CONTROL_PLANE": false,
     "CAP_COLORIST": false,
-    "CAP_VOICE_ISOLATION": false
+    "CAP_VOICE_ISOLATION": false,
+    "CAP_TIMELINE_ELEMENT_CONTROL": false
   },
   "palette": {
     "ivory": "#F7F2E8",

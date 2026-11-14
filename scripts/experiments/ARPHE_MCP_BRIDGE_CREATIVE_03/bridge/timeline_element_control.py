@@ -707,6 +707,8 @@ def inspect_elements(
         })
     return {
         "ok": True,
+        "action": "inspect_timeline_elements",
+        "workstation_id": workstation_id,
         "project": project_name,
         "timeline": timeline_name,
         "write_capability_enabled": bool(
@@ -829,7 +831,9 @@ def set_element_enabled(
         item, live = exact[0]
         if live.enabled == enabled:
             return {
-                "ok": True, "element_id": element_id, "enabled": enabled,
+                "ok": True, "action": "set_timeline_element_enabled",
+                "workstation_id": store.workstation_id,
+                "element_id": element_id, "enabled": enabled,
                 "idempotent": True, "fingerprint": fingerprint,
             }
     else:
@@ -841,7 +845,9 @@ def set_element_enabled(
             raise ValidationError("Rematch elemento ambiguo: target non univoco")
         if len(drift) == 1 and drift[0][1].enabled == enabled:
             return {
-                "ok": True, "element_id": element_id, "enabled": enabled,
+                "ok": True, "action": "set_timeline_element_enabled",
+                "workstation_id": store.workstation_id,
+                "element_id": element_id, "enabled": enabled,
                 "idempotent": True,
                 "fingerprint": snapshot_fingerprint(drift[0][1]),
             }
@@ -859,6 +865,8 @@ def set_element_enabled(
         raise ValidationError("Elemento cambiato durante SetClipEnabled")
     return {
         "ok": True,
+        "action": "set_timeline_element_enabled",
+        "workstation_id": store.workstation_id,
         "element_id": element_id,
         "enabled": enabled,
         "idempotent": False,
@@ -892,6 +900,10 @@ def prepare_element_removal(
     proposal = store.prepare_removal(handle, ownership, selected)
     return {
         "ok": True,
+        "action": "prepare_timeline_element_removal",
+        "workstation_id": store.workstation_id,
+        "element_id": element_id,
+        "fingerprint": fingerprint,
         "removal_id": proposal["removal_id"],
         "proposal_fingerprint": proposal["proposal_fingerprint"],
         "expires_at": proposal["expires_at"],
@@ -947,13 +959,18 @@ def _removal_live_state(
     return expected, target, candidates
 
 
-def _completed_removal_result(record: dict[str, object]) -> dict[str, object]:
+def _completed_removal_result(
+    record: dict[str, object], workstation_id: str
+) -> dict[str, object]:
     receipt = record.get("receipt")
     if not isinstance(receipt, dict):
         raise ValidationError("Ricevuta rimozione completata non valida")
     return {
         "ok": True,
+        "action": "execute_timeline_element_removal",
+        "workstation_id": workstation_id,
         "removal_id": record["removal_id"],
+        "proposal_fingerprint": record["proposal_fingerprint"],
         "state": "COMPLETED",
         **receipt,
     }
@@ -973,7 +990,7 @@ def execute_element_removal(
     selected = _utc(now)
     removal = store.require_removal(removal_id, proposal_fingerprint, selected)
     if removal.get("state") == "COMPLETED":
-        return _completed_removal_result(removal)
+        return _completed_removal_result(removal, store.workstation_id)
     if removal.get("state") == "BLOCKED":
         raise ValidationError("Rimozione bloccata: intervento tecnico richiesto")
     if not bool(getattr(config, "flags", {}).get("CAP_TIMELINE_ELEMENT_CONTROL", False)):
@@ -1061,4 +1078,4 @@ def execute_element_removal(
         "verified_at": _time_text(selected),
     }
     completed = store.complete_removal(removal_id, receipt, selected)
-    return _completed_removal_result(completed)
+    return _completed_removal_result(completed, store.workstation_id)

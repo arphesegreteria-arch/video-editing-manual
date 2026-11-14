@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +25,7 @@ from bridge.creative_tools import (_frame_to_timecode, _sequence_boundaries,
                                    _review_reading_frames, _cta_duration_frames,
                                    _intro_duration_frames, _timeline_is_vertical)  # noqa: E402
 from bridge.fusion_tools import set_visibility_window  # noqa: E402
+import bridge.server as server  # noqa: E402
 
 
 def config_for(root: Path) -> CreativeConfig:
@@ -127,6 +130,59 @@ class ReadOnlyPlaybackProject(FakeProject):
 
 
 class ProjectTimelineSafetyTests(unittest.TestCase):
+    def test_timeline_element_control_public_signatures_use_only_opaque_selectors(self):
+        import inspect
+        self.assertEqual(
+            ["media_type", "track_index", "start_frame", "end_frame"],
+            list(inspect.signature(server.inspect_timeline_elements).parameters),
+        )
+        self.assertEqual(
+            ["element_id", "fingerprint", "enabled"],
+            list(inspect.signature(server.set_timeline_element_enabled).parameters),
+        )
+        self.assertEqual(
+            ["element_id", "fingerprint"],
+            list(inspect.signature(server.prepare_timeline_element_removal).parameters),
+        )
+        self.assertEqual(
+            ["removal_id", "proposal_fingerprint", "operator_role"],
+            list(inspect.signature(server.execute_timeline_element_removal).parameters),
+        )
+
+    def test_disabled_timeline_control_gate_rejects_write_before_resolve_connection(self):
+        config = SimpleNamespace(flags={"CAP_TIMELINE_ELEMENT_CONTROL": False})
+        with patch.object(server, "load_config", return_value=config), \
+             patch.object(server, "context", side_effect=AssertionError("Resolve must not be touched")):
+            result = server.set_timeline_element_enabled("element_opaque", "a" * 64, False)
+        self.assertFalse(result["ok"])
+        self.assertIn("CAP_TIMELINE_ELEMENT_CONTROL", result["error"])
+
+    def test_timeline_control_wrapper_holds_global_lock_and_calls_typed_operation(self):
+        class TrackingLock:
+            active = False
+            def __enter__(self): self.active = True
+            def __exit__(self, *_args): self.active = False
+
+        lock = TrackingLock()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = SimpleNamespace(
+                flags={"CAP_TIMELINE_ELEMENT_CONTROL": True},
+                workstation_id="PC_PERSONALE", state_path=root / "state.json",
+                audit_log_path=root / "audit.jsonl",
+                timeline_element_control_path=root / "control.json",
+                timeline_element_handle_ttl_seconds=300,
+                timeline_element_removal_ttl_seconds=600,
+            )
+            project, timeline = object(), object()
+            def checked(*_args, **_kwargs):
+                self.assertTrue(lock.active)
+                return {"ok": True, "action": "inspect_timeline_elements", "elements": []}
+            with patch.object(server, "RESOLVE_ACCESS_LOCK", lock), \
+                 patch.object(server, "_runtime", return_value=(None, None, project, timeline, config, object(), None)), \
+                 patch.object(server, "do_inspect_timeline_elements", side_effect=checked):
+                result = server.inspect_timeline_elements()
+            self.assertTrue(result["ok"])
     def test_review_sequence_timecode_preserves_resolve_start_hour(self):
         self.assertEqual("01:00:00:00", _frame_to_timecode(108000, 30))
         self.assertEqual("01:00:03:00", _frame_to_timecode(108090, 30))

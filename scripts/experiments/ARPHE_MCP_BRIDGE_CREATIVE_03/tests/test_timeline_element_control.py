@@ -14,7 +14,9 @@ from bridge.timeline_element_control import (
     TimelineElementSnapshot,
     TimelineElementStore,
     capture_item_snapshot,
+    execute_element_removal,
     inspect_elements,
+    prepare_element_removal,
     set_element_enabled,
     snapshot_fingerprint,
 )
@@ -235,11 +237,25 @@ class LiveTimeline:
         self.name = name
         self.tracks = {"video": {1: []}, "audio": {1: []}}
         self.links: dict[LiveItem, list[LiveItem]] = {}
+        self.delete_calls: list[tuple[list[LiveItem], bool]] = []
+        self.delete_result = True
 
     def GetName(self): return self.name
     def GetTrackCount(self, media_type): return max(self.tracks[media_type], default=0)
     def GetItemListInTrack(self, media_type, track): return list(self.tracks[media_type].get(track, []))
     def GetLinkedItems(self, item): return list(self.links.get(item, []))
+
+    def DeleteClips(self, items, ripple):
+        selected = list(items)
+        self.delete_calls.append((selected, ripple))
+        if not self.delete_result:
+            return False
+        for tracks in self.tracks.values():
+            for track_items in tracks.values():
+                for item in selected:
+                    if item in track_items:
+                        track_items.remove(item)
+        return True
 
 
 class LiveProject:
@@ -434,6 +450,134 @@ class TimelineElementLiveTests(unittest.TestCase):
         self.video.name = "ARPHE_BRIDGE_OWNED_LOOKING_TITLE"
         element = self.inspect()["elements"][0]
         self.assertFalse(element["remove_allowed"])
+
+
+class TimelineElementRemovalTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.store = TimelineElementStore(self.root / "elements.json", "PC_PERSONALE")
+        self.timeline = LiveTimeline()
+        self.before = LiveItem(50, 100, "Prima", "video-before")
+        self.target = LiveItem(100, 150, "Overlay", "video-target")
+        self.after = LiveItem(150, 200, "Dopo", "video-after")
+        self.timeline.tracks["video"][1] = [self.before, self.target, self.after]
+        self.project = LiveProject(self.timeline)
+        self.registry = LiveRegistry()
+        self.config = live_config(self.root)
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def own_and_inspect(self):
+        snap = capture_item_snapshot(
+            "PC_PERSONALE", self.project, self.timeline, "video", 1, self.target,
+        )
+        self.store.register_ownership(snap, "create_fusion_title", "native-ref", now=NOW)
+        return inspect_elements(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            media_type="video", start_frame=100, end_frame=150, now=NOW,
+        )["elements"][0]
+
+    def proposal(self):
+        element = self.own_and_inspect()
+        return prepare_element_removal(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            element["element_id"], element["fingerprint"], NOW,
+        )
+
+    def execute(self, proposal):
+        return execute_element_removal(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            proposal["removal_id"], proposal["proposal_fingerprint"], "ALESSIO", NOW,
+        )
+
+    def test_prepare_removal_requires_exact_active_ownership_not_name_similarity(self):
+        self.target.name = "ARPHE_BRIDGE_OWNED_LOOKING_TITLE"
+        element = inspect_elements(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            media_type="video", start_frame=100, end_frame=150, now=NOW,
+        )["elements"][0]
+        with self.assertRaisesRegex(ValidationError, "ownership"):
+            prepare_element_removal(
+                self.project, self.timeline, self.config, self.registry, self.store,
+                element["element_id"], element["fingerprint"], NOW,
+            )
+        self.assertEqual([], self.timeline.delete_calls)
+
+    def test_prepare_removal_refuses_historical_and_duplicated_unregistered_items(self):
+        element = inspect_elements(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            media_type="video", start_frame=100, end_frame=150, now=NOW,
+        )["elements"][0]
+        duplicate = LiveItem(100, 150, "Overlay", "video-target")
+        self.timeline.tracks["video"][1].append(duplicate)
+        with self.assertRaises(ValidationError):
+            prepare_element_removal(
+                self.project, self.timeline, self.config, self.registry, self.store,
+                element["element_id"], element["fingerprint"], NOW,
+            )
+
+    def test_execute_removal_rechecks_picture_lock_and_live_fingerprint(self):
+        proposal = self.proposal()
+        self.config = live_config(self.root, locked=True)
+        with self.assertRaisesRegex(ValidationError, "picture lock"):
+            self.execute(proposal)
+        self.assertEqual([], self.timeline.delete_calls)
+
+    def test_execute_removal_calls_delete_clips_once_with_one_item_and_ripple_false(self):
+        receipt = self.execute(self.proposal())
+        self.assertTrue(receipt["ok"])
+        self.assertEqual(1, len(self.timeline.delete_calls))
+        items, ripple = self.timeline.delete_calls[0]
+        self.assertEqual([self.target], items)
+        self.assertFalse(ripple)
+
+    def test_execute_removal_verifies_target_absent_and_neighbour_ranges_unchanged(self):
+        receipt = self.execute(self.proposal())
+        self.assertEqual("COMPLETED", receipt["state"])
+        self.assertEqual([self.before, self.after], self.timeline.tracks["video"][1])
+        self.assertEqual([[50, 100], [150, 200]], receipt["neighbour_ranges"])
+
+    def test_execute_removal_does_not_consume_proposal_when_resolve_delete_fails(self):
+        proposal = self.proposal()
+        self.timeline.delete_result = False
+        with self.assertRaisesRegex(ValidationError, "DeleteClips"):
+            self.execute(proposal)
+        stored = self.store.require_removal(
+            proposal["removal_id"], proposal["proposal_fingerprint"], NOW,
+        )
+        self.assertEqual("PREPARED", stored["state"])
+        self.assertIn(self.target, self.timeline.tracks["video"][1])
+
+    def test_execute_removal_recovers_committed_delete_after_lost_response(self):
+        proposal = self.proposal()
+        with patch.object(self.store, "complete_removal", side_effect=RuntimeError("lost response")):
+            with self.assertRaisesRegex(RuntimeError, "lost response"):
+                self.execute(proposal)
+        self.assertNotIn(self.target, self.timeline.tracks["video"][1])
+        recovered = self.execute(proposal)
+        self.assertEqual("COMPLETED", recovered["state"])
+        self.assertEqual(1, len(self.timeline.delete_calls))
+
+    def test_execute_removal_never_redirects_to_replacement_item(self):
+        proposal = self.proposal()
+        with patch.object(self.store, "complete_removal", side_effect=RuntimeError("lost response")):
+            with self.assertRaises(RuntimeError):
+                self.execute(proposal)
+        replacement = LiveItem(100, 150, "Replacement", "video-replacement")
+        self.timeline.tracks["video"][1].append(replacement)
+        with self.assertRaisesRegex(ValidationError, "recovery|invariant|blocc"):
+            self.execute(proposal)
+        self.assertIn(replacement, self.timeline.tracks["video"][1])
+        self.assertEqual(1, len(self.timeline.delete_calls))
+
+    def test_completed_removal_returns_same_idempotent_receipt(self):
+        proposal = self.proposal()
+        first = self.execute(proposal)
+        second = self.execute(proposal)
+        self.assertEqual(first, second)
+        self.assertEqual(1, len(self.timeline.delete_calls))
 
 
 if __name__ == "__main__":

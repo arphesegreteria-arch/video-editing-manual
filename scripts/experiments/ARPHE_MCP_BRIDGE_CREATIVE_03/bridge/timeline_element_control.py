@@ -399,6 +399,7 @@ class TimelineElementStore:
         proposal_fingerprint: str,
         operator_role: str,
         now: datetime,
+        intent_context: dict[str, object] | None = None,
     ) -> dict[str, object]:
         selected = _utc(now)
         role = str(operator_role).strip().upper()
@@ -418,6 +419,68 @@ class TimelineElementStore:
             record["state"] = "INTENT"
             record["intent_at"] = _time_text(selected)
             record["operator_role"] = role
+            record["intent_context"] = dict(intent_context or {})
+            self._save(data)
+            return dict(record)
+
+    def require_removal(
+        self,
+        removal_id: str,
+        proposal_fingerprint: str,
+        now: datetime,
+    ) -> dict[str, object]:
+        selected = _utc(now)
+        with self._lock:
+            record = self._load()["removals"].get(removal_id)
+        if not isinstance(record, dict):
+            raise ValidationError("Proposta rimozione sconosciuta")
+        if record.get("proposal_fingerprint") != proposal_fingerprint:
+            raise ValidationError("Fingerprint proposta rimozione non valido")
+        if record.get("state") == "PREPARED" and selected > _parse_time(
+            record.get("expires_at"), "expires_at"
+        ):
+            raise ValidationError("Proposta rimozione scaduta")
+        return dict(record)
+
+    def removal_handle(self, removal: dict[str, object]) -> dict[str, object]:
+        with self._lock:
+            record = self._load()["handles"].get(removal.get("element_id"))
+        if not isinstance(record, dict):
+            raise ValidationError("Handle della rimozione non disponibile")
+        if record.get("fingerprint") != removal.get("element_fingerprint"):
+            raise ValidationError("Handle della rimozione non corrispondente")
+        return dict(record)
+
+    def reset_removal(
+        self, removal_id: str, proposal_fingerprint: str, reason: str
+    ) -> dict[str, object]:
+        with self._lock:
+            data = self._load()
+            record = data["removals"].get(removal_id)
+            if not isinstance(record, dict) or record.get("proposal_fingerprint") != proposal_fingerprint:
+                raise ValidationError("Proposta rimozione non valida")
+            if record.get("state") != "INTENT":
+                raise ValidationError("Intento rimozione non resettabile")
+            record["state"] = "PREPARED"
+            record["intent_at"] = None
+            record["operator_role"] = None
+            record["intent_context"] = None
+            record["last_error"] = _safe_display_name(reason)
+            self._save(data)
+            return dict(record)
+
+    def block_removal(
+        self, removal_id: str, proposal_fingerprint: str, reason: str
+    ) -> dict[str, object]:
+        with self._lock:
+            data = self._load()
+            record = data["removals"].get(removal_id)
+            if not isinstance(record, dict) or record.get("proposal_fingerprint") != proposal_fingerprint:
+                raise ValidationError("Proposta rimozione non valida")
+            if record.get("state") not in {"INTENT", "BLOCKED"}:
+                raise ValidationError("Rimozione non bloccabile nello stato corrente")
+            record["state"] = "BLOCKED"
+            record["last_error"] = _safe_display_name(reason)
             self._save(data)
             return dict(record)
 
@@ -739,3 +802,201 @@ def set_element_enabled(
         "idempotent": False,
         "fingerprint": snapshot_fingerprint(current),
     }
+
+
+def prepare_element_removal(
+    project: object,
+    timeline: object,
+    config: object,
+    registry: object,
+    store: TimelineElementStore,
+    element_id: str,
+    fingerprint: str,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    selected = _utc(now)
+    handle = store.require_handle(element_id, fingerprint, selected)
+    if not bool(getattr(config, "flags", {}).get("CAP_TIMELINE_ELEMENT_CONTROL", False)):
+        raise ValidationError("CAP_TIMELINE_ELEMENT_CONTROL disabilitata")
+    project_name, timeline_name = _require_allowed_target(
+        project, timeline, config, registry
+    )
+    if timeline_is_picture_locked(config, project_name, timeline_name):
+        raise ValidationError("Preparazione rifiutata: workflow in picture lock")
+    _, live = rematch_live_item(project, timeline, handle)
+    ownership = store.matching_ownership(live)
+    if ownership is None:
+        raise ValidationError("Rimozione vietata: ownership bridge esatta non disponibile")
+    proposal = store.prepare_removal(handle, ownership, selected)
+    return {
+        "ok": True,
+        "removal_id": proposal["removal_id"],
+        "proposal_fingerprint": proposal["proposal_fingerprint"],
+        "expires_at": proposal["expires_at"],
+        "preview": {
+            "media_type": live.media_type,
+            "track_index": live.track_index,
+            "start_frame": live.start_frame,
+            "end_frame": live.end_frame,
+            "display_name": live.display_name,
+        },
+    }
+
+
+def _ordered_fingerprints(
+    pairs: list[tuple[object, TimelineElementSnapshot]],
+) -> list[str]:
+    ordered = sorted(
+        (snapshot for _, snapshot in pairs),
+        key=lambda value: (
+            value.start_frame, value.end_frame, value.media_identity,
+            value.display_name, value.enabled,
+        ),
+    )
+    return [snapshot_fingerprint(value) for value in ordered]
+
+
+def _neighbour_ranges(
+    pairs: list[tuple[object, TimelineElementSnapshot]],
+) -> list[list[int]]:
+    return [
+        [snapshot.start_frame, snapshot.end_frame]
+        for _, snapshot in sorted(
+            pairs, key=lambda pair: (pair[1].start_frame, pair[1].end_frame)
+        )
+    ]
+
+
+def _removal_live_state(
+    project: object,
+    timeline: object,
+    handle: dict[str, object],
+) -> tuple[
+    TimelineElementSnapshot,
+    list[tuple[object, TimelineElementSnapshot]],
+    list[tuple[object, TimelineElementSnapshot]],
+]:
+    expected, candidates = _bound_track_snapshots(project, timeline, handle)
+    target = [
+        pair for pair in candidates
+        if pair[1] == expected
+        and snapshot_fingerprint(pair[1]) == handle.get("fingerprint")
+    ]
+    return expected, target, candidates
+
+
+def _completed_removal_result(record: dict[str, object]) -> dict[str, object]:
+    receipt = record.get("receipt")
+    if not isinstance(receipt, dict):
+        raise ValidationError("Ricevuta rimozione completata non valida")
+    return {
+        "ok": True,
+        "removal_id": record["removal_id"],
+        "state": "COMPLETED",
+        **receipt,
+    }
+
+
+def execute_element_removal(
+    project: object,
+    timeline: object,
+    config: object,
+    registry: object,
+    store: TimelineElementStore,
+    removal_id: str,
+    proposal_fingerprint: str,
+    operator_role: str,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    selected = _utc(now)
+    removal = store.require_removal(removal_id, proposal_fingerprint, selected)
+    if removal.get("state") == "COMPLETED":
+        return _completed_removal_result(removal)
+    if removal.get("state") == "BLOCKED":
+        raise ValidationError("Rimozione bloccata: intervento tecnico richiesto")
+    if not bool(getattr(config, "flags", {}).get("CAP_TIMELINE_ELEMENT_CONTROL", False)):
+        raise ValidationError("CAP_TIMELINE_ELEMENT_CONTROL disabilitata")
+    project_name, timeline_name = _require_allowed_target(
+        project, timeline, config, registry
+    )
+    if timeline_is_picture_locked(config, project_name, timeline_name):
+        raise ValidationError("Rimozione rifiutata: workflow in picture lock")
+    handle = store.removal_handle(removal)
+
+    if removal.get("state") == "PREPARED":
+        item, live = rematch_live_item(project, timeline, handle)
+        ownership = store.matching_ownership(live)
+        if ownership is None or ownership.get("ownership_id") != removal.get("ownership_id"):
+            raise ValidationError("Ownership rimozione non più valida")
+        expected, targets, candidates = _removal_live_state(project, timeline, handle)
+        if len(targets) != 1 or targets[0][0] is not item:
+            raise ValidationError("Target rimozione non univoco")
+        neighbours = [pair for pair in candidates if pair[0] is not item]
+        context = {
+            "target_fingerprint": snapshot_fingerprint(expected),
+            "neighbour_fingerprints": _ordered_fingerprints(neighbours),
+            "neighbour_ranges": _neighbour_ranges(neighbours),
+        }
+        removal = store.begin_removal(
+            removal_id, proposal_fingerprint, operator_role, selected, context
+        )
+        deleted = safe_call(timeline, "DeleteClips", [item], False)
+        if deleted is not True:
+            _, after_targets, after_candidates = _removal_live_state(
+                project, timeline, handle
+            )
+            after_neighbours = [
+                pair for pair in after_candidates
+                if not (
+                    pair[1] == expected
+                    and snapshot_fingerprint(pair[1]) == handle.get("fingerprint")
+                )
+            ]
+            unchanged = (
+                len(after_targets) == 1
+                and _ordered_fingerprints(after_neighbours)
+                == context["neighbour_fingerprints"]
+            )
+            if unchanged:
+                store.reset_removal(
+                    removal_id, proposal_fingerprint, "DeleteClips non riuscito"
+                )
+            else:
+                store.block_removal(
+                    removal_id, proposal_fingerprint,
+                    "DeleteClips fallito con stato timeline ambiguo",
+                )
+            raise ValidationError("DeleteClips non riuscito; nessuna rimozione confermata")
+    elif removal.get("state") != "INTENT":
+        raise ValidationError("Stato rimozione non eseguibile")
+
+    intent_context = removal.get("intent_context")
+    if not isinstance(intent_context, dict):
+        store.block_removal(
+            removal_id, proposal_fingerprint, "Contesto recovery mancante"
+        )
+        raise ValidationError("Rimozione bloccata: contesto recovery mancante")
+    _, targets, candidates = _removal_live_state(project, timeline, handle)
+    current_neighbours = candidates if not targets else [
+        pair for pair in candidates if pair not in targets
+    ]
+    neighbours_unchanged = (
+        _ordered_fingerprints(current_neighbours)
+        == intent_context.get("neighbour_fingerprints")
+    )
+    if targets or not neighbours_unchanged:
+        store.block_removal(
+            removal_id, proposal_fingerprint,
+            "Recovery non verificabile: target presente o invarianti vicini cambiati",
+        )
+        raise ValidationError(
+            "Rimozione bloccata: recovery o invarianti timeline non verificabili"
+        )
+    receipt: dict[str, object] = {
+        "target_absent": True,
+        "ripple": False,
+        "neighbour_ranges": list(intent_context.get("neighbour_ranges", [])),
+        "verified_at": _time_text(selected),
+    }
+    completed = store.complete_removal(removal_id, receipt, selected)
+    return _completed_removal_result(completed)

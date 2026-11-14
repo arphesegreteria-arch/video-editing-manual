@@ -1,5 +1,20 @@
 # CURRENT STATE
 
+## 2026-11-14 — Workflow segreteria consolidato
+
+Il percorso standard per i montaggi ADV/Reel affidati alla segreteria è ora descritto in
+[`docs/17_ARPHE_SECRETARY_EDITING_WORKFLOW.md`](docs/17_ARPHE_SECRETARY_EDITING_WORKFLOW.md).
+Il documento collega Graphic Kit, trascrizione, picture lock, audio/Fairlight, colorist, B-roll,
+card, sottotitoli Fusion, QA, export e protezione dei definitivi.
+
+Il contratto dei sottotitoli è pubblicato in
+[`docs/15_ARPHE_FUSION_CAPTIONS.md`](docs/15_ARPHE_FUSION_CAPTIONS.md). Il bridge continua a
+esporre primitive generiche: nessun comando o preset dedicato a un singolo video è stato aggiunto.
+Nessun gate o parametro della workstation è stato modificato.
+
+La portabilità documentale è pronta. Il test operativo sul `PC_SEGRETERIA` non è stato eseguito
+in questa sessione e resta esplicitamente a carico di Alessio quando sarà davanti a quel PC.
+
 ## 2026-11-10 — Social Plus come riferimento visivo ADV
 
 Per i video ADV ARPHÈ il riferimento estetico è **Ibrido Social Plus V7**. Le regolazioni devono

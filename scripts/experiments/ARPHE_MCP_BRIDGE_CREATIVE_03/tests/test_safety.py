@@ -120,8 +120,8 @@ class SafetyTests(unittest.TestCase):
         }
 
         names = set(EXPOSED_TOOL_NAMES)
-        self.assertEqual(122, len(EXPOSED_TOOL_NAMES))
-        self.assertEqual(122, len(names))
+        self.assertEqual(126, len(EXPOSED_TOOL_NAMES))
+        self.assertEqual(126, len(names))
         self.assertTrue(expected.issubset(names))
         self.assertTrue(residual_adv.isdisjoint(names))
 
@@ -353,7 +353,8 @@ class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
         tools = {tool.name: tool for tool in await mcp.list_tools()}
         self.assertEqual(set(EXPOSED_TOOL_NAMES), set(tools))
         destructive = {"run_artifact_maintenance", "execute_resolve_retirement",
-                       "apply_carabellese_cleanup", "recover_carabellese_cleanup", "set_music_bed"}
+                       "apply_carabellese_cleanup", "recover_carabellese_cleanup", "set_music_bed",
+                       "execute_timeline_element_removal"}
         for tool in tools.values():
             self.assertEqual(tool.name in destructive,
                              tool.annotations.destructive_hint, tool.name)
@@ -364,6 +365,17 @@ class ToolAnnotationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(tools["restore_quarantined_artifact"].annotations.destructive_hint)
         self.assertTrue(tools["execute_resolve_retirement"].annotations.idempotent_hint)
         self.assertTrue(tools["inspect_resolve_retirements"].annotations.read_only_hint)
+        self.assertTrue(tools["inspect_timeline_elements"].annotations.read_only_hint)
+        self.assertTrue(tools["prepare_timeline_element_removal"].annotations.read_only_hint)
+        self.assertTrue(tools["set_timeline_element_enabled"].annotations.idempotent_hint)
+        self.assertFalse(tools["set_timeline_element_enabled"].annotations.destructive_hint)
+        self.assertTrue(tools["execute_timeline_element_removal"].annotations.destructive_hint)
+        self.assertTrue(tools["execute_timeline_element_removal"].annotations.idempotent_hint)
+
+    def test_timeline_element_catalog_forbids_raw_and_batch_mutators(self):
+        for name in ("delete_clip", "delete_clips", "remove_timeline_item", "set_any_clip_property"):
+            self.assertIn(name, FORBIDDEN_GENERIC_TOOLS)
+            self.assertNotIn(name, EXPOSED_TOOL_NAMES)
 
     def test_artifact_tools_accept_no_arbitrary_path(self):
         self.assertEqual([], list(inspect.signature(server.inspect_artifact_hygiene).parameters))

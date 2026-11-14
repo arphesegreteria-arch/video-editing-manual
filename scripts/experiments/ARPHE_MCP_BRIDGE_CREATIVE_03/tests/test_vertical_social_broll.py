@@ -52,10 +52,15 @@ class BrollPlanTests(unittest.TestCase):
             "asset_path": "C:/allowed/studio.mov",
         }
         pool = Pool()
+        config = SimpleNamespace(timeline_element_control_path=Path("control.json"))
         with tempfile.TemporaryDirectory() as raw, \
                 patch("bridge.vertical_social_broll.allowed_media", return_value=Path(raw) / "studio.mov"), \
-                patch("bridge.vertical_social_broll.import_media_item", return_value=object()):
-            result = apply_provided_broll(object(), Project(pool), Timeline(), SimpleNamespace(), action, 300)
+                patch("bridge.vertical_social_broll.import_media_item", return_value=object()), \
+                patch("bridge.vertical_social_broll.register_created_item", return_value={"ownership_id": "opaque"}) as register:
+            result = apply_provided_broll(object(), Project(pool), Timeline(), config, action, 300)
         self.assertTrue(result["ok"])
         self.assertEqual(2, result["track_index"])
         self.assertEqual(2, pool.payload[0]["trackIndex"])
+        register.assert_called_once()
+        self.assertEqual(("video", 2), register.call_args.args[3:5])
+        self.assertEqual("apply_vertical_social_broll", register.call_args.args[6])

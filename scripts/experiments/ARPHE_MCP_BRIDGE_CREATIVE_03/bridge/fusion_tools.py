@@ -9,6 +9,7 @@ from .feature_flags import require_capability
 from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name, require_arphe_name, validate_color_role, validate_frame_range
+from .timeline_element_control import register_created_item, timeline_item_track_index
 
 
 # Resolve inserts a bare Fusion Composition at the user's standard generator
@@ -254,6 +255,12 @@ def create_composition(project: Any, timeline: Any, config: CreativeConfig, regi
     registry.add_element(composition_id, {"kind": "composition", "timeline": safe_call(timeline, "GetName"),
                                           "timeline_item_id": _item_id(item), "timeline_item_name": safe_call(item, "GetName"),
                                           "start_frame": start, "end_frame": end})
+    if connected:
+        register_created_item(
+            config, project, timeline, "video",
+            timeline_item_track_index(timeline, "video", item), item,
+            "create_fusion_composition", composition_id,
+        )
     return {"ok": connected, "action": "create_fusion_composition", "composition_id": composition_id,
             "timeline_item": safe_call(item, "GetName"), "requested_frame_range": [start, end],
             "duration_strategy": strategy,

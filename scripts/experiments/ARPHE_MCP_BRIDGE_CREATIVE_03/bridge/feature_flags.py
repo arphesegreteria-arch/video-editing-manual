@@ -27,6 +27,7 @@ CAPABILITY_STATUS = {
     "CAP_WORKFLOW_CONTROL_PLANE": "PENDING",
     "CAP_COLORIST": "PENDING",
     "CAP_VOICE_ISOLATION": "PENDING",
+    "CAP_TIMELINE_ELEMENT_CONTROL": "PENDING",
 }
 
 
@@ -135,6 +136,12 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "GetName", "GetUniqueId", "GetTrackCount", "GetTrackName",
         "GetVoiceIsolationState", "SetVoiceIsolationState",
     )))
+    timeline_element_control_ok = bool(
+        timeline is not None
+        and all(_method(timeline, name) for name in (
+            "GetName", "GetTrackCount", "GetItemListInTrack", "DeleteClips",
+        ))
+    )
     return {
         "CAP_PROJECT": project_ok,
         "CAP_TIMELINE": timeline_ok,
@@ -158,6 +165,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         "CAP_WORKFLOW_CONTROL_PLANE": bool(project is not None and timeline is not None),
         "CAP_COLORIST": colorist_ok,
         "CAP_VOICE_ISOLATION": voice_isolation_ok,
+        "CAP_TIMELINE_ELEMENT_CONTROL": timeline_element_control_ok,
     }
 
 

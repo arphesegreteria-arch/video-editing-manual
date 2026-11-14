@@ -44,6 +44,32 @@ class AuditTests(unittest.TestCase):
             self.assertNotIn("patients", raw)
             self.assertNotIn("private review", raw)
 
+    def test_timeline_control_audit_keeps_only_opaque_ids_and_fingerprints(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "audit.jsonl"
+            write_audit(path, "execute_timeline_element_removal", {
+                "ok": True,
+                "workstation_id": "PC_PERSONALE",
+                "element_id": "element_opaque",
+                "removal_id": "removal_opaque",
+                "fingerprint": "a" * 64,
+                "proposal_fingerprint": "b" * 64,
+                "project": "PRIVATE_PROJECT",
+                "timeline": "PRIVATE_TIMELINE",
+                "display_name": "patient private overlay",
+                "path": "C:/patients/private.mov",
+            })
+            raw = path.read_text(encoding="utf-8")
+            record = json.loads(raw)
+            self.assertEqual("PC_PERSONALE", record["workstation_id"])
+            self.assertEqual("element_opaque", record["element_id"])
+            self.assertEqual("removal_opaque", record["removal_id"])
+            self.assertEqual("a" * 64, record["fingerprint"])
+            self.assertEqual("b" * 64, record["proposal_fingerprint"])
+            self.assertNotIn("PRIVATE", raw)
+            self.assertNotIn("patient", raw)
+            self.assertNotIn("C:/", raw)
+
 
 if __name__ == "__main__":
     unittest.main()

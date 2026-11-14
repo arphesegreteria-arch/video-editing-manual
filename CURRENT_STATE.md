@@ -1,5 +1,30 @@
 # CURRENT STATE
 
+## 2026-11-14 — Workflow segreteria consolidato
+
+Il percorso standard per i montaggi ADV/Reel affidati alla segreteria è ora descritto in
+[`docs/17_ARPHE_SECRETARY_EDITING_WORKFLOW.md`](docs/17_ARPHE_SECRETARY_EDITING_WORKFLOW.md).
+Il documento collega Graphic Kit, trascrizione, picture lock, audio/Fairlight, colorist, B-roll,
+card, sottotitoli Fusion, QA, export e protezione dei definitivi.
+
+Il contratto dei sottotitoli è pubblicato in
+[`docs/15_ARPHE_FUSION_CAPTIONS.md`](docs/15_ARPHE_FUSION_CAPTIONS.md). Il bridge continua a
+esporre primitive generiche: nessun comando o preset dedicato a un singolo video è stato aggiunto.
+Nessun gate o parametro della workstation è stato modificato.
+
+La portabilità documentale è pronta. Il test operativo sul `PC_SEGRETERIA` non è stato eseguito
+in questa sessione e resta esplicitamente a carico di Alessio quando sarà davanti a quel PC.
+
+## 2026-11-10 — Social Plus come riferimento visivo ADV
+
+Per i video ADV ARPHÈ il riferimento estetico è **Ibrido Social Plus V7**. Le regolazioni devono
+essere calibrate sul singolo girato per ottenere una resa simile e riconoscibile, senza imporre
+valori numerici identici. Lo standard e i criteri di confronto sono in
+[Modulo Colorist: Social Plus](docs/23_COLORIST_MODULE.md#standard-visivo-social-plus).
+
+Decisione editoriale e documentale: nessuna modifica a preset, bridge, feature flag o gate
+tecnici. La disponibilità delle singole operazioni resta da verificare sul target corrente.
+
 ## 2026-10-31 — Sottotitoli Fusion ARPHÈ approvati
 
 Il workflow generico Vertical Social `CAPTIONS` è approvato su `PC_PERSONALE` dopo applicazione
@@ -29,7 +54,7 @@ gate richiede progetto usa-e-getta, editor fermo e consenso esplicito. Dopo quel
 backlog la definizione separata dei preset ADV signature ARPHÈ. Procedura:
 `docs/23_COLORIST_MODULE.md`.
 
-Ultimo aggiornamento: sessione 2026-10-31.
+Ultimo aggiornamento documentale: 2026-11-10. Le evidenze tecniche restano datate nelle rispettive sezioni.
 
 <a id="workflow-control-plane"></a>
 ## Workflow Control Plane — CODICE VALIDATO / ROLLOUT PENDING

@@ -77,9 +77,54 @@ l'evidenza contiene strategia e SHA-256 del CDL specifico di ogni clip.
 
 Il registro `colorist_presets.json` contiene `ARPHE_CLEAN_NEUTRAL`, `ARPHE_WARM_PRESENCE` e `ARPHE_SOFT_LUXURY`. Sono preset sperimentali e non ancora look di produzione. I DRX opzionali sono dichiarati nello stesso registro come percorsi relativi all'`asset_root`; la configurazione iniziale non ne abilita alcuno. Durante la preparazione il piano lega percorso relativo, dimensione e SHA-256 del DRX. Qualunque modifica prima dell'apply blocca l'operazione prima di una write Resolve.
 
-Backlog approvato: dopo la validazione delle correzioni tecniche V2, individuare e sottoporre a
-review una piccola famiglia di preset ADV signature ARPHÈ coerenti con il Graphic Kit. Nessun look
-signature viene mescolato alla normalizzazione tecnica in questa fase.
+Il riferimento estetico ADV è definito nello [standard Social Plus](#standard-visivo-social-plus)
+qui sotto. La realizzazione tecnica di eventuali preset signature resta un lavoro separato,
+subordinato alle capacità disponibili e alla review. Il look non va confuso con la normalizzazione
+tecnica del girato.
+
+<a id="standard-visivo-social-plus"></a>
+## Standard visivo ADV ARPHÈ: Social Plus
+
+Dal 10 novembre 2026 **Social Plus è il risultato visivo di riferimento per uniformare i video
+ADV ARPHÈ**. Il riferimento è **Ibrido Social Plus V7**, identificato dalla review
+`ARPHE_ADV_SGUARDO_STANCO_REVIEW_V7_IBRIDO_SOCIAL_PLUS.mp4`.
+
+L'obiettivo è una resa simile e riconoscibile tra i video. Le regolazioni vanno calibrate sul
+singolo girato e, quando necessario, sulla singola clip: usare gli stessi numeri su sorgenti diverse
+non garantisce uniformità. Questo standard non definisce un preset numerico universale.
+
+### Applicazione al girato
+
+1. Esaminare il riferimento visivo e il materiale da montare. Se la review V7 non è accessibile,
+   dichiarare il limite e non attestare una corrispondenza visiva non verificata.
+2. Correggere prima esposizione e dominanti del singolo girato; tenere separata questa
+   normalizzazione dalla costruzione del look.
+3. Calibrare il look confrontando calore, contrasto, saturazione e separazione fra soggetto e
+   sfondo con V7, preservando la naturalezza della pelle e la leggibilità dei bianchi, incluso
+   l'eventuale camice. Non trasferire automaticamente le regolazioni della prova a nuovi video.
+4. Confrontare prima/dopo e riferimento su più momenti rappresentativi, soprattutto quando
+   cambiano luce, camera o inquadratura. Controllare la continuità tra clip e la resa del render,
+   non soltanto un singolo fotogramma.
+5. Sottoporre la resa alla revisione umana e registrare riferimento usato, adattamenti e limiti.
+   Una correzione tecnica riuscita non equivale all'approvazione estetica del look.
+
+### Standard estetico e capacità disponibili
+
+**Ibrido Social Plus V7 è un riferimento estetico, non il nome di un preset del catalogo
+Colorist.** `ARPHE_WARM_PRESENCE` può essere valutato come punto di partenza solo se disponibile
+e consentito sul target; non va presentato come equivalente al trattamento Social Plus completo.
+
+La disponibilità va verificata sul bridge, sulla workstation e sul progetto effettivamente usati.
+Il registro documentato contiene correzioni globali limitate e DRX soltanto quando allowlisted;
+non dimostra che siano disponibili tutti gli interventi sul soggetto e sullo sfondo.
+
+Usare esclusivamente funzioni esistenti, consentite e verificate. Se una parte del look richiede
+un'operazione non esposta, dichiarare quale parte resta non realizzata e distinguere la prova
+parziale dal risultato completo. Non creare comandi ad hoc per un video, non inventare parametri
+o sostituire in silenzio un intervento mancante con un altro.
+
+Questa decisione aggiorna lo standard editoriale. Non abilita feature flag, non modifica preset
+o bridge e non promuove alcuna capacità tecnica, gate nativo o workstation a uno stato diverso.
 
 ## Matching multicamera
 

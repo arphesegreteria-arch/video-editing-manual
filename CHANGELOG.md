@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## 2026-11-14 — Workflow portabile per la segreteria
+
+- Pubblicato `docs/17_ARPHE_SECRETARY_EDITING_WORKFLOW.md` come percorso standard per ADV e Reel
+  affidati alla segreteria.
+- Consolidati ordine operativo, trascrizione, tagli, audio/Fairlight, colorist, B-roll, card
+  tematiche, sottotitoli Fusion, QA, export, Drive e protezione dei definitivi.
+- Pubblicato il contratto completo `docs/15_ARPHE_FUSION_CAPTIONS.md`, incluse due sole misure,
+  spaziatura compatta, massimo due righe ed evidenza semantica.
+- Separata la fonte estetica (Graphic Kit ARPHÉ) dal manuale operativo e dalle decisioni che
+  richiedono approvazione di Alessio.
+- Nessuna modifica a bridge, gate, allowlist o preset; nessun comando dedicato a un singolo video.
+- I test sul PC segreteria restano da eseguire quando Alessio sarà su quella workstation.
+
+## 2026-11-10 — Standard visivo Social Plus per ADV ARPHÈ
+
+- Definito Ibrido Social Plus V7 come riferimento visivo per una resa uniforme fra le ADV.
+- Esplicitata la calibrazione per singolo girato e clip, separata dalla normalizzazione tecnica:
+  uniformità del risultato, non identità dei valori.
+- Aggiunti confronto con V7, tutela di pelle e bianchi, continuità fra clip e review umana.
+- Distinto il riferimento estetico dai preset effettivamente disponibili; Warm Presence non è
+  dichiarato equivalente al look completo.
+- Collegato lo standard dal workflow shortform. Nessun codice, preset, flag, runtime o gate
+  tecnico modificato; nessun nuovo esperimento Resolve eseguito.
+
 ## 2026-10-31 — Sottotitoli Fusion ARPHÈ a due misure
 
 - Approvato il percorso generico Vertical Social `CAPTIONS` dopo picture lock.

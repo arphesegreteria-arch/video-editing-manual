@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -13,6 +14,8 @@ from bridge.timeline_element_control import (
     TimelineElementSnapshot,
     TimelineElementStore,
     capture_item_snapshot,
+    inspect_elements,
+    set_element_enabled,
     snapshot_fingerprint,
 )
 
@@ -195,6 +198,242 @@ class TimelineElementStoreTests(unittest.TestCase):
                 with self.assertRaises(OSError):
                     store.issue_handle(replace(snapshot(), start_frame=200, end_frame=250), now=NOW)
             self.assertEqual(previous, path.read_bytes())
+
+
+class LiveMediaPoolItem:
+    def __init__(self, media_id: str):
+        self.media_id = media_id
+
+    def GetMediaId(self):
+        return self.media_id
+
+
+class LiveItem:
+    def __init__(self, start: int, end: int, name: str, media_id: str, enabled: bool = True):
+        self.start = start
+        self.end = end
+        self.name = name
+        self.media = LiveMediaPoolItem(media_id)
+        self.enabled = enabled
+        self.set_calls: list[bool] = []
+
+    def GetStart(self): return self.start
+    def GetEnd(self): return self.end
+    def GetDuration(self): return self.end - self.start
+    def GetName(self): return self.name
+    def GetMediaPoolItem(self): return self.media
+    def GetClipEnabled(self): return self.enabled
+
+    def SetClipEnabled(self, value):
+        self.set_calls.append(value)
+        self.enabled = value
+        return True
+
+
+class LiveTimeline:
+    def __init__(self, name: str = "ARPHE_MASTER"):
+        self.name = name
+        self.tracks = {"video": {1: []}, "audio": {1: []}}
+        self.links: dict[LiveItem, list[LiveItem]] = {}
+
+    def GetName(self): return self.name
+    def GetTrackCount(self, media_type): return max(self.tracks[media_type], default=0)
+    def GetItemListInTrack(self, media_type, track): return list(self.tracks[media_type].get(track, []))
+    def GetLinkedItems(self, item): return list(self.links.get(item, []))
+
+
+class LiveProject:
+    def __init__(self, timeline: LiveTimeline, name: str = "ARPHE_ADV"):
+        self.timeline = timeline
+        self.name = name
+
+    def GetName(self): return self.name
+    def GetCurrentTimeline(self): return self.timeline
+
+
+class LiveRegistry:
+    def __init__(self, allowed: bool = True): self.allowed = allowed
+    def project_allowed(self, _project): return self.allowed
+    def timeline_allowed(self, _project, _timeline): return self.allowed
+
+
+def live_config(root: Path, locked: bool = False):
+    plans_path = root / "vertical_social_plans.json"
+    if locked:
+        plans_path.write_text(json.dumps({
+            "workstation_id": "PC_PERSONALE",
+            "plans": {
+                "vertical_0123456789abcdef0123456789abcdef": {
+                    "plan_id": "vertical_0123456789abcdef0123456789abcdef",
+                    "version": 1,
+                    "workstation_id": "PC_PERSONALE",
+                    "target": {"project": "ARPHE_ADV", "timeline": "ARPHE_MASTER"},
+                    "actions": [],
+                }
+            },
+        }), encoding="utf-8")
+        plans_path.with_name("vertical_social_plans_workflow.json").write_text(json.dumps({
+            "vertical_0123456789abcdef0123456789abcdef": {
+                "fingerprint": "a" * 64, "state": "APPROVED", "picture_locked": True,
+            }
+        }), encoding="utf-8")
+    return SimpleNamespace(
+        workstation_id="PC_PERSONALE",
+        allowed_projects=frozenset(),
+        allowed_timelines=frozenset(),
+        flags={"CAP_TIMELINE_ELEMENT_CONTROL": True},
+        vertical_social_plans_path=plans_path,
+    )
+
+
+class TimelineElementLiveTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.store = TimelineElementStore(self.root / "elements.json", "PC_PERSONALE")
+        self.timeline = LiveTimeline()
+        self.video = LiveItem(100, 150, "Titolo / sicuro", "video-1")
+        self.audio = LiveItem(100, 150, "Dialogo", "audio-1")
+        self.timeline.tracks["video"][1] = [self.video]
+        self.timeline.tracks["audio"][1] = [self.audio]
+        self.project = LiveProject(self.timeline)
+        self.registry = LiveRegistry()
+        self.config = live_config(self.root)
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def inspect(self):
+        return inspect_elements(
+            self.project, self.timeline, self.config, self.registry, self.store, now=NOW,
+        )
+
+    def test_inspection_returns_opaque_handles_and_sanitized_fields_for_each_track_item(self):
+        result = self.inspect()
+        self.assertEqual(2, len(result["elements"]))
+        for element in result["elements"]:
+            self.assertRegex(element["element_id"], r"^element_[0-9a-f]{32}$")
+            self.assertEqual(64, len(element["fingerprint"]))
+            self.assertNotIn("/", element["display_name"])
+            self.assertNotIn("media_identity", element)
+            self.assertNotIn("snapshot", element)
+
+    def test_inspection_reports_linked_peer_without_grouping_mutations(self):
+        self.timeline.links = {self.video: [self.audio], self.audio: [self.video]}
+        result = self.inspect()
+        video = next(item for item in result["elements"] if item["media_type"] == "video")
+        audio = next(item for item in result["elements"] if item["media_type"] == "audio")
+        self.assertEqual([audio["fingerprint"]], video["related_fingerprints"])
+        set_element_enabled(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            video["element_id"], video["fingerprint"], False, NOW,
+        )
+        self.assertFalse(self.video.enabled)
+        self.assertTrue(self.audio.enabled)
+        self.assertEqual([], self.audio.set_calls)
+
+    def test_disable_and_enable_are_idempotent_and_verified_by_readback(self):
+        element = self.inspect()["elements"][0]
+        disabled = set_element_enabled(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            element["element_id"], element["fingerprint"], False, NOW,
+        )
+        self.assertTrue(disabled["ok"])
+        self.assertFalse(disabled["idempotent"])
+        self.assertEqual([False], self.video.set_calls)
+        refreshed = inspect_elements(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            media_type="video", now=NOW,
+        )["elements"][0]
+        enabled = set_element_enabled(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            refreshed["element_id"], refreshed["fingerprint"], True, NOW,
+        )
+        self.assertTrue(enabled["ok"])
+        self.assertTrue(self.video.enabled)
+
+    def test_repeat_request_accepts_only_enabled_state_drift_to_the_requested_value(self):
+        element = self.inspect()["elements"][0]
+        self.video.enabled = False
+        result = set_element_enabled(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            element["element_id"], element["fingerprint"], False, NOW,
+        )
+        self.assertTrue(result["idempotent"])
+        self.assertEqual([], self.video.set_calls)
+
+    def test_mutation_rejects_expired_handle_before_set_clip_enabled(self):
+        self.store = TimelineElementStore(
+            self.root / "expiring.json", "PC_PERSONALE", handle_ttl_seconds=1,
+        )
+        element = self.inspect()["elements"][0]
+        with self.assertRaisesRegex(ValidationError, "scadut"):
+            set_element_enabled(
+                self.project, self.timeline, self.config, self.registry, self.store,
+                element["element_id"], element["fingerprint"], False,
+                NOW + timedelta(seconds=2),
+            )
+        self.assertEqual([], self.video.set_calls)
+
+    def test_mutation_rejects_ambiguous_live_rematch(self):
+        element = self.inspect()["elements"][0]
+        duplicate = LiveItem(100, 150, "Titolo / sicuro", "video-1")
+        self.timeline.tracks["video"][1].append(duplicate)
+        with self.assertRaisesRegex(ValidationError, "ambigu|univoc"):
+            set_element_enabled(
+                self.project, self.timeline, self.config, self.registry, self.store,
+                element["element_id"], element["fingerprint"], False, NOW,
+            )
+        self.assertEqual([], self.video.set_calls)
+        self.assertEqual([], duplicate.set_calls)
+
+    def test_mutation_rejects_changed_project_timeline_track_range_media_name_or_enabled_state(self):
+        changes = (
+            lambda project, timeline, video: setattr(project, "name", "ARPHE_OTHER"),
+            lambda project, timeline, video: setattr(timeline, "name", "ARPHE_OTHER_MASTER"),
+            lambda project, timeline, video: timeline.tracks["video"].setdefault(2, []).append(timeline.tracks["video"][1].pop()),
+            lambda project, timeline, video: setattr(video, "start", 101),
+            lambda project, timeline, video: setattr(video.media, "media_id", "video-2"),
+            lambda project, timeline, video: setattr(video, "name", "Altro titolo"),
+            lambda project, timeline, video: setattr(video, "enabled", False),
+        )
+        for change in changes:
+            with self.subTest(change=change):
+                with TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    store = TimelineElementStore(root / "elements.json", "PC_PERSONALE")
+                    timeline = LiveTimeline()
+                    video = LiveItem(100, 150, "Titolo / sicuro", "video-1")
+                    timeline.tracks["video"][1] = [video]
+                    project = LiveProject(timeline)
+                    registry = LiveRegistry()
+                    config = live_config(root)
+                    element = inspect_elements(
+                        project, timeline, config, registry, store,
+                        media_type="video", now=NOW,
+                    )["elements"][0]
+                    change(project, timeline, video)
+                    with self.assertRaises(ValidationError):
+                        set_element_enabled(
+                            project, timeline, config, registry, store,
+                            element["element_id"], element["fingerprint"], True, NOW,
+                        )
+                    self.assertEqual([], video.set_calls)
+
+    def test_mutation_rechecks_picture_lock_after_inspection(self):
+        element = self.inspect()["elements"][0]
+        self.config = live_config(self.root, locked=True)
+        with self.assertRaisesRegex(ValidationError, "picture lock"):
+            set_element_enabled(
+                self.project, self.timeline, self.config, self.registry, self.store,
+                element["element_id"], element["fingerprint"], False, NOW,
+            )
+        self.assertEqual([], self.video.set_calls)
+
+    def test_inspection_does_not_grant_remove_from_arphe_name_alone(self):
+        self.video.name = "ARPHE_BRIDGE_OWNED_LOOKING_TITLE"
+        element = self.inspect()["elements"][0]
+        self.assertFalse(element["remove_allowed"])
 
 
 if __name__ == "__main__":

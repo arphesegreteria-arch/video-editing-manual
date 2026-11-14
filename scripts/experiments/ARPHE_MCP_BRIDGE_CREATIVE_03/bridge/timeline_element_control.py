@@ -462,3 +462,280 @@ def store_for_config(config: object) -> TimelineElementStore:
         int(getattr(config, "timeline_element_handle_ttl_seconds", 300)),
         int(getattr(config, "timeline_element_removal_ttl_seconds", 600)),
     )
+
+
+def _require_allowed_target(
+    project: object, timeline: object, config: object, registry: object
+) -> tuple[str, str]:
+    project_name = str(safe_call(project, "GetName") or "")
+    timeline_name = str(safe_call(timeline, "GetName") or "")
+    project_allowed = bool(safe_call(registry, "project_allowed", project_name)) or (
+        project_name in getattr(config, "allowed_projects", frozenset())
+    )
+    timeline_allowed = bool(
+        safe_call(registry, "timeline_allowed", project_name, timeline_name)
+    ) or timeline_name in getattr(config, "allowed_timelines", frozenset())
+    if not project_allowed or not timeline_allowed:
+        raise ValidationError("Progetto o timeline corrente non allowlisted")
+    if safe_call(project, "GetCurrentTimeline") is not timeline:
+        raise ValidationError("La timeline indicata non è la timeline corrente")
+    return project_name, timeline_name
+
+
+def _validated_filters(
+    media_type: str | None,
+    track_index: int | None,
+    start_frame: int | None,
+    end_frame: int | None,
+) -> tuple[tuple[str, ...], int | None, int | None, int | None]:
+    if media_type is not None and media_type not in {"video", "audio"}:
+        raise ValidationError("media_type deve essere video o audio")
+    track = None if track_index is None else _required_int(track_index, "track_index", 1)
+    start = None if start_frame is None else _required_int(start_frame, "start_frame")
+    end = None if end_frame is None else _required_int(end_frame, "end_frame")
+    if start is not None and end is not None and end <= start:
+        raise ValidationError("Intervallo di ispezione non valido")
+    return ((media_type,) if media_type else ("video", "audio")), track, start, end
+
+
+def _enumerate_snapshots(
+    project: object,
+    timeline: object,
+    workstation_id: str,
+    media_types: tuple[str, ...],
+    track_index: int | None = None,
+) -> list[tuple[object, TimelineElementSnapshot]]:
+    found: list[tuple[object, TimelineElementSnapshot]] = []
+    for kind in media_types:
+        count = _required_int(safe_call(timeline, "GetTrackCount", kind) or 0, "track_count")
+        tracks = (track_index,) if track_index is not None else range(1, count + 1)
+        for track in tracks:
+            if track > count:
+                continue
+            items = safe_call(timeline, "GetItemListInTrack", kind, track)
+            if items is None:
+                raise ValidationError("Lettura elementi timeline non disponibile")
+            for item in list(items):
+                found.append((
+                    item,
+                    capture_item_snapshot(
+                        workstation_id, project, timeline, kind, track, item
+                    ),
+                ))
+    return found
+
+
+def inspect_elements(
+    project: object,
+    timeline: object,
+    config: object,
+    registry: object,
+    store: TimelineElementStore,
+    media_type: str | None = None,
+    track_index: int | None = None,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    project_name, timeline_name = _require_allowed_target(
+        project, timeline, config, registry
+    )
+    media_types, track, range_start, range_end = _validated_filters(
+        media_type, track_index, start_frame, end_frame
+    )
+    workstation_id = str(getattr(config, "workstation_id", ""))
+    if store.workstation_id != workstation_id:
+        raise ValidationError("Store timeline element control di un'altra workstation")
+    all_items = _enumerate_snapshots(
+        project, timeline, workstation_id, media_types, track
+    )
+    filtered = [
+        pair for pair in all_items
+        if (range_start is None or pair[1].end_frame > range_start)
+        and (range_end is None or pair[1].start_frame < range_end)
+    ]
+    by_object = {id(item): snap for item, snap in all_items}
+    result: list[dict[str, object]] = []
+    for item, snap in filtered:
+        linked = safe_call(timeline, "GetLinkedItems", item)
+        if linked is None:
+            linked = safe_call(item, "GetLinkedItems") or []
+        related_fingerprints = tuple(
+            snapshot_fingerprint(by_object[id(peer)])
+            for peer in list(linked or [])
+            if id(peer) in by_object and peer is not item
+        )
+        handle = store.issue_handle(snap, related_fingerprints, now=now)
+        result.append({
+            "element_id": handle["element_id"],
+            "fingerprint": handle["fingerprint"],
+            "media_type": snap.media_type,
+            "track_index": snap.track_index,
+            "start_frame": snap.start_frame,
+            "end_frame": snap.end_frame,
+            "duration_frames": snap.duration_frames,
+            "display_name": snap.display_name,
+            "enabled": snap.enabled,
+            "related_fingerprints": list(related_fingerprints),
+            "remove_allowed": store.matching_ownership(snap) is not None,
+            "expires_at": handle["expires_at"],
+        })
+    return {
+        "ok": True,
+        "project": project_name,
+        "timeline": timeline_name,
+        "write_capability_enabled": bool(
+            getattr(config, "flags", {}).get("CAP_TIMELINE_ELEMENT_CONTROL", False)
+        ),
+        "elements": result,
+    }
+
+
+def _bound_track_snapshots(
+    project: object, timeline: object, handle: dict[str, object]
+) -> tuple[TimelineElementSnapshot, list[tuple[object, TimelineElementSnapshot]]]:
+    expected = _snapshot_from_payload(handle.get("snapshot"))
+    if str(safe_call(project, "GetName") or "") != expected.project_name:
+        raise ValidationError("Target elemento stale: progetto cambiato")
+    if str(safe_call(timeline, "GetName") or "") != expected.timeline_name:
+        raise ValidationError("Target elemento stale: timeline cambiata")
+    candidates = _enumerate_snapshots(
+        project, timeline, expected.workstation_id,
+        (expected.media_type,), expected.track_index,
+    )
+    return expected, candidates
+
+
+def rematch_live_item(
+    project: object, timeline: object, handle: dict[str, object]
+) -> tuple[object, TimelineElementSnapshot]:
+    expected, candidates = _bound_track_snapshots(project, timeline, handle)
+    expected_fingerprint = str(handle.get("fingerprint") or "")
+    matches = [
+        (item, snap) for item, snap in candidates
+        if snapshot_fingerprint(snap) == expected_fingerprint and snap == expected
+    ]
+    if len(matches) > 1:
+        raise ValidationError("Rematch elemento ambiguo: target non univoco")
+    if not matches:
+        raise ValidationError("Target elemento stale o non più presente")
+    return matches[0]
+
+
+def timeline_is_picture_locked(
+    config: object, project_name: str, timeline_name: str
+) -> bool:
+    plans_path = getattr(config, "vertical_social_plans_path", None)
+    if not isinstance(plans_path, Path) or not plans_path.exists():
+        return False
+    meta_path = plans_path.with_name(plans_path.stem + "_workflow.json")
+    if not meta_path.exists():
+        return False
+    try:
+        plans_raw = json.loads(plans_path.read_text(encoding="utf-8-sig"))
+        meta_raw = json.loads(meta_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValidationError("Stato picture lock non leggibile") from exc
+    if plans_raw.get("workstation_id") != getattr(config, "workstation_id", None):
+        raise ValidationError("Registro picture lock di un'altra workstation")
+    plans = plans_raw.get("plans")
+    if not isinstance(plans, dict) or not isinstance(meta_raw, dict):
+        raise ValidationError("Stato picture lock non valido")
+    for plan_id, raw in plans.items():
+        metadata = meta_raw.get(plan_id, {})
+        if not isinstance(raw, dict) or not isinstance(metadata, dict):
+            raise ValidationError("Record picture lock non valido")
+        if metadata.get("picture_locked") is not True:
+            continue
+        target = raw.get("target", {})
+        if not isinstance(target, dict) or str(target.get("project") or "") != project_name:
+            continue
+        target_timeline = str(target.get("timeline") or "")
+        suffix = str(plan_id).removeprefix("vertical_").upper()
+        provisional = (
+            f"__ARPHE_VERTICAL_VERTICAL_{suffix}"
+            if len(suffix) == 32 and suffix.isalnum() else ""
+        )
+        if timeline_name in {target_timeline, provisional}:
+            return True
+    return False
+
+
+def _same_except_enabled(
+    expected: TimelineElementSnapshot, current: TimelineElementSnapshot
+) -> bool:
+    left = _snapshot_payload(expected)
+    right = _snapshot_payload(current)
+    left.pop("enabled")
+    right.pop("enabled")
+    return left == right
+
+
+def set_element_enabled(
+    project: object,
+    timeline: object,
+    config: object,
+    registry: object,
+    store: TimelineElementStore,
+    element_id: str,
+    fingerprint: str,
+    enabled: bool,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    if not isinstance(enabled, bool):
+        raise ValidationError("enabled deve essere booleano")
+    selected = _utc(now)
+    handle = store.require_handle(element_id, fingerprint, selected)
+    if not bool(getattr(config, "flags", {}).get("CAP_TIMELINE_ELEMENT_CONTROL", False)):
+        raise ValidationError("CAP_TIMELINE_ELEMENT_CONTROL disabilitata")
+    project_name, timeline_name = _require_allowed_target(
+        project, timeline, config, registry
+    )
+    if timeline_is_picture_locked(config, project_name, timeline_name):
+        raise ValidationError("Scrittura rifiutata: workflow in picture lock")
+    expected, candidates = _bound_track_snapshots(project, timeline, handle)
+    exact = [
+        (item, snap) for item, snap in candidates
+        if snap == expected and snapshot_fingerprint(snap) == fingerprint
+    ]
+    if len(exact) > 1:
+        raise ValidationError("Rematch elemento ambiguo: target non univoco")
+    if len(exact) == 1:
+        item, live = exact[0]
+        if live.enabled == enabled:
+            return {
+                "ok": True, "element_id": element_id, "enabled": enabled,
+                "idempotent": True, "fingerprint": fingerprint,
+            }
+    else:
+        drift = [
+            (item, snap) for item, snap in candidates
+            if _same_except_enabled(expected, snap)
+        ]
+        if len(drift) > 1:
+            raise ValidationError("Rematch elemento ambiguo: target non univoco")
+        if len(drift) == 1 and drift[0][1].enabled == enabled:
+            return {
+                "ok": True, "element_id": element_id, "enabled": enabled,
+                "idempotent": True,
+                "fingerprint": snapshot_fingerprint(drift[0][1]),
+            }
+        raise ValidationError("Target elemento stale: identità o stato cambiati")
+    if safe_call(item, "SetClipEnabled", enabled) is not True:
+        raise ValidationError("SetClipEnabled non supportato o fallito")
+    readback = safe_call(item, "GetClipEnabled")
+    if not isinstance(readback, bool) or readback is not enabled:
+        raise ValidationError("Read-back SetClipEnabled non corrispondente")
+    current = capture_item_snapshot(
+        store.workstation_id, project, timeline,
+        live.media_type, live.track_index, item,
+    )
+    if not _same_except_enabled(expected, current):
+        raise ValidationError("Elemento cambiato durante SetClipEnabled")
+    return {
+        "ok": True,
+        "element_id": element_id,
+        "enabled": enabled,
+        "idempotent": False,
+        "fingerprint": snapshot_fingerprint(current),
+    }

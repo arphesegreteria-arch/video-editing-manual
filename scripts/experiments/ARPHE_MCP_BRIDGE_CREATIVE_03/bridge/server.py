@@ -6,6 +6,7 @@ from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
+import re
 from typing import Any, Callable
 
 from mcp.server import MCPServer
@@ -278,6 +279,62 @@ def _call(operation: Callable[..., dict], *args: Any, **kwargs: Any) -> dict:
 def _require_timeline_element_control(config: Any) -> None:
     if not bool(config.flags.get("CAP_TIMELINE_ELEMENT_CONTROL", False)):
         raise ValidationError("CAP_TIMELINE_ELEMENT_CONTROL non attiva nella config locale")
+
+
+def _timeline_control_error_text(exc: Exception) -> str:
+    if not isinstance(exc, ValidationError):
+        return "Operazione timeline element control non disponibile"
+    message = str(exc)
+    message = re.sub(r"[A-Za-z]:[\\/][^\s]+", "[percorso locale]", message)
+    message = re.sub(r"\\\\[^\s]+", "[percorso locale]", message)
+    return message
+
+
+def _timeline_control_call(
+    action: str,
+    config: Any,
+    metadata: dict[str, object],
+    operation: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    base = {
+        "action": action,
+        "workstation_id": str(getattr(config, "workstation_id", "PC_UNSPECIFIED")),
+        **metadata,
+    }
+    try:
+        result = {**base, **operation()}
+    except Exception as exc:
+        result = {
+            **base,
+            "ok": False,
+            "stage": "validation" if isinstance(exc, ValidationError) else "runtime",
+            "error_type": type(exc).__name__,
+            "error": _timeline_control_error_text(exc),
+        }
+    try:
+        write_audit(config.audit_log_path, action, result)
+    except Exception:
+        pass
+    return result
+
+
+def _timeline_control_connection_error(
+    action: str, config: Any, metadata: dict[str, object]
+) -> dict[str, Any]:
+    return _timeline_control_call(
+        action, config, metadata,
+        lambda: (_ for _ in ()).throw(ValidationError("Resolve non raggiungibile")),
+    )
+
+
+def _timeline_control_bootstrap_error(action: str, exc: Exception) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "action": action,
+        "stage": "validation" if isinstance(exc, ValidationError) else "runtime",
+        "error_type": type(exc).__name__,
+        "error": _timeline_control_error_text(exc),
+    }
 
 
 EDITORIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "editorial_selection_contract.json"
@@ -1669,20 +1726,33 @@ def inspect_timeline_elements(
     end_frame: int | None = None,
 ) -> dict[str, Any]:
     """Inspect exact current timeline items and issue short-lived opaque handles."""
+    config = None
     with RESOLVE_ACCESS_LOCK:
         try:
             _, _, project, timeline, config, registry, error = _runtime()
             if error:
-                return error
+                return _timeline_control_connection_error(
+                    "inspect_timeline_elements", config, {}
+                )
             if project is None or timeline is None:
                 raise ValidationError("Serve una timeline corrente")
-            return _call(
-                do_inspect_timeline_elements,
-                project, timeline, config, registry, timeline_element_store_for(config),
-                media_type, track_index, start_frame, end_frame,
+            return _timeline_control_call(
+                "inspect_timeline_elements", config, {},
+                lambda: do_inspect_timeline_elements(
+                    project, timeline, config, registry,
+                    timeline_element_store_for(config), media_type, track_index,
+                    start_frame, end_frame,
+                ),
             )
         except Exception as exc:
-            return _error(exc)
+            if config is None:
+                return _timeline_control_bootstrap_error(
+                    "inspect_timeline_elements", exc
+                )
+            return _timeline_control_call(
+                "inspect_timeline_elements", config, {},
+                lambda: (_ for _ in ()).throw(exc),
+            )
 
 
 @mcp.tool(annotations=IDEMPOTENT_WRITE)
@@ -1690,22 +1760,35 @@ def set_timeline_element_enabled(
     element_id: str, fingerprint: str, enabled: bool
 ) -> dict[str, Any]:
     """Set only the enabled state of one fresh, unambiguous opaque item handle."""
+    config = None
+    metadata = {"element_id": element_id, "fingerprint": fingerprint}
     try:
         config = load_config()
         _require_timeline_element_control(config)
         with RESOLVE_ACCESS_LOCK:
             _, _, project, timeline, error = context()
             if error:
-                return error
+                return _timeline_control_connection_error(
+                    "set_timeline_element_enabled", config, metadata
+                )
             if project is None or timeline is None:
                 raise ValidationError("Serve una timeline corrente")
-            return _call(
-                do_set_timeline_element_enabled,
-                project, timeline, config, Registry(config.state_path),
-                timeline_element_store_for(config), element_id, fingerprint, enabled,
+            return _timeline_control_call(
+                "set_timeline_element_enabled", config, metadata,
+                lambda: do_set_timeline_element_enabled(
+                    project, timeline, config, Registry(config.state_path),
+                    timeline_element_store_for(config), element_id, fingerprint, enabled,
+                ),
             )
     except Exception as exc:
-        return _error(exc)
+        if config is None:
+            return _timeline_control_bootstrap_error(
+                "set_timeline_element_enabled", exc
+            )
+        return _timeline_control_call(
+            "set_timeline_element_enabled", config, metadata,
+            lambda: (_ for _ in ()).throw(exc),
+        )
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -1713,22 +1796,35 @@ def prepare_timeline_element_removal(
     element_id: str, fingerprint: str
 ) -> dict[str, Any]:
     """Prepare a short-lived removal proposal for one proven bridge-owned item."""
+    config = None
+    metadata = {"element_id": element_id, "fingerprint": fingerprint}
     try:
         config = load_config()
         _require_timeline_element_control(config)
         with RESOLVE_ACCESS_LOCK:
             _, _, project, timeline, error = context()
             if error:
-                return error
+                return _timeline_control_connection_error(
+                    "prepare_timeline_element_removal", config, metadata
+                )
             if project is None or timeline is None:
                 raise ValidationError("Serve una timeline corrente")
-            return _call(
-                do_prepare_timeline_element_removal,
-                project, timeline, config, Registry(config.state_path),
-                timeline_element_store_for(config), element_id, fingerprint,
+            return _timeline_control_call(
+                "prepare_timeline_element_removal", config, metadata,
+                lambda: do_prepare_timeline_element_removal(
+                    project, timeline, config, Registry(config.state_path),
+                    timeline_element_store_for(config), element_id, fingerprint,
+                ),
             )
     except Exception as exc:
-        return _error(exc)
+        if config is None:
+            return _timeline_control_bootstrap_error(
+                "prepare_timeline_element_removal", exc
+            )
+        return _timeline_control_call(
+            "prepare_timeline_element_removal", config, metadata,
+            lambda: (_ for _ in ()).throw(exc),
+        )
 
 
 @mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
@@ -1736,23 +1832,40 @@ def execute_timeline_element_removal(
     removal_id: str, proposal_fingerprint: str, operator_role: str
 ) -> dict[str, Any]:
     """Execute one prepared non-ripple removal; recovery never retargets another item."""
+    config = None
+    metadata = {
+        "removal_id": removal_id,
+        "proposal_fingerprint": proposal_fingerprint,
+        "actor_role": operator_role,
+    }
     try:
         config = load_config()
         _require_timeline_element_control(config)
         with RESOLVE_ACCESS_LOCK:
             _, _, project, timeline, error = context()
             if error:
-                return error
+                return _timeline_control_connection_error(
+                    "execute_timeline_element_removal", config, metadata
+                )
             if project is None or timeline is None:
                 raise ValidationError("Serve una timeline corrente")
-            return _call(
-                do_execute_timeline_element_removal,
-                project, timeline, config, Registry(config.state_path),
-                timeline_element_store_for(config), removal_id,
-                proposal_fingerprint, operator_role,
+            return _timeline_control_call(
+                "execute_timeline_element_removal", config, metadata,
+                lambda: do_execute_timeline_element_removal(
+                    project, timeline, config, Registry(config.state_path),
+                    timeline_element_store_for(config), removal_id,
+                    proposal_fingerprint, operator_role,
+                ),
             )
     except Exception as exc:
-        return _error(exc)
+        if config is None:
+            return _timeline_control_bootstrap_error(
+                "execute_timeline_element_removal", exc
+            )
+        return _timeline_control_call(
+            "execute_timeline_element_removal", config, metadata,
+            lambda: (_ for _ in ()).throw(exc),
+        )
 
 
 @mcp.tool(annotations=READ_ONLY)

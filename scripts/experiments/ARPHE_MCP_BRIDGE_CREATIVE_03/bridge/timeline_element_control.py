@@ -138,14 +138,45 @@ def snapshot_fingerprint(snapshot: TimelineElementSnapshot) -> str:
     return _canonical_digest(_snapshot_payload(snapshot))
 
 
-def _media_identity(item: object, media_pool_item: object, fallback: dict[str, object]) -> str:
-    for candidate in (
-        safe_call(media_pool_item, "GetMediaId"),
-        safe_call(media_pool_item, "GetUniqueId"),
-        safe_call(item, "GetUniqueId"),
-    ):
-        if candidate not in (None, ""):
-            return _safe_display_name(candidate)
+def _resolve_unique_id(value: object) -> str:
+    candidate = safe_call(value, "GetUniqueId")
+    return "" if candidate in (None, "") else str(candidate)
+
+
+def _same_resolve_object(left: object, right: object) -> bool:
+    left_id, right_id = _resolve_unique_id(left), _resolve_unique_id(right)
+    if left_id and right_id:
+        return left_id == right_id
+    return left is right
+
+
+def _resolve_item_key(item: object) -> tuple[str, str | int]:
+    unique_id = _resolve_unique_id(item)
+    return ("uid", unique_id) if unique_id else ("proxy", id(item))
+
+
+def _media_identity(
+    project: object,
+    timeline: object,
+    item: object,
+    media_pool_item: object,
+    fallback: dict[str, object],
+) -> str:
+    project_id = _resolve_unique_id(project)
+    timeline_id = _resolve_unique_id(timeline)
+    item_id = _resolve_unique_id(item)
+    media_id = str(
+        safe_call(media_pool_item, "GetMediaId")
+        or safe_call(media_pool_item, "GetUniqueId")
+        or ""
+    )
+    if project_id and timeline_id and item_id:
+        return "stable:" + _canonical_digest({
+            "project_id": project_id,
+            "timeline_id": timeline_id,
+            "item_id": item_id,
+            "media_id": media_id,
+        })
     properties = safe_call(media_pool_item, "GetClipProperty")
     safe_properties: dict[str, str] = {}
     if isinstance(properties, dict):
@@ -153,7 +184,14 @@ def _media_identity(item: object, media_pool_item: object, fallback: dict[str, o
             value = properties.get(key)
             if value not in (None, ""):
                 safe_properties[key] = _safe_display_name(value)
-    return "derived:" + _canonical_digest({"metadata": safe_properties, **fallback})
+    return "derived:" + _canonical_digest({
+        "project_id": project_id,
+        "timeline_id": timeline_id,
+        "item_id": item_id,
+        "media_id": media_id,
+        "metadata": safe_properties,
+        **fallback,
+    })
 
 
 def capture_item_snapshot(
@@ -181,7 +219,7 @@ def capture_item_snapshot(
         raise ValidationError("Stato enabled elemento non disponibile")
     display_name = _safe_display_name(safe_call(item, "GetName"))
     media_pool_item = safe_call(item, "GetMediaPoolItem")
-    media_identity = _media_identity(item, media_pool_item, {
+    media_identity = _media_identity(project, timeline, item, media_pool_item, {
         "media_type": media_type,
         "track_index": track,
         "start_frame": start,
@@ -315,6 +353,10 @@ class TimelineElementStore:
     ) -> dict[str, object]:
         if snapshot.workstation_id != self.workstation_id:
             raise ValidationError("Ownership appartenente a un'altra workstation")
+        if not snapshot.media_identity.startswith("stable:"):
+            raise ValidationError(
+                "Ownership richiede ID stabili di progetto, timeline e TimelineItem"
+            )
         if not action.strip() or not native_reference.strip():
             raise ValidationError("Provenienza ownership incompleta")
         selected = _utc(now)
@@ -545,14 +587,16 @@ def timeline_item_track_index(
     if media_type not in {"video", "audio"}:
         raise ValidationError("media_type deve essere video o audio")
     matches: list[int] = []
-    count = _required_int(
-        safe_call(timeline, "GetTrackCount", media_type) or 0, "track_count"
-    )
+    raw_count = safe_call(timeline, "GetTrackCount", media_type)
+    if isinstance(raw_count, bool) or not isinstance(raw_count, int) or raw_count < 0:
+        raise ValidationError("Read-back conteggio tracce non disponibile")
+    count = raw_count
+    item_key = _resolve_item_key(item)
     for track in range(1, count + 1):
         items = safe_call(timeline, "GetItemListInTrack", media_type, track)
         if items is None:
             raise ValidationError("Read-back traccia elemento creato non disponibile")
-        if any(candidate is item for candidate in list(items)):
+        if any(_resolve_item_key(candidate) == item_key for candidate in list(items)):
             matches.append(track)
     if len(matches) != 1:
         raise ValidationError("Elemento creato non presente su una sola traccia")
@@ -602,7 +646,8 @@ def _require_allowed_target(
     ) or timeline_name in getattr(config, "allowed_timelines", frozenset())
     if not project_allowed or not timeline_allowed:
         raise ValidationError("Progetto o timeline corrente non allowlisted")
-    if safe_call(project, "GetCurrentTimeline") is not timeline:
+    current_timeline = safe_call(project, "GetCurrentTimeline")
+    if current_timeline is None or not _same_resolve_object(current_timeline, timeline):
         raise ValidationError("La timeline indicata non è la timeline corrente")
     return project_name, timeline_name
 
@@ -632,11 +677,14 @@ def _enumerate_snapshots(
 ) -> list[tuple[object, TimelineElementSnapshot]]:
     found: list[tuple[object, TimelineElementSnapshot]] = []
     for kind in media_types:
-        count = _required_int(safe_call(timeline, "GetTrackCount", kind) or 0, "track_count")
+        raw_count = safe_call(timeline, "GetTrackCount", kind)
+        if isinstance(raw_count, bool) or not isinstance(raw_count, int) or raw_count < 0:
+            raise ValidationError("Lettura conteggio tracce timeline non disponibile")
+        count = raw_count
         tracks = (track_index,) if track_index is not None else range(1, count + 1)
         for track in tracks:
             if track > count:
-                continue
+                raise ValidationError("Traccia elemento bound non più disponibile")
             items = safe_call(timeline, "GetItemListInTrack", kind, track)
             if items is None:
                 raise ValidationError("Lettura elementi timeline non disponibile")
@@ -672,23 +720,26 @@ def inspect_elements(
     if store.workstation_id != workstation_id:
         raise ValidationError("Store timeline element control di un'altra workstation")
     all_items = _enumerate_snapshots(
-        project, timeline, workstation_id, media_types, track
+        project, timeline, workstation_id, ("video", "audio"), None
     )
     filtered = [
         pair for pair in all_items
+        if pair[1].media_type in media_types
+        and (track is None or pair[1].track_index == track)
         if (range_start is None or pair[1].end_frame > range_start)
         and (range_end is None or pair[1].start_frame < range_end)
     ]
-    by_object = {id(item): snap for item, snap in all_items}
+    by_object = {_resolve_item_key(item): snap for item, snap in all_items}
     result: list[dict[str, object]] = []
     for item, snap in filtered:
         linked = safe_call(timeline, "GetLinkedItems", item)
         if linked is None:
             linked = safe_call(item, "GetLinkedItems") or []
         related_fingerprints = tuple(
-            snapshot_fingerprint(by_object[id(peer)])
+            snapshot_fingerprint(by_object[_resolve_item_key(peer)])
             for peer in list(linked or [])
-            if id(peer) in by_object and peer is not item
+            if _resolve_item_key(peer) in by_object
+            and _resolve_item_key(peer) != _resolve_item_key(item)
         )
         handle = store.issue_handle(snap, related_fingerprints, now=now)
         result.append({
@@ -737,6 +788,8 @@ def rematch_live_item(
     project: object, timeline: object, handle: dict[str, object]
 ) -> tuple[object, TimelineElementSnapshot]:
     expected, candidates = _bound_track_snapshots(project, timeline, handle)
+    if not expected.media_identity.startswith("stable:"):
+        raise ValidationError("Mutazione rifiutata: ID stabili Resolve non disponibili")
     expected_fingerprint = str(handle.get("fingerprint") or "")
     matches = [
         (item, snap) for item, snap in candidates
@@ -821,6 +874,8 @@ def set_element_enabled(
     if timeline_is_picture_locked(config, project_name, timeline_name):
         raise ValidationError("Scrittura rifiutata: workflow in picture lock")
     expected, candidates = _bound_track_snapshots(project, timeline, handle)
+    if not expected.media_identity.startswith("stable:"):
+        raise ValidationError("Mutazione rifiutata: ID stabili Resolve non disponibili")
     exact = [
         (item, snap) for item, snap in candidates
         if snap == expected and snapshot_fingerprint(snap) == fingerprint
@@ -969,6 +1024,8 @@ def _completed_removal_result(
         "ok": True,
         "action": "execute_timeline_element_removal",
         "workstation_id": workstation_id,
+        "element_id": record["element_id"],
+        "fingerprint": record["element_fingerprint"],
         "removal_id": record["removal_id"],
         "proposal_fingerprint": record["proposal_fingerprint"],
         "state": "COMPLETED",
@@ -1008,9 +1065,12 @@ def execute_element_removal(
         if ownership is None or ownership.get("ownership_id") != removal.get("ownership_id"):
             raise ValidationError("Ownership rimozione non più valida")
         expected, targets, candidates = _removal_live_state(project, timeline, handle)
-        if len(targets) != 1 or targets[0][0] is not item:
+        if len(targets) != 1 or not _same_resolve_object(targets[0][0], item):
             raise ValidationError("Target rimozione non univoco")
-        neighbours = [pair for pair in candidates if pair[0] is not item]
+        item_key = _resolve_item_key(item)
+        neighbours = [
+            pair for pair in candidates if _resolve_item_key(pair[0]) != item_key
+        ]
         context = {
             "target_fingerprint": snapshot_fingerprint(expected),
             "neighbour_fingerprints": _ordered_fingerprints(neighbours),
@@ -1020,32 +1080,31 @@ def execute_element_removal(
             removal_id, proposal_fingerprint, operator_role, selected, context
         )
         deleted = safe_call(timeline, "DeleteClips", [item], False)
-        if deleted is not True:
-            _, after_targets, after_candidates = _removal_live_state(
-                project, timeline, handle
+        _, after_targets, after_candidates = _removal_live_state(
+            project, timeline, handle
+        )
+        after_neighbours = after_candidates if not after_targets else [
+            pair for pair in after_candidates if pair not in after_targets
+        ]
+        after_neighbours_unchanged = (
+            _ordered_fingerprints(after_neighbours)
+            == context["neighbour_fingerprints"]
+        )
+        if not after_targets and after_neighbours_unchanged:
+            removal = store.require_removal(
+                removal_id, proposal_fingerprint, selected
             )
-            after_neighbours = [
-                pair for pair in after_candidates
-                if not (
-                    pair[1] == expected
-                    and snapshot_fingerprint(pair[1]) == handle.get("fingerprint")
-                )
-            ]
-            unchanged = (
-                len(after_targets) == 1
-                and _ordered_fingerprints(after_neighbours)
-                == context["neighbour_fingerprints"]
+        elif deleted is not True and len(after_targets) == 1 and after_neighbours_unchanged:
+            store.reset_removal(
+                removal_id, proposal_fingerprint, "DeleteClips non riuscito"
             )
-            if unchanged:
-                store.reset_removal(
-                    removal_id, proposal_fingerprint, "DeleteClips non riuscito"
-                )
-            else:
-                store.block_removal(
-                    removal_id, proposal_fingerprint,
-                    "DeleteClips fallito con stato timeline ambiguo",
-                )
-            raise ValidationError("DeleteClips non riuscito; nessuna rimozione confermata")
+            raise ValidationError("DeleteClips non riuscito; target invariato")
+        else:
+            store.block_removal(
+                removal_id, proposal_fingerprint,
+                "DeleteClips con stato timeline ambiguo",
+            )
+            raise ValidationError("Rimozione bloccata: stato timeline ambiguo")
     elif removal.get("state") != "INTENT":
         raise ValidationError("Stato rimozione non eseguibile")
 

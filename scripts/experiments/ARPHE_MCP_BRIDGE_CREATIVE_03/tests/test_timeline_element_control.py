@@ -38,7 +38,7 @@ def snapshot(**changes: object) -> TimelineElementSnapshot:
         "end_frame": 150,
         "duration_frames": 50,
         "display_name": "Titolo sicuro",
-        "media_identity": "media-123",
+        "media_identity": "stable:" + "a" * 64,
         "enabled": True,
     }
     values.update(changes)
@@ -108,7 +108,7 @@ class TimelineElementStoreTests(unittest.TestCase):
             "end_frame": 151,
             "duration_frames": 49,
             "display_name": "Altro titolo",
-            "media_identity": "media-456",
+            "media_identity": "stable:" + "b" * 64,
             "enabled": False,
         }
         for field, value in variants.items():
@@ -126,7 +126,7 @@ class TimelineElementStoreTests(unittest.TestCase):
         self.assertNotIn("\\", captured.display_name)
         self.assertNotIn("\n", captured.display_name)
         self.assertNotIn("secret", captured.display_name.casefold())
-        self.assertEqual("media-id-7", captured.media_identity)
+        self.assertTrue(captured.media_identity.startswith("derived:"))
 
     def test_store_rejects_foreign_workstation_file(self):
         with TemporaryDirectory() as directory:
@@ -166,7 +166,7 @@ class TimelineElementStoreTests(unittest.TestCase):
                 replace(owned, timeline_name="ARPHE_OTHER_MASTER"),
                 replace(owned, track_index=3),
                 replace(owned, start_frame=101, end_frame=151),
-                replace(owned, media_identity="media-other"),
+                replace(owned, media_identity="stable:" + "b" * 64),
             )
             for changed in variants:
                 with self.subTest(changed=changed):
@@ -226,6 +226,15 @@ class TimelineElementStoreTests(unittest.TestCase):
             )
             self.assertIsNotNone(store.matching_ownership(snap))
 
+    def test_derived_identity_cannot_grant_ownership(self):
+        with TemporaryDirectory() as directory:
+            store = TimelineElementStore(Path(directory) / "control.json", "PC_PERSONALE")
+            with self.assertRaisesRegex(ValidationError, "ID stabili"):
+                store.register_ownership(
+                    replace(snapshot(), media_identity="derived:" + "a" * 64),
+                    "create_fusion_title", "native-ref", now=NOW,
+                )
+
 
 class LiveMediaPoolItem:
     def __init__(self, media_id: str):
@@ -236,12 +245,14 @@ class LiveMediaPoolItem:
 
 
 class LiveItem:
-    def __init__(self, start: int, end: int, name: str, media_id: str, enabled: bool = True):
+    def __init__(self, start: int, end: int, name: str, media_id: str, enabled: bool = True,
+                 unique_id: str | None = None):
         self.start = start
         self.end = end
         self.name = name
         self.media = LiveMediaPoolItem(media_id)
         self.enabled = enabled
+        self.unique_id = unique_id or f"item-{media_id}-{start}-{end}"
         self.set_calls: list[bool] = []
 
     def GetStart(self): return self.start
@@ -250,6 +261,7 @@ class LiveItem:
     def GetName(self): return self.name
     def GetMediaPoolItem(self): return self.media
     def GetClipEnabled(self): return self.enabled
+    def GetUniqueId(self): return self.unique_id
 
     def SetClipEnabled(self, value):
         self.set_calls.append(value)
@@ -258,15 +270,20 @@ class LiveItem:
 
 
 class LiveTimeline:
-    def __init__(self, name: str = "ARPHE_MASTER"):
+    def __init__(self, name: str = "ARPHE_MASTER", unique_id: str = "timeline-master"):
         self.name = name
+        self.unique_id = unique_id
         self.tracks = {"video": {1: []}, "audio": {1: []}}
         self.links: dict[LiveItem, list[LiveItem]] = {}
         self.delete_calls: list[tuple[list[LiveItem], bool]] = []
         self.delete_result = True
+        self.raise_after_delete = False
+        self.fail_track_count = False
 
     def GetName(self): return self.name
-    def GetTrackCount(self, media_type): return max(self.tracks[media_type], default=0)
+    def GetUniqueId(self): return self.unique_id
+    def GetTrackCount(self, media_type):
+        return None if self.fail_track_count else max(self.tracks[media_type], default=0)
     def GetItemListInTrack(self, media_type, track): return list(self.tracks[media_type].get(track, []))
     def GetLinkedItems(self, item): return list(self.links.get(item, []))
 
@@ -280,15 +297,20 @@ class LiveTimeline:
                 for item in selected:
                     if item in track_items:
                         track_items.remove(item)
+        if self.raise_after_delete:
+            raise RuntimeError("lost DeleteClips response")
         return True
 
 
 class LiveProject:
-    def __init__(self, timeline: LiveTimeline, name: str = "ARPHE_ADV"):
+    def __init__(self, timeline: LiveTimeline, name: str = "ARPHE_ADV",
+                 unique_id: str = "project-adv"):
         self.timeline = timeline
         self.name = name
+        self.unique_id = unique_id
 
     def GetName(self): return self.name
+    def GetUniqueId(self): return self.unique_id
     def GetCurrentTimeline(self): return self.timeline
 
 
@@ -372,6 +394,53 @@ class TimelineElementLiveTests(unittest.TestCase):
         self.assertFalse(self.video.enabled)
         self.assertTrue(self.audio.enabled)
         self.assertEqual([], self.audio.set_calls)
+
+    def test_video_filtered_inspection_still_reports_linked_audio_peer(self):
+        self.timeline.links = {self.video: [self.audio], self.audio: [self.video]}
+        result = inspect_elements(
+            self.project, self.timeline, self.config, self.registry, self.store,
+            media_type="video", now=NOW,
+        )
+        self.assertEqual(1, len(result["elements"]))
+        self.assertEqual(
+            [snapshot_fingerprint(capture_item_snapshot(
+                "PC_PERSONALE", self.project, self.timeline, "audio", 1, self.audio,
+            ))],
+            result["elements"][0]["related_fingerprints"],
+        )
+
+    def test_fresh_resolve_proxies_with_same_unique_ids_remain_the_same_target(self):
+        class Proxy:
+            def __init__(self, target): self.target = target
+            def __getattr__(self, name): return getattr(self.target, name)
+
+        class ProxyTimeline(Proxy):
+            def GetItemListInTrack(self, media_type, track):
+                return [Proxy(item) for item in self.target.GetItemListInTrack(media_type, track)]
+
+        original_timeline = self.timeline
+        timeline_proxy = ProxyTimeline(original_timeline)
+        self.project.GetCurrentTimeline = lambda: ProxyTimeline(original_timeline)
+        result = inspect_elements(
+            self.project, timeline_proxy, self.config, self.registry, self.store,
+            media_type="video", now=NOW,
+        )
+        element = result["elements"][0]
+        changed = set_element_enabled(
+            self.project, ProxyTimeline(original_timeline), self.config, self.registry, self.store,
+            element["element_id"], element["fingerprint"], False, NOW,
+        )
+        self.assertTrue(changed["ok"])
+        self.assertFalse(self.video.enabled)
+
+    def test_same_name_without_stable_id_cannot_impersonate_current_timeline(self):
+        impostor = LiveTimeline(name=self.timeline.name, unique_id="")
+        self.timeline.unique_id = ""
+        with self.assertRaisesRegex(ValidationError, "timeline corrente"):
+            inspect_elements(
+                self.project, impostor, self.config, self.registry, self.store,
+                media_type="video", now=NOW,
+            )
 
     def test_disable_and_enable_are_idempotent_and_verified_by_readback(self):
         element = self.inspect()["elements"][0]
@@ -595,6 +664,40 @@ class TimelineElementRemovalTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "recovery|invariant|blocc"):
             self.execute(proposal)
         self.assertIn(replacement, self.timeline.tracks["video"][1])
+        self.assertEqual(1, len(self.timeline.delete_calls))
+
+    def test_prepared_removal_never_deletes_same_source_replacement_with_new_item_id(self):
+        proposal = self.proposal()
+        replacement = LiveItem(
+            100, 150, "Overlay", "video-target", unique_id="replacement-item-id",
+        )
+        self.timeline.tracks["video"][1] = [self.before, replacement, self.after]
+        with self.assertRaises(ValidationError):
+            self.execute(proposal)
+        self.assertIn(replacement, self.timeline.tracks["video"][1])
+        self.assertEqual([], self.timeline.delete_calls)
+
+    def test_recovery_refuses_failed_track_enumeration_even_if_target_would_look_absent(self):
+        self.timeline.tracks["video"][1] = [self.target]
+        proposal = self.proposal()
+        with patch.object(self.store, "complete_removal", side_effect=RuntimeError("lost response")):
+            with self.assertRaises(RuntimeError):
+                self.execute(proposal)
+        self.timeline.tracks["video"][1] = [self.target]
+        self.timeline.fail_track_count = True
+        with self.assertRaises(ValidationError):
+            self.execute(proposal)
+        stored = self.store.require_removal(
+            proposal["removal_id"], proposal["proposal_fingerprint"], NOW,
+        )
+        self.assertNotEqual("COMPLETED", stored["state"])
+
+    def test_lost_delete_response_completes_when_absence_and_neighbours_are_verified(self):
+        proposal = self.proposal()
+        self.timeline.raise_after_delete = True
+        result = self.execute(proposal)
+        self.assertEqual("COMPLETED", result["state"])
+        self.assertNotIn(self.target, self.timeline.tracks["video"][1])
         self.assertEqual(1, len(self.timeline.delete_calls))
 
     def test_completed_removal_returns_same_idempotent_receipt(self):

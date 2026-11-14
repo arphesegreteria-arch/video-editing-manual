@@ -183,6 +183,29 @@ class ProjectTimelineSafetyTests(unittest.TestCase):
                  patch.object(server, "do_inspect_timeline_elements", side_effect=checked):
                 result = server.inspect_timeline_elements()
             self.assertTrue(result["ok"])
+
+    def test_timeline_control_wrapper_sanitizes_permission_error_and_audits_target(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = SimpleNamespace(
+                flags={"CAP_TIMELINE_ELEMENT_CONTROL": True},
+                workstation_id="PC_PERSONALE", state_path=root / "state.json",
+                audit_log_path=root / "audit.jsonl",
+                timeline_element_control_path=root / "private" / "control.json",
+                timeline_element_handle_ttl_seconds=300,
+                timeline_element_removal_ttl_seconds=600,
+            )
+            with patch.object(server, "load_config", return_value=config), \
+                 patch.object(server, "context", return_value=(None, None, object(), object(), None)), \
+                 patch.object(server, "do_set_timeline_element_enabled",
+                              side_effect=PermissionError(r"C:\patients\secret\control.json")):
+                result = server.set_timeline_element_enabled("element_opaque", "a" * 64, False)
+            raw = (root / "audit.jsonl").read_text(encoding="utf-8")
+            self.assertFalse(result["ok"])
+            self.assertNotIn("patients", str(result).casefold())
+            self.assertNotIn("secret", str(result).casefold())
+            self.assertIn("element_opaque", raw)
+            self.assertIn("PC_PERSONALE", raw)
     def test_review_sequence_timecode_preserves_resolve_start_hour(self):
         self.assertEqual("01:00:00:00", _frame_to_timecode(108000, 30))
         self.assertEqual("01:00:03:00", _frame_to_timecode(108090, 30))

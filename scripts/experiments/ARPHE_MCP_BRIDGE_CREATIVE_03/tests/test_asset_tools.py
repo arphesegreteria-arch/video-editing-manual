@@ -15,12 +15,25 @@ class FakeItem:
         self.start = start
         self.end = end
         self.name = ""
+        self.unique_id = f"item-{start}-{end}-{id(self)}"
 
     def GetStart(self):
         return self.start
 
     def GetEnd(self):
         return self.end
+
+    def GetDuration(self):
+        return self.end - self.start
+
+    def GetUniqueId(self):
+        return self.unique_id
+
+    def GetClipEnabled(self):
+        return True
+
+    def GetMediaPoolItem(self):
+        return SimpleNamespace(GetMediaId=lambda: "media-chart")
 
     def SetName(self, name):
         self.name = name
@@ -35,9 +48,13 @@ class FakeTimeline:
         self.bad_count_after_add = bad_count_after_add
         self.deleted_clips = []
         self.deleted_tracks = []
+        self.unique_id = "timeline-asset-test"
 
     def GetName(self):
         return "ARPHE_ASSET_TEST"
+
+    def GetUniqueId(self):
+        return self.unique_id
 
     def GetTrackCount(self, track_type):
         if self.bad_count_after_add and self.add_calls:
@@ -100,6 +117,12 @@ class FakeProject:
 
     def GetName(self):
         return "ARPHE_ASSET_PROJECT"
+
+    def GetUniqueId(self):
+        return "project-asset-test"
+
+    def GetCurrentTimeline(self):
+        return self.pool.timeline
 
     def GetMediaStorage(self):
         return None
@@ -184,6 +207,23 @@ class AssetToolTests(unittest.TestCase):
             args = register.call_args.args
             self.assertEqual(("video", 2), args[3:5])
             self.assertEqual("add_image_asset", args[6])
+
+    def test_asset_success_persists_real_exact_ownership_record(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            image = root / "chart.png"
+            image.write_bytes(b"png")
+            timeline = FakeTimeline()
+            pool = FakePool(timeline)
+            result = add_asset(
+                FakeProject(pool), timeline, self.config(root, ownership=True), self.registry(),
+                str(image), "image", 30, 120, 1,
+            )
+            self.assertTrue(result["ok"])
+            control = __import__("json").loads((root / "control.json").read_text(encoding="utf-8"))
+            self.assertEqual(1, len(control["ownership"]))
+            record = next(iter(control["ownership"].values()))
+            self.assertTrue(record["identity"]["media_identity"].startswith("stable:"))
 
     def test_asset_registration_failure_never_reports_success(self):
         with tempfile.TemporaryDirectory() as raw:

@@ -24,17 +24,19 @@ Non costruire una GUI desktop ARPHE separata come interfaccia primaria salvo nuo
 8. `docs/01_SETUP_RESOLVE_PYTHON.md` — setup Resolve/Python e fallback legacy.
 9. `docs/02_SHORTFORM_WORKFLOW.md` — workflow shorts/ADV.
 10. `docs/16_CAPTION_ENGINE_AND_MOBILE_SUBTITLES.md` — sottotitoli Fusion ARPHÈ approvati.
-11. `docs/03_TRACKING_FUSION.md` — lezioni su tracking, Fusion e yoyo.
-12. `docs/04_LONGFORM_WORKFLOW.md` — pipeline longform e trascrizione.
-13. `docs/05_OPERATOR_GUIDE.md` — procedure manuali di test/fallback.
-14. `docs/06_TROUBLESHOOTING.md` — errori noti e cosa fare.
-15. `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` — replica sicura sul PC personale.
-16. `docs/15_E09_REVIEWS_CARTOLINE.md` — piano E09 con recensioni originali e cartoline.
-17. `docs/18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md` — scelta linea, formato e render sicuro.
-18. `docs/19_ARTIFACT_HYGIENE_AND_QUARANTINE.md` — file tecnici, quarantena e ripristino.
-19. `docs/20_RESOLVE_RETIREMENT_AND_RECOVERY.md` — ritiro archive-first e recovery Resolve.
-20. `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md` — card recensioni, leggibilità, approvazioni e rollback.
-21. `validation/review-readability-ledger.json` — cosa è automatico e cosa è stato osservato su ciascun PC.
+11. `docs/15_ARPHE_FUSION_CAPTIONS.md` — contratto grafico e operativo dei sottotitoli Fusion ARPHÉ.
+12. `docs/17_ARPHE_SECRETARY_EDITING_WORKFLOW.md` — percorso ADV/Reel portabile per la segreteria, criteri editoriali e QA.
+13. `docs/03_TRACKING_FUSION.md` — lezioni su tracking, Fusion e yoyo.
+14. `docs/04_LONGFORM_WORKFLOW.md` — pipeline longform e trascrizione.
+15. `docs/05_OPERATOR_GUIDE.md` — procedure manuali di test/fallback.
+16. `docs/06_TROUBLESHOOTING.md` — errori noti e cosa fare.
+17. `docs/14_PERSONAL_PC_BRIDGE_INSTALLATION.md` — replica sicura sul PC personale.
+18. `docs/15_E09_REVIEWS_CARTOLINE.md` — piano E09 con recensioni originali e cartoline.
+19. `docs/18_EDITORIAL_WORKFLOWS_AND_RENDER_DELIVERY.md` — scelta linea, formato e render sicuro.
+20. `docs/19_ARTIFACT_HYGIENE_AND_QUARANTINE.md` — file tecnici, quarantena e ripristino.
+21. `docs/20_RESOLVE_RETIREMENT_AND_RECOVERY.md` — ritiro archive-first e recovery Resolve.
+22. `docs/16_INSTAGRAM_REVIEW_REEL_STANDARD.md` — card recensioni, leggibilità, approvazioni e rollback.
+23. `validation/review-readability-ledger.json` — cosa è automatico e cosa è stato osservato su ciascun PC.
 
 ## Regola per ChatGPT
 
@@ -44,6 +46,7 @@ Quando questa repository viene usata in una nuova sessione:
 - in caso di routing ambiguo tra PC, leggere subito `docs/15_MULTI_WORKSTATION_ISOLATION_AND_2026-09-21_INCIDENT.md`;
 - usare `docs/08_CHATGPT_MCP_RESOLVE_ARCHITECTURE.md` come fonte della direzione prodotto;
 - consultare solo i file pertinenti al task;
+- per un ADV/Reel affidato alla segreteria leggere `docs/17_ARPHE_SECRETARY_EDITING_WORKFLOW.md` insieme al Graphic Kit ARPHÉ;
 - non assumere che gli script nella cartella `experiments/` siano affidabili;
 - trattare `scripts/validated/` come primitive già verificate;
 - aggiornare lo stato persistente quando un test cambia ciò che sappiamo.

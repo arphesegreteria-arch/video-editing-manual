@@ -85,6 +85,9 @@ class TimelineElementSnapshot:
     workstation_id: str
     project_name: str
     timeline_name: str
+    project_identity: str
+    timeline_identity: str
+    item_identity: str
     media_type: str
     track_index: int
     start_frame: int
@@ -110,6 +113,9 @@ def _snapshot_from_payload(raw: object) -> TimelineElementSnapshot:
             workstation_id=str(raw["workstation_id"]),
             project_name=str(raw["project_name"]),
             timeline_name=str(raw["timeline_name"]),
+            project_identity=str(raw["project_identity"]),
+            timeline_identity=str(raw["timeline_identity"]),
+            item_identity=str(raw["item_identity"]),
             media_type=str(raw["media_type"]),
             track_index=_required_int(raw["track_index"], "track_index", 1),
             start_frame=_required_int(raw["start_frame"], "start_frame"),
@@ -129,6 +135,8 @@ def _snapshot_from_payload(raw: object) -> TimelineElementSnapshot:
         raise ValidationError("Intervallo elemento non valido")
     if not result.workstation_id or not result.project_name or not result.timeline_name:
         raise ValidationError("Identità elemento incompleta")
+    if not result.project_identity or not result.timeline_identity or not result.item_identity:
+        raise ValidationError("Binding Resolve elemento incompleto")
     if not result.media_identity:
         raise ValidationError("Identità media assente")
     return result
@@ -143,11 +151,27 @@ def _resolve_unique_id(value: object) -> str:
     return "" if candidate in (None, "") else str(candidate)
 
 
+def _resolve_identity(value: object, kind: str) -> str:
+    unique_id = _resolve_unique_id(value)
+    if not unique_id:
+        return "unavailable"
+    return "stable:" + _canonical_digest({"kind": kind, "unique_id": unique_id})
+
+
 def _same_resolve_object(left: object, right: object) -> bool:
     left_id, right_id = _resolve_unique_id(left), _resolve_unique_id(right)
     if left_id and right_id:
         return left_id == right_id
     return left is right
+
+
+def _has_stable_resolve_binding(snapshot: TimelineElementSnapshot) -> bool:
+    return all(value.startswith("stable:") for value in (
+        snapshot.project_identity,
+        snapshot.timeline_identity,
+        snapshot.item_identity,
+        snapshot.media_identity,
+    ))
 
 
 def _resolve_item_key(item: object) -> tuple[str, str | int]:
@@ -230,6 +254,9 @@ def capture_item_snapshot(
         "workstation_id": workstation_id,
         "project_name": project_name,
         "timeline_name": timeline_name,
+        "project_identity": _resolve_identity(project, "project"),
+        "timeline_identity": _resolve_identity(timeline, "timeline"),
+        "item_identity": _resolve_identity(item, "timeline_item"),
         "media_type": media_type,
         "track_index": track,
         "start_frame": start,
@@ -353,7 +380,7 @@ class TimelineElementStore:
     ) -> dict[str, object]:
         if snapshot.workstation_id != self.workstation_id:
             raise ValidationError("Ownership appartenente a un'altra workstation")
-        if not snapshot.media_identity.startswith("stable:"):
+        if not _has_stable_resolve_binding(snapshot):
             raise ValidationError(
                 "Ownership richiede ID stabili di progetto, timeline e TimelineItem"
             )
@@ -777,6 +804,10 @@ def _bound_track_snapshots(
         raise ValidationError("Target elemento stale: progetto cambiato")
     if str(safe_call(timeline, "GetName") or "") != expected.timeline_name:
         raise ValidationError("Target elemento stale: timeline cambiata")
+    if _resolve_identity(project, "project") != expected.project_identity:
+        raise ValidationError("Target elemento stale: identità progetto cambiata")
+    if _resolve_identity(timeline, "timeline") != expected.timeline_identity:
+        raise ValidationError("Target elemento stale: identità timeline cambiata")
     candidates = _enumerate_snapshots(
         project, timeline, expected.workstation_id,
         (expected.media_type,), expected.track_index,
@@ -788,7 +819,7 @@ def rematch_live_item(
     project: object, timeline: object, handle: dict[str, object]
 ) -> tuple[object, TimelineElementSnapshot]:
     expected, candidates = _bound_track_snapshots(project, timeline, handle)
-    if not expected.media_identity.startswith("stable:"):
+    if not _has_stable_resolve_binding(expected):
         raise ValidationError("Mutazione rifiutata: ID stabili Resolve non disponibili")
     expected_fingerprint = str(handle.get("fingerprint") or "")
     matches = [
@@ -874,7 +905,7 @@ def set_element_enabled(
     if timeline_is_picture_locked(config, project_name, timeline_name):
         raise ValidationError("Scrittura rifiutata: workflow in picture lock")
     expected, candidates = _bound_track_snapshots(project, timeline, handle)
-    if not expected.media_identity.startswith("stable:"):
+    if not _has_stable_resolve_binding(expected):
         raise ValidationError("Mutazione rifiutata: ID stabili Resolve non disponibili")
     exact = [
         (item, snap) for item, snap in candidates
@@ -1005,7 +1036,16 @@ def _removal_live_state(
     list[tuple[object, TimelineElementSnapshot]],
     list[tuple[object, TimelineElementSnapshot]],
 ]:
-    expected, candidates = _bound_track_snapshots(project, timeline, handle)
+    expected = _snapshot_from_payload(handle.get("snapshot"))
+    if not _has_stable_resolve_binding(expected):
+        raise ValidationError("Recovery rifiutato: binding Resolve non stabile")
+    if _resolve_identity(project, "project") != expected.project_identity:
+        raise ValidationError("Recovery rifiutato: identità progetto cambiata")
+    if _resolve_identity(timeline, "timeline") != expected.timeline_identity:
+        raise ValidationError("Recovery rifiutato: identità timeline cambiata")
+    candidates = _enumerate_snapshots(
+        project, timeline, expected.workstation_id, (expected.media_type,), None,
+    )
     target = [
         pair for pair in candidates
         if pair[1] == expected
@@ -1090,7 +1130,11 @@ def execute_element_removal(
             _ordered_fingerprints(after_neighbours)
             == context["neighbour_fingerprints"]
         )
-        if not after_targets and after_neighbours_unchanged:
+        target_identity_present = any(
+            snap.item_identity == expected.item_identity
+            for _, snap in after_candidates
+        )
+        if not after_targets and not target_identity_present and after_neighbours_unchanged:
             removal = store.require_removal(
                 removal_id, proposal_fingerprint, selected
             )
@@ -1114,7 +1158,7 @@ def execute_element_removal(
             removal_id, proposal_fingerprint, "Contesto recovery mancante"
         )
         raise ValidationError("Rimozione bloccata: contesto recovery mancante")
-    _, targets, candidates = _removal_live_state(project, timeline, handle)
+    expected, targets, candidates = _removal_live_state(project, timeline, handle)
     current_neighbours = candidates if not targets else [
         pair for pair in candidates if pair not in targets
     ]
@@ -1122,7 +1166,10 @@ def execute_element_removal(
         _ordered_fingerprints(current_neighbours)
         == intent_context.get("neighbour_fingerprints")
     )
-    if targets or not neighbours_unchanged:
+    target_identity_present = any(
+        snap.item_identity == expected.item_identity for _, snap in candidates
+    )
+    if targets or target_identity_present or not neighbours_unchanged:
         store.block_removal(
             removal_id, proposal_fingerprint,
             "Recovery non verificabile: target presente o invarianti vicini cambiati",

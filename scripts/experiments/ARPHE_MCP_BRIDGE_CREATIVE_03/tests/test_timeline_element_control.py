@@ -32,6 +32,9 @@ def snapshot(**changes: object) -> TimelineElementSnapshot:
         "workstation_id": "PC_PERSONALE",
         "project_name": "ARPHE_ADV",
         "timeline_name": "ARPHE_MASTER",
+        "project_identity": "stable:" + "1" * 64,
+        "timeline_identity": "stable:" + "2" * 64,
+        "item_identity": "stable:" + "3" * 64,
         "media_type": "video",
         "track_index": 2,
         "start_frame": 100,
@@ -92,7 +95,8 @@ class TimelineElementStoreTests(unittest.TestCase):
         self.assertEqual(snapshot_fingerprint(original), snapshot_fingerprint(original))
         self.assertEqual(
             {
-                "workstation_id", "project_name", "timeline_name", "media_type",
+                "workstation_id", "project_name", "timeline_name",
+                "project_identity", "timeline_identity", "item_identity", "media_type",
                 "track_index", "start_frame", "end_frame", "duration_frames",
                 "display_name", "media_identity", "enabled",
             },
@@ -102,6 +106,9 @@ class TimelineElementStoreTests(unittest.TestCase):
             "workstation_id": "PC_SEGRETERIA",
             "project_name": "ARPHE_ALTRO",
             "timeline_name": "ARPHE_ALTRO_MASTER",
+            "project_identity": "stable:" + "4" * 64,
+            "timeline_identity": "stable:" + "5" * 64,
+            "item_identity": "stable:" + "6" * 64,
             "media_type": "audio",
             "track_index": 3,
             "start_frame": 101,
@@ -653,6 +660,42 @@ class TimelineElementRemovalTests(unittest.TestCase):
         recovered = self.execute(proposal)
         self.assertEqual("COMPLETED", recovered["state"])
         self.assertEqual(1, len(self.timeline.delete_calls))
+
+    def test_recovery_never_completes_against_different_timeline_with_same_name(self):
+        self.timeline.tracks["video"][1] = [self.target]
+        proposal = self.proposal()
+        with patch.object(self.store, "complete_removal", side_effect=RuntimeError("lost response")):
+            with self.assertRaises(RuntimeError):
+                self.execute(proposal)
+        self.timeline.tracks["video"][1] = [self.target]
+        other = LiveTimeline(name=self.timeline.name, unique_id="different-timeline")
+        other.tracks["video"][1] = []
+        other_project = LiveProject(other, unique_id=self.project.unique_id)
+        with self.assertRaisesRegex(ValidationError, "timeline|blocc|recovery"):
+            execute_element_removal(
+                other_project, other, self.config, self.registry, self.store,
+                proposal["removal_id"], proposal["proposal_fingerprint"],
+                "ALESSIO", NOW,
+            )
+        self.assertIn(self.target, self.timeline.tracks["video"][1])
+        stored = self.store.require_removal(
+            proposal["removal_id"], proposal["proposal_fingerprint"], NOW,
+        )
+        self.assertNotEqual("COMPLETED", stored["state"])
+
+    def test_recovery_never_treats_target_moved_to_another_track_as_absent(self):
+        proposal = self.proposal()
+        with patch.object(self.store, "complete_removal", side_effect=RuntimeError("lost response")):
+            with self.assertRaises(RuntimeError):
+                self.execute(proposal)
+        self.timeline.tracks["video"][2] = [self.target]
+        with self.assertRaisesRegex(ValidationError, "recovery|invariant|blocc"):
+            self.execute(proposal)
+        self.assertIn(self.target, self.timeline.tracks["video"][2])
+        stored = self.store.require_removal(
+            proposal["removal_id"], proposal["proposal_fingerprint"], NOW,
+        )
+        self.assertNotEqual("COMPLETED", stored["state"])
 
     def test_execute_removal_never_redirects_to_replacement_item(self):
         proposal = self.proposal()

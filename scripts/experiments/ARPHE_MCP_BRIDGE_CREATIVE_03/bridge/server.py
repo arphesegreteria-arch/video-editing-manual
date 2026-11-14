@@ -290,6 +290,26 @@ def _timeline_control_error_text(exc: Exception) -> str:
     return message
 
 
+def _timeline_control_audit_metadata(
+    metadata: dict[str, object],
+) -> dict[str, object]:
+    sanitized: dict[str, object] = {}
+    opaque_patterns = {
+        "element_id": r"element_[0-9a-f]{32}",
+        "removal_id": r"removal_[0-9a-f]{32}",
+        "fingerprint": r"[0-9a-f]{64}",
+        "proposal_fingerprint": r"[0-9a-f]{64}",
+    }
+    for key, pattern in opaque_patterns.items():
+        value = str(metadata.get(key) or "")
+        if re.fullmatch(pattern, value):
+            sanitized[key] = value
+    role = str(metadata.get("actor_role") or "").strip().upper()
+    if role in {"SEGRETERIA", "TECNICO", "ALESSIO"}:
+        sanitized["actor_role"] = role
+    return sanitized
+
+
 def _timeline_control_call(
     action: str,
     config: Any,
@@ -299,7 +319,7 @@ def _timeline_control_call(
     base = {
         "action": action,
         "workstation_id": str(getattr(config, "workstation_id", "PC_UNSPECIFIED")),
-        **metadata,
+        **_timeline_control_audit_metadata(metadata),
     }
     try:
         result = {**base, **operation()}

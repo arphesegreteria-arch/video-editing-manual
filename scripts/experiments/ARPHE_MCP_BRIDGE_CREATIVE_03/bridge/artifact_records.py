@@ -27,6 +27,7 @@ KNOWN_CATEGORIES = frozenset({
     "RENDER_STAGING",
     "FAILED_RENDER_STAGING",
     "ROTATED_LOG",
+    "TRANSCRIPTION_EXTRACTION",
 })
 PROTECTED_CATEGORIES = frozenset({
     "AUDIO_SOURCE",
@@ -48,6 +49,7 @@ class ProducerId(str, Enum):
     APPLY_FREEZE_SBAM = "apply_freeze_sbam"
     AUDIO_WORKER = "audio_worker"
     TIMELINE_DIALOGUE_CLEANUP = "timeline_dialogue_cleanup"
+    TIMELINE_TRANSCRIPTION = "timeline_transcription"
     COLORIST_JOB_STORE = "colorist_job_store"
     WINDOWS_RUNTIME_LOG_ROTATION = "windows_runtime_log_rotation"
 
@@ -754,6 +756,7 @@ def artifact_store_for(config: CreativeConfig) -> ArtifactStore:
         "runtime_log_root": getattr(config, "runtime_log_root", None),
         "audio_root": getattr(config, "audio_root", None),
         "audio_jobs_root": getattr(config, "audio_jobs_root", None),
+        "transcript_root": getattr(config, "transcript_root", None),
         "profile_root": config.artifact_registry_path.parent,
         "asset_root": getattr(config, "asset_root", None),
         "resolve_archive_root": getattr(config, "resolve_archive_root", None),

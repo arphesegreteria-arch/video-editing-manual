@@ -34,13 +34,17 @@ from .retention_activation import (
 )
 from .artifact_producers import register_colorist_state
 from .audio_provenance import media_fingerprint
+from .artifact_hygiene import producer_activity_blockers
+from .release_identity import release_identity
 from .config import load_config, _default_config_path
 from .colorist_jobs import (
+    cancel_colorist_job as do_cancel_colorist_job,
     ColoristJobStore,
     approve_colorist_job as do_approve_colorist_job,
     new_colorist_job,
     record_colorist_apply,
     record_colorist_apply_failure,
+    record_colorist_exception,
     record_colorist_apply_started,
     record_colorist_preview_restored,
     record_colorist_preview_start,
@@ -428,6 +432,39 @@ def inspect_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
 
 
 @mcp.tool(annotations=SAFE_WRITE)
+def cancel_colorist_plan(colorist_job_id: str, expected_plan_fingerprint: str,
+                         expected_revision: int, operator_role: str,
+                         reason: str) -> dict[str, Any]:
+    """Cancel one exact PREPARED Colorist plan in the ledger; never calls Resolve."""
+    config = None
+    try:
+        config = load_config()
+        saved = do_cancel_colorist_job(
+            _colorist_store(config), colorist_job_id, expected_plan_fingerprint,
+            expected_revision, operator_role, reason,
+        )
+        result = {
+            "ok": True,
+            "action": "cancel_colorist_plan",
+            "colorist_job_id": saved.colorist_job_id,
+            "state": saved.state,
+            "revision": saved.revision,
+            "plan_fingerprint": saved.plan_fingerprint,
+            "operator_role": saved.operator_role,
+            "cancellation_evidence": saved.cancellation_evidence,
+        }
+    except Exception as exc:
+        result = {**_error(exc), "action": "cancel_colorist_plan"}
+    if config is not None:
+        try:
+            write_audit(config.audit_log_path, "cancel_colorist_plan", result)
+        except Exception:
+            pass
+    return result
+
+
+
+@mcp.tool(annotations=SAFE_WRITE)
 def approve_colorist_plan(colorist_job_id: str, expected_plan_fingerprint: str,
                           operator_role: str) -> dict[str, Any]:
     """Approve exactly one Colorist plan fingerprint; performs no Resolve write."""
@@ -445,6 +482,8 @@ def approve_colorist_plan(colorist_job_id: str, expected_plan_fingerprint: str,
 def apply_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
     """Create new local color versions and apply only the approved Colorist plan."""
     with RESOLVE_ACCESS_LOCK:
+        applying = None
+        store = None
         try:
             _, manager, project, timeline, config, target_registry, error = _runtime()
             if error: return error
@@ -460,8 +499,8 @@ def apply_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
             try:
                 result = do_apply_colorist_job(project, timeline, applying, drx_path)
             except Exception as exc:
-                result = {"ok": False, "stage": "preflight_colorist", "recoverable": True,
-                          "manual_recovery_required": False, "error": str(exc),
+                result = {"ok": False, "stage": "unexpected_apply_exception", "recoverable": False,
+                          "manual_recovery_required": True, "error": str(exc),
                           "created_versions": [], "restored_clip_ids": []}
             if not result.get("ok"):
                 failed = record_colorist_apply_failure(applying, result)
@@ -473,7 +512,15 @@ def apply_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
             saved = _register_colorist_state(config, store.save(applied, applying.revision))
             return {**result, "action": "apply_colorist_plan", "state": saved.state,
                     "revision": saved.revision}
-        except Exception as exc: return _error(exc)
+        except Exception as exc:
+            if store is not None and applying is not None:
+                try:
+                    failed = record_colorist_exception(store, applying, exc)
+                    _register_colorist_state(config, failed)
+                except Exception:
+                    # An unreadable ledger stays APPLYING/unknown and therefore held.
+                    pass
+            return {**_error(exc), 'next_safe_action':'RECOVERY_REQUIRED'}
 
 
 @mcp.tool(annotations=SAFE_WRITE)
@@ -1658,7 +1705,8 @@ def ping() -> dict[str, Any]:
         config = load_config()
         return {"ok": True, "bridge": "ARPHE_MCP_BRIDGE_CREATIVE_03", "mode": "CREATIVE_GATED",
                 "workstation_id": config.workstation_id,
-                "configured_feature_flags": config.flags, "arbitrary_execution": False}
+                "configured_feature_flags": config.flags, "arbitrary_execution": False,
+                "build_identity": release_identity(config)}
     except Exception as exc:
         return _error(exc)
 
@@ -1760,7 +1808,8 @@ def inspect_workstation_control_plane() -> dict[str, Any]:
                 registry_warning = type(exc).__name__
             return {"ok": True, "bridge": "ARPHE_MCP_BRIDGE_CREATIVE_03", "workstation_id": config.workstation_id,
                     "resolve": resolve_card, "capabilities": feature_report(config, manager, project, timeline),
-                    "active_jobs": active_cards, "registry_warning": registry_warning}
+                    "active_jobs": active_cards, "registry_warning": registry_warning,
+                    "maintenance_blockers": producer_activity_blockers(config)}
         except Exception as exc:
             return _error(exc)
 

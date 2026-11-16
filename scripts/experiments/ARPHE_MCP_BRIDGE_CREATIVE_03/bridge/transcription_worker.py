@@ -203,6 +203,10 @@ def run_job(job_path: Path) -> None:
                        transcript_fingerprint=file_sha256(Path(payload["output_path"])),
                        updated_at=_now(), error=None)
         _atomic_json(job_path, payload)
+        if payload.get('lifecycle_config_path') and payload.get('timeline_source', {}).get('project_id'):
+            from .config import load_config
+            from .artifact_producers import register_timeline_transcription
+            register_timeline_transcription(load_config(Path(payload['lifecycle_config_path'])), job_path)
     except BaseException as exc:
         payload = _load_worker_job(job_path)
         payload.update(status="INTERRUPTED", updated_at=_now(), error=type(exc).__name__)

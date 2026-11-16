@@ -4,6 +4,10 @@
   "quarantine_seconds": 1296000,
   "purge_enabled": false,
   "rules": {
+    "TRANSCRIPTION_EXTRACTION": {
+      "active_seconds": 86400,
+      "terminal_batch_states": []
+    },
     "DIAGNOSTIC_CAPTURE": {
       "active_seconds": 86400,
       "terminal_batch_states": []

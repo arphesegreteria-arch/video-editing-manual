@@ -23,26 +23,68 @@ ACTIVE_BATCH_STATES = frozenset({"DRAFT", "CONFIRMED", "PREPARED", "APPROVED", "
 FAILED_BATCH_STATES = frozenset({"FAILED_RENDER", "FAILED_VERIFY"})
 
 
-def _producer_activity_hold(config: CreativeConfig) -> bool:
-    active = {"QUEUED", "RUNNING", "RENDERING", "PROCESSING", "APPLYING",
-              "PREPARED", "APPROVED"}
-    if config.audio_jobs_root.is_dir():
-        for path in config.audio_jobs_root.rglob("*.json"):
-            try:
-                payload = json.loads(path.read_text(encoding="utf-8-sig"))
-            except (OSError, json.JSONDecodeError):
-                return True
-            if isinstance(payload, dict) and str(payload.get("status") or "").upper() in active:
-                return True
-    if config.colorist_jobs_path.exists():
+def producer_activity_blockers(config: CreativeConfig, now_utc: datetime | None = None) -> list[dict[str, Any]]:
+    """Request-local diagnostics. Age is information, never authority to expire a job."""
+    now = now_utc or datetime.now(UTC)
+    terminal = {"COMPLETED", "COMPLETE", "INTERRUPTED", "FAILED", "CANCELLED", "CANCELED",
+                "APPLIED", "ACCEPTED", "REJECTED", "FAILED_RECOVERABLE"}
+    result: list[dict[str, Any]] = []
+
+    def add(kind, job_id, payload=None, error=None):
+        payload = payload if isinstance(payload, dict) else {}
+        status = str(payload.get("status") or payload.get("state") or "UNKNOWN").upper()
+        if not error and status in terminal and not payload.get("preview_restore_versions"):
+            return
+        timestamps = payload.get("state_timestamps")
+        updated = payload.get("updated_at") or (timestamps.get(status) if isinstance(timestamps, dict) else None)
         try:
+            age = max(0, int((now - _utc(datetime.fromisoformat(str(updated).replace('Z', '+00:00')))).total_seconds()))
+        except (ValueError, TypeError):
+            age = None
+        result.append({"job_id": str(payload.get("job_id") or payload.get("colorist_job_id") or job_id),
+                       "kind": kind, "status": status, "age_seconds": age,
+                       "reason": "UNREADABLE_OR_MALFORMED" if error else "PRODUCER_ACTIVITY_OR_UNKNOWN",
+                       "error_type": type(error).__name__ if error else None,
+                       "next_safe_action": ("GUARDED_CANCEL_OR_CONTINUE" if status == "PREPARED" and not error
+                                            else "RECOVERY_REQUIRED" if status in {"APPLYING", "UNKNOWN", "FAILED_MANUAL"} or error
+                                            else "WAIT_OR_INSPECT_PRODUCER")})
+
+    locations = (("audio", getattr(config, 'audio_jobs_root', Path('.'))),
+                 ("timeline_transcription", getattr(config, 'transcript_root', Path('.')) / ".timeline_jobs" / config.workstation_id))
+    for kind, root in locations:
+        try:
+            # Relative dataclass defaults mean no configured store. Never scan cwd.
+            if not root.is_absolute():
+                continue
+            if not root.exists():
+                continue
+            for path in root.rglob("*.json"):
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+                    if not isinstance(payload, dict) or not isinstance(payload.get("status"), str):
+                        raise ValueError("Invalid job shape/status")
+                    add(kind, path.stem, payload)
+                except (OSError, ValueError) as exc:
+                    add(kind, path.stem, error=exc)
+        except OSError as exc:
+            add(kind, "store", error=exc)
+    try:
+        if getattr(config, 'colorist_jobs_path', Path('colorist_jobs.json')).exists():
             payload = json.loads(config.colorist_jobs_path.read_text(encoding="utf-8-sig"))
-            jobs = payload.get("jobs", {}) if isinstance(payload, dict) else {}
-            return any(str(value.get("state") or "").upper() in active
-                       for value in jobs.values() if isinstance(value, dict))
-        except (OSError, json.JSONDecodeError):
-            return True
-    return False
+            if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), dict):
+                raise ValueError("Invalid Colorist store shape")
+            for job_id, value in payload["jobs"].items():
+                if not isinstance(value, dict) or not isinstance(value.get("state"), str):
+                    add("colorist", job_id, error=ValueError("Invalid Colorist record"))
+                else:
+                    add("colorist", job_id, value)
+    except (OSError, ValueError) as exc:
+        add("colorist", "store", error=exc)
+    return result
+
+
+def _producer_activity_hold(config: CreativeConfig) -> bool:
+    return bool(producer_activity_blockers(config))
 
 
 def _utc(value: datetime) -> datetime:
@@ -97,6 +139,7 @@ def _roots(config: CreativeConfig) -> dict[str, Path]:
         "runtime_log_root": config.runtime_log_root.resolve(),
         "audio_root": config.audio_root.resolve(),
         "audio_jobs_root": config.audio_jobs_root.resolve(),
+        "transcript_root": config.transcript_root.resolve(),
     }
 
 
@@ -117,6 +160,11 @@ def _record_item(record: ArtifactRecord, config: CreativeConfig, project_registr
         "eligible_at": None if record.eligible_at is None else record.eligible_at.isoformat(),
         "purge_after": None if record.purge_after is None else record.purge_after.isoformat(),
     }
+    if record.state == "PURGED":
+        item["display_path"] = f"{record.managed_root_id}:purged/{record.artifact_id}"
+        item["audit"] = {"path": record.path, "quarantine_path": record.quarantine_path,
+                         "last_error": record.last_error}
+        return item
     if root is None:
         item["state"] = "ERROR"
         item["error_code"] = "UNKNOWN_MANAGED_ROOT"
@@ -129,14 +177,17 @@ def _record_item(record: ArtifactRecord, config: CreativeConfig, project_registr
             path = validate_managed_path(Path(record.path), root,
                                          allow_directory=record.kind == "directory")
             item["display_path"] = _display(path, record.managed_root_id, root)
-    except ValueError:
+    except ValueError as exc:
         item["state"] = "ERROR"
-        item["error_code"] = "PATH_OUTSIDE_MANAGED_ROOT"
+        item["error_code"] = "INVALID_ARTIFACT_PATH"
+        item["error_detail"] = str(exc)
         return item
     if record.state in {"QUARANTINE_COPYING", "QUARANTINED", "PURGE_PENDING", "PURGED", "ERROR", "REVIEW_REQUIRED"}:
         return item
-    if record.protection_class == "PROTECTED":
+    if not _disposable(record):
         item["state"] = "PROTECTED"
+        item["hold_reasons"] = list(record.hold_reasons)
+        item["dependencies"] = list(record.dependencies)
         return item
     rule = policy.rules[record.category]
     if record.batch_id:
@@ -169,17 +220,20 @@ def _unclassified(config: CreativeConfig, known_paths: set[Path]) -> list[dict[s
         ("render_root", config.render_root / "diagnostics"),
         ("render_root", config.render_root / "technical-preview"),
         ("render_root", config.render_root / "staging"),
+        ("audio_root", config.audio_root / "timeline-transcriptions" / config.workstation_id),
+        ("transcript_root", config.transcript_root / ".timeline_jobs" / config.workstation_id),
     )
-    render_root = config.render_root.resolve()
+    roots = _roots(config)
     for root_id, directory in locations:
+        managed_root = roots[root_id]
         if not directory.is_dir():
             continue
         for path in sorted(directory.iterdir(), key=lambda item: item.name.casefold()):
             try:
-                resolved = validate_managed_path(path, render_root, allow_directory=path.is_dir())
+                resolved = validate_managed_path(path, managed_root, allow_directory=path.is_dir())
             except ValueError:
                 continue
-            if resolved in known_paths or any(known in resolved.parents for known in known_paths):
+            if resolved in known_paths or any(parent in known_paths for parent in resolved.parents):
                 continue
             try:
                 size = resolved.stat().st_size if resolved.is_file() else 0
@@ -189,7 +243,7 @@ def _unclassified(config: CreativeConfig, known_paths: set[Path]) -> list[dict[s
                 "artifact_id": None,
                 "category": "UNCLASSIFIED",
                 "state": "UNCLASSIFIED",
-                "display_path": _display(resolved, root_id, render_root),
+                "display_path": _display(resolved, root_id, managed_root),
                 "bytes": size,
                 "eligible_at": None,
                 "purge_after": None,
@@ -817,6 +871,13 @@ def run_maintenance(config: CreativeConfig, artifact_store: ArtifactStore, proje
     try:
         if policy.quarantine_seconds != 1296000:
             raise ValueError("Quarantine must last 1296000 seconds")
+        blockers = producer_activity_blockers(config, now)
+        if blockers:
+            artifact_store.set_maintenance_state(last_attempt_at=now, last_result="held")
+            return {"ok": False, "action": "run_artifact_maintenance", "status": "held",
+                    "error_code": "PRODUCER_ACTIVITY_HELD", "blockers": blockers,
+                    "retry_after_seconds": 3600, "quarantined": quarantined, "purged": purged,
+                    "purge_blocked": purge_blocked, "review_required": reviews, "errors": errors}
         with artifact_store.registration_guard():
             before = {record.artifact_id: record.state for record in artifact_store.records()}
             _reconcile_pending(config, artifact_store, policy, now)
@@ -830,9 +891,8 @@ def run_maintenance(config: CreativeConfig, artifact_store: ArtifactStore, proje
         if activation_store is None:
             from .retention_activation import RetentionActivationStore
             activation_store = RetentionActivationStore(config.retention_activation_path, config.workstation_id)
-        producer_hold = _producer_activity_hold(config)
         for record in artifact_store.records():
-            if record.state in {"ERROR", "PURGED", "REVIEW_REQUIRED"} or not _disposable(record) or producer_hold:
+            if record.state in {"ERROR", "PURGED", "REVIEW_REQUIRED"} or not _disposable(record):
                 continue
             _owned_record(config, artifact_store, record)
             if record.batch_id and record.terminal_observed_at is None:

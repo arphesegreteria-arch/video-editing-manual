@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from .artifact_hygiene import validate_managed_path
-from .artifact_records import ArtifactRecord, artifact_store_for, sha256_file
+from .artifact_records import ArtifactRecord, artifact_store_for, sha256_file, load_artifact_policy
 from .config import CreativeConfig
 
 
@@ -138,3 +140,87 @@ def register_colorist_state(config: CreativeConfig, _job: Any = None) -> Artifac
         managed_root_id="profile_root", dependencies=_unique(tuple(dependencies)),
         review_state=review_state, hold_reasons=_unique(tuple(holds)), refresh=True,
     )
+
+
+def register_timeline_transcription(config: CreativeConfig, manifest_path: Path) -> tuple[ArtifactRecord, ...]:
+    """Register only new, UUID-bound timeline extractions; never adopts legacy media.
+
+    Active/failed extraction retains its own hold. Successful transcript evidence releases
+    only that hold; KEEP and external dependencies survive repeated polls.
+    """
+    manifest = validate_managed_path(manifest_path, config.transcript_root.resolve())
+    payload = json.loads(manifest.read_text(encoding="utf-8-sig"))
+    from .transcription_worker import JOB_SCHEMA
+    if (not isinstance(payload, dict) or payload.get("schema") != JOB_SCHEMA
+            or payload.get("workstation_id") != config.workstation_id):
+        raise ValueError("Invalid timeline transcription owner/schema")
+    source = payload.get("timeline_source")
+    if not isinstance(source, dict) or not source.get("project_id"):
+        raise ValueError("Legacy transcription requires project UUID binding; no automatic adoption")
+    job_id = str(payload.get("job_id") or "")
+    import re
+    if not re.fullmatch(r"timeline_tx_[0-9a-f]{16}", job_id):
+        raise ValueError("Invalid timeline transcription identity")
+    expected_manifest = config.transcript_root.resolve() / '.timeline_jobs' / config.workstation_id / (job_id+'.json')
+    if manifest != expected_manifest:
+        raise ValueError("Timeline manifest path mismatch")
+    wav = validate_managed_path(Path(str(payload.get("source_path") or "")), config.audio_root.resolve())
+    extraction_root = config.audio_root.resolve() / 'timeline-transcriptions' / config.workstation_id
+    if wav.parent != extraction_root or wav.suffix.lower() != '.wav':
+        raise ValueError("Timeline extraction path mismatch")
+    store = artifact_store_for(config)
+    project_id = store.bind_project(source['project_id'])
+    records = [store.register_produced_path(
+        manifest, project_id=project_id, category='AUDIO_MANIFEST', protection_class='PROTECTED',
+        producer='timeline_transcription', managed_root_id='transcript_root',
+        hold_reasons=('PROVENANCE_EVIDENCE',))]
+    completed = payload.get('status') == 'COMPLETED'
+    previous = next((r for r in store.records() if r.path == str(wav)), None)
+    output = None
+    if completed:
+        output = validate_managed_path(Path(str(payload.get('output_path') or '')), config.transcript_root.resolve())
+        if output.parent != config.transcript_root.resolve() / config.workstation_id or output.suffix.lower() != '.json':
+            raise ValueError('Timeline transcript path mismatch')
+        if not wav.exists() and previous is not None and previous.state in {'QUARANTINED','PURGED'}:
+            if (previous.sha256 != payload.get('source_fingerprint') or previous.project_id != project_id
+                    or previous.producer != 'timeline_transcription'
+                    or previous.category != 'TRANSCRIPTION_EXTRACTION'):
+                raise ValueError('Retired extraction provenance mismatch')
+        else:
+            _check_digest(wav, payload.get('source_fingerprint'), 'timeline extraction')
+        _check_digest(output, payload.get('transcript_fingerprint'), 'timeline transcript')
+        transcript = json.loads(output.read_text(encoding='utf-8-sig'))
+        if transcript.get('status') != 'complete' or transcript.get('timeline_source') != source:
+            raise ValueError('Timeline transcript provenance mismatch')
+        records.append(store.register_produced_path(
+            output, project_id=project_id, category='RESOLVE_REFERENCE', protection_class='PROTECTED',
+            producer='timeline_transcription', managed_root_id='transcript_root',
+            hold_reasons=('TRANSCRIPT_ORIGINAL',)))
+    # A render may still be appending to this file. The manifest/global producer
+    # blocker protects it until final WAV evidence exists; never freeze partial bytes.
+    if wav.is_file() and payload.get('source_fingerprint'):
+        _check_digest(wav, payload.get('source_fingerprint'), 'timeline extraction')
+        record = store.register_produced_path(
+            wav, project_id=project_id, category='TRANSCRIPTION_EXTRACTION', protection_class='DISPOSABLE',
+            producer='timeline_transcription', managed_root_id='audio_root',
+            hold_reasons=() if completed else ('TRANSCRIPTION_ACTIVE_OR_FAILED',))
+        if completed:
+            with store.registration_guard():
+                record = next(r for r in store.records() if r.artifact_id == record.artifact_id)
+                # A changed extraction cannot be released by an old completion manifest.
+                if record.sha256 != payload.get('source_fingerprint'):
+                    raise ValueError('Registered extraction changed')
+                now = datetime.now(timezone.utc)
+                terminal = record.terminal_observed_at or now
+                eligible = record.eligible_at or terminal + timedelta(seconds=load_artifact_policy(
+                    config.artifact_policy_path).rules['TRANSCRIPTION_EXTRACTION'].active_seconds)
+                updated = replace(record, hold_reasons=tuple(h for h in record.hold_reasons
+                                  if h != 'TRANSCRIPTION_ACTIVE_OR_FAILED'),
+                                  terminal_observed_at=terminal, eligible_at=eligible)
+                if updated != record:
+                    store.replace(updated)
+                record = updated
+        records.append(record)
+    elif previous is not None:
+        records.append(previous)
+    return tuple(records)

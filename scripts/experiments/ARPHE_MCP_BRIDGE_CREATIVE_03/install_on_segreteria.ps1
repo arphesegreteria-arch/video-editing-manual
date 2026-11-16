@@ -5,11 +5,21 @@ param(
     [string]$AssetRoot = 'C:\ARPHE\MCP\assets\creative',
     [string]$RenderRoot = 'C:\ARPHE\MCP\renders\creative',
     [string]$RuntimeLogRoot = '',
-    [Parameter(Mandatory)][string]$ConfigPath
+    [string]$ConfigPath,
+    [string]$PackagePath,
+    [string]$ProfilePath,
+    [ValidateSet('DryRun','Install','Rollback')][string]$PackageMode = 'DryRun',
+    [string]$BackupPath
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($PackagePath) {
+    if (-not $ProfilePath) { throw 'Package mode requires ProfilePath' }
+    & (Join-Path $PSScriptRoot 'scripts/install_package.ps1') -PackagePath $PackagePath -ProfilePath $ProfilePath -Mode $PackageMode -BackupPath $BackupPath
+    return
+}
+if (-not $ConfigPath) { throw 'ConfigPath required for legacy installation' }
 $configPath = [IO.Path]::GetFullPath($ConfigPath)
 $configDir = Split-Path -Parent $configPath
 $artifactRegistryPath = Join-Path $configDir 'artifact_registry.json'

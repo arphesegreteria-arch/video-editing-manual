@@ -15,7 +15,9 @@ from .feature_flags import require_capability
 from .resolve_connection import safe_call
 from .safety import ValidationError, arphe_name
 from .timeline_tools import find_timeline
-from .transcription_worker import ALLOWED_LANGUAGES, ALLOWED_MODELS, JOB_SCHEMA, _atomic_json
+from .transcription_worker import ALLOWED_LANGUAGES, ALLOWED_MODELS, JOB_SCHEMA, _atomic_json, file_sha256
+from .artifact_producers import register_timeline_transcription
+from .artifact_records import artifact_store_for
 from .vertical_social_captions import timeline_edit_fingerprint
 from .carabellese_transcription import _launch
 
@@ -120,7 +122,7 @@ def _wav_evidence(path: Path, expected_seconds: float, fps: float) -> tuple[str,
     duration = frames / rate
     if abs(duration - expected_seconds) > (1.0 / fps):
         raise ValidationError("Durata WAV timeline non coincide con la timeline")
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    digest = file_sha256(path)
     return digest, round(duration, 6)
 
 
@@ -142,6 +144,8 @@ def start_timeline_audio_transcription(
     if timeline is None or not _allowed(config, registry, project_name, source_timeline):
         raise ValidationError("Timeline sorgente non disponibile o non autorizzata")
     require_capability("CAP_RENDER", config, None, project, timeline)
+    # Resolve's UUID is authoritative; bind it before creating any extraction.
+    project_id = artifact_store_for(config).bind_project(str(safe_call(project, "GetUniqueId") or ""))
     start = safe_call(timeline, "GetStartFrame")
     end = safe_call(timeline, "GetEndFrame")
     try:
@@ -199,6 +203,7 @@ def start_timeline_audio_transcription(
             raise RuntimeError("Ripristino contesto render dopo audio timeline non confermato")
 
     timeline_source = {
+        "project_id": project_id,
         "workstation_id": config.workstation_id,
         "project_name": project_name,
         "timeline_name": source_timeline,
@@ -218,12 +223,14 @@ def start_timeline_audio_transcription(
         "output_path": str(transcript_path), "transcript_root": str(config.transcript_root.resolve()),
         "model": model, "language": language, "created_at": created, "updated_at": created,
         "error": None, "render_job_id": queued_id, "render_queue_before": list(before),
+        "lifecycle_config_path": str(config.path.resolve()),
         "timeline_source": timeline_source,
     }
     manifest = (config.transcript_root / ".timeline_jobs" / config.workstation_id /
                 f"{job_id}.json").resolve()
     try:
         _atomic_json(manifest, payload)
+        register_timeline_transcription(config, manifest)
         if not safe_call(project, "StartRendering", [queued_id], False):
             raise RuntimeError("Avvio render audio timeline fallito")
     except Exception:
@@ -241,6 +248,8 @@ def get_timeline_audio_transcription_job(
     """Advance or read one owned timeline-audio transcription job."""
     manifest_path, payload = _load_manifest(config, job_id)
     status = str(payload.get("status"))
+    if payload['timeline_source'].get('project_id'):
+        register_timeline_transcription(config, manifest_path)
     if status == "RENDERING":
         render_id = str(payload.get("render_job_id") or "")
         current_ids = set(_job_ids(project))
@@ -270,6 +279,8 @@ def get_timeline_audio_transcription_job(
         payload.update(status="QUEUED", progress_percent=0.0, source_fingerprint=digest,
                        updated_at=_now(), error=None)
         _atomic_json(manifest_path, payload)
+        if payload['timeline_source'].get('project_id'):
+            register_timeline_transcription(config, manifest_path)
         try:
             payload["pid"] = _launch(manifest_path)
             _atomic_json(manifest_path, payload)

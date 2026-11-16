@@ -522,3 +522,16 @@ def cancel_colorist_job(store: ColoristJobStore, job_id: str, expected_plan_fing
         job_id, expected_plan_fingerprint, expected_revision, operator_role, reason,
     )
 
+
+def record_colorist_exception(store: ColoristJobStore, applying: ColoristJob, exc: Exception) -> ColoristJob:
+    """Persist actual interruption evidence, without assuming Resolve rolled back."""
+    current = store.get(applying.colorist_job_id, applying.workstation_id)
+    if current.state != 'APPLYING' or current.plan_fingerprint != applying.plan_fingerprint:
+        return current
+    failed = record_colorist_apply_failure(current, {
+        'stage':'unexpected_apply_exception', 'error_type':type(exc).__name__, 'error':str(exc),
+        'recoverable':False, 'manual_recovery_required':True,
+        'next_safe_action':'RECOVERY_REQUIRED',
+    })
+    return store.save(failed, current.revision)
+

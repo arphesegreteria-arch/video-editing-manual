@@ -23,8 +23,10 @@ def run_if_due(config: CreativeConfig, *, now_utc: datetime | None = None) -> di
     if not config.flags.get("CAP_ARTIFACT_MAINTENANCE", False):
         return {"ok": True, "action": "lazy_artifact_maintenance", "ran": False, "reason": "disabled"}
     store = artifact_store_for(config)
-    last_attempt = store.maintenance_state().last_attempt_at
-    if last_attempt is not None and now < last_attempt + RUN_INTERVAL:
+    state = store.maintenance_state()
+    last_attempt = state.last_attempt_at
+    interval = RUN_INTERVAL if state.last_result == "ok" else timedelta(hours=1)
+    if last_attempt is not None and now < last_attempt + interval:
         return {"ok": True, "action": "lazy_artifact_maintenance", "ran": False, "reason": "not_due"}
     result = run_maintenance(
         config,

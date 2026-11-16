@@ -53,6 +53,27 @@ def build_release(source, destination, baselines, source_revision):
     return manifest
 
 
+def validate_effective_policy(config_path, target_root, payload_root):
+    """Validate post-install policy without rewriting profile or external policy."""
+    from .config import _registry_path
+    from .artifact_records import load_artifact_policy
+    raw = json.loads(Path(config_path).read_text(encoding='utf-8-sig'))
+    target_root, payload_root = Path(target_root).resolve(), Path(payload_root).resolve()
+    effective = _registry_path(raw.get('artifact_policy_path'),target_root/'artifact_retention.json')
+    selected = effective
+    if effective.is_relative_to(target_root):
+        relative = effective.relative_to(target_root).as_posix()
+        if relative in payload_files(payload_root):
+            selected = payload_root/relative
+    try:
+        policy = load_artifact_policy(selected)
+    except (OSError,ValueError,TypeError,AttributeError) as exc:
+        raise ValueError('Effective artifact policy incompatible: '+str(effective)+
+                         '; reconcile this policy with packaged categories before upgrading any artifact operation; '+str(exc)) from exc
+    return {'effective_policy_path':str(effective),'validated_policy_path':str(selected),
+            'policy_sha256':sha256_path(selected),'policy_version':policy.policy_version}
+
+
 def release_identity(config, root=None):
     root = Path(root) if root else Path(__file__).resolve().parents[1]
     actual = payload_files(root)

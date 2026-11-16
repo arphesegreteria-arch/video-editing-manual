@@ -22,6 +22,18 @@ The installer verifies target/config ownership, all package hashes and baseline
 drift. Dry run changes nothing. Unknown code, missing previously-existing files,
 mixed new/old releases and incomplete installation journals fail closed.
 
+Before any upgrade of artifact operations (including existing inventory,
+maintenance and restoration), preflight must validate the target's effective
+`artifact_policy_path` against the new loader. This is required for the entire
+artifact subsystem, not only the transcription producer. The installer resolves
+the preserved config using the same policy-path rules as the bridge and invokes
+the hash-verified payload validator with the profile's existing `python_path`.
+If the policy path is deployed by this package, it validates the replacement
+payload; otherwise it validates the unchanged custom external policy. An old
+external policy missing `TRANSCRIPTION_EXTRACTION`, or any other incompatible
+rule, blocks DryRun/Install before target/backup/profile writes. Reconcile that
+custom policy for review first; the installer never rewrites or overrides it.
+
 ```powershell
 $package = 'C:/review-releases/bridge-maintenance'
 $profile = 'C:/ARPHE/MCP/ARPHE_WINDOWS_BRIDGE_RUNTIME_V1/runtime-configs/PC_PERSONALE/bridge_config.json'
@@ -52,6 +64,13 @@ Rollback verifies current/new and backup hashes before restoring. Foreign drift
 fails closed. Configurations, feature flags, local registries and credentials are
 never copied or rewritten. If rollback fails, leave the runtime stopped and retain
 the complete backup/receipt for recovery.
+
+Staging is created exclusively and journaled as owned before copying payload
+bytes. A truncated owned staging file is moved into the transaction backup's
+`staging-audit/` with a durable SHA256, allowing verified rollback to complete.
+Pre-existing unowned staging files or links are refused and never overwritten or
+removed. Repeated rollback verifies the restored target and finishes removal of
+its own pending marker if the preceding attempt stopped after the final receipt.
 
 For PC_SEGRETERIA, transfer this same verified package and substitute only its own
 profile path ending `runtime-configs/PC_SEGRETERIA/bridge_config.json`. Run DryRun

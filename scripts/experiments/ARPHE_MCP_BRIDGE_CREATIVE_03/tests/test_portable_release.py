@@ -3,8 +3,17 @@ import json
 import tempfile
 import unittest
 import subprocess
+import shutil
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def policy_support(source):
+    """Real packaged policy validator dependencies, without runtime/MCP services."""
+    for name in ('__init__.py','config.py','artifact_records.py','release_identity.py'):
+        shutil.copyfile(ROOT/'bridge'/name,source/'bridge'/name)
+    shutil.copyfile(ROOT/'artifact_retention.json',source/'artifact_retention.json')
 
 
 class ReleaseTests(unittest.TestCase):
@@ -13,6 +22,7 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);source=root/'source';target=root/'target'
             for folder in (source/'bridge',target/'bridge'): folder.mkdir(parents=True)
+            policy_support(source)
             baseline={}
             for name in ('a.py','b.py'):
                 (source/'bridge'/name).write_text('new')
@@ -20,7 +30,7 @@ class ReleaseTests(unittest.TestCase):
                 baseline['bridge/'+name]=[sha256_path(target/'bridge'/name)]
             build_release(source,root/'package',baseline,'revision')
             config=root/'creative.json';config.write_text('{"workstation_id":"PC_PERSONALE"}')
-            profile=root/'profile.json';profile.write_text(json.dumps({'workstation_id':'PC_PERSONALE',
+            profile=root/'profile.json';profile.write_text(json.dumps({'workstation_id':'PC_PERSONALE','python_path':sys.executable,
                 'creative_destination':str(target),'creative_config_path':str(config)}))
             def run(mode):
                 return subprocess.run(['pwsh','-NoProfile','-ExecutionPolicy','Bypass','-File',
@@ -81,12 +91,13 @@ class ReleaseTests(unittest.TestCase):
                 target = root/'target'
                 for folder in (source/'bridge', target/'bridge'):
                     folder.mkdir(parents=True)
+                policy_support(source)
                 (source/'bridge'/'x.py').write_text('new')
                 (target/'bridge'/'x.py').write_text('old')
                 baseline = {'bridge/x.py': [sha256_path(target/'bridge'/'x.py')]}
                 build_release(source,root/'package',baseline,'revision')
                 config = root/'creative.json';config.write_text(json.dumps({'workstation_id':workstation,'flags':{'CAP_RENDER':True}}))
-                profile = root/'profile.json';profile.write_text(json.dumps({'workstation_id':workstation,'creative_destination':str(target),'creative_config_path':str(config)}))
+                profile = root/'profile.json';profile.write_text(json.dumps({'workstation_id':workstation,'python_path':sys.executable,'creative_destination':str(target),'creative_config_path':str(config)}))
                 saved_config = config.read_bytes()
 
                 def run(mode='DryRun', backup=None):
@@ -109,3 +120,100 @@ class ReleaseTests(unittest.TestCase):
                 rolled=run('Rollback',root/'backup');self.assertEqual(0,rolled.returncode,rolled.stderr)
                 self.assertEqual('old',(target/'bridge'/'x.py').read_text())
                 self.assertEqual(saved_config,config.read_bytes())
+
+    def test_interrupted_owned_staging_is_audited_and_repeated_rollback_recovers(self):
+        from bridge.release_identity import build_release,sha256_path
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'source';target=root/'target'
+            for folder in (source/'bridge',target/'bridge'):folder.mkdir(parents=True)
+            policy_support(source)
+            (source/'bridge'/'x.py').write_text('new')
+            original=target/'bridge'/'x.py';original.write_text('old')
+            build_release(source,root/'package',{'bridge/x.py':[sha256_path(original)]},'revision')
+            config=root/'creative.json';config.write_text('{"workstation_id":"PC_PERSONALE"}')
+            saved=config.read_bytes()
+            profile=root/'profile.json';profile.write_text(json.dumps({'workstation_id':'PC_PERSONALE','python_path':sys.executable,
+                'creative_destination':str(target),'creative_config_path':str(config)}))
+            def run(mode,backup='backup'):
+                return subprocess.run(['pwsh','-NoProfile','-ExecutionPolicy','Bypass','-File',
+                    str(ROOT/'scripts'/'install_package.ps1'),'-PackagePath',str(root/'package'),
+                    '-ProfilePath',str(profile),'-Mode',mode,'-BackupPath',str(root/backup)],capture_output=True,text=True)
+            # Fail after copy but before rename, then reproduce interruption during copy.
+            with original.open('rb'):
+                self.assertNotEqual(0,run('Install').returncode)
+            staged=original.with_name(original.name+'.arphe-install.tmp')
+            staged.write_bytes(b'ne')
+            receipt=json.loads((root/'backup'/'receipt.json').read_text(encoding='utf-8-sig'))
+            entry=next(e for e in receipt['files'] if e['path']=='bridge/x.py')
+            self.assertTrue(entry.get('staging_owned'))
+            rolled=run('Rollback');self.assertEqual(0,rolled.returncode,rolled.stderr)
+            self.assertEqual(b'ne',(root/'backup'/'staging-audit'/'bridge'/'x.py.arphe-install.tmp').read_bytes())
+            self.assertFalse(staged.exists())
+            # A crash after the final receipt write but before marker removal is retryable.
+            (target/'.arphe-install-pending.json').write_text(str(root/'backup'))
+            self.assertEqual(0,run('Rollback').returncode)
+            self.assertFalse((target/'.arphe-install-pending.json').exists())
+            self.assertEqual('old',original.read_text())
+            self.assertEqual(saved,config.read_bytes())
+            installed=run('Install','backup2');self.assertEqual(0,installed.returncode,installed.stderr)
+            self.assertEqual(0,run('Rollback','backup2').returncode)
+            self.assertEqual('old',original.read_text())
+
+    def test_unowned_staging_is_not_overwritten_or_removed(self):
+        from bridge.release_identity import build_release,sha256_path
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'source';target=root/'target'
+            for folder in (source/'bridge',target/'bridge'):folder.mkdir(parents=True)
+            policy_support(source)
+            (source/'bridge'/'x.py').write_text('new')
+            original=target/'bridge'/'x.py';original.write_text('old')
+            build_release(source,root/'package',{'bridge/x.py':[sha256_path(original)]},'revision')
+            config=root/'creative.json';config.write_text('{"workstation_id":"PC_PERSONALE"}')
+            profile=root/'profile.json';profile.write_text(json.dumps({'workstation_id':'PC_PERSONALE','python_path':sys.executable,
+                'creative_destination':str(target),'creative_config_path':str(config)}))
+            staged=original.with_name(original.name+'.arphe-install.tmp');staged.write_bytes(b'unowned')
+            result=subprocess.run(['pwsh','-NoProfile','-ExecutionPolicy','Bypass','-File',str(ROOT/'scripts'/'install_package.ps1'),
+                '-PackagePath',str(root/'package'),'-ProfilePath',str(profile),'-Mode','Install','-BackupPath',str(root/'backup')],capture_output=True,text=True)
+            self.assertNotEqual(0,result.returncode)
+            self.assertEqual(b'unowned',staged.read_bytes())
+            self.assertEqual('old',original.read_text())
+            self.assertFalse((target/'.arphe-install-pending.json').exists())
+            self.assertFalse((root/'backup').exists())
+
+    def test_effective_policy_preflight_is_compatible_or_fails_before_writes_both_profiles(self):
+        from bridge.release_identity import build_release,sha256_path
+        for workstation in ('PC_PERSONALE','PC_SEGRETERIA'):
+            for case in ('packaged','external_compatible','external_incompatible'):
+                with self.subTest(workstation=workstation,case=case),tempfile.TemporaryDirectory() as directory:
+                    root=Path(directory);source=root/'source';target=root/'target'
+                    for folder in (source/'bridge',target/'bridge'):folder.mkdir(parents=True)
+                    policy_support(source)
+                    (source/'bridge'/'x.py').write_text('new');(target/'bridge'/'x.py').write_text('old')
+                    build_release(source,root/'package',{'bridge/x.py':[sha256_path(target/'bridge'/'x.py')]},'revision')
+                    raw={'workstation_id':workstation}
+                    external=root/'external-policy.json'
+                    if case!='packaged':
+                        policy=json.loads((ROOT/'artifact_retention.json').read_text())
+                        if case=='external_incompatible':policy['rules'].pop('TRANSCRIPTION_EXTRACTION')
+                        external.write_text(json.dumps(policy));raw['artifact_policy_path']=str(external)
+                    config=root/'creative.json';config.write_text(json.dumps(raw))
+                    saved_config=config.read_bytes();saved_policy=external.read_bytes() if external.exists() else None
+                    profile=root/'profile.json';profile.write_text(json.dumps({'workstation_id':workstation,'python_path':sys.executable,
+                        'creative_destination':str(target),'creative_config_path':str(config)}))
+                    def run(mode):
+                        return subprocess.run(['pwsh','-NoProfile','-ExecutionPolicy','Bypass','-File',str(ROOT/'scripts'/'install_package.ps1'),
+                            '-PackagePath',str(root/'package'),'-ProfilePath',str(profile),'-Mode',mode,'-BackupPath',str(root/'backup')],capture_output=True,text=True)
+                    dry=run('DryRun')
+                    if case=='external_incompatible':
+                        self.assertNotEqual(0,dry.returncode)
+                        self.assertIn('Effective artifact policy incompatible',dry.stderr)
+                        self.assertNotEqual(0,run('Install').returncode)
+                        self.assertFalse((root/'backup').exists())
+                        self.assertFalse((target/'.arphe-install-pending.json').exists())
+                        self.assertEqual('old',(target/'bridge'/'x.py').read_text())
+                    else:
+                        self.assertEqual(0,dry.returncode,dry.stderr)
+                        installed=run('Install');self.assertEqual(0,installed.returncode,installed.stderr)
+                        rolled=run('Rollback');self.assertEqual(0,rolled.returncode,rolled.stderr)
+                    self.assertEqual(saved_config,config.read_bytes())
+                    if saved_policy is not None:self.assertEqual(saved_policy,external.read_bytes())

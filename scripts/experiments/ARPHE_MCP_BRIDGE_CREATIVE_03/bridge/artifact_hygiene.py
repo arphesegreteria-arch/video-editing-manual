@@ -7,6 +7,7 @@ import errno
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import stat
@@ -21,6 +22,94 @@ from .config import CreativeConfig
 UTC = timezone.utc
 ACTIVE_BATCH_STATES = frozenset({"DRAFT", "CONFIRMED", "PREPARED", "APPROVED", "RENDERING", "VERIFYING"})
 FAILED_BATCH_STATES = frozenset({"FAILED_RENDER", "FAILED_VERIFY"})
+
+
+def _validate_terminal_producer(config, kind, path, payload):
+    """Validate persisted terminal contracts, not mutable media existence.
+
+    Completed extraction media may already be retired. Immutable manifest evidence
+    establishes terminal state; it does not authorize cleanup of any referenced file.
+    Ownerless legacy audio cannot establish workstation ownership and remains held.
+    Legacy transcription without the newer project UUID remains supported here.
+    """
+    from .audio_provenance import REQUIRED_COMPLETE_FIELDS, SHA256, _finite_number
+    from .transcription_worker import JOB_SCHEMA, ALLOWED_MODELS, ALLOWED_LANGUAGES
+    status = str(payload.get('status') or '')
+    schema = payload.get('schema')
+    job_id = str(payload.get('job_id') or '')
+    def managed_file(field,root,suffix):
+        value=payload.get(field)
+        if not isinstance(value,str) or not value or not Path(value).is_absolute() or Path(value).suffix.lower()!=suffix:
+            raise ValueError('Producer '+field+' is not a managed file path')
+        return validate_managed_path(Path(value),root)
+    if payload.get('workstation_id') != config.workstation_id:
+        raise ValueError('Producer workstation ownership missing or mismatched')
+    if schema == 'ARPHE_AUDIO_JOB_V2' and kind == 'audio':
+        valid_names = {job_id+'.json', 'dialogue_cleanup_'+job_id.removeprefix('audio_')+'.audio.json'}
+        if not re.fullmatch(r'audio_[0-9a-f]{16}',job_id) or path.name not in valid_names:
+            raise ValueError('Audio job identity mismatch')
+        if not SHA256.fullmatch(str(payload.get('source_fingerprint') or '')):
+            raise ValueError('Audio source evidence missing')
+        managed_file('output_path',config.audio_root,'.wav')
+        if status == 'FAILED':
+            if not all(isinstance(payload.get(k),str) and payload[k].strip() for k in ('error','error_type')):
+                raise ValueError('Audio failure evidence missing')
+            return
+        if status != 'COMPLETED' or REQUIRED_COMPLETE_FIELDS-set(payload):
+            raise ValueError('Unsupported or incomplete audio terminal contract')
+        if not SHA256.fullmatch(str(payload.get('output_sha256') or '')) or not payload.get('preset'):
+            raise ValueError('Audio completion evidence missing')
+        source = _finite_number(payload['source_duration_seconds'],'source_duration_seconds')
+        output = _finite_number(payload['output_duration_seconds'],'output_duration_seconds')
+        delta = _finite_number(payload['sync_delta_seconds'],'sync_delta_seconds',allow_negative=True)
+        if (source <= 0 or output <= 0 or abs(output-source-delta)>0.001 or abs(delta)>1/30
+                or payload['sample_rate']!=48000 or payload['channels']!=2):
+            raise ValueError('Audio completion format/sync evidence invalid')
+        return
+    if schema == JOB_SCHEMA:
+        required = {'source_path','source_name','media_root','output_path','transcript_root','model','language',
+                    'created_at','updated_at','error','progress_percent'}
+        prefix = 'timeline_tx_' if kind=='timeline_transcription' else 'carabellese_tx_'
+        if (required-set(payload) or not re.fullmatch(prefix+r'[0-9a-f]{16}',job_id)
+                or path.stem!=job_id or payload.get('model') not in ALLOWED_MODELS
+                or payload.get('language') not in ALLOWED_LANGUAGES):
+            raise ValueError('Transcription terminal contract invalid')
+        if kind=='timeline_transcription' and not isinstance(payload.get('timeline_source'),dict):
+            raise ValueError('Timeline transcription provenance missing')
+        managed_file('output_path',config.transcript_root,'.json')
+        source_root=Path(str(payload.get('media_root') or '')).resolve()
+        allowed_roots=(config.audio_root,) if kind=='timeline_transcription' else config.media_roots
+        if source_root not in tuple(root.resolve() for root in allowed_roots):
+            raise ValueError('Transcription source-root ownership mismatch')
+        source_path=payload.get('source_path')
+        if not isinstance(source_path,str) or not Path(source_path).is_absolute():
+            raise ValueError('Transcription source path missing')
+        validate_managed_path(Path(source_path),source_root)
+        if Path(str(payload['transcript_root'])).resolve()!=config.transcript_root.resolve():
+            raise ValueError('Transcription root ownership mismatch')
+        if status=='INTERRUPTED' and isinstance(payload.get('error'),str) and payload['error'].strip():
+            return
+        if (status!='COMPLETED' or payload.get('progress_percent')!=100
+                or not SHA256.fullmatch(str(payload.get('source_fingerprint') or ''))
+                or not SHA256.fullmatch(str(payload.get('transcript_fingerprint') or ''))):
+            raise ValueError('Transcription terminal evidence missing')
+        return
+    if schema == 'ARPHE_TIMELINE_DIALOGUE_CLEANUP_JOB_V1' and kind=='audio':
+        from .timeline_dialogue_cleanup import _load_manifest
+        manifest,checked=_load_manifest(config,job_id)
+        if manifest!=path.resolve() or checked!=payload:
+            raise ValueError('Dialogue terminal manifest identity mismatch')
+        if status=='INTERRUPTED' and isinstance(payload.get('error'),str) and payload['error'].strip():
+            return
+        evidence=payload.get('readback')
+        if (status!='COMPLETED' or not isinstance(evidence,dict) or evidence.get('source_preserved') is not True
+                or evidence.get('created_timeline')!=payload.get('target_timeline')
+                or not SHA256.fullmatch(str(payload.get('source_fingerprint') or ''))
+                or not SHA256.fullmatch(str(payload.get('output_fingerprint') or ''))
+                or evidence.get('output_fingerprint')!=payload.get('output_fingerprint')):
+            raise ValueError('Dialogue completion/readback evidence missing')
+        return
+    raise ValueError('Unknown producer schema; recovery required')
 
 
 def producer_activity_blockers(config: CreativeConfig, now_utc: datetime | None = None) -> list[dict[str, Any]]:
@@ -45,6 +134,7 @@ def producer_activity_blockers(config: CreativeConfig, now_utc: datetime | None 
                        "kind": kind, "status": status, "age_seconds": age,
                        "reason": "UNREADABLE_OR_MALFORMED" if error else "PRODUCER_ACTIVITY_OR_UNKNOWN",
                        "error_type": type(error).__name__ if error else None,
+                       "error_detail": str(error) if error else None,
                        "next_safe_action": ("GUARDED_CANCEL_OR_CONTINUE" if status == "PREPARED" and not error
                                             else "RECOVERY_REQUIRED" if status in {"APPLYING", "UNKNOWN", "FAILED_MANUAL"} or error
                                             else "WAIT_OR_INSPECT_PRODUCER")})
@@ -59,13 +149,16 @@ def producer_activity_blockers(config: CreativeConfig, now_utc: datetime | None 
             if not root.exists():
                 continue
             for path in root.rglob("*.json"):
+                payload = None
                 try:
                     payload = json.loads(path.read_text(encoding="utf-8-sig"))
                     if not isinstance(payload, dict) or not isinstance(payload.get("status"), str):
                         raise ValueError("Invalid job shape/status")
+                    if str(payload['status']).upper() in terminal:
+                        _validate_terminal_producer(config,kind,path,payload)
                     add(kind, path.stem, payload)
                 except (OSError, ValueError) as exc:
-                    add(kind, path.stem, error=exc)
+                    add(kind, path.stem, payload,error=exc)
         except OSError as exc:
             add(kind, "store", error=exc)
     try:
@@ -73,11 +166,21 @@ def producer_activity_blockers(config: CreativeConfig, now_utc: datetime | None 
             payload = json.loads(config.colorist_jobs_path.read_text(encoding="utf-8-sig"))
             if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), dict):
                 raise ValueError("Invalid Colorist store shape")
+            from .colorist_jobs import SCHEMA, _from_payload
+            envelope_error = (ValueError('Colorist store schema/workstation mismatch')
+                              if payload.get('schema')!=SCHEMA or payload.get('workstation_id')!=config.workstation_id else None)
+            if envelope_error and not payload['jobs']:
+                add('colorist','store',error=envelope_error)
             for job_id, value in payload["jobs"].items():
-                if not isinstance(value, dict) or not isinstance(value.get("state"), str):
-                    add("colorist", job_id, error=ValueError("Invalid Colorist record"))
-                else:
+                try:
+                    if envelope_error:
+                        raise envelope_error
+                    job = _from_payload(value)
+                    if job.colorist_job_id!=job_id or job.workstation_id!=config.workstation_id:
+                        raise ValueError('Colorist job ownership/identity mismatch')
                     add("colorist", job_id, value)
+                except (ValueError,TypeError) as exc:
+                    add('colorist',job_id,value,error=exc)
     except (OSError, ValueError) as exc:
         add("colorist", "store", error=exc)
     return result

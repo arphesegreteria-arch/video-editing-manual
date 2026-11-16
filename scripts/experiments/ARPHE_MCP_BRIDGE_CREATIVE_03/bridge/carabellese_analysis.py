@@ -102,13 +102,15 @@ def load_carabellese_inputs(config: CreativeConfig, transcript_path: Path,
                              audio, _flatten_words(transcript), audio.silence_windows)
 
 
-def _word(raw: Mapping[str, object]) -> tuple[str, float, float, str | None]:
+def _word(raw: Mapping[str, object]) -> tuple[str, float, float, str | None] | None:
     text = raw.get("word", raw.get("text"))
     if not isinstance(text, str) or not text.strip():
         raise ValidationError("Parola senza testo")
     start, end = _number(raw.get("start"), "word.start"), _number(raw.get("end"), "word.end")
-    if end <= start:
+    if end < start:
         raise ValidationError("Intervallo parola non valido")
+    if end == start:
+        return None
     speaker = raw.get("speaker")
     if speaker is not None and not isinstance(speaker, str):
         raise ValidationError("speaker parola non valido")
@@ -118,7 +120,7 @@ def _word(raw: Mapping[str, object]) -> tuple[str, float, float, str | None]:
 def derive_pause_candidates(words: Sequence[Mapping[str, object]],
                             silence_windows: Sequence[Mapping[str, object] | tuple[float, float]],
                             contract: CarabelleseContract) -> tuple[CleanupCandidate, ...]:
-    parsed_words = [_word(raw) for raw in words]
+    parsed_words = [parsed for raw in words if (parsed := _word(raw)) is not None]
     if any(current[1] < previous[2] for previous, current in zip(parsed_words, parsed_words[1:])):
         raise ValidationError("Parole sovrapposte o non ordinate")
     windows = []

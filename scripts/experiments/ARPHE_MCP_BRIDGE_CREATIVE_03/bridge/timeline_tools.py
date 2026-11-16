@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from fractions import Fraction
 from typing import Any
+from pathlib import Path
+from uuid import uuid4
 
 from .config import CreativeConfig
 from .feature_flags import require_capability
@@ -136,8 +138,58 @@ def duplicate_timeline(project: Any, config: CreativeConfig, registry: Registry,
     duplicated_name = safe_call(duplicated, "GetName")
     if duplicated_name == target:
         registry.add_timeline(project_name, target)
+        try:
+            preserve_fusion_compositions(source, duplicated, config)
+        except ValidationError as exc:
+            return {"ok": False, "action": "duplicate_timeline_version", "stage": "fusion_copy",
+                    "source_timeline": source_name, "created_timeline": duplicated_name,
+                    "error": str(exc), "overwrite": False}
     return {"ok": duplicated_name == target, "action": "duplicate_timeline_version",
             "source_timeline": source_name, "created_timeline": duplicated_name, "overwrite": False}
+
+
+def preserve_fusion_compositions(source: Any, target: Any, config: CreativeConfig,
+                                 *, allow_added_motion: bool = False) -> None:
+    """Repair Resolve 21 clones that silently omit SDK-created Fusion comps.
+
+    Only corresponding video items on this newly-created copy are touched.
+    Export/import uses one private temporary .comp file, never arbitrary code.
+    """
+    count = safe_call(source, "GetTrackCount", "video")
+    if isinstance(count, bool) or not isinstance(count, int):
+        raise ValidationError("Tracce sorgente copia Fusion non verificabili")
+    if safe_call(target, "GetTrackCount", "video") != count:
+        raise ValidationError("Tracce copia Fusion diverse dalla sorgente")
+    for track in range(1, count + 1):
+        originals = safe_call(source, "GetItemListInTrack", "video", track)
+        copies = safe_call(target, "GetItemListInTrack", "video", track)
+        if not isinstance(originals, (list, tuple)) or not isinstance(copies, (list, tuple)) or len(originals) != len(copies):
+            raise ValidationError("Clip copia Fusion non corrispondenti")
+        for original, clone in zip(originals, copies):
+            if any(safe_call(original, key) != safe_call(clone, key) for key in ("GetStart", "GetEnd")):
+                raise ValidationError("Range copia Fusion non corrispondente")
+            expected, actual = safe_call(original, "GetFusionCompCount"), safe_call(clone, "GetFusionCompCount")
+            if any(isinstance(value, bool) or not isinstance(value, int) for value in (expected, actual)):
+                raise ValidationError("Conteggio composizioni Fusion non verificabile")
+            if actual == expected: continue
+            if allow_added_motion and expected == 0 and actual == 1:
+                comp = safe_call(clone, "GetFusionCompByIndex", 1)
+                tools = (safe_call(comp, "GetToolList", False) or {}).values()
+                if any(str((safe_call(tool, "GetAttrs") or {}).get("TOOLS_Name", "")).startswith("ARPHE_CAMERA_ZOOM_") for tool in tools):
+                    continue
+                raise ValidationError("Composizione aggiunta non riconosciuta come motion posseduta")
+            if actual != 0 or expected != 1:
+                raise ValidationError("Copia Fusion parziale non riparabile automaticamente")
+            for index in range(1, expected + 1):
+                temporary = Path(config.state_path).parent / ("fusion-copy-" + uuid4().hex + ".comp")
+                try:
+                    if safe_call(original, "ExportFusionComp", str(temporary), index) is not True or not temporary.is_file():
+                        raise ValidationError("Export composizione sorgente fallito")
+                    imported = safe_call(clone, "ImportFusionComp", str(temporary))
+                    if imported is None or imported is False or safe_call(clone, "GetFusionCompCount") != index:
+                        raise ValidationError("Import composizione nella copia non verificato")
+                finally:
+                    temporary.unlink(missing_ok=True)
 
 
 def create_safe_working_timeline(project: Any, config: CreativeConfig, registry: Registry, name_prefix: str) -> dict:

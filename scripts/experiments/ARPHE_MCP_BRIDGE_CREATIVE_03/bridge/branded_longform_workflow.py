@@ -10,6 +10,9 @@ from .branded_longform_jobs import BrandedLongformJob, BrandedLongformJobStore
 from .safety import ValidationError
 
 
+RETRYABLE_BLOCK_REASONS = frozenset({"EXECUTOR_NON_DISPONIBILE"})
+
+
 def propose_batch(store: BrandedLongformJobStore, job_id: str,
                   segments: list[dict[str, Any]]) -> BrandedLongformJob:
     job = store.get(job_id)
@@ -45,8 +48,16 @@ def application_for_job(job: BrandedLongformJob) -> tuple[dict[str, Any], ...]:
         raise ValidationError("Job branded longform non approvato")
     proposals = {str(item["proposal_id"]): dict(item) for item in job.proposal_card.get("proposals", [])}
     approved_ids = tuple(str(value) for value in job.approval.get("approved_ids", []))
-    terminal = {str(item.get("proposal_id")) for item in job.operations
-                if item.get("status") in {"VERIFIED", "BLOCKED"}}
+    terminal = {
+        str(item.get("proposal_id"))
+        for item in job.operations
+        if item.get("ok") is True
+        or item.get("status") == "VERIFIED"
+        or (
+            item.get("status") == "BLOCKED"
+            and item.get("reason") not in RETRYABLE_BLOCK_REASONS
+        )
+    }
     plan = [item for item in build_application_plan(proposals, approved_ids)
             if str(item.get("proposal_id")) not in terminal]
     for item in plan:

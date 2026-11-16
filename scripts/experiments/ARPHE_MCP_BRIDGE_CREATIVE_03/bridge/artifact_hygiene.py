@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+import base64
+import errno
 import hashlib
 import json
 import os
@@ -11,7 +13,8 @@ import stat
 from typing import Any
 
 from .artifact_records import (ArtifactPolicy, ArtifactRecord, ArtifactStore,
-                               RegistrationLockedError, sha256_file)
+                               KNOWN_CATEGORIES, RegistrationLockedError, _reject_links,
+                               artifact_signature, sha256_file)
 from .config import CreativeConfig
 
 
@@ -57,6 +60,8 @@ def _is_reparse(path: Path) -> bool:
 
 
 def validate_managed_path(path: Path, root: Path, *, allow_directory: bool = False) -> Path:
+    _reject_links(root)
+    _reject_links(path)
     root_resolved = root.resolve(strict=False)
     selected = path if path.is_absolute() else root_resolved / path
     selected_resolved = selected.resolve(strict=False)
@@ -68,7 +73,7 @@ def validate_managed_path(path: Path, root: Path, *, allow_directory: bool = Fal
         raise ValueError("Percorso fuori dal managed root")
     current = selected.absolute()
     while True:
-        if current.exists() and (current.is_symlink() or _is_reparse(current)):
+        if current.is_symlink() or _is_reparse(current):
             raise ValueError("Percorso symlink o reparse non consentito")
         if current.resolve(strict=False) == root_resolved:
             break
@@ -116,16 +121,19 @@ def _record_item(record: ArtifactRecord, config: CreativeConfig, project_registr
         item["state"] = "ERROR"
         item["error_code"] = "UNKNOWN_MANAGED_ROOT"
         return item
-    selected_path = record.quarantine_path if record.state == "QUARANTINED" else record.path
     try:
-        path = validate_managed_path(Path(selected_path or record.path), root,
-                                     allow_directory=record.kind == "directory")
-        item["display_path"] = _display(path, record.managed_root_id, root)
+        if record.quarantine_path:
+            path = _payload(config, record)
+            item["display_path"] = _display(path, "artifact_quarantine_root", _quarantine_root(config, record))
+        else:
+            path = validate_managed_path(Path(record.path), root,
+                                         allow_directory=record.kind == "directory")
+            item["display_path"] = _display(path, record.managed_root_id, root)
     except ValueError:
         item["state"] = "ERROR"
         item["error_code"] = "PATH_OUTSIDE_MANAGED_ROOT"
         return item
-    if record.state in {"QUARANTINED", "PURGED", "ERROR"}:
+    if record.state in {"QUARANTINE_COPYING", "QUARANTINED", "PURGE_PENDING", "PURGED", "ERROR", "REVIEW_REQUIRED"}:
         return item
     if record.protection_class == "PROTECTED":
         item["state"] = "PROTECTED"
@@ -269,62 +277,85 @@ def _import_rotated_logs(config: CreativeConfig, store: ArtifactStore,
             created_at=created,
             policy_version=policy.policy_version,
         )
-        size, digest, _ = _directory_signature(producer)
-        store.replace(replace(record, size_bytes=size, sha256=digest))
+        with store.registration_guard():
+            record = _record_by_id(store, record.artifact_id)
+            _owned_record(config, store, record)
+            if _disposable(record) and record.state in {"ACTIVE", "ELIGIBLE", "RESTORED"}:
+                size, digest, _ = _directory_signature(producer)
+                store.replace(replace(record, size_bytes=size, sha256=digest))
         known.add(producer.resolve())
 
 
+def _inventory_fingerprint(items: list[dict[str, Any]]) -> str:
+    encoded = json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _inspection_cursor(fingerprint: str, offset: int) -> str:
+    payload = json.dumps({"fingerprint": fingerprint, "offset": offset},
+                         sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _inspection_offset(cursor: str, fingerprint: str) -> int:
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+        if payload.get("fingerprint") != fingerprint or type(payload.get("offset")) is not int:
+            raise ValueError
+        offset = payload["offset"]
+        if offset < 0:
+            raise ValueError
+        return offset
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError("Inspection cursor stale or invalid") from exc
+
+
 def inspect_artifacts(config: CreativeConfig, artifact_store: ArtifactStore, project_registry: Any,
-                      policy: ArtifactPolicy, now_utc: datetime) -> dict[str, Any]:
+                      policy: ArtifactPolicy, now_utc: datetime, *, cursor: str | None = None,
+                      limit: int = 0) -> dict[str, Any]:
     now = _utc(now_utc)
     records = artifact_store.records()
     items = [_record_item(record, config, project_registry, policy, now) for record in records]
     known_paths = {Path(record.path).resolve(strict=False) for record in records if record.state != "PURGED"}
     items.extend(_unclassified(config, known_paths))
     items.extend(_rotated_log_findings(config, known_paths))
+    items.sort(key=lambda item: (str(item.get("display_path", "")).casefold(),
+                                 str(item.get("artifact_id") or "")))
     summary: dict[str, dict[str, int]] = {}
     for item in items:
         bucket = summary.setdefault(item["state"], {"count": 0, "bytes": 0})
         bucket["count"] += 1
         bucket["bytes"] += int(item.get("bytes") or 0)
-    return {
+    fingerprint = _inventory_fingerprint(items)
+    result = {
         "ok": True,
         "action": "inspect_artifact_hygiene",
         "workstation_id": config.workstation_id,
         "policy_version": policy.policy_version,
         "summary": summary,
-        "items": items,
+        "item_count": len(items),
+        "inventory_fingerprint": fingerprint,
     }
+    if cursor is None and limit <= 0:
+        return result
+    page_limit = min(50, max(1, int(limit or 50)))
+    offset = _inspection_offset(cursor, fingerprint) if cursor is not None else 0
+    if offset > len(items):
+        raise ValueError("Inspection cursor stale or invalid")
+    page = items[offset:offset + page_limit]
+    next_offset = offset + len(page)
+    return {**result, "items": page,
+            "next_cursor": (_inspection_cursor(fingerprint, next_offset)
+                            if next_offset < len(items) else None)}
 
 
 def _directory_signature(path: Path) -> tuple[int, str, tuple[str, ...]]:
-    total = 0
-    digest = hashlib.sha256()
-    names: list[str] = []
-    for item in sorted(path.rglob("*"), key=lambda value: value.relative_to(path).as_posix().casefold()):
-        if item.is_symlink() or _is_reparse(item):
-            raise ValueError("Contenuto symlink o reparse non consentito")
-        if item.is_dir():
-            continue
-        if not item.is_file():
-            raise ValueError("Contenuto staging non regolare")
-        relative = item.relative_to(path).as_posix()
-        size = item.stat().st_size
-        file_digest = sha256_file(item)
-        digest.update(relative.encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(str(size).encode("ascii"))
-        digest.update(b"\0")
-        digest.update(file_digest.encode("ascii"))
-        names.append(relative)
-        total += size
-    return total, digest.hexdigest(), tuple(names)
+    return artifact_signature(path, "directory")
 
 
 def _signature(path: Path, kind: str) -> tuple[int, str, tuple[str, ...]]:
-    if kind == "file":
-        return path.stat().st_size, sha256_file(path), (path.name,)
-    return _directory_signature(path)
+    return artifact_signature(path, kind)
 
 
 def _lock_path(store: ArtifactStore) -> Path:
@@ -356,63 +387,227 @@ def _mark_error(store: ArtifactStore, record: ArtifactRecord, code: str) -> None
     store.replace(replace(record, state="ERROR", last_error=code))
 
 
-def _reconcile_pending(store: ArtifactStore) -> None:
+def _review(store, record, code):
+    updated = replace(record, state="REVIEW_REQUIRED", last_error=code)
+    store.replace(updated)
+    return updated
+
+
+def _owned_record(config, store, record):
+    if store.workstation_id != config.workstation_id or record.workstation_id != config.workstation_id:
+        raise ValueError("Artifact workstation mismatch")
+    if store.path != config.artifact_registry_path.resolve():
+        raise ValueError("Artifact registry mismatch")
+    _reject_links(store.path)
+    if _record_by_id(store, record.artifact_id) != record:
+        raise ValueError("Artifact record changed")
+    if not record.artifact_id or Path(record.artifact_id).name != record.artifact_id or record.artifact_id in {".", ".."}:
+        raise ValueError("Invalid artifact identity")
+
+
+def _disposable(record):
+    return (record.protection_class == "DISPOSABLE" and record.category in KNOWN_CATEGORIES
+            and not record.hold_reasons and not record.dependencies)
+
+
+def _original(config, record):
+    root = _roots(config).get(record.managed_root_id)
+    if root is None:
+        raise ValueError("Unknown managed root")
+    path = validate_managed_path(Path(record.path), root, allow_directory=record.kind == "directory")
+    if path == root or ".arphe-quarantine" in path.relative_to(root).parts:
+        raise ValueError("Invalid artifact source")
+    if record.original_path and Path(record.original_path) != path:
+        raise ValueError("Original artifact path changed")
+    return path
+
+
+def _quarantine_root(config, record):
+    root = config.artifact_quarantine_root
+    # Compatibility with manually constructed profiles predating absolute retention paths.
+    if not root.is_absolute():
+        root = _roots(config)[record.managed_root_id] / ".arphe-quarantine"
+    _reject_links(root)
+    return root
+
+
+def _payload(config, record, *, legacy=False):
+    root = _quarantine_root(config, record)
+    if legacy:
+        root = _roots(config)[record.managed_root_id] / ".arphe-quarantine"
+    expected = root / record.artifact_id / "payload"
+    selected = Path(record.quarantine_path) if record.quarantine_path else expected
+    if selected != expected:
+        raise ValueError("Quarantine payload path mismatch")
+    return validate_managed_path(selected, root, allow_directory=record.kind == "directory")
+
+
+def _check_overlap(store, record, path):
+    for other in store.records():
+        if other.artifact_id == record.artifact_id or other.state == "PURGED":
+            continue
+        if other.workstation_id != store.workstation_id:
+            raise ValueError("Inventory ownership ambiguous")
+        for candidate in (other.path, other.quarantine_path):
+            if candidate:
+                other_path = Path(candidate).resolve()
+                if path == other_path or path in other_path.parents or other_path in path.parents:
+                    raise ValueError("Overlapping registered artifact")
+
+
+def _verified(path, record):
+    if not path.exists():
+        raise ValueError("PAYLOAD_MISSING")
+    size, digest, _ = _signature(path, record.kind)
+    if record.size_bytes != size or record.sha256 != digest:
+        raise ValueError("CONTENT_CHANGED")
+
+
+def _remove_verified(path, record):
+    # The caller checks exact target, ownership, state/time and authorization first.
+    _reject_links(path)
+    _verified(path, record)
+    if record.kind == "directory":
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+
+
+def _flush_payload(path, kind):
+    files = [path] if kind == "file" else [item for item in path.rglob("*") if item.is_file()]
+    for file in files:
+        with file.open("r+b") as handle:
+            handle.flush()
+            os.fsync(handle.fileno())
+    if os.name != "nt":
+        directories = [path.parent]
+        if kind == "directory":
+            directories += [item for item in path.rglob("*") if item.is_dir()] + [path]
+        for directory in directories:
+            descriptor = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+
+
+def _copy_durable(source, destination, kind):
+    if kind == "directory":
+        shutil.copytree(source, destination, copy_function=shutil.copyfile)
+    else:
+        shutil.copyfile(source, destination)
+    _flush_payload(destination, kind)
+
+
+def _complete_quarantine(store, record, operation):
+    at = _utc(datetime.fromisoformat(operation["at"]))
+    updated = replace(record, state="QUARANTINED", original_path=operation["source"],
+                      quarantine_path=operation["destination"], quarantined_at=at,
+                      purge_after=at + timedelta(seconds=1296000), last_error=None)
+    store.replace(updated)
+    store.clear_pending_operation()
+    return updated
+
+
+def _reconcile_pending(config, store, policy, now):
     operation = store.pending_operation()
     if operation is None:
         return
-    record = _record_by_id(store, str(operation["artifact_id"]))
-    source = Path(str(operation["source"]))
-    destination = Path(str(operation["destination"]))
-    action = operation.get("type")
-    if action == "MOVE_TO_QUARANTINE" and source.exists() and not destination.exists():
-        container = destination.parent
-        if container.exists():
-            try:
-                container.rmdir()
-            except OSError as exc:
-                raise RuntimeError("Contenitore quarantena incompleto non vuoto") from exc
+    record = _record_by_id(store, str(operation.get("artifact_id", "")))
+    try:
+        _owned_record(config, store, record)
+        if not _disposable(record) or record.state == "REVIEW_REQUIRED":
+            raise ValueError("PENDING_OPERATION_REQUIRES_REVIEW")
+        original = _original(config, record)
+        action = operation.get("type")
+        if action in {"MOVE_TO_QUARANTINE", "RESTORE"}:
+            # Legacy journals name source=original and destination=quarantine for both actions.
+            payload = _payload(config, record, legacy=operation.get("version") is None)
+            if Path(operation["source"]) != original or Path(operation["destination"]) != payload:
+                raise ValueError("PENDING_PATH_MISMATCH")
+            _check_overlap(store, record, original)
+            _check_overlap(store, record, payload)
+            if action == "RESTORE":
+                if original.exists() and payload.exists() and operation.get("phase") in {"COPYING", "VERIFIED"}:
+                    _verified(original, record)
+                    _verified(payload, record)
+                    _flush_payload(original, record.kind)
+                    store.update_pending_operation({**operation, "phase": "VERIFIED"})
+                    _verified(original, record)
+                    _remove_verified(payload, record)
+                if original.exists() and not payload.exists():
+                    _verified(original, record)
+                    if record.state != "RESTORED":
+                        # Recovery completes the restore now; an old intent must
+                        # not consume the restored artifact's new active period.
+                        eligible_at = now + timedelta(seconds=policy.rules[record.category].active_seconds)
+                        restored = replace(record, state="RESTORED", path=str(original),
+                            original_path=str(original), quarantine_path=None, quarantined_at=None,
+                            purge_after=None, eligible_at=eligible_at, last_error=None)
+                        if operation.get("keep_after_restore") is True:
+                            # A crash after moving bytes must finish the keep transaction, not
+                            # downgrade it into an ordinary eligible restore. This save also
+                            # clears the journal, so a write failure leaves it for retry.
+                            requested_at = operation.get("keep_requested_at")
+                            event_at = (_utc(datetime.fromisoformat(requested_at))
+                                        if isinstance(requested_at, str) else now)
+                            try:
+                                store.complete_restore_with_keep(record, restored, event_at)
+                            except (OSError, ValueError, RegistrationLockedError):
+                                # Do not replace the quarantined record or consume the journal;
+                                # the next guarded reconciliation retries the same held commit.
+                                return
+                            return
+                        store.replace(restored)
+                elif payload.exists() and not original.exists():
+                    _verified(payload, record)
+                else:
+                    raise ValueError("RESTORE_AMBIGUOUS")
+                store.clear_pending_operation()
+                return
+            if original.exists() and not payload.exists():
+                _verified(original, record)
+                if record.state == "QUARANTINE_COPYING":
+                    store.replace(replace(record, state="ACTIVE", last_error=None))
+                store.clear_pending_operation()
+                return
+            if payload.exists():
+                _verified(payload, record)
+                if record.state != "QUARANTINED":
+                    # A recovered transfer starts its complete retention period now.
+                    operation = {**operation, "at": max(now, _utc(datetime.fromisoformat(operation["at"]))).isoformat()}
+                if original.exists():
+                    if operation.get("phase") not in {"COPYING", "VERIFIED"}:
+                        raise ValueError("QUARANTINE_AMBIGUOUS")
+                    _verified(original, record)
+                    _flush_payload(payload, record.kind)
+                    operation = {**operation, "phase": "VERIFIED"}
+                    store.update_pending_operation(operation)
+                    _verified(payload, record)
+                    _remove_verified(original, record)
+                _complete_quarantine(store, record, operation)
+                return
+            raise ValueError("PAYLOAD_MISSING")
+        if action == "PURGE":
+            payload = _payload(config, record)
+            if Path(operation["source"]) != payload:
+                raise ValueError("PENDING_PATH_MISMATCH")
+            if record.state == "PURGED" and operation.get("phase") == "DELETED" and not payload.exists():
+                store.clear_pending_operation()
+                return
+            if not payload.exists():
+                if operation.get("phase") != "DELETED" or record.state != "PURGE_PENDING":
+                    raise ValueError("PURGE_OUTCOME_UNKNOWN")
+                store.replace(replace(record, state="PURGED", last_error=None))
+            else:
+                _verified(payload, record)
+                store.replace(replace(record, state="QUARANTINED", last_error=None))
+            store.clear_pending_operation()
+            return
+        raise ValueError("UNKNOWN_PENDING_OPERATION")
+    except (OSError, ValueError, KeyError) as exc:
+        _review(store, record, str(exc))
         store.clear_pending_operation()
-        return
-    if action == "MOVE_TO_QUARANTINE" and not source.exists() and destination.exists():
-        size, digest, _ = _signature(destination, record.kind)
-        if size != record.size_bytes or digest != record.sha256:
-            raise RuntimeError("Riconciliazione quarantena con contenuto modificato")
-        store.replace(replace(
-            record,
-            state="QUARANTINED",
-            original_path=str(source),
-            quarantine_path=str(destination),
-            quarantined_at=datetime.fromisoformat(str(operation["at"])),
-            purge_after=datetime.fromisoformat(str(operation["purge_after"])),
-            last_error=None,
-        ))
-        store.clear_pending_operation()
-        return
-    if action == "RESTORE" and not source.exists() and destination.exists():
-        store.clear_pending_operation()
-        return
-    if action == "RESTORE" and source.exists() and not destination.exists():
-        store.replace(replace(
-            record,
-            state="RESTORED",
-            path=str(source),
-            original_path=str(source),
-            quarantine_path=None,
-            quarantined_at=None,
-            purge_after=None,
-            eligible_at=datetime.fromisoformat(str(operation["eligible_at"])),
-            last_error=None,
-        ))
-        store.clear_pending_operation()
-        return
-    if action == "PURGE" and source.exists():
-        store.clear_pending_operation()
-        return
-    if action == "PURGE" and not source.exists():
-        store.replace(replace(record, state="PURGED", last_error=None))
-        store.clear_pending_operation()
-        return
-    raise RuntimeError("Operazione artefatto pendente non riconciliabile")
 
 
 def _freeze_terminal(record: ArtifactRecord, store: ArtifactStore, project_registry: Any,
@@ -452,65 +647,163 @@ def _freeze_terminal(record: ArtifactRecord, store: ArtifactStore, project_regis
     return frozen
 
 
-def _quarantine(config: CreativeConfig, store: ArtifactStore, record: ArtifactRecord,
-                policy: ArtifactPolicy, now: datetime) -> None:
-    root = _roots(config)[record.managed_root_id]
-    source = validate_managed_path(Path(record.path), root, allow_directory=record.kind == "directory")
-    size, digest, _ = _signature(source, record.kind)
-    if record.size_bytes != size or record.sha256 != digest:
-        _mark_error(store, record, "CONTENT_CHANGED")
-        return
-    container = root / ".arphe-quarantine" / record.artifact_id
-    destination = container / "payload"
-    purge_after = now + timedelta(seconds=policy.quarantine_seconds)
-    store.set_pending_operation({
-        "type": "MOVE_TO_QUARANTINE",
-        "artifact_id": record.artifact_id,
-        "source": str(source),
-        "destination": str(destination),
-        "at": now.isoformat(),
-        "purge_after": purge_after.isoformat(),
-    })
-    container.mkdir(parents=True, exist_ok=False)
-    os.replace(source, destination)
-    store.replace(replace(
-        record,
-        state="QUARANTINED",
-        original_path=str(source),
-        quarantine_path=str(destination),
-        quarantined_at=now,
-        purge_after=purge_after,
-        last_error=None,
-    ))
-    store.clear_pending_operation()
+def quarantine_artifact(config: CreativeConfig, store: ArtifactStore, record: ArtifactRecord,
+                        policy: ArtifactPolicy, now_utc: datetime) -> ArtifactRecord:
+    now = _utc(now_utc)
+    if type(policy.quarantine_seconds) is not int or policy.quarantine_seconds != 1296000:
+        raise ValueError("Quarantine must last 1296000 seconds")
+    with store.registration_guard():
+        _owned_record(config, store, record)
+        if store.pending_operation() is not None:
+            raise ValueError("Pending operation requires reconciliation")
+        if not _disposable(record) or record.state not in {"ACTIVE", "ELIGIBLE", "RESTORED"}:
+            return record
+        if record.batch_id and (record.terminal_observed_at is None or record.eligible_at is None):
+            return record
+        eligible_at = record.eligible_at or record.created_at + timedelta(seconds=policy.rules[record.category].active_seconds)
+        if now < eligible_at or _producer_activity_hold(config):
+            return record
+        try:
+            source = _original(config, record)
+            destination = _payload(config, record)
+            _check_overlap(store, record, source)
+            _check_overlap(store, record, destination)
+            _verified(source, record)
+            if destination.exists() or destination.is_symlink():
+                raise ValueError("QUARANTINE_COLLISION")
+            if destination.parent.exists() and any(destination.parent.iterdir()):
+                raise ValueError("QUARANTINE_CONTAINER_NOT_EMPTY")
+        except (OSError, ValueError) as exc:
+            if str(exc) == "CONTENT_CHANGED":
+                _mark_error(store, record, "CONTENT_CHANGED")
+                return _record_by_id(store, record.artifact_id)
+            return _review(store, record, str(exc))
+        operation = {"version": 2, "type": "MOVE_TO_QUARANTINE", "phase": "INTENT",
+            "artifact_id": record.artifact_id, "source": str(source), "destination": str(destination),
+            "at": now.isoformat(), "purge_after": (now + timedelta(seconds=1296000)).isoformat()}
+        store.set_pending_operation(operation)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            _owned_record(config, store, record)
+            _original(config, record)
+            _payload(config, record)
+            _verified(source, record)
+            if destination.exists() or destination.is_symlink():
+                raise ValueError("QUARANTINE_COLLISION")
+        except (OSError, ValueError) as exc:
+            return _review(store, record, str(exc))
+        try:
+            os.replace(source, destination)
+        except OSError as exc:
+            if exc.errno != errno.EXDEV and getattr(exc, "winerror", None) != 17:
+                return _review(store, record, "QUARANTINE_MOVE_FAILED")
+            copying = replace(record, state="QUARANTINE_COPYING")
+            operation = {**operation, "phase": "COPYING"}
+            store.update_pending_operation(operation, copying)
+            try:
+                _copy_durable(source, destination, record.kind)
+                _verified(destination, record)
+                _verified(source, record)
+                operation = {**operation, "phase": "VERIFIED"}
+                store.update_pending_operation(operation)
+                _check_overlap(store, copying, source)
+                _check_overlap(store, copying, destination)
+                _payload(config, copying)
+                _verified(destination, record)
+                _remove_verified(source, record)
+            except (OSError, ValueError) as exc:
+                return _review(store, copying, "QUARANTINE_COPY_FAILED: " + str(exc))
+        return _complete_quarantine(store, record, operation)
 
 
-def _purge(store: ArtifactStore, record: ArtifactRecord) -> None:
-    path = Path(record.quarantine_path or "")
-    size, digest, _ = _signature(path, record.kind)
-    if record.size_bytes != size or record.sha256 != digest:
-        _mark_error(store, record, "QUARANTINE_CONTENT_CHANGED")
-        return
-    store.set_pending_operation({
-        "type": "PURGE",
-        "artifact_id": record.artifact_id,
-        "source": str(path),
-        "destination": "",
-    })
-    if record.kind == "directory":
-        shutil.rmtree(path)
-    else:
-        path.unlink()
+def _activation_evidence(config, store, activation_store, policy):
+    from .retention_activation import activation_allows_purge, inventory_fingerprint, policy_fingerprint
+    if activation_store.workstation_id != config.workstation_id or activation_store.path != config.retention_activation_path.resolve():
+        return None
     try:
-        path.parent.rmdir()
-    except OSError:
-        pass
-    store.replace(replace(record, state="PURGED", last_error=None))
-    store.clear_pending_operation()
+        registry_bytes = store.path.read_bytes()
+        policy_hash = policy_fingerprint(policy)
+        inventory_hash = inventory_fingerprint(config, store)
+        if registry_bytes != store.path.read_bytes():
+            return None
+        if not activation_allows_purge(activation_store, config.workstation_id, policy_hash, inventory_hash):
+            return None
+        return registry_bytes, policy_hash, inventory_hash
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def purge_artifact(config: CreativeConfig, store: ArtifactStore, activation_store,
+                   record: ArtifactRecord, policy: ArtifactPolicy, now_utc: datetime) -> ArtifactRecord:
+    now = _utc(now_utc)
+    if type(policy.quarantine_seconds) is not int or policy.quarantine_seconds != 1296000:
+        raise ValueError("Quarantine must last 1296000 seconds")
+    _owned_record(config, store, record)
+    if not _disposable(record) or record.state != "QUARANTINED":
+        return record
+    evidence = _activation_evidence(config, store, activation_store, policy)
+    with store.registration_guard():
+        current = _record_by_id(store, record.artifact_id)
+        if current != record:
+            return _review(store, current, "INVENTORY_CHANGED")
+        if store.pending_operation() is not None:
+            raise ValueError("Pending operation requires reconciliation")
+        try:
+            original = _original(config, record)
+            payload = _payload(config, record)
+            _check_overlap(store, record, original)
+            _check_overlap(store, record, payload)
+            if original.exists():
+                raise ValueError("QUARANTINE_AMBIGUOUS")
+            _verified(payload, record)
+            if record.quarantined_at is None or record.purge_after != record.quarantined_at + timedelta(seconds=1296000):
+                raise ValueError("INVALID_PURGE_TIME")
+        except (OSError, ValueError) as exc:
+            return _review(store, record, str(exc))
+        if now < record.purge_after or _producer_activity_hold(config) or evidence is None:
+            return record
+        registry_bytes, policy_hash, inventory_hash = evidence
+        if store.path.read_bytes() != registry_bytes:
+            return _review(store, record, "INVENTORY_CHANGED")
+        from .retention_activation import activation_allows_purge, inventory_fingerprint
+        try:
+            current_inventory_hash = inventory_fingerprint(config, store)
+        except (OSError, ValueError, KeyError, TypeError):
+            return _review(store, record, "INVENTORY_CHANGED")
+        if current_inventory_hash != inventory_hash or store.path.read_bytes() != registry_bytes:
+            return _review(store, record, "INVENTORY_CHANGED")
+        if not activation_allows_purge(activation_store, config.workstation_id, policy_hash, current_inventory_hash):
+            return record
+        operation = {"version": 2, "type": "PURGE", "phase": "INTENT",
+            "artifact_id": record.artifact_id, "source": str(payload), "destination": "",
+            "policy_fingerprint": policy_hash, "inventory_fingerprint": inventory_hash,
+            "at": now.isoformat()}
+        store.set_pending_operation(operation)
+        pending = replace(record, state="PURGE_PENDING")
+        store.update_pending_operation(operation, pending)
+        try:
+            _owned_record(config, store, pending)
+            _payload(config, pending)
+            _check_overlap(store, pending, payload)
+            if _original(config, pending).exists():
+                raise ValueError("QUARANTINE_AMBIGUOUS")
+            if not activation_allows_purge(activation_store, config.workstation_id, policy_hash, inventory_hash):
+                store.replace(record)
+                store.clear_pending_operation()
+                return record
+            _remove_verified(payload, pending)
+        except (OSError, ValueError) as exc:
+            return _review(store, pending, "PURGE_FAILED: " + str(exc))
+        operation = {**operation, "phase": "DELETED"}
+        store.update_pending_operation(operation)
+        purged = replace(record, state="PURGED", last_error=None)
+        store.replace(purged)
+        store.clear_pending_operation()
+        return purged
 
 
 def run_maintenance(config: CreativeConfig, artifact_store: ArtifactStore, project_registry: Any,
-                    policy: ArtifactPolicy, now_utc: datetime) -> dict[str, Any]:
+                    policy: ArtifactPolicy, now_utc: datetime, activation_store=None) -> dict[str, Any]:
     now = _utc(now_utc)
     descriptor = _acquire_lock(artifact_store)
     if descriptor is None:
@@ -519,48 +812,69 @@ def run_maintenance(config: CreativeConfig, artifact_store: ArtifactStore, proje
     quarantined: list[str] = []
     purged: list[str] = []
     purge_blocked: list[str] = []
+    reviews: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
     try:
-        _import_rotated_logs(config, artifact_store, policy)
+        if policy.quarantine_seconds != 1296000:
+            raise ValueError("Quarantine must last 1296000 seconds")
         with artifact_store.registration_guard():
-            _reconcile_pending(artifact_store)
-            producer_hold = _producer_activity_hold(config)
-            for original in artifact_store.records():
-                record = original
-                if record.state == "ERROR" or record.state == "PURGED":
-                    continue
-                if record.protection_class == "PROTECTED":
-                    continue
-                if producer_hold:
-                    continue
-                if record.batch_id and record.terminal_observed_at is None:
+            before = {record.artifact_id: record.state for record in artifact_store.records()}
+            _reconcile_pending(config, artifact_store, policy, now)
+            for record in artifact_store.records():
+                if record.state != before.get(record.artifact_id):
+                    if record.state == "QUARANTINED" and before.get(record.artifact_id) != "PURGE_PENDING":
+                        quarantined.append(record.artifact_id)
+                    elif record.state == "PURGED":
+                        purged.append(record.artifact_id)
+        _import_rotated_logs(config, artifact_store, policy)
+        if activation_store is None:
+            from .retention_activation import RetentionActivationStore
+            activation_store = RetentionActivationStore(config.retention_activation_path, config.workstation_id)
+        producer_hold = _producer_activity_hold(config)
+        for record in artifact_store.records():
+            if record.state in {"ERROR", "PURGED", "REVIEW_REQUIRED"} or not _disposable(record) or producer_hold:
+                continue
+            _owned_record(config, artifact_store, record)
+            if record.batch_id and record.terminal_observed_at is None:
+                with artifact_store.registration_guard():
+                    # Producers may promote to Resolve protection after the loop
+                    # snapshot. Never freeze/save that stale disposable record.
+                    record = _record_by_id(artifact_store, record.artifact_id)
+                    _owned_record(config, artifact_store, record)
+                    if not _disposable(record) or record.state not in {"ACTIVE", "ELIGIBLE", "RESTORED"}:
+                        continue
                     record = _freeze_terminal(record, artifact_store, project_registry, policy, now)
-                if record.state in {"ACTIVE", "ELIGIBLE", "RESTORED"}:
-                    if record.batch_id:
-                        batch = project_registry.render_batch(record.batch_id)
-                        if batch is None or batch.status in ACTIVE_BATCH_STATES or record.eligible_at is None:
-                            continue
-                    rule = policy.rules[record.category]
-                    eligible_at = record.eligible_at or record.created_at + timedelta(seconds=rule.active_seconds)
-                    if now >= eligible_at:
-                        _quarantine(config, artifact_store, record, policy, now)
-                        updated = _record_by_id(artifact_store, record.artifact_id)
-                        if updated.state == "QUARANTINED":
-                            quarantined.append(record.artifact_id)
-                elif (record.state == "QUARANTINED" and record.purge_after is not None
-                      and now >= record.purge_after):
-                    # Purge is deliberately unreachable in production code.  The
-                    # policy field is descriptive, not an execution switch.
+            if record.state in {"ACTIVE", "ELIGIBLE", "RESTORED"}:
+                if record.batch_id:
+                    batch = project_registry.render_batch(record.batch_id)
+                    if batch is None or batch.status in ACTIVE_BATCH_STATES or record.eligible_at is None:
+                        continue
+                updated = quarantine_artifact(config, artifact_store, record, policy, now)
+                if updated.state == "QUARANTINED" and record.artifact_id not in quarantined:
+                    quarantined.append(record.artifact_id)
+            elif record.state == "QUARANTINED":
+                updated = purge_artifact(config, artifact_store, activation_store, record, policy, now)
+                if updated.state == "PURGED":
+                    purged.append(record.artifact_id)
+                elif record.quarantined_at is not None and now >= record.quarantined_at + timedelta(seconds=1296000):
                     purge_blocked.append(record.artifact_id)
-            artifact_store.set_maintenance_state(last_attempt_at=now, last_result="ok")
+            if artifact_store.pending_operation() is not None:
+                break
+        for record in artifact_store.records():
+            if record.state == "REVIEW_REQUIRED":
+                reviews.append({"artifact_id": record.artifact_id, "code": record.last_error})
+            elif record.state == "ERROR":
+                errors.append({"artifact_id": record.artifact_id, "code": record.last_error})
+        artifact_store.set_maintenance_state(last_attempt_at=now, last_result="ok")
         return {"ok": True, "action": "run_artifact_maintenance",
                 "workstation_id": config.workstation_id,
                 "policy_version": policy.policy_version,
                 "quarantined": quarantined, "purged": purged,
-                "purge_blocked": purge_blocked}
+                "purge_blocked": purge_blocked, "review_required": reviews, "errors": errors}
     except RegistrationLockedError:
         return {"ok": False, "action": "run_artifact_maintenance",
                 "error_code": "REGISTRATION_LOCKED", "quarantined": quarantined,
-                "purged": purged, "purge_blocked": purge_blocked}
+                "purged": purged, "purge_blocked": purge_blocked, "review_required": reviews, "errors": errors}
     except Exception as exc:
         try:
             artifact_store.set_maintenance_state(last_attempt_at=now, last_result="error")
@@ -568,26 +882,30 @@ def run_maintenance(config: CreativeConfig, artifact_store: ArtifactStore, proje
             pass
         return {"ok": False, "action": "run_artifact_maintenance",
                 "error_code": type(exc).__name__, "quarantined": quarantined,
-                "purged": purged, "purge_blocked": purge_blocked}
+                "purged": purged, "purge_blocked": purge_blocked, "review_required": reviews,
+                "errors": errors + [{"code": type(exc).__name__, "detail": str(exc)}]}
     finally:
         _release_lock(artifact_store, descriptor)
 
 
-def restore_artifact(config: CreativeConfig, artifact_store: ArtifactStore, artifact_id: str,
-                     policy: ArtifactPolicy, now_utc: datetime) -> dict[str, Any]:
+def _restore_artifact(config: CreativeConfig, artifact_store: ArtifactStore, artifact_id: str,
+                     policy: ArtifactPolicy, now_utc: datetime, *, keep_after_restore: bool = False) -> dict[str, Any]:
     now = _utc(now_utc)
     descriptor = _acquire_lock(artifact_store)
     if descriptor is None:
         return {"ok": False, "action": "restore_quarantined_artifact", "error_code": "MAINTENANCE_LOCKED"}
     try:
-        _reconcile_pending(artifact_store)
+        _reconcile_pending(config, artifact_store, policy, now)
         record = _record_by_id(artifact_store, artifact_id)
-        if record.state != "QUARANTINED" or not record.quarantine_path or not record.original_path:
+        _owned_record(config, artifact_store, record)
+        if record.state != "QUARANTINED" or not _disposable(record) or not record.quarantine_path or not record.original_path:
             return {"ok": False, "action": "restore_quarantined_artifact", "error_code": "NOT_QUARANTINED"}
-        source = Path(record.quarantine_path)
-        destination = Path(record.original_path)
-        if destination.exists():
+        source = _payload(config, record)
+        destination = _original(config, record)
+        if destination.exists() or destination.is_symlink():
             return {"ok": False, "action": "restore_quarantined_artifact", "error_code": "RESTORE_COLLISION"}
+        _check_overlap(artifact_store, record, source)
+        _check_overlap(artifact_store, record, destination)
         size, digest, _ = _signature(source, record.kind)
         if record.size_bytes != size or record.sha256 != digest:
             _mark_error(artifact_store, record, "QUARANTINE_CONTENT_CHANGED")
@@ -595,14 +913,45 @@ def restore_artifact(config: CreativeConfig, artifact_store: ArtifactStore, arti
                     "error_code": "QUARANTINE_CONTENT_CHANGED"}
         destination.parent.mkdir(parents=True, exist_ok=True)
         eligible_at = now + timedelta(seconds=policy.rules[record.category].active_seconds)
-        artifact_store.set_pending_operation({
+        operation = {
+            "version": 2,
             "type": "RESTORE",
+            "phase": "INTENT",
             "artifact_id": record.artifact_id,
             "source": str(destination),
             "destination": str(source),
             "eligible_at": eligible_at.isoformat(),
-        })
-        os.replace(source, destination)
+        }
+        if keep_after_restore:
+            operation["keep_after_restore"] = True
+            operation["keep_requested_at"] = now.isoformat()
+        artifact_store.set_pending_operation(operation)
+        # A producer can have created a collision while the journal was flushed.
+        if destination.exists() or destination.is_symlink():
+            artifact_store.clear_pending_operation()
+            return {"ok": False, "action": "restore_quarantined_artifact", "error_code": "RESTORE_COLLISION"}
+        _original(config, record)
+        _payload(config, record)
+        _verified(source, record)
+        try:
+            os.replace(source, destination)
+        except OSError as exc:
+            if exc.errno != errno.EXDEV and getattr(exc, "winerror", None) != 17:
+                raise
+            operation = {**operation, "phase": "COPYING"}
+            artifact_store.update_pending_operation(operation)
+            try:
+                _copy_durable(source, destination, record.kind)
+                _verified(destination, record)
+                _verified(source, record)
+                artifact_store.update_pending_operation({**operation, "phase": "VERIFIED"})
+                _original(config, record)
+                _payload(config, record)
+                _verified(destination, record)
+                _remove_verified(source, record)
+            except (OSError, ValueError) as exc:
+                _review(artifact_store, record, "RESTORE_COPY_FAILED: " + str(exc))
+                raise
         restored = replace(
             record,
             state="RESTORED",
@@ -614,13 +963,71 @@ def restore_artifact(config: CreativeConfig, artifact_store: ArtifactStore, arti
             eligible_at=eligible_at,
             last_error=None,
         )
-        artifact_store.replace(restored)
-        artifact_store.clear_pending_operation()
+        if keep_after_restore:
+            try:
+                restored = artifact_store.complete_restore_with_keep(record, restored, now)
+            except (OSError, ValueError, RegistrationLockedError):
+                # The registry still names the quarantined payload. Restore that exact state
+                # before returning a failed keep, never exposing an unheld eligible artifact.
+                try:
+                    if source.exists() or source.is_symlink():
+                        raise ValueError("RESTORE_ROLLBACK_COLLISION")
+                    os.replace(destination, source)
+                    artifact_store.clear_pending_operation()
+                except (OSError, ValueError):
+                    pass
+                raise
+        else:
+            artifact_store.replace(restored)
+            artifact_store.clear_pending_operation()
         try:
             source.parent.rmdir()
         except OSError:
             pass
         return {"ok": True, "action": "restore_quarantined_artifact",
                 "artifact_id": artifact_id, "state": "RESTORED"}
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "action": "restore_quarantined_artifact", "error_code": str(exc)}
     finally:
         _release_lock(artifact_store, descriptor)
+
+
+def restore_artifact(config: CreativeConfig, artifact_store: ArtifactStore, artifact_id: str,
+                     policy: ArtifactPolicy, now_utc: datetime, *, keep_after_restore: bool = False) -> dict[str, Any]:
+    try:
+        with artifact_store.registration_guard():
+            return _restore_artifact(config, artifact_store, artifact_id, policy, now_utc,
+                                     keep_after_restore=keep_after_restore)
+    except RegistrationLockedError:
+        return {"ok": False, "action": "restore_quarantined_artifact", "error_code": "REGISTRATION_LOCKED"}
+
+
+def keep_artifact(config: CreativeConfig, store: ArtifactStore, artifact_id: str,
+                  policy: ArtifactPolicy, now_utc: datetime) -> dict[str, Any]:
+    """Keep an exact local artifact; quarantined content is restored before the hold."""
+    try:
+        now = _utc(now_utc)
+        record = _record_by_id(store, artifact_id)
+        _owned_record(config, store, record)
+        restored = False
+        if record.state == "QUARANTINED":
+            outcome = restore_artifact(config, store, artifact_id, policy, now, keep_after_restore=True)
+            if not outcome.get("ok"):
+                return {"ok": False, "action": "keep_artifact", "artifact_id": artifact_id,
+                        "error_code": outcome.get("error_code", "RESTORE_FAILED")}
+            restored = True
+        elif record.state not in {"ACTIVE", "ELIGIBLE", "RESTORED"}:
+            # Let the store durably record a sanitized local refusal before returning.
+            try:
+                store.keep_artifact(artifact_id, now)
+            except (OSError, ValueError, RegistrationLockedError):
+                pass
+            return {"ok": False, "action": "keep_artifact", "artifact_id": artifact_id,
+                    "error_code": "STATE_REJECTED"}
+        updated = _record_by_id(store, artifact_id) if restored else store.keep_artifact(artifact_id, now)
+        return {"ok": True, "action": "keep_artifact", "artifact_id": artifact_id,
+                "state": updated.state, "hold_reasons": updated.hold_reasons,
+                "restore_performed": restored}
+    except (KeyError, OSError, ValueError, RegistrationLockedError):
+        return {"ok": False, "action": "keep_artifact", "artifact_id": artifact_id,
+                "error_code": "KEEP_REFUSED"}

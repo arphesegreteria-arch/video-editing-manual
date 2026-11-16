@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
+import re
+from contextlib import contextmanager
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
-import re
 from typing import Any, Callable
 
 from mcp.server import MCPServer
@@ -18,16 +20,24 @@ from .asset_tools import add_asset, set_music_bed as do_set_music_bed
 from .audio_tools import audio_job as do_audio_job, start_audio_job as do_start_audio_job
 from .audio_cta_tail import move_voiceover_tail_to_cta as do_move_voiceover_tail_to_cta
 from .artifact_hygiene import (inspect_artifacts as do_inspect_artifacts,
+                               keep_artifact as do_keep_artifact,
                                restore_artifact as do_restore_artifact,
                                run_maintenance as do_run_maintenance)
 from .artifact_records import artifact_store_for, load_artifact_policy
+from .retention_activation import (
+    RetentionActivationStore, prepare_activation as do_prepare_retention_activation,
+    approve_activation as do_approve_retention_activation,
+    validate_activation as do_validate_retention_activation,
+    invalidate_activation as do_invalidate_retention_activation,
+    inventory_fingerprint, policy_fingerprint,
+    _fingerprint as retention_fingerprint, _profile as retention_profile,
+)
 from .artifact_producers import register_colorist_state
 from .audio_provenance import media_fingerprint
-from .config import load_config
+from .config import load_config, _default_config_path
 from .colorist_jobs import (
     ColoristJobStore,
     approve_colorist_job as do_approve_colorist_job,
-    cancel_colorist_job as do_cancel_colorist_job,
     new_colorist_job,
     record_colorist_apply,
     record_colorist_apply_failure,
@@ -36,7 +46,7 @@ from .colorist_jobs import (
     record_colorist_preview_start,
     record_colorist_review,
 )
-from .colorist_model import build_clip_corrections, cdl_digest, load_colorist_presets
+from .colorist_model import build_cdl, load_colorist_presets
 from .colorist_resolve import (
     apply_colorist_job as do_apply_colorist_job,
     inspect_colorist_context as do_inspect_colorist_context,
@@ -98,9 +108,13 @@ from .branded_longform_resolve import (add_proposal_markers as do_add_branded_ma
                                       create_cleanup_timeline as do_create_branded_cleanup,
                                       create_editorial_timeline as do_create_branded_editorial,
                                       find_owned_timeline as do_find_branded_timeline,
+                                      register_owned_timelines as do_register_branded_timelines,
                                       timeline_structure_fingerprint as do_branded_timeline_fingerprint,
                                       verify_branded_longform_timelines as do_verify_branded_timelines)
-from .branded_longform_graphics import apply_editorial_graphic as do_apply_branded_graphic
+from .branded_longform_graphics import (
+    EXECUTABLE_GRAPHIC_KINDS,
+    apply_editorial_graphic as do_apply_branded_graphic,
+)
 from .branded_longform_broll import apply_provided_broll as do_apply_branded_broll
 from .branded_longform_workflow import (application_for_job as do_branded_application,
                                        approve_batch as do_approve_branded_batch,
@@ -116,11 +130,18 @@ from .vertical_social_workflow import (
     record_vertical_social_action_execution as do_record_vertical_social_action_execution,
 )
 from .vertical_social_cuts import create_provisional_cut_timeline as do_create_provisional_cut_timeline
+from .vertical_social_cuts import (duplicate_preserved_timeline as do_duplicate_preserved_timeline,
+                                   preserved_timeline_fingerprint)
+from .vertical_social_source import (create_vertical_social_sequence as do_create_vertical_social_sequence,
+                                     create_vertical_social_source as do_create_vertical_social_source)
+from .vertical_social_jobs import VerticalSocialPlanStore
 from .vertical_social_apply import (
     apply_reframe_action as do_apply_vertical_social_reframe,
     find_provisional_timeline as do_find_vertical_social_provisional,
+    provisional_timeline_name,
 )
 from .vertical_social_broll import apply_provided_broll as do_apply_vertical_social_broll
+from .vertical_social_broll import is_still_asset
 from .vertical_social_music import apply_music_duck as do_apply_vertical_social_music
 from .vertical_social_overlay import apply_graphic_or_cta as do_apply_vertical_social_overlay
 from .vertical_social_captions import (
@@ -133,6 +154,9 @@ from .creative_tools import (add_end_card as do_add_end_card,
 from .diagnostic_tools import (capture_timeline_frames as do_capture_timeline_frames,
                                inspect_fusion_graph as do_inspect_fusion_graph)
 from .edge_fade_tools import create_edge_fade_test as do_create_edge_fade_test
+from .monochrome_window import apply_monochrome_window as do_apply_monochrome_window
+from .monochrome_segment import apply_monochrome_segment as do_apply_monochrome_segment
+from .freeze_sbam import apply_freeze_sbam as do_apply_freeze_sbam
 from .editorial_workflows import (EditorialBrief, load_render_profile_registry,
                                   load_workflow_registry,
                                   resolve_delivery_profile,
@@ -166,10 +190,6 @@ from .longform_tools import (apply_plan as do_apply_longform_plan,
                              transcript_chunk as do_transcript_chunk,
                              transcript_metadata as do_transcript_metadata,
                              validate_plan as do_validate_longform_plan)
-from .native_transcription21 import (
-    read_native_transcription21 as do_read_native_transcription21,
-    start_native_transcription21 as do_start_native_transcription21,
-)
 from .project_tools import (create_project as do_create_project,
                             save_project as do_save_project,
                             set_current_project as do_set_current_project)
@@ -214,12 +234,13 @@ from .timeline_dialogue_cleanup import (
     get_timeline_dialogue_cleanup_job as do_get_timeline_dialogue_cleanup_job,
     start_timeline_dialogue_cleanup_test as do_start_timeline_dialogue_cleanup_test,
 )
-from .timeline_element_control import (
-    execute_element_removal as do_execute_timeline_element_removal,
-    inspect_elements as do_inspect_timeline_elements,
-    prepare_element_removal as do_prepare_timeline_element_removal,
-    set_element_enabled as do_set_timeline_element_enabled,
-    store_for_config as timeline_element_store_for,
+from .timeline_transcription import (
+    get_timeline_audio_transcription_job as do_get_timeline_audio_transcription_job,
+    start_timeline_audio_transcription as do_start_timeline_audio_transcription,
+)
+from .native_transcription21 import (
+    read_native_transcription21 as do_read_native_transcription21,
+    start_native_transcription21 as do_start_native_transcription21,
 )
 from .voice_isolation import (VoiceIsolationCapture, VoiceIsolationState, VoiceIsolationStore,
                               VoiceIsolationTarget, apply_voice_isolation, capture_track,
@@ -274,87 +295,6 @@ def _call(operation: Callable[..., dict], *args: Any, **kwargs: Any) -> dict:
     except Exception:
         pass
     return result
-
-
-def _require_timeline_element_control(config: Any) -> None:
-    if not bool(config.flags.get("CAP_TIMELINE_ELEMENT_CONTROL", False)):
-        raise ValidationError("CAP_TIMELINE_ELEMENT_CONTROL non attiva nella config locale")
-
-
-def _timeline_control_error_text(exc: Exception) -> str:
-    if not isinstance(exc, ValidationError):
-        return "Operazione timeline element control non disponibile"
-    message = str(exc)
-    message = re.sub(r"[A-Za-z]:[\\/][^\s]+", "[percorso locale]", message)
-    message = re.sub(r"\\\\[^\s]+", "[percorso locale]", message)
-    return message
-
-
-def _timeline_control_audit_metadata(
-    metadata: dict[str, object],
-) -> dict[str, object]:
-    sanitized: dict[str, object] = {}
-    opaque_patterns = {
-        "element_id": r"element_[0-9a-f]{32}",
-        "removal_id": r"removal_[0-9a-f]{32}",
-        "fingerprint": r"[0-9a-f]{64}",
-        "proposal_fingerprint": r"[0-9a-f]{64}",
-    }
-    for key, pattern in opaque_patterns.items():
-        value = str(metadata.get(key) or "")
-        if re.fullmatch(pattern, value):
-            sanitized[key] = value
-    role = str(metadata.get("actor_role") or "").strip().upper()
-    if role in {"SEGRETERIA", "TECNICO", "ALESSIO"}:
-        sanitized["actor_role"] = role
-    return sanitized
-
-
-def _timeline_control_call(
-    action: str,
-    config: Any,
-    metadata: dict[str, object],
-    operation: Callable[[], dict[str, Any]],
-) -> dict[str, Any]:
-    base = {
-        "action": action,
-        "workstation_id": str(getattr(config, "workstation_id", "PC_UNSPECIFIED")),
-        **_timeline_control_audit_metadata(metadata),
-    }
-    try:
-        result = {**base, **operation()}
-    except Exception as exc:
-        result = {
-            **base,
-            "ok": False,
-            "stage": "validation" if isinstance(exc, ValidationError) else "runtime",
-            "error_type": type(exc).__name__,
-            "error": _timeline_control_error_text(exc),
-        }
-    try:
-        write_audit(config.audit_log_path, action, result)
-    except Exception:
-        pass
-    return result
-
-
-def _timeline_control_connection_error(
-    action: str, config: Any, metadata: dict[str, object]
-) -> dict[str, Any]:
-    return _timeline_control_call(
-        action, config, metadata,
-        lambda: (_ for _ in ()).throw(ValidationError("Resolve non raggiungibile")),
-    )
-
-
-def _timeline_control_bootstrap_error(action: str, exc: Exception) -> dict[str, Any]:
-    return {
-        "ok": False,
-        "action": action,
-        "stage": "validation" if isinstance(exc, ValidationError) else "runtime",
-        "error_type": type(exc).__name__,
-        "error": _timeline_control_error_text(exc),
-    }
 
 
 EDITORIAL_CONTRACT_PATH = Path(__file__).resolve().parents[1] / "editorial_selection_contract.json"
@@ -442,9 +382,7 @@ def inspect_colorist_context() -> dict[str, Any]:
 @mcp.tool(annotations=SAFE_WRITE)
 def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
                           adjustments: dict[str, Any], preset_name: str = "ARPHE_CLEAN_NEUTRAL",
-                          drx_preset_name: str | None = None,
-                          adjustments_by_clip: dict[str, dict[str, Any]] | None = None,
-                          observations_by_clip: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+                          drx_preset_name: str | None = None) -> dict[str, Any]:
     """Prepare a fingerprint-bound Colorist plan locally; performs no Resolve write."""
     with RESOLVE_ACCESS_LOCK:
         try:
@@ -458,10 +396,7 @@ def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
             if reference_clip_id is not None and reference_clip_id not in clip_ids:
                 raise ValidationError("reference_clip_id deve appartenere ai clip selezionati")
             registry = load_colorist_presets(config.colorist_presets_path)
-            strategy, clip_adjustments, observations, clip_cdls = build_clip_corrections(
-                tuple(clip_ids), adjustments, adjustments_by_clip, observations_by_clip,
-                preset_name, registry["presets"],
-            )
+            cdl = build_cdl(adjustments, preset_name, registry["presets"])
             drx_path = _resolve_colorist_drx(config, registry, drx_preset_name)
             drx_identity = _colorist_drx_identity(config, drx_path)
             before = {clip_id: available[clip_id]["current_version"] for clip_id in clip_ids}
@@ -469,12 +404,9 @@ def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
                 workstation_id=config.workstation_id,
                 project_name=context_card["project_name"], timeline_name=context_card["timeline_name"],
                 timeline_identity=context_card["timeline_identity"], clip_ids=tuple(clip_ids),
-                reference_clip_id=reference_clip_id, adjustments={},
+                reference_clip_id=reference_clip_id, adjustments=adjustments,
                 preset_name=preset_name, drx_preset_name=drx_preset_name,
-                drx_asset_identity=drx_identity, before_versions=before, cdl={},
-                plan_schema="ARPHE_COLORIST_PLAN_V2", matching_strategy=strategy,
-                adjustments_by_clip=clip_adjustments, observations_by_clip=observations,
-                cdl_by_clip=clip_cdls,
+                drx_asset_identity=drx_identity, before_versions=before, cdl=cdl,
             )
             saved = _register_colorist_state(config, _colorist_store(config).create(job))
             return {"ok": True, "action": "prepare_colorist_plan",
@@ -482,16 +414,7 @@ def prepare_colorist_plan(clip_ids: list[str], reference_clip_id: str | None,
                     "state": saved.state, "plan_fingerprint": saved.plan_fingerprint,
                     "clip_ids": list(saved.clip_ids), "reference_clip_id": saved.reference_clip_id,
                     "preset_name": saved.preset_name, "drx_preset_name": saved.drx_preset_name,
-                    "plan_schema": saved.plan_schema,
-                    "matching_strategy": saved.matching_strategy,
-                    "adjustments_by_clip": saved.adjustments_by_clip,
-                    "observations_by_clip": saved.observations_by_clip,
-                    "cdl_by_clip": saved.cdl_by_clip,
-                    "cdl_sha256_by_clip": {
-                        clip_id: cdl_digest(saved.cdl_by_clip[clip_id])
-                        for clip_id in saved.clip_ids
-                    },
-                    "requires_human_approval": True}
+                    "cdl": saved.cdl, "requires_human_approval": True}
         except Exception as exc: return _error(exc)
 
 
@@ -502,38 +425,6 @@ def inspect_colorist_plan(colorist_job_id: str) -> dict[str, Any]:
         config = load_config(); job = _colorist_store(config).get(colorist_job_id, config.workstation_id)
         return {"ok": True, **asdict(job)}
     except Exception as exc: return _error(exc)
-
-
-@mcp.tool(annotations=SAFE_WRITE)
-def cancel_colorist_plan(colorist_job_id: str, expected_plan_fingerprint: str,
-                         expected_revision: int, operator_role: str,
-                         reason: str) -> dict[str, Any]:
-    """Cancel one exact PREPARED Colorist plan in the ledger; never calls Resolve."""
-    config = None
-    try:
-        config = load_config()
-        saved = do_cancel_colorist_job(
-            _colorist_store(config), colorist_job_id, expected_plan_fingerprint,
-            expected_revision, operator_role, reason,
-        )
-        result = {
-            "ok": True,
-            "action": "cancel_colorist_plan",
-            "colorist_job_id": saved.colorist_job_id,
-            "state": saved.state,
-            "revision": saved.revision,
-            "plan_fingerprint": saved.plan_fingerprint,
-            "operator_role": saved.operator_role,
-            "cancellation_evidence": saved.cancellation_evidence,
-        }
-    except Exception as exc:
-        result = {**_error(exc), "action": "cancel_colorist_plan"}
-    if config is not None:
-        try:
-            write_audit(config.audit_log_path, "cancel_colorist_plan", result)
-        except Exception:
-            pass
-    return result
 
 
 @mcp.tool(annotations=SAFE_WRITE)
@@ -697,7 +588,7 @@ def create_branded_longform_cleanup(profile_id: str, source_fingerprint: str,
                                     cleanup_events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Create or recover the derived CLEANUP timeline; never mutates the original."""
     try:
-        resolve, manager, project, timeline, config, _, error = _runtime()
+        resolve, manager, project, timeline, config, registry, error = _runtime()
         if error: return error
         _require_branded_longform(config, manager, project, timeline)
         contract = load_branded_longform_contract(BRANDED_LONGFORM_CONTRACT_PATH)
@@ -723,6 +614,7 @@ def create_branded_longform_cleanup(profile_id: str, source_fingerprint: str,
         cleanup_cuts = cleanup_cut_ranges(candidates, fps, total) if candidates else ()
         with RESOLVE_ACCESS_LOCK:
             result = do_create_branded_cleanup(project, job, cleanup_cuts)
+        do_register_branded_timelines(registry, job)
         return {"ok": True, "action": "create_branded_longform_cleanup", "job_id": job.job_id,
                 "profile_id": profile_id, "kit_status": profile.kit_status,
                 "cleanup": {"auto_cut_ranges": cleanup_cuts,
@@ -767,12 +659,13 @@ def approve_branded_longform_batch(job_id: str, proposal_fingerprint: str,
 def apply_branded_longform_batch(job_id: str) -> dict[str, Any]:
     """Create the EDITORIAL timeline and apply only the exact approved action plan."""
     try:
-        resolve, manager, project, timeline, config, _, error = _runtime()
+        resolve, manager, project, timeline, config, registry, error = _runtime()
         if error: return error
         _require_branded_longform(config, manager, project, timeline)
         store = BrandedLongformJobStore(config.branded_longform_jobs_path, config.workstation_id)
         job = store.get(job_id)
         _verify_branded_profile_binding(job)
+        do_register_branded_timelines(registry, job, include_editorial=True)
         if job.state == "APPLIED":
             return {"ok": True, "action": "apply_branded_longform_batch", "job_id": job_id,
                     "state": job.state, "operations": job.operations, "idempotent": True}
@@ -794,7 +687,7 @@ def apply_branded_longform_batch(job_id: str) -> dict[str, Any]:
                 elif item.get("kind") == "NO_OVERLAY":
                     operations.append({"proposal_id": item["proposal_id"], "status": "VERIFIED",
                                        "operation": "NO_OVERLAY"})
-                elif item.get("kind") in {"KEYWORD_BOX", "PROGRESSIVE_LIST", "CHAPTER_CARD"}:
+                elif item.get("kind") in EXECUTABLE_GRAPHIC_KINDS:
                     operations.append(do_apply_branded_graphic(project, editorial, config, job, item))
                 elif item.get("kind") == "B_ROLL_PROVIDED":
                     operations.append(do_apply_branded_broll(resolve, project, editorial, config, job, item))
@@ -839,9 +732,58 @@ def inspect_vertical_social() -> dict[str, Any]:
 
 
 @mcp.tool(annotations=SAFE_WRITE)
+def create_vertical_social_source(media_path: str, project_name: str,
+                                  timeline_name: str) -> dict[str, Any]:
+    """Create one new 1080x1920 ARPHE project with a linked A/V source timeline."""
+    try:
+        resolve, manager, _, _, config, registry, error = _runtime()
+        if error and manager is None:
+            return error
+        _require_vertical_social(config)
+        with RESOLVE_ACCESS_LOCK:
+            return do_create_vertical_social_source(
+                resolve, manager, config, registry, media_path, project_name, timeline_name)
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def create_vertical_social_sequence(media_paths: list[str], project_name: str,
+                                    timeline_name: str,
+                                    trim_ranges: list[tuple[int, int]] | None = None) -> dict[str, Any]:
+    """Create one new vertical ARPHE project from 2-20 ordered linked A/V sources."""
+    try:
+        resolve, manager, _, _, config, registry, error = _runtime()
+        if error and manager is None:
+            return error
+        _require_vertical_social(config)
+        with RESOLVE_ACCESS_LOCK:
+            return do_create_vertical_social_sequence(
+                resolve, manager, config, registry, media_paths, project_name, timeline_name,
+                trim_ranges=trim_ranges)
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
 def prepare_vertical_social_plan(target: dict[str, Any], actions: list[dict[str, Any]]) -> dict[str, Any]:
     try:
         config = load_config(); _require_vertical_social(config)
+        if actions and all(action.get("type") == "REFRAME" or (
+                action.get("type") == "B_ROLL_PROVIDED" and is_still_asset(str(action.get("asset_path", "")))) for action in actions):
+            _, manager, project, timeline, config, registry, error = _runtime()
+            if error: return error
+            require_capability("CAP_MOTION", config, manager, project, timeline)
+            from .fusion_tools import _timeline_allowed
+            _timeline_allowed(project, timeline, config, registry)
+            if (target.get("project") != safe_call(project, "GetName")
+                    or target.get("timeline") != safe_call(timeline, "GetName")):
+                raise ValidationError("Target motion diverso dal contesto corrente")
+            duration = int(safe_call(timeline, "GetEndFrame")) - int(safe_call(timeline, "GetStartFrame"))
+            if target.get("total_frames") != duration:
+                raise ValidationError("Durata motion diversa dalla timeline")
+            target = {**target, "timeline_identity": safe_call(timeline, "GetUniqueId"),
+                      "source_state_fingerprint": preserved_timeline_fingerprint(timeline)}
         plan = do_prepare_vertical_social_plan(config.vertical_social_plans_path, config.workstation_id, target, actions)
         return {"ok": True, "action": "prepare_vertical_social_plan", "plan_id": plan.plan_id,
                 "fingerprint": plan.fingerprint, "state": plan.state}
@@ -899,7 +841,7 @@ def advance_vertical_social_action(plan_id: str, action_id: str, next_state: str
 def apply_vertical_social_cuts(plan_id: str, fingerprint: str) -> dict[str, Any]:
     """Create or resume the verified provisional CUT timeline; never changes its source timeline."""
     try:
-        resolve, manager, project, timeline, config, _, error = _runtime()
+        resolve, manager, project, timeline, config, registry, error = _runtime()
         _require_vertical_social(config)
         if error:
             return error
@@ -912,22 +854,47 @@ def apply_vertical_social_cuts(plan_id: str, fingerprint: str) -> dict[str, Any]
         if (str(safe_call(project, "GetName")) != str(plan.target.get("project"))
                 or str(safe_call(timeline, "GetName")) != str(plan.target.get("timeline"))):
             raise ValidationError("Target progetto o timeline diverso dal piano approvato")
+        plan_actions = tuple(getattr(plan, "actions", ()))
+        caption_only = bool(plan_actions) and all(
+            item.action_type == "CAPTIONS" for item in plan_actions)
+        reframe_only = bool(plan_actions) and all(
+            item.action_type == "REFRAME" or (item.action_type == "B_ROLL_PROVIDED"
+            and is_still_asset(str(item.to_dict().get("asset_path", "")))) for item in plan_actions)
+        copy_only = caption_only or reframe_only
         video = safe_call(timeline, "GetItemListInTrack", "video", 1) or []
-        if len(video) != 1:
+        if not copy_only and len(video) != 1:
             raise ValidationError("CUT Vertical Social richiede una sola clip video sorgente")
-        total_frames = int(safe_call(video[0], "GetDuration") or 0)
+        total_frames = int(plan.target.get("total_frames") or 0) if copy_only \
+            else int(safe_call(video[0], "GetDuration") or 0)
         with RESOLVE_ACCESS_LOCK:
             try:
-                provisional = do_create_provisional_cut_timeline(
-                    project, timeline, plan.to_dict(), total_frames=total_frames)
+                if reframe_only:
+                    require_capability("CAP_MOTION", config, manager, project, timeline)
+                    from .fusion_tools import _timeline_allowed
+                    _timeline_allowed(project, timeline, config, registry)
+                    provisional = do_duplicate_preserved_timeline(project, timeline, plan.to_dict(), config)
+                elif caption_only:
+                    target_name = provisional_timeline_name(plan_id)
+                    provisional = safe_call(timeline, "DuplicateTimeline", target_name)
+                    if provisional is None or str(safe_call(provisional, "GetName") or "") != target_name:
+                        raise ValidationError("Duplicazione timeline CAPTIONS fallita")
+                    from .timeline_tools import preserve_fusion_compositions
+                    preserve_fusion_compositions(timeline, provisional, config)
+                else:
+                    provisional = do_create_provisional_cut_timeline(
+                        project, timeline, plan.to_dict(), total_frames=total_frames)
             finally:
                 if not safe_call(project, "SetCurrentTimeline", timeline):
                     raise ValidationError("Ripristino timeline sorgente dopo CUT fallito")
         verified = do_record_vertical_social_cut_execution(
             config.vertical_social_plans_path, config.workstation_id, plan_id, fingerprint,
             str(safe_call(provisional, "GetName")),
-            sum(int(safe_call(item, "GetDuration") or 0)
+            total_frames if copy_only else sum(int(safe_call(item, "GetDuration") or 0)
                 for item in (safe_call(provisional, "GetItemListInTrack", "video", 1) or [])),
+        )
+        registry.add_timeline(
+            str(safe_call(project, "GetName") or ""),
+            str(safe_call(provisional, "GetName") or ""),
         )
         return {"ok": True, "action": "apply_vertical_social_cuts", "plan_id": plan_id,
                 "provisional_timeline": str(safe_call(provisional, "GetName")),
@@ -954,6 +921,13 @@ def apply_vertical_social_action(plan_id: str, fingerprint: str, action_id: str)
                 or str(safe_call(timeline, "GetName") or "") != str(plan.target.get("timeline"))):
             raise ValidationError("Target progetto o timeline diverso dal piano approvato")
         action = plan.action(action_id)
+        if action.action_type == "REFRAME" or (action.action_type == "B_ROLL_PROVIDED"
+                and is_still_asset(str(action.to_dict().get("asset_path", "")))):
+            require_capability("CAP_MOTION", config, manager, project, timeline)
+            if plan.target.get("source_state_fingerprint") and (
+                    safe_call(timeline, "GetUniqueId") != plan.target.get("timeline_identity")
+                    or preserved_timeline_fingerprint(timeline) != plan.target["source_state_fingerprint"]):
+                raise ValidationError("Sorgente motion cambiata dopo approvazione")
         if action.state == "VERIFIED":
             return {"ok": True, "action": "apply_vertical_social_action", "plan_id": plan_id,
                     "action_id": action_id, "state": "VERIFIED", "idempotent": True,
@@ -1718,10 +1692,12 @@ def inspect_resolve21_compatibility() -> dict[str, Any]:
     """Inspect Resolve 21 native API readiness without modifying the project."""
     with RESOLVE_ACCESS_LOCK:
         try:
-            resolve, manager, project, timeline, _, _, error = _runtime()
+            resolve, manager, project, timeline, config, _, error = _runtime()
             if error and resolve is None:
-                return {**error, "state": "RESOLVE_UNREACHABLE"}
-            return do_resolve21_compatibility(resolve, manager, project, timeline)
+                return {**error, "workstation_id": config.workstation_id,
+                        "state": "RESOLVE_UNREACHABLE"}
+            return {**do_resolve21_compatibility(resolve, manager, project, timeline),
+                    "workstation_id": config.workstation_id}
         except Exception as exc:
             return _error(exc)
 
@@ -1736,156 +1712,6 @@ def get_feature_flags() -> dict[str, Any]:
                     "connection": error, "capabilities": feature_report(config, manager, project, timeline)}
         except Exception as exc:
             return _error(exc)
-
-
-@mcp.tool(annotations=READ_ONLY)
-def inspect_timeline_elements(
-    media_type: str | None = None,
-    track_index: int | None = None,
-    start_frame: int | None = None,
-    end_frame: int | None = None,
-) -> dict[str, Any]:
-    """Inspect exact current timeline items and issue short-lived opaque handles."""
-    config = None
-    with RESOLVE_ACCESS_LOCK:
-        try:
-            _, _, project, timeline, config, registry, error = _runtime()
-            if error:
-                return _timeline_control_connection_error(
-                    "inspect_timeline_elements", config, {}
-                )
-            if project is None or timeline is None:
-                raise ValidationError("Serve una timeline corrente")
-            return _timeline_control_call(
-                "inspect_timeline_elements", config, {},
-                lambda: do_inspect_timeline_elements(
-                    project, timeline, config, registry,
-                    timeline_element_store_for(config), media_type, track_index,
-                    start_frame, end_frame,
-                ),
-            )
-        except Exception as exc:
-            if config is None:
-                return _timeline_control_bootstrap_error(
-                    "inspect_timeline_elements", exc
-                )
-            return _timeline_control_call(
-                "inspect_timeline_elements", config, {},
-                lambda: (_ for _ in ()).throw(exc),
-            )
-
-
-@mcp.tool(annotations=IDEMPOTENT_WRITE)
-def set_timeline_element_enabled(
-    element_id: str, fingerprint: str, enabled: bool
-) -> dict[str, Any]:
-    """Set only the enabled state of one fresh, unambiguous opaque item handle."""
-    config = None
-    metadata = {"element_id": element_id, "fingerprint": fingerprint}
-    try:
-        config = load_config()
-        _require_timeline_element_control(config)
-        with RESOLVE_ACCESS_LOCK:
-            _, _, project, timeline, error = context()
-            if error:
-                return _timeline_control_connection_error(
-                    "set_timeline_element_enabled", config, metadata
-                )
-            if project is None or timeline is None:
-                raise ValidationError("Serve una timeline corrente")
-            return _timeline_control_call(
-                "set_timeline_element_enabled", config, metadata,
-                lambda: do_set_timeline_element_enabled(
-                    project, timeline, config, Registry(config.state_path),
-                    timeline_element_store_for(config), element_id, fingerprint, enabled,
-                ),
-            )
-    except Exception as exc:
-        if config is None:
-            return _timeline_control_bootstrap_error(
-                "set_timeline_element_enabled", exc
-            )
-        return _timeline_control_call(
-            "set_timeline_element_enabled", config, metadata,
-            lambda: (_ for _ in ()).throw(exc),
-        )
-
-
-@mcp.tool(annotations=READ_ONLY)
-def prepare_timeline_element_removal(
-    element_id: str, fingerprint: str
-) -> dict[str, Any]:
-    """Prepare a short-lived removal proposal for one proven bridge-owned item."""
-    config = None
-    metadata = {"element_id": element_id, "fingerprint": fingerprint}
-    try:
-        config = load_config()
-        _require_timeline_element_control(config)
-        with RESOLVE_ACCESS_LOCK:
-            _, _, project, timeline, error = context()
-            if error:
-                return _timeline_control_connection_error(
-                    "prepare_timeline_element_removal", config, metadata
-                )
-            if project is None or timeline is None:
-                raise ValidationError("Serve una timeline corrente")
-            return _timeline_control_call(
-                "prepare_timeline_element_removal", config, metadata,
-                lambda: do_prepare_timeline_element_removal(
-                    project, timeline, config, Registry(config.state_path),
-                    timeline_element_store_for(config), element_id, fingerprint,
-                ),
-            )
-    except Exception as exc:
-        if config is None:
-            return _timeline_control_bootstrap_error(
-                "prepare_timeline_element_removal", exc
-            )
-        return _timeline_control_call(
-            "prepare_timeline_element_removal", config, metadata,
-            lambda: (_ for _ in ()).throw(exc),
-        )
-
-
-@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
-def execute_timeline_element_removal(
-    removal_id: str, proposal_fingerprint: str, operator_role: str
-) -> dict[str, Any]:
-    """Execute one prepared non-ripple removal; recovery never retargets another item."""
-    config = None
-    metadata = {
-        "removal_id": removal_id,
-        "proposal_fingerprint": proposal_fingerprint,
-        "actor_role": operator_role,
-    }
-    try:
-        config = load_config()
-        _require_timeline_element_control(config)
-        with RESOLVE_ACCESS_LOCK:
-            _, _, project, timeline, error = context()
-            if error:
-                return _timeline_control_connection_error(
-                    "execute_timeline_element_removal", config, metadata
-                )
-            if project is None or timeline is None:
-                raise ValidationError("Serve una timeline corrente")
-            return _timeline_control_call(
-                "execute_timeline_element_removal", config, metadata,
-                lambda: do_execute_timeline_element_removal(
-                    project, timeline, config, Registry(config.state_path),
-                    timeline_element_store_for(config), removal_id,
-                    proposal_fingerprint, operator_role,
-                ),
-            )
-    except Exception as exc:
-        if config is None:
-            return _timeline_control_bootstrap_error(
-                "execute_timeline_element_removal", exc
-            )
-        return _timeline_control_call(
-            "execute_timeline_element_removal", config, metadata,
-            lambda: (_ for _ in ()).throw(exc),
-        )
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -2162,40 +1988,6 @@ def get_transcript_chunk(transcript_path: str, start_second: float,
     except Exception as exc: return _error(exc)
 
 
-@mcp.tool(annotations=IDEMPOTENT_WRITE)
-def start_native_transcription21(clip_id: str,
-                                 use_speaker_detection: bool = True) -> dict[str, Any]:
-    """Start or resume native Resolve transcription for one current timeline clip."""
-    with RESOLVE_ACCESS_LOCK:
-        try:
-            _, _, project, timeline, config, registry, error = _runtime()
-            if error:
-                return error
-            if not project or not timeline:
-                return {"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}
-            return _call(do_start_native_transcription21, project, timeline, config, registry,
-                         clip_id, use_speaker_detection)
-        except Exception as exc:
-            return _error(exc)
-
-
-@mcp.tool(annotations=READ_ONLY)
-def read_native_transcription21(job_id: str, start_segment: int = 0,
-                                max_segments: int = 50) -> dict[str, Any]:
-    """Poll and read a bounded chunk from one native Resolve transcription job."""
-    with RESOLVE_ACCESS_LOCK:
-        try:
-            _, _, project, timeline, config, registry, error = _runtime()
-            if error:
-                return error
-            if not project or not timeline:
-                return {"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}
-            return _call(do_read_native_transcription21, project, timeline, config, registry,
-                         job_id, start_segment, max_segments)
-        except Exception as exc:
-            return _error(exc)
-
-
 @mcp.tool(annotations=READ_ONLY)
 def validate_longform_edit_plan(clips: list[dict[str, Any]], fps: float = 30.0) -> dict[str, Any]:
     """Validate a non-destructive longform plan and convert seconds to source frames."""
@@ -2324,6 +2116,79 @@ def create_edge_fade_test(source_timeline: str, target_name: str,
 
 
 @mcp.tool(annotations=SAFE_WRITE)
+def apply_monochrome_window(start_frame: int, end_frame: int, video_track: int = 1) -> dict[str, Any]:
+    """Apply hard-cut monochrome only inside one exact frame range of a current ARPHE video clip."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, manager, project, timeline, config, registry, error = _runtime()
+            if error:
+                return error
+            require_capability("CAP_FUSION", config, manager, project, timeline)
+            if not project or not timeline:
+                return {"ok": False, "stage": "preflight", "error": "Serve una timeline ARPHE aperta."}
+            timeline_name = str(safe_call(timeline, "GetName") or "")
+            project_name = str(safe_call(project, "GetName") or "")
+            if not timeline_name.startswith("ARPHE_") or not registry.timeline_allowed(project_name, timeline_name):
+                return {"ok": False, "stage": "target", "error": "La timeline deve essere ARPHE e registrata."}
+            if isinstance(video_track, bool) or not isinstance(video_track, int) or video_track < 1:
+                return {"ok": False, "stage": "input", "error": "video_track non valido."}
+            target_name = f"{timeline_name}_BW_004"
+            return do_apply_monochrome_segment(project, config, registry, timeline_name, target_name,
+                                               start_frame, end_frame, video_track)
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_monochrome_segment(source_timeline: str, target_name: str, start_frame: int,
+                             end_frame: int, video_track: int = 1) -> dict[str, Any]:
+    """Create a new ARPHE timeline and apply monochrome only to one split video segment."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, timeline, config, registry, error = _runtime()
+            if error:
+                return error
+            require_capability("CAP_TIMELINE", config, None, project, timeline)
+            if not project:
+                return {"ok": False, "stage": "preflight", "error": "Serve un progetto ARPHE aperto."}
+            if not all(isinstance(value, int) and not isinstance(value, bool)
+                       for value in (start_frame, end_frame, video_track)) or video_track < 1:
+                return {"ok": False, "stage": "input", "error": "Frame o traccia non validi."}
+            return do_apply_monochrome_segment(project, config, registry, source_timeline,
+                                               target_name, start_frame, end_frame, video_track)
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def apply_freeze_sbam(source_timeline: str, target_name: str,
+                      freeze_source_offset: int = 160,
+                      insert_frame: int = 108180,
+                      duration_frames: int = 15) -> dict[str, Any]:
+    """Create a new ARPHE timeline with a silent 0.5-second freeze and SBAM on A2."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            resolve, _, project, timeline, config, registry, error = _runtime()
+            if error:
+                return error
+            require_capability("CAP_TIMELINE", config, None, project, timeline)
+            if not project:
+                return {"ok": False, "stage": "preflight", "error": "Serve un progetto ARPHE aperto."}
+            if not isinstance(source_timeline, str) or not source_timeline.strip():
+                return {"ok": False, "stage": "input", "error": "Timeline sorgente non valida."}
+            if not isinstance(target_name, str) or not target_name.strip():
+                return {"ok": False, "stage": "input", "error": "Nome timeline destinazione non valido."}
+            values = (freeze_source_offset, insert_frame, duration_frames)
+            if not all(isinstance(value, int) and not isinstance(value, bool) for value in values):
+                return {"ok": False, "stage": "input", "error": "Parametri frame non validi."}
+            return do_apply_freeze_sbam(resolve, project, config, registry,
+                                        source_timeline, target_name,
+                                        freeze_source_offset, insert_frame, duration_frames)
+    except Exception as exc:
+        return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
 def start_timeline_dialogue_cleanup_test(
     source_timeline: str,
     target_name: str,
@@ -2349,6 +2214,64 @@ def get_timeline_dialogue_cleanup_job(job_id: str) -> dict[str, Any]:
             return _call(do_get_timeline_dialogue_cleanup_job,
                          project, config, registry, job_id)
     except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def start_timeline_audio_transcription(source_timeline: str, model: str = "small",
+                                       language: str = "it") -> dict[str, Any]:
+    """Render and transcribe only the exact audio heard on one allowed timeline."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_start_timeline_audio_transcription, project, config, registry,
+                         source_timeline, model, language)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def get_timeline_audio_transcription_job(job_id: str) -> dict[str, Any]:
+    """Advance or read an owned timeline-audio transcription job."""
+    try:
+        with RESOLVE_ACCESS_LOCK:
+            _, _, project, _, config, registry, error = _runtime()
+            if error: return error
+            return _call(do_get_timeline_audio_transcription_job, project, config, registry, job_id)
+    except Exception as exc: return _error(exc)
+
+
+@mcp.tool(annotations=IDEMPOTENT_WRITE)
+def start_native_transcription21(clip_id: str,
+                                 use_speaker_detection: bool = True) -> dict[str, Any]:
+    """Start or resume native Resolve transcription for one current timeline clip."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, timeline, config, registry, error = _runtime()
+            if error:
+                return error
+            if not project or not timeline:
+                return {"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}
+            return _call(do_start_native_transcription21, project, timeline, config, registry,
+                         clip_id, use_speaker_detection)
+        except Exception as exc:
+            return _error(exc)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def read_native_transcription21(job_id: str, start_segment: int = 0,
+                                max_segments: int = 50) -> dict[str, Any]:
+    """Poll and read a bounded chunk from one native Resolve transcription job."""
+    with RESOLVE_ACCESS_LOCK:
+        try:
+            _, _, project, timeline, config, registry, error = _runtime()
+            if error:
+                return error
+            if not project or not timeline:
+                return {"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}
+            return _call(do_read_native_transcription21, project, timeline, config, registry,
+                         job_id, start_segment, max_segments)
+        except Exception as exc:
+            return _error(exc)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -2387,6 +2310,25 @@ def inspect_fusion_graph(composition_id: str) -> dict[str, Any]:
     except Exception as exc: return _error(exc)
 
 
+def _bridge_owned_vertical_capture_allowed(project: object, timeline: object,
+                                           config: Any) -> bool:
+    """Bind diagnostic access to an existing stored Vertical Social plan."""
+    timeline_name = str(safe_call(timeline, "GetName") or "")
+    match = re.fullmatch(r"__ARPHE_VERTICAL_VERTICAL_([0-9A-F]{32})", timeline_name)
+    if match is None:
+        return False
+    plan_id = f"vertical_{match.group(1).lower()}"
+    try:
+        plan = VerticalSocialPlanStore(
+            config.vertical_social_plans_path, config.workstation_id).get(plan_id)
+    except Exception:
+        return False
+    return (
+        timeline_name == provisional_timeline_name(plan_id)
+        and str(safe_call(project, "GetName") or "") == str(plan.target.get("project") or "")
+    )
+
+
 @mcp.tool(annotations=SAFE_WRITE)
 def capture_timeline_frames(frame_offsets: list[int]) -> CallToolResult:
     """Export 1-8 exact ARPHE timeline frames as JPEG images and restore the playhead/page."""
@@ -2398,7 +2340,9 @@ def capture_timeline_frames(frame_offsets: list[int]) -> CallToolResult:
             result = [{"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}]
         else:
             result = do_capture_timeline_frames(
-                resolve, project, timeline, config, registry, frame_offsets
+                resolve, project, timeline, config, registry, frame_offsets,
+                bridge_owned_provisional=_bridge_owned_vertical_capture_allowed(
+                    project, timeline, config),
             )
     except Exception as exc:
         result = [_error(exc)]
@@ -2414,20 +2358,19 @@ def export_review_frames21(frame_offsets: list[int], mode: str = "frames",
                            roi: dict[str, float] | None = None,
                            max_dimension: int = 1600, quality: int = 90) -> CallToolResult:
     """Export native Resolve 21.2 frames or a labelled grid without moving the playhead."""
-    with RESOLVE_ACCESS_LOCK:
-        try:
-            _, _, project, timeline, config, registry, error = _runtime()
-            if error:
-                result: list[Any] = [error]
-            elif not project or not timeline:
-                result = [{"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}]
-            else:
-                validate_review_target(project, timeline, config, registry)
-                result = do_export_review_frames21(
-                    timeline, frame_offsets, mode, roi, max_dimension, quality
-                )
-        except Exception as exc:
-            result = [_error(exc)]
+    try:
+        _, _, project, timeline, config, registry, error = _runtime()
+        if error:
+            result: list[Any] = [error]
+        elif not project or not timeline:
+            result = [{"ok": False, "stage": "preflight", "error": "Serve una timeline aperta."}]
+        else:
+            validate_review_target(project, timeline, config, registry)
+            result = do_export_review_frames21(
+                timeline, frame_offsets, mode, roi, max_dimension, quality
+            )
+    except Exception as exc:
+        result = [_error(exc)]
     metadata = result[0]
     content = [TextContent(type="text", text=json.dumps(metadata, ensure_ascii=False, indent=2))]
     content.extend(item.to_image_content() for item in result[1:] if isinstance(item, Image))
@@ -2745,39 +2688,228 @@ def _require_resolve_retirement(config: Any) -> None:
         raise RuntimeError("CAP_RESOLVE_RETIREMENT non attiva")
 
 
-@mcp.tool(annotations=READ_ONLY)
-def inspect_artifact_hygiene() -> dict[str, Any]:
-    """Inspect only bridge-owned artifacts; accepts no filesystem path."""
+def _retention_identity(config: Any = None) -> str | None:
+    """Recover identity only from this call's config or the fixed local config."""
+    try:
+        if config is not None:
+            value = config.workstation_id
+        else:
+            path = Path(os.environ.get("ARPHE_CREATIVE_CONFIG", "") or _default_config_path())
+            value = json.loads(path.expanduser().read_text(encoding="utf-8"))["workstation_id"]
+        if isinstance(value, str) and re.fullmatch(r"PC_[A-Z0-9_]{2,48}", value):
+            return value
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, RuntimeError):
+        pass
+    return None
+
+
+def _retention_public(value: Any, key: str = "") -> Any:
+    """Do not expose raw exceptions or filesystem paths from lifecycle internals."""
+    if isinstance(value, dict):
+        return {name: _retention_public(item, name) for name, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_retention_public(item, key) for item in value]
+    if isinstance(value, Path):
+        return "[local path withheld]"
+    if isinstance(value, str):
+        if key in {"error", "detail"}:
+            if value == "CAP_ARTIFACT_MAINTENANCE non attiva":
+                return value
+            return "Retention operation refused; inspect local diagnostics."
+        if key in {"code", "error_code"} and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", value):
+            return "RETENTION_REVIEW_REQUIRED"
+        if re.search(r"[A-Za-z]:[\\/]|\\\\|(?:^|[\s'\"])/", value):
+            return "[local path withheld]"
+    return value
+
+
+def _retention_call(action: str, operation: Callable, *, mutation: bool = False) -> dict[str, Any]:
+    config = None
     try:
         config = load_config()
-        store, registry, policy = _artifact_components(config)
-        return _call(do_inspect_artifacts, config, store, registry, policy, datetime.now(timezone.utc))
+        if mutation:
+            _require_artifact_mutation(config)
+        result = operation(config)
     except Exception as exc:
-        return _error(exc)
+        result = {"ok": False, "error_type": type(exc).__name__, "error": str(exc)}
+    result = {**_retention_public(result), "action": action,
+              "workstation_id": _retention_identity(config)}
+    if mutation and config is not None:
+        try:
+            write_audit(config.audit_log_path, action, result)
+        except Exception:
+            pass
+    return result
+
+
+def _opaque_artifact_id(value: Any) -> str | None:
+    if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value):
+        return value
+    return None
+
+
+def _keep_release_public(action: str, artifact_id: Any, operation: Callable) -> dict[str, Any]:
+    """Run a local hold transition and expose only the reviewed artifact evidence."""
+    parsed_id = _opaque_artifact_id(artifact_id)
+    config = None
+    try:
+        config = load_config()
+        _require_artifact_mutation(config)
+        if parsed_id is None:
+            raise ValueError("Invalid opaque artifact ID")
+        record, restore_performed = operation(config, parsed_id)
+        result: dict[str, Any] = {
+            "ok": True, "action": action, "workstation_id": config.workstation_id,
+            "artifact_id": record.artifact_id, "category": record.category,
+            "producer": record.producer, "batch_id": record.batch_id,
+            "hold_state": "KEPT" if "USER_KEEP" in record.hold_reasons else "RELEASED",
+            "restore_performed": bool(restore_performed),
+        }
+        if record.eligible_at is not None:
+            result["eligible_at"] = record.eligible_at.isoformat()
+    except Exception as exc:
+        result = {"ok": False, "action": action, "workstation_id": _retention_identity(config),
+                  "error_code": "RETENTION_REFUSED"}
+        if str(exc) == "CAP_ARTIFACT_MAINTENANCE non attiva":
+            result["error"] = "CAP_ARTIFACT_MAINTENANCE non attiva"
+        if parsed_id is not None:
+            result["artifact_id"] = parsed_id
+    if config is not None:
+        try:
+            write_audit(config.audit_log_path, action, result)
+        except Exception:
+            pass
+    return result
+
+
+@contextmanager
+def _retention_snapshot_guard(store: Any):
+    # Share the lifecycle lock; an activation snapshot cannot overlap maintenance.
+    from .artifact_hygiene import _acquire_lock, _release_lock
+    descriptor = _acquire_lock(store)
+    if descriptor is None:
+        raise RuntimeError("MAINTENANCE_LOCKED")
+    try:
+        yield
+    finally:
+        _release_lock(store, descriptor)
+
+
+def _require_current_retention_proposal(config: Any, store: Any, proposal: dict) -> None:
+    # Re-read the fixed local configuration/policy: the first load may precede
+    # a long inventory scan. A changed snapshot never refreshes its approval.
+    current = load_config(config.path)
+    _require_artifact_mutation(current)
+    policy = load_artifact_policy(current.artifact_policy_path)
+    if (current.workstation_id != config.workstation_id
+            or proposal["config_path"] != str(current.path.resolve())
+            or proposal["policy_fingerprint"] != policy_fingerprint(policy)
+            or proposal["profile_fingerprint"] != retention_fingerprint(retention_profile(current))
+            or proposal["inventory_fingerprint"] != inventory_fingerprint(current, store)):
+        raise ValueError("Activation proposal is no longer current")
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def prepare_retention_activation() -> dict[str, Any]:
+    """Prepare immutable local policy/inventory/dry-run evidence; never enable purge."""
+    def operation(config):
+        store, _, policy = _artifact_components(config)
+        with _retention_snapshot_guard(store):
+            proposal = do_prepare_retention_activation(config, store, policy, datetime.now(timezone.utc),
+                                                       defer_validation=True)
+            try:
+                with store.registration_guard():
+                    _require_current_retention_proposal(config, store, asdict(proposal))
+                do_validate_retention_activation(
+                    RetentionActivationStore(config.retention_activation_path, config.workstation_id),
+                    proposal.proposal_id, proposal.fingerprint, datetime.now(timezone.utc))
+            except Exception:
+                # The proposal is immutable audit evidence, but cannot become approvable
+                # after the post-persistence snapshot has drifted (including a crash here).
+                do_invalidate_retention_activation(
+                    RetentionActivationStore(config.retention_activation_path, config.workstation_id),
+                    proposal.proposal_id, proposal.fingerprint, datetime.now(timezone.utc))
+                raise
+        public = asdict(proposal)
+        public.pop("config_path")
+        public["created_at"] = proposal.created_at.isoformat()
+        return {"ok": True, **public}
+    return _retention_call("prepare_retention_activation", operation, mutation=True)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def approve_retention_activation(proposal_id: str, fingerprint: str, operator_role: str) -> dict[str, Any]:
+    """Approve an exact current proposal in this workstation's fixed activation store."""
+    def operation(config):
+        if (not isinstance(proposal_id, str)
+                or not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", proposal_id)
+                or not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint)
+                or not isinstance(operator_role, str)):
+            raise ValueError("Malformed retention approval input")
+        store, _, policy = _artifact_components(config)
+        activation = RetentionActivationStore(config.retention_activation_path, config.workstation_id)
+        with _retention_snapshot_guard(store), store.registration_guard():
+            data = activation._load()
+            proposal = data["proposals"][proposal_id]
+            if data["latest_proposal_id"] != proposal_id or proposal["fingerprint"] != fingerprint:
+                raise ValueError("Activation proposal is no longer current")
+            _require_current_retention_proposal(config, store, proposal)
+            approval = do_approve_retention_activation(activation, proposal_id, fingerprint,
+                                                       operator_role, datetime.now(timezone.utc))
+        return {"ok": True, **asdict(approval), "approved_at": approval.approved_at.isoformat()}
+    return _retention_call("approve_retention_activation", operation, mutation=True)
+
+
+@mcp.tool(annotations=READ_ONLY)
+def inspect_artifact_hygiene(cursor: str | None = None, limit: int = 0) -> dict[str, Any]:
+    """Inspect only bridge-owned artifacts; accepts no filesystem path."""
+    def operation(config):
+        store, registry, policy = _artifact_components(config)
+        return do_inspect_artifacts(config, store, registry, policy, datetime.now(timezone.utc),
+                                    cursor=cursor, limit=limit)
+    return _retention_call("inspect_artifact_hygiene", operation)
 
 
 @mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT_WRITE)
 def run_artifact_maintenance() -> dict[str, Any]:
     """Apply the fixed retention policy to registered artifacts only."""
-    try:
-        config = load_config()
-        _require_artifact_mutation(config)
+    def operation(config):
         store, registry, policy = _artifact_components(config)
-        return _call(do_run_maintenance, config, store, registry, policy, datetime.now(timezone.utc))
-    except Exception as exc:
-        return _error(exc)
+        return do_run_maintenance(config, store, registry, policy, datetime.now(timezone.utc))
+    return _retention_call("run_artifact_maintenance", operation, mutation=True)
 
 
 @mcp.tool(annotations=SAFE_WRITE)
 def restore_quarantined_artifact(artifact_id: str) -> dict[str, Any]:
     """Restore one quarantined artifact by opaque ID; accepts no path."""
-    try:
-        config = load_config()
-        _require_artifact_mutation(config)
+    def operation(config):
+        if not isinstance(artifact_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", artifact_id):
+            raise ValueError("Invalid opaque artifact ID")
         store, _, policy = _artifact_components(config)
-        return _call(do_restore_artifact, config, store, artifact_id, policy, datetime.now(timezone.utc))
-    except Exception as exc:
-        return _error(exc)
+        return do_restore_artifact(config, store, artifact_id, policy, datetime.now(timezone.utc))
+    return _retention_call("restore_quarantined_artifact", operation, mutation=True)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def keep_artifact(artifact_id: str) -> dict[str, Any]:
+    """Keep one exact local registered artifact; accepts no path or override."""
+    def operation(config, parsed_id):
+        store, _, policy = _artifact_components(config)
+        outcome = do_keep_artifact(config, store, parsed_id, policy, datetime.now(timezone.utc))
+        if not outcome.get("ok"):
+            raise ValueError("Keep refused")
+        return next(record for record in store.records() if record.artifact_id == parsed_id), outcome.get("restore_performed", False)
+    return _keep_release_public("keep_artifact", artifact_id, operation)
+
+
+@mcp.tool(annotations=SAFE_WRITE)
+def release_kept_artifact(artifact_id: str) -> dict[str, Any]:
+    """Release only the user keep hold for one exact local registered artifact."""
+    def operation(config, parsed_id):
+        store, _, policy = _artifact_components(config)
+        record = store.release_kept_artifact(parsed_id, policy, datetime.now(timezone.utc))
+        return record, False
+    return _keep_release_public("release_kept_artifact", artifact_id, operation)
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -2877,12 +3009,19 @@ def inspect_voice_isolation(track_index: int) -> dict[str, Any]:
     with RESOLVE_ACCESS_LOCK:
         try:
             _, manager, project, timeline, config, _, error = _runtime()
-            if error: return error
+            if error:
+                return error
             capture = capture_track(project, timeline, track_index)
-            return {"ok": True, "action": "inspect_voice_isolation", "target": capture.target.__dict__,
-                    "current": capture.initial.as_dict(), "capability_enabled": bool(config.flags.get("CAP_VOICE_ISOLATION")),
-                    "capability_status": "PENDING"}
-        except Exception as exc: return _error(exc)
+            return {
+                "ok": True,
+                "action": "inspect_voice_isolation",
+                "target": capture.target.__dict__,
+                "current": capture.initial.as_dict(),
+                "capability_enabled": bool(config.flags.get("CAP_VOICE_ISOLATION")),
+                "capability_status": "PENDING",
+            }
+        except Exception as exc:
+            return _error(exc)
 
 
 @mcp.tool(annotations=SAFE_WRITE)
@@ -2893,11 +3032,19 @@ def prepare_voice_isolation(track_index: int, amount: int) -> dict[str, Any]:
             config = load_config()
             _require_voice_isolation_enabled(config)
             _, _, project, timeline, config, _, error = _runtime()
-            if error: return error
-            if config.workstation_id != "PC_PERSONALE": raise ValidationError("Voice Isolation solo PC_PERSONALE")
+            if error:
+                return error
+            if config.workstation_id != "PC_PERSONALE":
+                raise ValidationError("Voice Isolation solo PC_PERSONALE")
             job = _voice_store(config).prepare(capture_track(project, timeline, track_index), amount)
-            return {"ok": True, "action": "prepare_voice_isolation", "voice_job_id": job["job_id"], "state": job["state"]}
-        except Exception as exc: return _error(exc)
+            return {
+                "ok": True,
+                "action": "prepare_voice_isolation",
+                "voice_job_id": job["job_id"],
+                "state": job["state"],
+            }
+        except Exception as exc:
+            return _error(exc)
 
 
 @mcp.tool(annotations=SAFE_WRITE)
@@ -2907,15 +3054,28 @@ def apply_voice_isolation_job(voice_job_id: str) -> dict[str, Any]:
         try:
             _require_voice_isolation_enabled(load_config())
             _, manager, project, timeline, config, _, error = _runtime()
-            if error: return error
-            if config.workstation_id != "PC_PERSONALE": raise ValidationError("Voice Isolation solo PC_PERSONALE")
+            if error:
+                return error
+            if config.workstation_id != "PC_PERSONALE":
+                raise ValidationError("Voice Isolation solo PC_PERSONALE")
             require_capability("CAP_VOICE_ISOLATION", config, manager, project, timeline)
             store = _voice_store(config)
-            result = store.apply(voice_job_id, lambda job: apply_voice_isolation(
-                project, timeline, _voice_capture(job), job["requested"]["amount"]
-            ))
-            return {"ok": True, "action": "apply_voice_isolation", "current": result.current.as_dict()}
-        except Exception as exc: return _error(exc)
+            result = store.apply(
+                voice_job_id,
+                lambda job: apply_voice_isolation(
+                    project,
+                    timeline,
+                    _voice_capture(job),
+                    job["requested"]["amount"],
+                ),
+            )
+            return {
+                "ok": True,
+                "action": "apply_voice_isolation",
+                "current": result.current.as_dict(),
+            }
+        except Exception as exc:
+            return _error(exc)
 
 
 @mcp.tool(annotations=IDEMPOTENT_WRITE)
@@ -2925,22 +3085,38 @@ def restore_voice_isolation_job(voice_job_id: str) -> dict[str, Any]:
         try:
             _require_voice_isolation_enabled(load_config())
             _, manager, project, timeline, config, _, error = _runtime()
-            if error: return error
-            if config.workstation_id != "PC_PERSONALE": raise ValidationError("Voice Isolation solo PC_PERSONALE")
+            if error:
+                return error
+            if config.workstation_id != "PC_PERSONALE":
+                raise ValidationError("Voice Isolation solo PC_PERSONALE")
             require_capability("CAP_VOICE_ISOLATION", config, manager, project, timeline)
             store = _voice_store(config)
+
             def restore_operation(job: dict[str, Any]):
                 capture = _voice_capture(job)
-                expected = VoiceIsolationState(job["requested"]["isEnabled"], job["requested"]["amount"])
+                expected = VoiceIsolationState(
+                    job["requested"]["isEnabled"],
+                    job["requested"]["amount"],
+                )
                 current = read_voice_isolation(project, timeline, capture)
                 if job["state"] == "RESTORING" and current.current == capture.initial:
                     return current
                 return restore_voice_isolation(project, timeline, capture, expected)
+
             result, idempotent = store.restore(voice_job_id, restore_operation)
             if idempotent:
-                return {"ok": True, "action": "restore_voice_isolation", "idempotent": True}
-            return {"ok": True, "action": "restore_voice_isolation", "current": result.current.as_dict()}
-        except Exception as exc: return _error(exc)
+                return {
+                    "ok": True,
+                    "action": "restore_voice_isolation",
+                    "idempotent": True,
+                }
+            return {
+                "ok": True,
+                "action": "restore_voice_isolation",
+                "current": result.current.as_dict(),
+            }
+        except Exception as exc:
+            return _error(exc)
 
 
 def run() -> None:
@@ -2949,4 +3125,3 @@ def run() -> None:
     except Exception:
         pass
     mcp.run()
-

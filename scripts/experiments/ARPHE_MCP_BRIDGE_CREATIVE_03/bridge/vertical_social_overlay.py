@@ -37,9 +37,11 @@ def create_overlay_composition(project: object, timeline: object, config: Any,
     if not safe_call(timeline, "AddTrack", "video"):
         raise ValidationError("Creazione traccia overlay fallita")
     track = int(safe_call(timeline, "GetTrackCount", "video") or 0)
+    timeline_start = int(safe_call(timeline, "GetStartFrame") or 0)
+    record_frame = timeline_start + start
     appended = safe_call(pool, "AppendToTimeline", [{
         "mediaPoolItem": imported[0], "startFrame": 0, "endFrame": duration,
-        "recordFrame": start, "mediaType": 1, "trackIndex": track,
+        "recordFrame": record_frame, "mediaType": 1, "trackIndex": track,
     }]) or []
     carrier_item = appended[0] if len(appended) == 1 else None
     if carrier_item is None:
@@ -49,7 +51,7 @@ def create_overlay_composition(project: object, timeline: object, config: Any,
     if comp is None:
         raise ValidationError("Composizione Fusion overlay non disponibile")
     safe_call(item, "SetName", f"ARPHE_VERTICAL_{name}")
-    if (safe_call(item, "GetStart") != start or safe_call(item, "GetEnd") != end
+    if (safe_call(item, "GetStart") != record_frame or safe_call(item, "GetEnd") != record_frame + duration
             or safe_call(item, "GetDuration") != duration):
         raise ValidationError("Read-back range overlay non corrispondente")
     return item, comp
@@ -79,7 +81,7 @@ def build_graphic_graph(comp: object, action: dict[str, Any], palette: dict[str,
     if action_type == "CTA":
         _set_color(canvas, _rgb(palette[action["style_role"]]))
     else:
-        _set_color(canvas, _rgb(palette.get("black", "#000000"), 0.0))
+        _set_color(canvas, _rgb("#000000", 0.0))
     if not connect_input(media_out, "Input", canvas):
         raise ValidationError("Collegamento canvas overlay fallito")
     texts: list[object] = []

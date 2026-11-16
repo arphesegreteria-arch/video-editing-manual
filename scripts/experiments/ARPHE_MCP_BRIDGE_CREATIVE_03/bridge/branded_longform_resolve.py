@@ -59,6 +59,16 @@ def _check_project(project: object, job: BrandedLongformJob) -> None:
             raise ValidationError("Timeline originale modificata dopo la creazione del job")
 
 
+def register_owned_timelines(registry: object, job: BrandedLongformJob,
+                             *, include_editorial: bool = False) -> None:
+    registry.add_project(job.project_name)
+    names = [job.original_timeline, job.cleanup_timeline]
+    if include_editorial:
+        names.append(job.editorial_timeline)
+    for name in names:
+        registry.add_timeline(job.project_name, name)
+
+
 def _duplicate(project: object, job: BrandedLongformJob, source_name: str, target_name: str) -> dict[str, Any]:
     _check_project(project, job)
     original = safe_call(project, "GetCurrentTimeline")
@@ -116,11 +126,23 @@ def _create_cut_cleanup(project: object, job: BrandedLongformJob,
     media_video, media_audio = safe_call(video[0], "GetMediaPoolItem"), safe_call(audio[0], "GetMediaPoolItem")
     video_id, audio_id = safe_call(media_video, "GetUniqueId"), safe_call(media_audio, "GetUniqueId")
     same_media = media_video is media_audio or (video_id and audio_id and video_id == audio_id)
-    if media_video is None or media_audio is None or not same_media:
-        raise ValidationError("Cleanup automatico richiede video e audio dalla stessa sorgente")
-    total = int(safe_call(video[0], "GetDuration") or 0)
+    if media_video is None or media_audio is None:
+        raise ValidationError("Cleanup automatico richiede sorgenti video e audio valide")
+    video_duration = int(safe_call(video[0], "GetDuration") or 0)
+    audio_duration = int(safe_call(audio[0], "GetDuration") or 0)
+    if not same_media:
+        video_start, audio_start = safe_call(video[0], "GetStart"), safe_call(audio[0], "GetStart")
+        video_end, audio_end = safe_call(video[0], "GetEnd"), safe_call(audio[0], "GetEnd")
+        if (video_duration != audio_duration or video_start is None or audio_start is None
+                or video_end is None or audio_end is None
+                or int(video_start) != int(audio_start) or int(video_end) != int(audio_end)):
+            raise ValidationError("Cleanup automatico richiede video e audio perfettamente allineati")
+    total = video_duration
     keep = _keep_ranges(total, cleanup_cuts)
-    source_offset = int(safe_call(video[0], "GetLeftOffset") or 0)
+    sources = (
+        (media_video, int(safe_call(video[0], "GetLeftOffset") or 0), 1),
+        (media_audio, int(safe_call(audio[0], "GetLeftOffset") or 0), 2),
+    )
     pool = safe_call(project, "GetMediaPool")
     cleanup = None
     try:
@@ -129,11 +151,12 @@ def _create_cut_cleanup(project: object, job: BrandedLongformJob,
             raise ValidationError("Creazione timeline CLEANUP fallita")
         if not safe_call(project, "SetCurrentTimeline", cleanup):
             raise ValidationError("Selezione timeline CLEANUP fallita")
-        record = 0
+        record_start = int(safe_call(cleanup, "GetStartFrame") or 0)
+        record = record_start
         for start, end in keep:
-            for media_type in (1, 2):
+            for media_item, source_offset, media_type in sources:
                 appended = safe_call(pool, "AppendToTimeline", [{
-                    "mediaPoolItem": media_video, "startFrame": source_offset + start,
+                    "mediaPoolItem": media_item, "startFrame": source_offset + start,
                     "endFrame": source_offset + end, "recordFrame": record,
                     "mediaType": media_type,
                 }])
@@ -142,7 +165,7 @@ def _create_cut_cleanup(project: object, job: BrandedLongformJob,
             record += end - start
         return {"ok": True, "created_timeline": job.cleanup_timeline, "existing": False,
                 "returned_to_original": True, "cleanup_cuts": len(cleanup_cuts),
-                "kept_frames": record}
+                "kept_frames": record - record_start}
     except Exception:
         if cleanup is not None:
             safe_call(pool, "DeleteTimelines", [cleanup])

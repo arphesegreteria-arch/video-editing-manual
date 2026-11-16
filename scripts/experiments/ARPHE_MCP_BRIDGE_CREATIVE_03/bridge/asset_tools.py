@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from fractions import Fraction
 
 from .config import CreativeConfig
 from .feature_flags import require_capability
@@ -8,7 +9,7 @@ from .registry import Registry
 from .resolve_connection import safe_call
 from .safety import ValidationError, allowed_asset, allowed_music_asset, validate_frame_range, validate_music_settings
 from .safety import arphe_name
-from .timeline_element_control import register_created_item
+from .still_media import prepare_still_video
 
 
 def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Registry, path: str,
@@ -22,11 +23,19 @@ def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Reg
         raise ValidationError("Timeline non creata o allowlisted per gli asset")
     start, end = validate_frame_range(start_frame, end_frame)
     selected = allowed_asset(path, (config.asset_root, *getattr(config, "media_roots", ())), kind)
+    import_path = selected
+    if kind == "image":
+        fps = safe_call(timeline, "GetSetting", "timelineFrameRate")
+        try:
+            rate = Fraction(str(fps))
+        except (ValueError, ZeroDivisionError) as exc:
+            raise ValidationError("FPS timeline immagine non verificabili") from exc
+        import_path = prepare_still_video(selected, config.asset_root, rate, end - start)
     storage = safe_call(project, "GetMediaStorage")
-    imported = safe_call(storage, "AddItemListToMediaPool", str(selected)) if storage else None
+    imported = safe_call(storage, "AddItemListToMediaPool", str(import_path)) if storage else None
     if not imported:
         pool = safe_call(project, "GetMediaPool")
-        imported = safe_call(pool, "ImportMedia", [str(selected)]) if pool else None
+        imported = safe_call(pool, "ImportMedia", [str(import_path)]) if pool else None
     if not imported:
         return {"ok": False, "action": f"add_{kind}_asset", "stage": "import", "asset_name": selected.name}
     media_item = imported[0]
@@ -54,11 +63,11 @@ def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Reg
         if safe_call(timeline, "GetTrackCount", "video") != expected_track_count:
             rollback([])
             raise ValidationError("Read-back creazione traccia video non verificabile")
-    # Resolve uses an inclusive source endFrame; bridge and TimelineItem ranges
-    # are half-open [start, end).
+    # Resolve interprets source endFrame as exclusive; bridge and TimelineItem
+    # ranges are likewise half-open [start, end).
     appended = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": media_item,
                                                        "startFrame": 0,
-                                                       "endFrame": end - start - 1,
+                                                       "endFrame": end - start,
                                                        "recordFrame": start,
                                                        "mediaType": 1,
                                                        "trackIndex": int(track_index)}])
@@ -68,6 +77,20 @@ def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Reg
         raise ValidationError("Inserimento asset non verificabile")
     item = appended[0]
     actual_start, actual_end = safe_call(item, "GetStart"), safe_call(item, "GetEnd")
+    # Native versions differ by one frame on video source endFrame. Adapt only
+    # that observed discrepancy, never the 150-frame still default or bad start.
+    if actual_start == start and isinstance(actual_end, (int, float)) and abs(actual_end - end) == 1:
+        if safe_call(timeline, "DeleteClips", [item], False) is not True:
+            raise ValidationError("Rollback correzione frame asset fallito")
+        corrected_end = end - start + (end - actual_end)
+        retry = safe_call(pool, "AppendToTimeline", [{"mediaPoolItem": media_item,
+            "startFrame": 0, "endFrame": corrected_end, "recordFrame": start,
+            "mediaType": 1, "trackIndex": int(track_index)}])
+        if not isinstance(retry, (list, tuple)) or len(retry) != 1:
+            rollback(list(retry) if isinstance(retry, (list, tuple)) else [])
+            raise ValidationError("Correzione frame asset non verificabile")
+        item = retry[0]
+        actual_start, actual_end = safe_call(item, "GetStart"), safe_call(item, "GetEnd")
     if actual_start != start or actual_end != end:
         rollback([item])
         raise ValidationError(
@@ -76,10 +99,6 @@ def add_asset(project: Any, timeline: Any, config: CreativeConfig, registry: Reg
         )
     created_name = arphe_name(selected.stem, "ASSET")
     safe_call(item, "SetName", created_name)
-    register_created_item(
-        config, project, timeline, "video", int(track_index), item,
-        f"add_{kind}_asset", created_name,
-    )
     return {"ok": True, "action": f"add_{kind}_asset", "asset_name": selected.name,
             "created_item_name": created_name, "timeline": timeline_name,
             "frame_range": [start, end], "track_index": int(track_index),
@@ -149,11 +168,6 @@ def set_music_bed(project: Any, timeline: Any, config: CreativeConfig, registry:
         raise ValidationError("Applicazione volume base musicale fallita")
     desired["track_index"] = track
     registry.save_music_bed(project_name, timeline_name, desired)
-    register_created_item(
-        config, project, timeline, "audio", track, item,
-        "set_music_bed", "ARPHE_MUSIC_BED",
-    )
     return {"ok": True, "action": "set_music_bed", "asset_name": selected.name,
             "status": "APPLIED", "track_index": track, "frame_range": [video_start, video_end],
             "absolute_path_returned": False}
-

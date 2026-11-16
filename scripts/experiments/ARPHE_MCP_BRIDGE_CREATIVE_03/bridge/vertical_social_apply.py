@@ -41,16 +41,37 @@ def _exact_video_item(timeline: object, start: int, end: int) -> object:
     return matches[0]
 
 
+def _containing_video_item(timeline: object, start: int, end: int) -> object:
+    matches = [
+        item for item in (safe_call(timeline, "GetItemListInTrack", "video", 1) or [])
+        if int(safe_call(item, "GetStart") or 0) <= start
+        and int(safe_call(item, "GetEnd") or 0) >= end
+    ]
+    if len(matches) != 1:
+        raise ValidationError("CAMERA_ZOOM deve ricadere in una sola clip provvisoria")
+    return matches[0]
+
+
 def apply_reframe_action(timeline: object, action: dict[str, Any], total_frames: int) -> dict[str, Any]:
     validated = validate_reframe_action(action, total_frames)
     start, end = validated["range"]
-    item = _exact_video_item(timeline, start, end)
+    timeline_start = int(safe_call(timeline, "GetStartFrame") or 0)
+    absolute_start, absolute_end = timeline_start + start, timeline_start + end
+    item = (_containing_video_item(timeline, absolute_start, absolute_end)
+            if validated["motion"] is not None
+            else _exact_video_item(timeline, absolute_start, absolute_end))
     width = int(safe_call(timeline, "GetSetting", "timelineResolutionWidth") or 0)
     height = int(safe_call(timeline, "GetSetting", "timelineResolutionHeight") or 0)
-    transform = reframe_transform_plan(action, width, height)
+    item_start = int(safe_call(item, "GetStart") or 0)
+    transform = reframe_transform_plan(
+        action, width, height, local_start=absolute_start - item_start,
+        local_end=absolute_end - item_start,
+    )
     if not apply_fusion_reframe(item, transform):
         raise ValidationError("Read-back REFRAME non riuscito")
     return {"ok": True, "action_id": str(action["action_id"]),
             "timeline": str(safe_call(timeline, "GetName") or ""),
             "range": [start, end], "anchor": validated["anchor"],
+            "motion": validated["motion"],
+            "zoom_samples": transform.get("motion_readback", []),
             "output": transform["output"]}

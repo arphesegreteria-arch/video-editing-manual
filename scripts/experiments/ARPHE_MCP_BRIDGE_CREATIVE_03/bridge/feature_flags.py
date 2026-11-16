@@ -27,7 +27,6 @@ CAPABILITY_STATUS = {
     "CAP_WORKFLOW_CONTROL_PLANE": "PENDING",
     "CAP_COLORIST": "PENDING",
     "CAP_VOICE_ISOLATION": "PENDING",
-    "CAP_TIMELINE_ELEMENT_CONTROL": "PENDING",
 }
 
 
@@ -127,21 +126,11 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
                 clips.extend(timeline.GetItemListInTrack("video", track_index) or [])
             required = (
                 "GetUniqueId", "GetName", "GetCurrentVersion", "GetVersionNameList",
-                "AddVersion", "LoadVersionByName", "SetCDL",
+                "AddVersion", "LoadVersionByName", "SetCDL", "GetNodeGraph", "CopyGrades",
             )
             colorist_ok = bool(clips) and all(all(_method(clip, name) for name in required) for clip in clips)
         except Exception:
             colorist_ok = False
-    voice_isolation_ok = bool(timeline is not None and all(_method(timeline, name) for name in (
-        "GetName", "GetUniqueId", "GetTrackCount", "GetTrackName",
-        "GetVoiceIsolationState", "SetVoiceIsolationState",
-    )))
-    timeline_element_control_ok = bool(
-        timeline is not None
-        and all(_method(timeline, name) for name in (
-            "GetName", "GetTrackCount", "GetItemListInTrack", "DeleteClips",
-        ))
-    )
     return {
         "CAP_PROJECT": project_ok,
         "CAP_TIMELINE": timeline_ok,
@@ -164,8 +153,7 @@ def availability(manager: Any, project: Any, timeline: Any) -> dict[str, bool]:
         ),
         "CAP_WORKFLOW_CONTROL_PLANE": bool(project is not None and timeline is not None),
         "CAP_COLORIST": colorist_ok,
-        "CAP_VOICE_ISOLATION": voice_isolation_ok,
-        "CAP_TIMELINE_ELEMENT_CONTROL": timeline_element_control_ok,
+        "CAP_VOICE_ISOLATION": bool(project is not None and timeline is not None),
     }
 
 

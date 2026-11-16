@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import json
 import os
 import re
@@ -19,7 +19,6 @@ CAPABILITY_NAMES = (
     "CAP_VERTICAL_SOCIAL",
     "CAP_BRANDED_LONGFORM_EDITORIAL", "CAP_WORKFLOW_CONTROL_PLANE", "CAP_COLORIST",
     "CAP_VOICE_ISOLATION",
-    "CAP_TIMELINE_ELEMENT_CONTROL",
 )
 
 DEFAULT_PALETTE = {
@@ -50,10 +49,9 @@ DEFAULT_FLAGS = {
     "CAP_CARABELLESE_CLEANUP": False,
     "CAP_VERTICAL_SOCIAL": False,
     "CAP_BRANDED_LONGFORM_EDITORIAL": False,
+    "CAP_VOICE_ISOLATION": False,
     "CAP_WORKFLOW_CONTROL_PLANE": False,
     "CAP_COLORIST": False,
-    "CAP_VOICE_ISOLATION": False,
-    "CAP_TIMELINE_ELEMENT_CONTROL": False,
 }
 
 ALLOWED_RENDER_PAIRS = {("mp4", "H264"), ("mov", "ProRes422HQ")}
@@ -88,6 +86,10 @@ class CreativeConfig:
     render_profile_registry_path: Path = Path("render_profiles.json")
     artifact_policy_path: Path = Path("artifact_retention.json")
     artifact_registry_path: Path = Path("artifact_registry.json")
+    retention_activation_path: Path = Path("retention_activation.json")
+    artifact_journal_path: Path = Path("artifact_journal.jsonl")
+    artifact_quarantine_root: Path = Path("artifact-quarantine")
+    purge_enabled: bool = False
     runtime_log_root: Path = Path("runtime-logs")
     resolve_archive_root: Path = Path("resolve-archives")
     resolve_retirement_registry_path: Path = Path("resolve-retirements.json")
@@ -107,9 +109,6 @@ class CreativeConfig:
     workflow_control_jobs_path: Path = Path("workflow_control_jobs.json")
     colorist_jobs_path: Path = Path("colorist_jobs.json")
     colorist_presets_path: Path = Path("colorist_presets.json")
-    timeline_element_control_path: Path = Path("timeline_element_control.json")
-    timeline_element_handle_ttl_seconds: int = 300
-    timeline_element_removal_ttl_seconds: int = 600
 
 
 def _path(value: str, base: Path) -> Path:
@@ -123,14 +122,25 @@ def _registry_path(value: object, package_default: Path) -> Path:
     return (selected if selected.is_absolute() else package_default.parent / selected).resolve()
 
 
-def _bounded_ttl(raw: dict[str, Any], key: str, default: int,
-                 minimum: int, maximum: int) -> int:
-    value = raw.get(key, default)
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"TTL {key} deve essere un intero")
-    if not minimum <= value <= maximum:
-        raise ValueError(f"TTL {key} deve essere tra {minimum} e {maximum} secondi")
-    return value
+def validate_retention_paths(paths: dict[str, Path], reserved: dict[str, Path] | None = None) -> None:
+    """Keep mutable control files separate, including from the quarantine tree."""
+    items = list(paths.items())
+    for index, (name, path) in enumerate(items):
+        selected = path.resolve()
+        for other_name, other in items[index + 1:] + list((reserved or {}).items()):
+            other = other.resolve()
+            if selected == other or selected in other.parents or other in selected.parents:
+                raise ValueError(f"Retention path collision: {name}, {other_name}")
+
+
+def validate_retention_profile(config: CreativeConfig) -> None:
+    retention_names = {"retention_activation_path", "artifact_registry_path",
+                       "artifact_journal_path", "artifact_quarantine_root"}
+    paths = {name: getattr(config, name) for name in retention_names}
+    reserved = {field.name: getattr(config, field.name) for field in fields(config)
+                if field.name not in retention_names
+                and (field.name == "path" or field.name.endswith("_path"))}
+    validate_retention_paths(paths, reserved)
 
 
 def load_config(path: Path | None = None) -> CreativeConfig:
@@ -166,13 +176,22 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         raise ValueError("Coppia render_format/render_codec non consentita")
     state_path = _path(str(raw.get("state_path", "")), base / "creative_state.json")
     editorial_root = state_path.parent
-    timeline_element_handle_ttl_seconds = _bounded_ttl(
-        raw, "timeline_element_handle_ttl_seconds", 300, 30, 900
-    )
-    timeline_element_removal_ttl_seconds = _bounded_ttl(
-        raw, "timeline_element_removal_ttl_seconds", 600, 60, 1800
-    )
-    return CreativeConfig(
+    purge_enabled = raw.get("purge_enabled", False)
+    if not isinstance(purge_enabled, bool):
+        raise ValueError("purge_enabled deve essere true o false")
+    retention_root = base / "retention" / str(raw["workstation_id"])
+    retention_paths = {
+        "retention_activation_path": _path(str(raw.get("retention_activation_path", "")),
+                                          retention_root / "activation.json"),
+        "artifact_registry_path": _path(str(raw.get("artifact_registry_path", "")),
+                                        retention_root / "artifact_registry.json"),
+        "artifact_journal_path": _path(str(raw.get("artifact_journal_path", "")),
+                                       retention_root / "artifact_journal.jsonl"),
+        "artifact_quarantine_root": _path(str(raw.get("artifact_quarantine_root", "")),
+                                          retention_root / "quarantine"),
+    }
+    validate_retention_paths(retention_paths)
+    config = CreativeConfig(
         path=selected,
         asset_root=_path(str(raw.get("asset_root", "")), base / "assets"),
         render_root=_path(str(raw.get("render_root", "")), base / "renders"),
@@ -197,7 +216,8 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         workflow_registry_path=_registry_path(raw.get("workflow_registry_path"), package_root / "editorial_workflows.json"),
         render_profile_registry_path=_registry_path(raw.get("render_profile_registry_path"), package_root / "render_profiles.json"),
         artifact_policy_path=_registry_path(raw.get("artifact_policy_path"), package_root / "artifact_retention.json"),
-        artifact_registry_path=_path(str(raw.get("artifact_registry_path", "")), base / "artifact_registry.json"),
+        **retention_paths,
+        purge_enabled=purge_enabled,
         runtime_log_root=_path(str(raw.get("runtime_log_root", "")), base / "runtime-logs"),
         resolve_archive_root=_path(str(raw.get("resolve_archive_root", "")), base / "resolve-archives"),
         resolve_retirement_registry_path=_path(
@@ -253,10 +273,6 @@ def load_config(path: Path | None = None) -> CreativeConfig:
         colorist_presets_path=_registry_path(
             raw.get("colorist_presets_path"), package_root / "colorist_presets.json"
         ),
-        timeline_element_control_path=_path(
-            str(raw.get("timeline_element_control_path", "")),
-            base / "timeline_element_control.json",
-        ),
-        timeline_element_handle_ttl_seconds=timeline_element_handle_ttl_seconds,
-        timeline_element_removal_ttl_seconds=timeline_element_removal_ttl_seconds,
     )
+    validate_retention_profile(config)
+    return config

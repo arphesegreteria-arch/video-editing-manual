@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from pathlib import Path
 
-from .artifact_records import artifact_store_for
+from .artifact_records import ProducerId, artifact_store_for
 from .config import CreativeConfig
 from .feature_flags import require_capability
 from .format_contract import require_project_playback
@@ -47,15 +47,17 @@ def render_job_status(project: Any, job_id: str) -> str:
     return str(_job_map(project).get(job_id, {}).get("JobStatus") or "unknown")
 
 
-def _register_render_staging(config: CreativeConfig, staging: Path, batch_id: str) -> None:
-    artifact_store_for(config).register_path(
-        staging,
-        kind="directory",
-        category="RENDER_STAGING",
-        producer="prepare_render_batch",
-        managed_root_id="render_root",
-        batch_id=batch_id,
-    )
+def _register_render_staging(config: CreativeConfig, staging: Path, batch_id: str,
+                             project_id: str) -> None:
+    try:
+        artifact_store_for(config).register_produced_path(
+            staging, kind="directory", category="RENDER_STAGING",
+            protection_class="DISPOSABLE", project_id=project_id,
+            producer=ProducerId.PREPARE_RENDER_BATCH,
+            managed_root_id="render_root", batch_id=batch_id,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"Artifact registration failed; staging retained for review: {exc}") from exc
 
 
 def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registry, batch_id: str) -> dict[str, Any]:
@@ -69,6 +71,7 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
     before = _render_job_ids(project)
     timelines = _timeline_map(project)
     original = safe_call(project, "GetCurrentTimeline")
+    project_id = artifact_store_for(config).bind_project(safe_call(project, "GetUniqueId"))
     staging = (config.render_root / "staging" / batch.batch_id).resolve()
     staging.mkdir(parents=True, exist_ok=False)
     created: list[str] = []
@@ -79,7 +82,19 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
             timeline = timelines.get(timeline_name)
             if timeline is None or not safe_call(project, "SetCurrentTimeline", timeline):
                 raise ValidationError(f"Timeline non disponibile: {timeline_name}")
-            if not safe_call(project, "SetCurrentRenderFormatAndCodec", batch.container, batch.video_codec):
+            # Resolve keeps the last Deliver preset globally. H.264 batches
+            # reset it to the known video preset so an "Audio Only" preset
+            # cannot suppress the video stream. A ProRes master must not load
+            # that H.264 preset because Resolve then rejects the master codec.
+            if batch.container == "mp4" and not safe_call(project, "LoadRenderPreset", "YouTube - 1080p"):
+                raise ValidationError("Preset video render non disponibile")
+            resolve_video_codec = ({
+                "HQ": "ProRes422HQ",
+                "Standard": "ProRes422",
+            }.get(batch.video_profile, batch.video_codec)
+                                  if batch.container == "mov" and batch.video_codec == "prores"
+                                  else batch.video_codec)
+            if not safe_call(project, "SetCurrentRenderFormatAndCodec", batch.container, resolve_video_codec):
                 raise ValidationError("Formato/codec render rifiutati")
             numerator, denominator = (int(v) for v in batch.frame_rate.split("/"))
             settings = {"TargetDir": str(staging), "CustomName": output_name, "SelectAllFrames": True,
@@ -87,10 +102,15 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
                         "FrameRate": numerator / denominator, "ExportVideo": True,
                         "ExportAudio": batch.audio_required}
             if batch.audio_codec:
-                settings["AudioCodec"] = batch.audio_codec
+                # The profile records the probe codec name (pcm_s16le), while
+                # Resolve's MOV render API requires its native token (lpcm).
+                settings["AudioCodec"] = (
+                    "lpcm" if batch.container == "mov" and batch.audio_codec == "pcm_s16le"
+                    else batch.audio_codec
+                )
             if batch.audio_sample_rate:
                 settings["AudioSampleRate"] = batch.audio_sample_rate
-            if batch.video_profile:
+            if batch.video_profile and batch.container != "mov":
                 settings["EncodingProfile"] = batch.video_profile
             if not safe_call(project, "SetRenderSettings", settings):
                 raise ValidationError("Impostazioni render rifiutate")
@@ -117,28 +137,36 @@ def prepare_render_batch(project: Any, config: CreativeConfig, registry: Registr
                          {"error": str(exc), "orphaned_job_ids": [j for j in created if j in set(_render_job_ids(project))],
                           "expected_outputs": expected, "expected_durations": expected_durations,
                           "staging_directory": str(staging)})
-        _register_render_staging(config, staging, batch.batch_id)
+        try:
+            _register_render_staging(config, staging, batch.batch_id, project_id)
+        except Exception as registration_error:
+            failed = registry.render_batch(batch.batch_id)
+            from dataclasses import replace
+            registry.save_render_batch(replace(failed, evidence={**(failed.evidence or {}),
+                "artifact_registration_error": str(registration_error)}))
+            raise registration_error from exc
         raise
     finally:
         if original is not None:
             safe_call(project, "SetCurrentTimeline", original)
     snapshots = {job_id: _job_map(project)[job_id] for job_id in created}
-    prepared = transition_batch(registry, batch.batch_id, "CONFIRMED", "PREPARED",
-                                {"queue_before": list(before), "created_job_ids": created,
-                                 "job_snapshots": snapshots, "expected_outputs": expected,
-                                 "expected_durations": expected_durations,
-                                 "staging_directory": str(staging)})
     try:
-        _register_render_staging(config, staging, batch.batch_id)
+        _register_render_staging(config, staging, batch.batch_id, project_id)
     except Exception as exc:
         current = set(_render_job_ids(project))
         for job_id in created:
             if job_id in current:
                 safe_call(project, "DeleteRenderJob", job_id)
-        transition_batch(registry, batch.batch_id, "PREPARED", "FAILED_PREPARE",
+        transition_batch(registry, batch.batch_id, "CONFIRMED", "FAILED_PREPARE",
                          {"artifact_registration_error": str(exc),
+                          "staging_directory": str(staging),
                           "orphaned_job_ids": [j for j in created if j in set(_render_job_ids(project))]})
         raise
+    prepared = transition_batch(registry, batch.batch_id, "CONFIRMED", "PREPARED",
+                                {"queue_before": list(before), "created_job_ids": created,
+                                 "job_snapshots": snapshots, "expected_outputs": expected,
+                                 "expected_durations": expected_durations,
+                                 "staging_directory": str(staging), "project_id": project_id})
     return {"ok": True, "action": "prepare_render_batch", "batch_id": batch_id,
             "created_job_ids": list(prepared.created_job_ids), "render_started": False,
             "next_action": "approve_render_batch"}
@@ -191,7 +219,7 @@ def cancel_render_batch(project: Any, registry: Registry, batch_id: str,
         lock = registry.render_lock(batch.project_name)
         if not lock or lock.get("batch_id") != batch.batch_id:
             raise ValidationError("Render attivo non posseduto dal bridge")
-        if not safe_call(project, "StopRendering"):
+        if safe_call(project, "IsRenderingInProgress") and not safe_call(project, "StopRendering"):
             return {"ok": False, "action": "cancel_render_batch", "status": "RENDERING"}
     else:
         current = set(_render_job_ids(project))

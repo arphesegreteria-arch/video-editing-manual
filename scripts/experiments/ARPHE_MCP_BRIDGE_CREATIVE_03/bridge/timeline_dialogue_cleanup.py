@@ -105,6 +105,23 @@ def _load_manifest(config: CreativeConfig, job_id: str) -> tuple[Path, dict[str,
     return path, payload
 
 
+def _restore_render_context(project: Any, payload: dict[str, Any]) -> None:
+    context = payload.get("render_restore")
+    if not isinstance(context, dict):
+        raise ValidationError("Contesto render dialogo non disponibile per il ripristino")
+    preset = str(context.get("preset") or "")
+    timeline_id = str(context.get("timeline_id") or "")
+    original = next((candidate for candidate in (
+        safe_call(project, "GetTimelineByIndex", index)
+        for index in range(1, int(safe_call(project, "GetTimelineCount") or 0) + 1)
+    ) if candidate is not None and str(safe_call(candidate, "GetUniqueId") or "") == timeline_id), None)
+    restored_settings = bool(preset and safe_call(project, "LoadRenderPreset", preset))
+    deleted_restore_preset = bool(preset and safe_call(project, "DeleteRenderPreset", preset))
+    restored_timeline = bool(original and safe_call(project, "SetCurrentTimeline", original))
+    if not (restored_settings and deleted_restore_preset and restored_timeline):
+        raise RuntimeError("Ripristino contesto render dopo pulizia dialogo non confermato")
+
+
 def _strict_wav_evidence(path: Path, expected_seconds: float, fps: float) -> tuple[str, float]:
     try:
         resolved = path.resolve(strict=True)
@@ -173,6 +190,50 @@ def _single_clip_structure(timeline: Any) -> dict[str, Any]:
     }
 
 
+def _timeline_structure(timeline: Any) -> dict[str, Any]:
+    if (safe_call(timeline, "GetTrackCount", "video") != 1
+            or safe_call(timeline, "GetTrackCount", "audio") != 1):
+        raise ValidationError("Il test dialogo richiede esattamente una traccia V1 e una A1")
+    video_items = safe_call(timeline, "GetItemListInTrack", "video", 1) or []
+    audio_items = safe_call(timeline, "GetItemListInTrack", "audio", 1) or []
+    if len(video_items) == len(audio_items) == 1:
+        return {**_single_clip_structure(timeline),
+                "video_clip_count": 1, "audio_clip_count": 1}
+    if len(video_items) < 2 or len(video_items) != len(audio_items):
+        raise ValidationError("V1 e A1 devono contenere lo stesso numero di clip")
+    video_clips: list[dict[str, Any]] = []
+    audio_clips: list[dict[str, Any]] = []
+    previous_end: int | None = None
+    for video, audio in zip(video_items, audio_items):
+        video_range = (safe_call(video, "GetStart"), safe_call(video, "GetEnd"))
+        audio_range = (safe_call(audio, "GetStart"), safe_call(audio, "GetEnd"))
+        if (not all(isinstance(value, int) and not isinstance(value, bool)
+                    for value in (*video_range, *audio_range))
+                or video_range != audio_range or video_range[1] <= video_range[0]
+                or (previous_end is not None and video_range[0] != previous_end)):
+            raise ValidationError("Le clip V1/A1 devono essere abbinate e contigue")
+        video_media = safe_call(video, "GetMediaPoolItem")
+        audio_media = safe_call(audio, "GetMediaPoolItem")
+        if video_media is None or audio_media is None:
+            raise ValidationError("Media V1/A1 non leggibili")
+        source_start = int(safe_call(audio, "GetSourceStartFrame") or 0)
+        video_clips.append({"media_id": _media_id(video_media),
+                            "record_start": video_range[0], "record_end": video_range[1]})
+        audio_clips.append({"media_id": _media_id(audio_media),
+                            "record_start": audio_range[0], "record_end": audio_range[1],
+                            "source_start": source_start,
+                            "source_end": source_start + audio_range[1] - audio_range[0]})
+        previous_end = video_range[1]
+    return {
+        "record_start": video_clips[0]["record_start"],
+        "record_end": video_clips[-1]["record_end"],
+        "video_clip_count": len(video_clips),
+        "audio_clip_count": len(audio_clips),
+        "video_clips": video_clips,
+        "audio_clips": audio_clips,
+    }
+
+
 def _media_id(media: Any) -> str:
     media_id = str(safe_call(media, "GetUniqueId") or "")
     if not media_id:
@@ -190,13 +251,31 @@ def _matching_audio(timeline: Any, media: Any, start: int, end: int) -> list[Any
     ]
 
 
+def _audio_track_snapshot(timeline: Any) -> list[dict[str, object]]:
+    """Return only the read-back fields needed to diagnose an insertion mismatch."""
+    observed: list[dict[str, object]] = []
+    track_count = int(safe_call(timeline, "GetTrackCount", "audio") or 0)
+    for track in range(1, track_count + 1):
+        for item in safe_call(timeline, "GetItemListInTrack", "audio", track) or []:
+            media = safe_call(item, "GetMediaPoolItem")
+            observed.append({
+                "track": track,
+                "media_id": str(safe_call(media, "GetUniqueId") or ""),
+                "start": safe_call(item, "GetStart"),
+                "end": safe_call(item, "GetEnd"),
+                "duration": safe_call(item, "GetDuration"),
+            })
+    return observed
+
+
 def _append_audio(pool: Any, timeline: Any, media: Any, source_start: int,
                   source_end: int, record_start: int, record_end: int,
                   *, require_return: bool) -> Any:
     appended = safe_call(pool, "AppendToTimeline", [{
         "mediaPoolItem": media,
         "startFrame": source_start,
-        "endFrame": source_end - 1,
+        # Resolve's WAV append boundary is exclusive, matching the bridge range.
+        "endFrame": source_end,
         "recordFrame": record_start,
         "mediaType": 2,
         "trackIndex": 1,
@@ -205,7 +284,11 @@ def _append_audio(pool: Any, timeline: Any, media: Any, source_start: int,
         raise RuntimeError("Inserimento WAV dialogo fallito")
     matches = _matching_audio(timeline, media, record_start, record_end)
     if len(matches) != 1:
-        raise ValidationError("Read-back WAV dialogo non corrispondente")
+        expected = {"media_id": _media_id(media), "start": record_start, "end": record_end}
+        raise ValidationError(
+            f"Read-back WAV dialogo non corrispondente; expected_audio={expected}; "
+            f"observed_audio={_audio_track_snapshot(timeline)}"
+        )
     return matches[0]
 
 
@@ -230,11 +313,8 @@ def _apply_processed_audio(project: Any, config: CreativeConfig, registry: Any,
     if (source is None or str(safe_call(source, "GetUniqueId") or "") != source_info["timeline_id"]
             or timeline_edit_fingerprint(source) != source_info["timeline_edit_fingerprint"]):
         raise ValidationError("La timeline sorgente è cambiata prima dell'applicazione")
-    source_structure = _single_clip_structure(source)
-    structure_keys = (
-        "record_start", "record_end", "video_media_id", "audio_media_id",
-        "audio_source_start", "audio_source_end",
-    )
+    source_structure = _timeline_structure(source)
+    structure_keys = tuple(source_structure)
     if any(source_structure[key] != source_info[key] for key in structure_keys):
         raise ValidationError("La timeline sorgente è cambiata prima dell'applicazione")
     duplicated = duplicate_timeline(
@@ -246,12 +326,14 @@ def _apply_processed_audio(project: Any, config: CreativeConfig, registry: Any,
     timeline = safe_call(project, "GetCurrentTimeline")
     if timeline is None or safe_call(timeline, "GetName") != payload["target_timeline"]:
         raise RuntimeError("Timeline duplicata non selezionata")
-    structure = _single_clip_structure(timeline)
+    structure = _timeline_structure(timeline)
     if any(structure[key] != source_info[key] for key in structure_keys):
         raise ValidationError("La copia timeline non corrisponde alla sorgente verificata")
-    original = (safe_call(timeline, "GetItemListInTrack", "audio", 1) or [None])[0]
-    original_media = safe_call(original, "GetMediaPoolItem") if original else None
-    if original is None or original_media is None:
+    originals = list(safe_call(timeline, "GetItemListInTrack", "audio", 1) or [])
+    if len(originals) != int(source_info["audio_clip_count"]):
+        raise ValidationError("A1 originale della copia non disponibile")
+    original_media = [safe_call(item, "GetMediaPoolItem") for item in originals]
+    if any(media is None for media in original_media):
         raise ValidationError("A1 originale della copia non disponibile")
     pool = safe_call(project, "GetMediaPool")
     import_digest, _ = _strict_wav_evidence(
@@ -263,24 +345,46 @@ def _apply_processed_audio(project: Any, config: CreativeConfig, registry: Any,
     if len(imported) != 1:
         raise RuntimeError("Import WAV dialogo fallito")
     processed_media = imported[0]
-    _media_id(original_media)
+    for media in original_media:
+        _media_id(media)
     _media_id(processed_media)
     record_start = int(source_info["record_start"])
     record_end = int(source_info["record_end"])
-    original_source_start = int(source_info["audio_source_start"])
-    original_source_end = int(source_info["audio_source_end"])
+    audio_specs = source_info.get("audio_clips") or [{
+        "media_id": source_info["audio_media_id"],
+        "record_start": record_start,
+        "record_end": record_end,
+        "source_start": int(source_info["audio_source_start"]),
+        "source_end": int(source_info["audio_source_end"]),
+    }]
+    for item, media, spec in zip(originals, original_media, audio_specs):
+        if (_media_id(media) != spec["media_id"]
+                or safe_call(item, "GetStart") != spec["record_start"]
+                or safe_call(item, "GetEnd") != spec["record_end"]):
+            raise ValidationError("A1 originale della copia non corrisponde alla sorgente")
     try:
-        if not safe_call(timeline, "DeleteClips", [original], False):
+        if not safe_call(timeline, "DeleteClips", originals, False):
             raise RuntimeError("Rimozione A1 originale dalla copia fallita")
-        if _matching_audio(timeline, original_media, record_start, record_end):
+        if any(_matching_audio(timeline, media, spec["record_start"], spec["record_end"])
+               for media, spec in zip(original_media, audio_specs)):
             raise RuntimeError("Rimozione A1 originale dalla copia non confermata")
         replacement = _append_audio(
             pool, timeline, processed_media, 0, record_end - record_start,
             record_start, record_end, require_return=True,
         )
-        verified = _single_clip_structure(timeline)
-        if (verified["record_start"] != record_start or verified["record_end"] != record_end
-                or verified["video_media_id"] != source_info["video_media_id"]
+        video_items = safe_call(timeline, "GetItemListInTrack", "video", 1) or []
+        video_specs = source_info.get("video_clips") or [{
+            "media_id": source_info["video_media_id"],
+            "record_start": record_start,
+            "record_end": record_end,
+        }]
+        video_matches = len(video_items) == len(video_specs) and all(
+            _media_id(safe_call(item, "GetMediaPoolItem")) == spec["media_id"]
+            and safe_call(item, "GetStart") == spec["record_start"]
+            and safe_call(item, "GetEnd") == spec["record_end"]
+            for item, spec in zip(video_items, video_specs)
+        )
+        if (not video_matches
                 or _media_id(safe_call(replacement, "GetMediaPoolItem")) != _media_id(processed_media)):
             raise ValidationError("Read-back timeline dialogo non conforme")
         processed_path = Path(str(safe_call(
@@ -291,18 +395,19 @@ def _apply_processed_audio(project: Any, config: CreativeConfig, registry: Any,
             raise ValidationError("La timeline sorgente è cambiata durante l'applicazione")
     except Exception:
         _remove_matching_audio(timeline, processed_media, record_start, record_end)
-        if not _matching_audio(timeline, original_media, record_start, record_end):
-            _append_audio(
-                pool, timeline, original_media, original_source_start, original_source_end,
-                record_start, record_end, require_return=False,
-            )
-        if len(_matching_audio(timeline, original_media, record_start, record_end)) != 1:
-            raise RuntimeError("Rollback A1 originale non confermato")
+        for media, spec in zip(original_media, audio_specs):
+            if not _matching_audio(timeline, media, spec["record_start"], spec["record_end"]):
+                _append_audio(
+                    pool, timeline, media, spec["source_start"], spec["source_end"],
+                    spec["record_start"], spec["record_end"], require_return=False,
+                )
+            if len(_matching_audio(timeline, media, spec["record_start"], spec["record_end"])) != 1:
+                raise RuntimeError("Rollback A1 originale non confermato")
         raise
     return {
         "source_preserved": True,
         "created_timeline": str(payload["target_timeline"]),
-        "video_clip_count": 1,
+        "video_clip_count": int(source_info["video_clip_count"]),
         "audio_clip_count": 1,
         "video_range": [record_start, record_end],
         "audio_range": [record_start, record_end],
@@ -334,7 +439,7 @@ def start_timeline_dialogue_cleanup_test(
     if target in timeline_names(project):
         raise ValidationError("Timeline target già esistente")
     require_capability("CAP_RENDER", config, None, project, timeline)
-    structure = _single_clip_structure(timeline)
+    structure = _timeline_structure(timeline)
     start = safe_call(timeline, "GetStartFrame")
     end = safe_call(timeline, "GetEndFrame")
     try:
@@ -389,17 +494,6 @@ def start_timeline_dialogue_cleanup_test(
         for render_id in created_ids:
             safe_call(project, "DeleteRenderJob", render_id)
         raise
-    finally:
-        restored_settings = bool(safe_call(project, "LoadRenderPreset", restore_preset))
-        deleted_restore_preset = bool(safe_call(project, "DeleteRenderPreset", restore_preset))
-        restored_timeline = bool(
-            original_timeline and safe_call(project, "SetCurrentTimeline", original_timeline)
-        )
-        if not (restored_settings and deleted_restore_preset and restored_timeline):
-            if queued_id:
-                safe_call(project, "DeleteRenderJob", queued_id)
-            raise RuntimeError("Ripristino contesto render dopo pulizia dialogo non confermato")
-
     timeline_source = {
         "workstation_id": config.workstation_id,
         "project_name": project_name,
@@ -427,6 +521,10 @@ def start_timeline_dialogue_cleanup_test(
         "output_fingerprint": None,
         "render_job_id": queued_id,
         "render_queue_before": list(before),
+        "render_restore": {
+            "preset": restore_preset,
+            "timeline_id": str(safe_call(original_timeline, "GetUniqueId") or ""),
+        },
         "timeline_source": timeline_source,
         "created_at": created,
         "updated_at": created,
@@ -439,6 +537,7 @@ def start_timeline_dialogue_cleanup_test(
             raise RuntimeError("Avvio render audio timeline fallito")
     except Exception:
         safe_call(project, "DeleteRenderJob", queued_id)
+        _restore_render_context(project, payload)
         raise
     return _public(payload)
 
@@ -472,6 +571,12 @@ def get_timeline_dialogue_cleanup_job(
                                error=f"RENDER_{render_status.upper()}")
                 _atomic_json(manifest_path, payload)
             return _public(payload)
+        try:
+            _restore_render_context(project, payload)
+        except Exception:
+            payload.update(status="INTERRUPTED", updated_at=_now(), error="RESTORE_CONTEXT_FAILED")
+            _atomic_json(manifest_path, payload)
+            raise
         expected_seconds = float(source["duration_frames"]) / float(source["fps"])
         try:
             digest, duration = _strict_wav_evidence(

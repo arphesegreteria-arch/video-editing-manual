@@ -1,12 +1,13 @@
 EXPOSED_TOOL_NAMES = (
     "ping", "resolve_status", "inspect_resolve21_compatibility", "create_safe_working_timeline", "get_feature_flags",
     "list_longform_media", "get_transcript_metadata", "get_transcript_chunk",
-    "start_native_transcription21", "read_native_transcription21",
     "validate_longform_edit_plan", "apply_longform_edit_plan",
     "start_prepare_longform_audio", "get_longform_audio_job",
     "start_timeline_dialogue_cleanup_test", "get_timeline_dialogue_cleanup_job",
+    "start_timeline_audio_transcription", "get_timeline_audio_transcription_job",
+    "start_native_transcription21", "read_native_transcription21",
     "create_project", "set_current_project", "create_timeline", "set_current_timeline",
-    "duplicate_timeline_version", "create_edge_fade_test", "get_creative_status", "create_fusion_composition",
+    "duplicate_timeline_version", "create_edge_fade_test", "apply_monochrome_window", "apply_monochrome_segment", "apply_freeze_sbam", "get_creative_status", "create_fusion_composition",
     "move_voiceover_tail_to_cta",
     "inspect_fusion_graph", "capture_timeline_frames", "export_review_frames21",
     "add_brand_background", "add_logo", "add_image_asset", "add_video_background", "set_music_bed",
@@ -21,6 +22,8 @@ EXPOSED_TOOL_NAMES = (
     "approve_render_batch", "start_render_batch", "get_render_batch_status",
     "verify_render_batch", "cancel_render_batch",
     "inspect_artifact_hygiene", "run_artifact_maintenance", "restore_quarantined_artifact",
+    "keep_artifact", "release_kept_artifact",
+    "prepare_retention_activation", "approve_retention_activation",
     "inspect_resolve_retirements", "prepare_resolve_retirement",
     "approve_resolve_retirement", "execute_resolve_retirement", "recover_resolve_retirement",
     "inspect_editorial_selection", "prepare_podcast_reel_selection",
@@ -34,7 +37,8 @@ EXPOSED_TOOL_NAMES = (
     "apply_carabellese_cleanup", "recover_carabellese_cleanup",
     "close_carabellese_cleanup", "inspect_carabellese_learning",
     "compile_carabellese_profile_proposal", "approve_carabellese_profile_proposal",
-    "inspect_vertical_social", "prepare_vertical_social_plan", "approve_vertical_social_plan",
+    "inspect_vertical_social", "create_vertical_social_source", "create_vertical_social_sequence",
+    "prepare_vertical_social_plan", "approve_vertical_social_plan",
     "inspect_vertical_social_plan", "mark_vertical_social_picture_lock", "advance_vertical_social_action",
     "apply_vertical_social_cuts", "apply_vertical_social_action",
     "inspect_branded_longform", "inspect_branded_longform_sources",
@@ -44,17 +48,14 @@ EXPOSED_TOOL_NAMES = (
     "inspect_workstation_control_plane", "prepare_workflow_job", "inspect_workflow_job",
     "approve_workflow_job", "advance_workflow_job", "approve_workflow_delivery",
     "inspect_colorist_context", "prepare_colorist_plan", "inspect_colorist_plan",
-    "cancel_colorist_plan", "approve_colorist_plan", "apply_colorist_plan", "preview_colorist_version",
+    "approve_colorist_plan", "apply_colorist_plan", "preview_colorist_version",
     "restore_colorist_preview", "submit_colorist_review",
     "inspect_voice_isolation", "prepare_voice_isolation",
     "apply_voice_isolation_job", "restore_voice_isolation_job",
-    "inspect_timeline_elements", "set_timeline_element_enabled",
-    "prepare_timeline_element_removal", "execute_timeline_element_removal",
 )
 
 FORBIDDEN_GENERIC_TOOLS = {
     "run_python", "run_shell", "delete_project", "delete_timeline",
     "add_fusion_node", "add_any_node", "set_any_fusion_property", "eval_fusion_script",
-    "delete_clip", "delete_clips", "remove_timeline_item", "set_any_clip_property",
 }
 

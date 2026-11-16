@@ -17,10 +17,7 @@ def write_audit(path: Path, action: str, result: dict[str, Any]) -> None:
         "stage": result.get("stage"),
         "error_type": result.get("error_type"),
     }
-    for key in (
-        "batch_id", "actor_role", "transition", "fingerprint", "job_ids",
-        "workstation_id", "element_id", "removal_id", "proposal_fingerprint",
-    ):
+    for key in ("batch_id", "actor_role", "transition", "fingerprint", "job_ids"):
         value = result.get(key)
         if value is not None:
             record[key] = value

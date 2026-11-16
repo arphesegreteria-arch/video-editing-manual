@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "kits": [
+    {
+      "profile_id": "CARABELLESE_LONGFORM_EDITORIAL",
+      "version": 1,
+      "font_family": "Space Grotesk",
+      "palette": {
+        "ink": "#1F2937",
+        "teal": "#3AA6A0",
+        "neutral": "#F1F3F0",
+        "warm": "#FAF7F1"
+      },
+      "safe_area": {
+        "left": 0.08,
+        "right": 0.92,
+        "top": 0.08,
+        "bottom": 0.92
+      },
+      "components": [
+        "KEYWORD_BOX",
+        "PROGRESSIVE_LIST",
+        "PROCESS_STEPS",
+        "COMPARISON_TABLE",
+        "CHAPTER_CARD"
+      ]
+    }
+  ]
+}

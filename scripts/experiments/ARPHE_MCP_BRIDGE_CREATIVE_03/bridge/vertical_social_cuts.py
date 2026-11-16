@@ -1,7 +1,64 @@
 from __future__ import annotations
 from typing import Any
+import hashlib
+import json
 from .safety import ValidationError
 from .vertical_social_apply import provisional_timeline_name
+
+
+def preserved_timeline_fingerprint(timeline: object) -> str:
+    """Bind timing, media identities, inspector settings and local color version.
+
+    No paths or settings are returned to the caller. DuplicateTimeline carries
+    the native effects, audio processing and stabilization; this signature
+    detects stale sources and verifies the copy without rebuilding media.
+    """
+    from .vertical_social_captions import timeline_edit_fingerprint
+    tracks = []
+    for kind in ('video', 'audio'):
+        for index in range(1, int(_resolve_call(timeline, 'GetTrackCount', kind) or 0) + 1):
+            items = []
+            for item in _resolve_call(timeline, 'GetItemListInTrack', kind, index) or []:
+                properties = _resolve_call(item, 'GetProperty')
+                if not isinstance(properties, dict):
+                    raise ValidationError('Proprieta clip non verificabili per copia motion')
+                version = getattr(item, 'GetCurrentVersion', None)
+                offsets = [_resolve_call(item, 'GetLeftOffset'), _resolve_call(item, 'GetRightOffset')]
+                if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in offsets):
+                    raise ValidationError('Offset sorgente clip non verificabili per copia motion')
+                items.append({'properties': properties,
+                              'source_offsets': offsets,
+                              'color_version': version() if callable(version) and kind == 'video' else None})
+            tracks.append({'kind': kind, 'index': index, 'items': items})
+    payload = {'edit': timeline_edit_fingerprint(timeline), 'tracks': tracks}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def duplicate_preserved_timeline(project: object, source: object, plan: dict[str, Any], config: object) -> object:
+    target = plan.get('target', {})
+    if (_resolve_call(source, 'GetUniqueId') != target.get('timeline_identity')
+            or preserved_timeline_fingerprint(source) != target.get('source_state_fingerprint')):
+        raise ValidationError('Sorgente motion cambiata dopo approvazione')
+    duration = int(_resolve_call(source, 'GetEndFrame')) - int(_resolve_call(source, 'GetStartFrame'))
+    if duration != target.get('total_frames'):
+        raise ValidationError('Durata sorgente motion diversa dal piano')
+    name = provisional_timeline_name(plan['plan_id'])
+    clone = _existing_timeline(project, name)
+    from .timeline_tools import preserve_fusion_compositions
+    if clone is not None:
+        # Motion can have added a Fusion composition, but must retain all media,
+        # timing, inspector settings and color versions on replay.
+        if preserved_timeline_fingerprint(clone) != target['source_state_fingerprint']:
+            raise ValidationError('Copia motion esistente non corrispondente')
+        preserve_fusion_compositions(source, clone, config, allow_added_motion=True)
+        return clone
+    clone = _resolve_call(source, 'DuplicateTimeline', name)
+    if clone is None or _resolve_call(clone, 'GetName') != name:
+        raise ValidationError('Duplicazione completa per motion fallita')
+    preserve_fusion_compositions(source, clone, config)
+    if preserved_timeline_fingerprint(clone) != target['source_state_fingerprint']:
+        raise ValidationError('Read-back copia motion non corrispondente')
+    return clone
 
 
 def _resolve_call(target: object, method: str, *args: object) -> Any:
@@ -94,6 +151,36 @@ def _existing_timeline(project: object, name: str) -> object | None:
     return None
 
 
+def _append_exact_range(pool: object, timeline: object, media: object,
+                        start: int, end: int, record: int, media_type: int) -> object:
+    """Append an exact half-open source range, adapting to Resolve's one-short edge case."""
+    expected = end - start
+
+    def append(selected_end: int) -> object:
+        result = _resolve_call(pool, "AppendToTimeline", [{
+            "mediaPoolItem": media, "startFrame": start, "endFrame": selected_end,
+            "recordFrame": record, "mediaType": media_type,
+        }])
+        if not isinstance(result, (list, tuple)) or len(result) != 1:
+            raise ValidationError(f"Append CUT provvisorio non univoco: {start}-{selected_end}")
+        return result[0]
+
+    item = append(end)
+    duration = int(_resolve_call(item, "GetDuration") or 0)
+    if duration == expected:
+        return item
+    if duration != expected - 1:
+        raise ValidationError(f"Durata Append CUT inattesa: {duration} invece di {expected}")
+    if not _resolve_call(timeline, "DeleteClips", [item], False):
+        raise ValidationError("Rollback Append CUT corto fallito")
+    corrected = append(end + 1)
+    corrected_duration = int(_resolve_call(corrected, "GetDuration") or 0)
+    right_offset = _resolve_call(corrected, "GetRightOffset")
+    if corrected_duration != expected or (isinstance(right_offset, int) and right_offset < 0):
+        raise ValidationError("Correzione Append CUT di un fotogramma non verificata")
+    return corrected
+
+
 def create_provisional_cut_timeline(project: object, source_timeline: object, plan: dict[str, Any],
                                     *, total_frames: int) -> object:
     """Build a non-destructive, named provisional timeline from approved Vertical Social CUTs."""
@@ -117,15 +204,10 @@ def create_provisional_cut_timeline(project: object, source_timeline: object, pl
         raise ValidationError("Creazione timeline provvisoria Vertical Social fallita")
     if not _resolve_call(project, "SetCurrentTimeline", provisional):
         raise ValidationError("Impossibile selezionare la timeline provvisoria")
-    record = 0
+    record = int(_resolve_call(provisional, "GetStartFrame") or 0)
     for start, end in keep:
         for media_type in (1, 2):
-            appended = _resolve_call(pool, "AppendToTimeline", [{
-                "mediaPoolItem": media, "startFrame": start, "endFrame": end,
-                "recordFrame": record, "mediaType": media_type,
-            }])
-            if not appended:
-                raise ValidationError(f"Append CUT provvisorio fallito: {start}-{end}")
+            _append_exact_range(pool, provisional, media, start, end, record, media_type)
         record += end - start
     _verify_provisional(provisional, len(keep), expected_frames)
     return provisional

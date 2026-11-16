@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import tempfile
@@ -26,6 +27,27 @@ def _limiter_options(preset: str) -> str:
     if preset in {NATURAL_PRESET, DEREVERB_NATURAL_PRESET}:
         return "limit=0.891:attack=8:release=80:level=false"
     return "limit=0.891:attack=5:release=50"
+
+
+def _duration_seconds(container: object, stream: object, decoded_samples: int | None = None,
+                      sample_rate: int | None = None) -> float:
+    stream_duration = getattr(stream, "duration", None)
+    stream_time_base = getattr(stream, "time_base", None)
+    if stream_duration is not None and stream_time_base is not None:
+        value = float(stream_duration * stream_time_base)
+        if math.isfinite(value) and value > 0:
+            return value
+    if (isinstance(decoded_samples, int) and decoded_samples > 0
+            and isinstance(sample_rate, int) and sample_rate > 0):
+        value = decoded_samples / sample_rate
+        if math.isfinite(value) and value > 0:
+            return value
+    container_duration = getattr(container, "duration", None)
+    if container_duration is not None:
+        value = float(container_duration) / 1_000_000.0
+        if math.isfinite(value) and value > 0:
+            return value
+    raise RuntimeError("Durata sorgente/output audio non disponibile")
 
 
 def _save(path: Path, payload: dict) -> None:
@@ -77,9 +99,18 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
     graph = None
     source_node = sink = None
     processed = 0
-    duration = float(audio_stream.duration * audio_stream.time_base) if audio_stream.duration else 0.0
+    try:
+        duration = _duration_seconds(source_container, audio_stream)
+    except RuntimeError:
+        # OBS MKV files may omit per-stream and container duration.  The exact
+        # decoded sample count is the final provenance fallback after decoding.
+        duration = 0.0
+    decoded_samples = 0
+    decoded_sample_rate = 0
     try:
         for frame in source_container.decode(audio_stream):
+            decoded_samples += int(frame.samples or 0)
+            decoded_sample_rate = decoded_sample_rate or int(frame.sample_rate or 0)
             if graph is None:
                 graph = av.filter.Graph()
                 source_node = graph.add("abuffer", (
@@ -218,17 +249,19 @@ def process_audio(source: Path, output: Path, job_path: Path, preset: str = PRES
         destination.close()
         source_container.close()
 
+    source_duration = _duration_seconds(
+        source_container, audio_stream, decoded_samples, decoded_sample_rate)
     check = av.open(str(output))
-    check_stream = next(stream for stream in check.streams if stream.type == "audio")
-    output_duration = float(check_stream.duration * check_stream.time_base) if check_stream.duration else None
-    check.close()
-    if output_duration is None or not duration:
-        raise RuntimeError("Durata sorgente/output audio non disponibile")
-    sync_delta = output_duration - duration
+    try:
+        check_stream = next(stream for stream in check.streams if stream.type == "audio")
+        output_duration = _duration_seconds(check, check_stream)
+    finally:
+        check.close()
+    sync_delta = output_duration - source_duration
     if abs(sync_delta) > (1 / 30):
         raise RuntimeError(f"Audio non sincronizzato: differenza {sync_delta:.3f}s")
     state.update(status="COMPLETED", progress_percent=100, output_path=str(output),
-                 source_duration_seconds=duration, output_duration_seconds=output_duration,
+                 source_duration_seconds=source_duration, output_duration_seconds=output_duration,
                  sync_delta_seconds=sync_delta, output_sha256=file_sha256(output),
                  sample_rate=48000, channels=2)
     _save(job_path, state)

@@ -1,0 +1,728 @@
+[
+  {
+    "path": "bridge/__init__.py",
+    "repository_sha256": "d291b4c9554d70bcf2cd6d0e5b2717e13e476cb0f4c847c1d28f739e64565bb1",
+    "installed_sha256": "d291b4c9554d70bcf2cd6d0e5b2717e13e476cb0f4c847c1d28f739e64565bb1",
+    "changed": false
+  },
+  {
+    "path": "bridge/artifact_hygiene.py",
+    "repository_sha256": "2a8c2fc85c57b48705311030a8e81df84757535a3186a261159e447eae3172f7",
+    "installed_sha256": "67ed4da3a9a59f3d565d04ac55b1a5f943c6bbf9eb3ca5e3ea4ea3ced4c4aab1",
+    "changed": true
+  },
+  {
+    "path": "bridge/artifact_planning.py",
+    "repository_sha256": "36751d8a44aed81ef5e853beb735aa9fae7423d4f6fa36fea5bca56c237d865d",
+    "installed_sha256": "36751d8a44aed81ef5e853beb735aa9fae7423d4f6fa36fea5bca56c237d865d",
+    "changed": false
+  },
+  {
+    "path": "bridge/artifact_producers.py",
+    "repository_sha256": "c7017b4fc5873f05ad061ad6ad5bf0670c2032c2342aed97fca1a1b1cb635f87",
+    "installed_sha256": "c7017b4fc5873f05ad061ad6ad5bf0670c2032c2342aed97fca1a1b1cb635f87",
+    "changed": false
+  },
+  {
+    "path": "bridge/artifact_records.py",
+    "repository_sha256": "eef7f57b561c3ddfe6708c64caae6e6ea9a7f65ae1cb2b11e51a88bb89ec1774",
+    "installed_sha256": "b318aa9fe0d3ca3f7a0342de7ed9737808e3a7cb2527235b1e4ff4bc852e808e",
+    "changed": true
+  },
+  {
+    "path": "bridge/asset_tools.py",
+    "repository_sha256": "571c5539d6ecdb1efa269c8e431877549bd50664713e3cc1fc0f0cee4da4d7a6",
+    "installed_sha256": "6043c52d930cf9dc2d8c1bfcad43efe16a492cc7bab5302aa4cead2f98c8ec48",
+    "changed": true
+  },
+  {
+    "path": "bridge/audio_cta_tail.py",
+    "repository_sha256": "d6dfd3a95235ea491e8e0a4b5999178e438e69b2c4d75a220e506e8b9a2f83e3",
+    "installed_sha256": "d6dfd3a95235ea491e8e0a4b5999178e438e69b2c4d75a220e506e8b9a2f83e3",
+    "changed": false
+  },
+  {
+    "path": "bridge/audio_provenance.py",
+    "repository_sha256": "5ba37c440d15b81833a37a8d11e5d84670487ac9bfd503dbc3845c2a22ea28d2",
+    "installed_sha256": "5ba37c440d15b81833a37a8d11e5d84670487ac9bfd503dbc3845c2a22ea28d2",
+    "changed": false
+  },
+  {
+    "path": "bridge/audio_seam_transitions.py",
+    "repository_sha256": null,
+    "installed_sha256": "36f3bce91150144eab3b08da21c109ac585bb9702475aa021d55744bb0af8a87",
+    "changed": true
+  },
+  {
+    "path": "bridge/audio_tools.py",
+    "repository_sha256": "44f57fd0845bec75214bdfcb421d391dede26c292de955d18f09362104220a83",
+    "installed_sha256": "44f57fd0845bec75214bdfcb421d391dede26c292de955d18f09362104220a83",
+    "changed": false
+  },
+  {
+    "path": "bridge/audio_worker.py",
+    "repository_sha256": "55bed42410b28b0ef524b3bef3cd675e87eb069abca53857f3ae07ad4e088880",
+    "installed_sha256": "7cdf24d3d886052d1bc3ced76969251fa97753f587cff24e255490473d2ef038",
+    "changed": true
+  },
+  {
+    "path": "bridge/audit.py",
+    "repository_sha256": "b734c14f6c8a7986d456aff7bcd31e71d9b3af24a704f86c749fa6122a114547",
+    "installed_sha256": "e0677a82e9a123ede1164c77b1fb66af457dbdf257d4b0dbf5beb99da3feb216",
+    "changed": true
+  },
+  {
+    "path": "bridge/branded_longform_application_plan.py",
+    "repository_sha256": "1c14295ba9fbf77b1a079dabe95d32ca8284572cf5ac993639f5f27b3b6a3dad",
+    "installed_sha256": "1c14295ba9fbf77b1a079dabe95d32ca8284572cf5ac993639f5f27b3b6a3dad",
+    "changed": false
+  },
+  {
+    "path": "bridge/branded_longform_apply.py",
+    "repository_sha256": "5f6b3e269b5744f6c1ad9aed7762a3779e9a2f3f5b2c5efa9398219e72f6dbbe",
+    "installed_sha256": "5f6b3e269b5744f6c1ad9aed7762a3779e9a2f3f5b2c5efa9398219e72f6dbbe",
+    "changed": false
+  },
+  {
+    "path": "bridge/branded_longform_broll.py",
+    "repository_sha256": "35665392ffe2f114aab7a4235a9b3b7eb67a0b3a415db080248451571da64b79",
+    "installed_sha256": "35665392ffe2f114aab7a4235a9b3b7eb67a0b3a415db080248451571da64b79",
+    "changed": false
+  },
+  {
+    "path": "bridge/branded_longform_cleanup.py",
+    "repository_sha256": "648fc244d8ba1c515b0658045c592a8db3d48a032a0434460d0216c0ef8454c8",
+    "installed_sha256": "648fc244d8ba1c515b0658045c592a8db3d48a032a0434460d0216c0ef8454c8",
+    "changed": false
+  },
+  {
+    "path": "bridge/branded_longform_contract.py",
+    "repository_sha256": "a2eb8360f39377dc1736420ae513c06f8820c08043ae097580715c142ba3d4c6",
+    "installed_sha256": "a2eb8360f39377dc1736420ae513c06f8820c08043ae097580715c142ba3d4c6",
+    "changed": false
+  },
+  {
+    "path": "bridge/branded_longform_editorial.py",
+    "repository_sha256": "cb5b2176297fc25ba8c00883f6a93f094f51a01527497a327841ec8eda530fb2",
+    "installed_sha256": "bb3e5a356f409de2f71c266e0a336fe5a4bc258ce7d3226f32b9bee6e0a39674",
+    "changed": true
+  },
+  {
+    "path": "bridge/branded_longform_graphics.py",
+    "repository_sha256": "55f242b90bca9452848a998ece26678c1ae29bc04cca046d32037b87088b64bb",
+    "installed_sha256": "0dccb6873c4d31a7ff4399f22e2decb86847afe840523f0480d6d88261720381",
+    "changed": true
+  },
+  {
+    "path": "bridge/branded_longform_jobs.py",
+    "repository_sha256": "5d5476e7203ec906464a0c339e6a388e1b277b7adf2ed5207a8555f31784b2de",
+    "installed_sha256": "5d5476e7203ec906464a0c339e6a388e1b277b7adf2ed5207a8555f31784b2de",
+    "changed": false
+  },
+  {
+    "path": "bridge/branded_longform_kits.py",
+    "repository_sha256": null,
+    "installed_sha256": "a39c219122f4c9d414646204ebd2fb5cffc025d79caf545baa5e886ab99a153e",
+    "changed": true
+  },
+  {
+    "path": "bridge/branded_longform_media.py",
+    "repository_sha256": "36ee3b1afbd1d6e82336bde2441649920df8f8460ecf15d7ac9279edd4c122e7",
+    "installed_sha256": "36ee3b1afbd1d6e82336bde2441649920df8f8460ecf15d7ac9279edd4c122e7",
+    "changed": false
+  },
+  {
+    "path": "bridge/branded_longform_resolve.py",
+    "repository_sha256": "0bc882164579bb04d40ba7c2b493aac724df0772fc8554b661019bf92f4aecc4",
+    "installed_sha256": "410388cfc6cd74f667adae32604abb04de74d7fd0c2bc9212b92dfd2fe9cf896",
+    "changed": true
+  },
+  {
+    "path": "bridge/branded_longform_workflow.py",
+    "repository_sha256": "f4a13cf18728ed2933f4e5c8831475710f1d145982b33250374c846bde61d668",
+    "installed_sha256": "4f85cdf819f5dd17c7966635e6d619e15454bfd73850d7b91f56e4aeaa83efa9",
+    "changed": true
+  },
+  {
+    "path": "bridge/caption_test.py",
+    "repository_sha256": null,
+    "installed_sha256": "6c30288dad232087ffc29904dc933c3384183162d1659ae2a945861ee239d9e5",
+    "changed": true
+  },
+  {
+    "path": "bridge/carabellese_analysis.py",
+    "repository_sha256": "ef8e69a466298e606435c96612f606d7ed8553f9126e168785a69fe35f05e385",
+    "installed_sha256": "d59a028843b1fd124319525e02b5a54ae232c18d523608f29ba1724a5d797fd9",
+    "changed": true
+  },
+  {
+    "path": "bridge/carabellese_apply.py",
+    "repository_sha256": "f2ad964ddadf9901290a48f79d192a848add9793e66aedf079bb1e73174efe83",
+    "installed_sha256": "f2ad964ddadf9901290a48f79d192a848add9793e66aedf079bb1e73174efe83",
+    "changed": false
+  },
+  {
+    "path": "bridge/carabellese_checkpoint.py",
+    "repository_sha256": "b9a5d03732e77cb76ffc37307ff7e73d11036c3bd2f0fb0b181dbd9b64c0b9b6",
+    "installed_sha256": "b9a5d03732e77cb76ffc37307ff7e73d11036c3bd2f0fb0b181dbd9b64c0b9b6",
+    "changed": false
+  },
+  {
+    "path": "bridge/carabellese_contract.py",
+    "repository_sha256": "a79ac550e8b194289a12a7aef23daf9fb15a504ac864242444532f638a6422ab",
+    "installed_sha256": "a79ac550e8b194289a12a7aef23daf9fb15a504ac864242444532f638a6422ab",
+    "changed": false
+  },
+  {
+    "path": "bridge/carabellese_draft.py",
+    "repository_sha256": null,
+    "installed_sha256": "6cf1bc0418648a13d2f59cbc5790b4d025edbbe054b3e5b0cb823a482f546362",
+    "changed": true
+  },
+  {
+    "path": "bridge/carabellese_jobs.py",
+    "repository_sha256": "6b906b2429cd6b46ffcc330a6d602cdaa68976f5f981cb72e0d9d689787ac020",
+    "installed_sha256": "6b906b2429cd6b46ffcc330a6d602cdaa68976f5f981cb72e0d9d689787ac020",
+    "changed": false
+  },
+  {
+    "path": "bridge/carabellese_learning.py",
+    "repository_sha256": "b5f0acdb68c5b543f1b69afb6c36b13a6060f1a4f6709db2139d69c7f9db764b",
+    "installed_sha256": "b5f0acdb68c5b543f1b69afb6c36b13a6060f1a4f6709db2139d69c7f9db764b",
+    "changed": false
+  },
+  {
+    "path": "bridge/carabellese_longform_graphics.py",
+    "repository_sha256": null,
+    "installed_sha256": "747785171adddf69c22fcef5769955c5a7462d3dab09e27becbd76ca179702f7",
+    "changed": true
+  },
+  {
+    "path": "bridge/carabellese_markers.py",
+    "repository_sha256": "b22c0544976144078bc6ed24ac9ef08ae9a79a1f1ca11a12ba89c9b7c36dfc51",
+    "installed_sha256": "b22c0544976144078bc6ed24ac9ef08ae9a79a1f1ca11a12ba89c9b7c36dfc51",
+    "changed": false
+  },
+  {
+    "path": "bridge/carabellese_recovery.py",
+    "repository_sha256": "c61f9572a2c0a88f56213b11f91e60401797960a7c41578b86e1ac83468c6f16",
+    "installed_sha256": "c61f9572a2c0a88f56213b11f91e60401797960a7c41578b86e1ac83468c6f16",
+    "changed": false
+  },
+  {
+    "path": "bridge/carabellese_review.py",
+    "repository_sha256": "5271cdad5e225edd090011b6c153ebe9195fc584c23414be9cd0f72aa9875196",
+    "installed_sha256": "5271cdad5e225edd090011b6c153ebe9195fc584c23414be9cd0f72aa9875196",
+    "changed": false
+  },
+  {
+    "path": "bridge/carabellese_transcription.py",
+    "repository_sha256": "3e5d35fcadce676deb9443e412c667bf372ad9e11797a9c5927ee72372c880d4",
+    "installed_sha256": "3e5d35fcadce676deb9443e412c667bf372ad9e11797a9c5927ee72372c880d4",
+    "changed": false
+  },
+  {
+    "path": "bridge/cleanup_tools.py",
+    "repository_sha256": null,
+    "installed_sha256": "0b477c707b93db69dc50f539112ec0559523eff60218ae21378b6245232a5b55",
+    "changed": true
+  },
+  {
+    "path": "bridge/colorist_jobs.py",
+    "repository_sha256": "652045618a9f98250b3d373f8dac3dda281666f53705eb81ebfe3ab7bb2a6718",
+    "installed_sha256": "28ddfb3d4069d60f4a4dd59ffb71224ef3ba87e11f8ade5917209f49fa85cdb8",
+    "changed": true
+  },
+  {
+    "path": "bridge/colorist_model.py",
+    "repository_sha256": "c65ec199ed7e9d475d27170d209ab3e4f650bf168990e8d6af3e814b6dd59986",
+    "installed_sha256": "9cac5920f77950518db4681fdb411eb566d449a1fc5a969fb0432b086e6eb333",
+    "changed": true
+  },
+  {
+    "path": "bridge/colorist_resolve.py",
+    "repository_sha256": "b0d1cc2e567f35aaf6b0494ed4e4cf3c23c5eabff3155af6ba4b6858bb701cb2",
+    "installed_sha256": "71a361205e60c749f7f1b0844321f83abf9c5086407b716d790a0e2419353a97",
+    "changed": true
+  },
+  {
+    "path": "bridge/config.py",
+    "repository_sha256": "8992e9b3e5a7469b7d3af9ecc11434d1804e31afad935ab9d01cb1e9545d8bc4",
+    "installed_sha256": "6278008027154a280851c6015ce9bbb3ba39dacde2bb3e5ba29480a29252ceee",
+    "changed": true
+  },
+  {
+    "path": "bridge/control_plane.py",
+    "repository_sha256": "44e303268cce75c1b3e7f1d3f9923ebba3fb36f9a2cefaed7ff56ecdf83424b1",
+    "installed_sha256": "44e303268cce75c1b3e7f1d3f9923ebba3fb36f9a2cefaed7ff56ecdf83424b1",
+    "changed": false
+  },
+  {
+    "path": "bridge/creative_tools.py",
+    "repository_sha256": "7497851741903bbf02ae173368dc3104da2f89fd6e14f2fd30471963d704441d",
+    "installed_sha256": "7497851741903bbf02ae173368dc3104da2f89fd6e14f2fd30471963d704441d",
+    "changed": false
+  },
+  {
+    "path": "bridge/diagnostic_tools.py",
+    "repository_sha256": "e107c008518e601623c5a9d7752c9dc6a4b5722845f7656a67343e929b9b70c7",
+    "installed_sha256": "cf4f0c97ac228f952043039d48aafd8f966cb5edef959c662c871ce74f5539c6",
+    "changed": true
+  },
+  {
+    "path": "bridge/edge_fade_tools.py",
+    "repository_sha256": "f2e8ad7d0f3957a34399a3ac2bc12c0f78187d342bffc70ef9e86941375e64a4",
+    "installed_sha256": "f2e8ad7d0f3957a34399a3ac2bc12c0f78187d342bffc70ef9e86941375e64a4",
+    "changed": false
+  },
+  {
+    "path": "bridge/edit_point_inspection.py",
+    "repository_sha256": null,
+    "installed_sha256": "e5771085d5959739092bdb9f4d724795edbfd9e644eae17cd495c1225d26c5b8",
+    "changed": true
+  },
+  {
+    "path": "bridge/editorial_cut_workflow.py",
+    "repository_sha256": "797bc7d28efba37600d5ffd935f9a436d6d90738895497c2b2b973fdbaade03b",
+    "installed_sha256": "797bc7d28efba37600d5ffd935f9a436d6d90738895497c2b2b973fdbaade03b",
+    "changed": false
+  },
+  {
+    "path": "bridge/editorial_jobs.py",
+    "repository_sha256": "a190d09c68da6d801c0235906e2bb4acfa9e3890189a2ba342b36933190a005c",
+    "installed_sha256": "a190d09c68da6d801c0235906e2bb4acfa9e3890189a2ba342b36933190a005c",
+    "changed": false
+  },
+  {
+    "path": "bridge/editorial_learning.py",
+    "repository_sha256": "f1f38f479ac3a7aa7cc8953f1609d1611fde345e7d721daf5dc56d847c25129e",
+    "installed_sha256": "f1f38f479ac3a7aa7cc8953f1609d1611fde345e7d721daf5dc56d847c25129e",
+    "changed": false
+  },
+  {
+    "path": "bridge/editorial_markers.py",
+    "repository_sha256": "040777dff23e3bc53c9698eef2917f9d59b65a8d111ca6c9bb700ffe8b28a268",
+    "installed_sha256": "040777dff23e3bc53c9698eef2917f9d59b65a8d111ca6c9bb700ffe8b28a268",
+    "changed": false
+  },
+  {
+    "path": "bridge/editorial_review.py",
+    "repository_sha256": "55a5f35a583d077b9898c9e660ba0cfb24dd57b93ffda7e411ffefa6ae82aefc",
+    "installed_sha256": "55a5f35a583d077b9898c9e660ba0cfb24dd57b93ffda7e411ffefa6ae82aefc",
+    "changed": false
+  },
+  {
+    "path": "bridge/editorial_selection_contract.py",
+    "repository_sha256": "2361da3d5fda4f5d8dc44ef908d3485e82c9ab881116b9cbb9818285e0d753bd",
+    "installed_sha256": "2361da3d5fda4f5d8dc44ef908d3485e82c9ab881116b9cbb9818285e0d753bd",
+    "changed": false
+  },
+  {
+    "path": "bridge/editorial_selection.py",
+    "repository_sha256": "9e68c72b76cf9679469699d2a7fd04cdb4b2d74c02fd6f126d5a227e0b407037",
+    "installed_sha256": "9e68c72b76cf9679469699d2a7fd04cdb4b2d74c02fd6f126d5a227e0b407037",
+    "changed": false
+  },
+  {
+    "path": "bridge/editorial_workflows.py",
+    "repository_sha256": "104b5337912497142e6db3b937a4eadb00a820dcca477a2605e859341b609ada",
+    "installed_sha256": "104b5337912497142e6db3b937a4eadb00a820dcca477a2605e859341b609ada",
+    "changed": false
+  },
+  {
+    "path": "bridge/feature_flags.py",
+    "repository_sha256": "cdcf0aeffcdb4cce8ccbbc185f5436c7d36f085256bf45f7e77b6b16e2d62823",
+    "installed_sha256": "c65760e0c876fbafe6f1c50643665bb1ee4b061172e6320508e0c7dd6cad0a18",
+    "changed": true
+  },
+  {
+    "path": "bridge/font_readiness.py",
+    "repository_sha256": "bde8e84067e1098d234e9c51b1829e6ec7902cce4965f0f18a1d8446f861c355",
+    "installed_sha256": "bde8e84067e1098d234e9c51b1829e6ec7902cce4965f0f18a1d8446f861c355",
+    "changed": false
+  },
+  {
+    "path": "bridge/format_contract.py",
+    "repository_sha256": "55a87060e2e11ccaf27fd0a6ad28c81c86c9b2fff01d707de25fa66bcb08cf4c",
+    "installed_sha256": "55a87060e2e11ccaf27fd0a6ad28c81c86c9b2fff01d707de25fa66bcb08cf4c",
+    "changed": false
+  },
+  {
+    "path": "bridge/freeze_sbam.py",
+    "repository_sha256": null,
+    "installed_sha256": "93636de36661aa64346555c464706167e285dde47e226d519575b251413b8177",
+    "changed": true
+  },
+  {
+    "path": "bridge/fusion_tools.py",
+    "repository_sha256": "c0ddfff87a3600b2e7787a2519cb542e03323382288dcb9869537e8246047d70",
+    "installed_sha256": "0b8a0fdb76ef94016e2c45fa582861d1e8a73dd92bc5b17cc6107406e91de78b",
+    "changed": true
+  },
+  {
+    "path": "bridge/longform_tools.py",
+    "repository_sha256": "d836b64838c065b76a5a6b8a0ca86b601e3e9e94d0f437be20c123acd2fcf355",
+    "installed_sha256": "d836b64838c065b76a5a6b8a0ca86b601e3e9e94d0f437be20c123acd2fcf355",
+    "changed": false
+  },
+  {
+    "path": "bridge/maintenance_scheduler.py",
+    "repository_sha256": "616bb101777fa91fdbf02ae2b664a41a3eed9ada0097aff221d1711b9de3afbf",
+    "installed_sha256": "616bb101777fa91fdbf02ae2b664a41a3eed9ada0097aff221d1711b9de3afbf",
+    "changed": false
+  },
+  {
+    "path": "bridge/media_verification.py",
+    "repository_sha256": "64ba35ee48e7352fc777a1dc215dbf6846c415169787ef7298ec9b4175e7f7c5",
+    "installed_sha256": "64ba35ee48e7352fc777a1dc215dbf6846c415169787ef7298ec9b4175e7f7c5",
+    "changed": false
+  },
+  {
+    "path": "bridge/monochrome_segment.py",
+    "repository_sha256": null,
+    "installed_sha256": "0fea9806a93a4fb7d0d875e2f07b29191eab2b2d43e5c47224472f1f3b0c8186",
+    "changed": true
+  },
+  {
+    "path": "bridge/monochrome_window.py",
+    "repository_sha256": null,
+    "installed_sha256": "180f590101d2f25b7d8437eaa4685fc61931501c7b6608f72740b27d431e48f2",
+    "changed": true
+  },
+  {
+    "path": "bridge/motion_presets.py",
+    "repository_sha256": "7046019e185c8c724b78bcd1bd07694009fd46c143a54c13c44bddd151be56b6",
+    "installed_sha256": "7046019e185c8c724b78bcd1bd07694009fd46c143a54c13c44bddd151be56b6",
+    "changed": false
+  },
+  {
+    "path": "bridge/native_transcription21.py",
+    "repository_sha256": "f336520c4db2bb2534d99f07795e5a67f8c2e17491bd67636b22997185e591ed",
+    "installed_sha256": "e8d3679360d1dde07dd5c033dbcf5d01482110560cb65506b0747ab149c52fbe",
+    "changed": true
+  },
+  {
+    "path": "bridge/playback_diagnostics.py",
+    "repository_sha256": null,
+    "installed_sha256": "601d7c3be3e5f74b832fc38daa4ec8e703ebf9bf50987347f2163874244b5007",
+    "changed": true
+  },
+  {
+    "path": "bridge/project_tools.py",
+    "repository_sha256": "d3332839db2c20a15fba2b10d1320c7334a9ca6f7aef57de410813a59bbae45a",
+    "installed_sha256": "d3332839db2c20a15fba2b10d1320c7334a9ca6f7aef57de410813a59bbae45a",
+    "changed": false
+  },
+  {
+    "path": "bridge/readability_approvals.py",
+    "repository_sha256": "fc05f198f641568e2a5bf9f2e18b8d32e24c91d68185ef42882195b2bbd276c3",
+    "installed_sha256": "fc05f198f641568e2a5bf9f2e18b8d32e24c91d68185ef42882195b2bbd276c3",
+    "changed": false
+  },
+  {
+    "path": "bridge/readability_contract.py",
+    "repository_sha256": "44cf32e3215fad5e0962af71ebeb90dc7430380a7aacb8d75e66c5d1f20706d5",
+    "installed_sha256": "44cf32e3215fad5e0962af71ebeb90dc7430380a7aacb8d75e66c5d1f20706d5",
+    "changed": false
+  },
+  {
+    "path": "bridge/registry.py",
+    "repository_sha256": "b76bcbb21c848b4077bfeb5fd449489596cc24958083be89a7604fd1ab30f859",
+    "installed_sha256": "b76bcbb21c848b4077bfeb5fd449489596cc24958083be89a7604fd1ab30f859",
+    "changed": false
+  },
+  {
+    "path": "bridge/render_batches.py",
+    "repository_sha256": "3b264e5e87c553aa1aab3c80d9e07b7660bb1518449e824737fc0289ada16dd9",
+    "installed_sha256": "3b264e5e87c553aa1aab3c80d9e07b7660bb1518449e824737fc0289ada16dd9",
+    "changed": false
+  },
+  {
+    "path": "bridge/render_tools.py",
+    "repository_sha256": "2e0b663bf5b3a9202c8fad0c99d1238de4dbecaa64ebae7c645087649a443478",
+    "installed_sha256": "7a20a7b0a44e5d7a4200065a73ca63a93d787fbff85482e6498882a93434fe70",
+    "changed": true
+  },
+  {
+    "path": "bridge/resolve_connection.py",
+    "repository_sha256": "3f73240e99158c0989e119481ded3b0d94d7e6b908eedb8cbc6a8fba0918a9a8",
+    "installed_sha256": "3f73240e99158c0989e119481ded3b0d94d7e6b908eedb8cbc6a8fba0918a9a8",
+    "changed": false
+  },
+  {
+    "path": "bridge/resolve_retirement.py",
+    "repository_sha256": "cf58709c525dc59dbe799b31aa27fc90523b4af093422d0ffe146caf5cd73b8c",
+    "installed_sha256": "cf58709c525dc59dbe799b31aa27fc90523b4af093422d0ffe146caf5cd73b8c",
+    "changed": false
+  },
+  {
+    "path": "bridge/resolve21_compat.py",
+    "repository_sha256": "28fddb19abd47c809268e710940d633bb88a77408b347b5a3de06ac47b5fbd4b",
+    "installed_sha256": "9cfc8a5ae4b3740589f2ad4eeef77a353c2d69a05817e3cd06670edd31294fe7",
+    "changed": true
+  },
+  {
+    "path": "bridge/retention_activation.py",
+    "repository_sha256": null,
+    "installed_sha256": "fa1d1c51c0da2a1e00701014fa5d1fec22f5f0c5215198ee402a06774e94b9a1",
+    "changed": true
+  },
+  {
+    "path": "bridge/review_export21.py",
+    "repository_sha256": "c7a02c6089bd0904baa4039a887b828702f934f098fae34d5cb3e2795ede3a0f",
+    "installed_sha256": "6277d5484affc6a735c2cfa7b1a348e75fb20207790b99d524dc8a1d6cbe95e0",
+    "changed": true
+  },
+  {
+    "path": "bridge/review_readability.py",
+    "repository_sha256": "c302806608250c8f643338140c9cd5825208d2b87e77ad966f3d0149847c63b8",
+    "installed_sha256": "c302806608250c8f643338140c9cd5825208d2b87e77ad966f3d0149847c63b8",
+    "changed": false
+  },
+  {
+    "path": "bridge/review_workflow.py",
+    "repository_sha256": "c27a647f74ec1e443a0ad1ecf2113f47f799fa6237a85bd79a3a3d4e092a204b",
+    "installed_sha256": "c27a647f74ec1e443a0ad1ecf2113f47f799fa6237a85bd79a3a3d4e092a204b",
+    "changed": false
+  },
+  {
+    "path": "bridge/safety.py",
+    "repository_sha256": "527789525dca348ceac46fd398f717dfdbb421a055382d885c142caa7d3d20cc",
+    "installed_sha256": "527789525dca348ceac46fd398f717dfdbb421a055382d885c142caa7d3d20cc",
+    "changed": false
+  },
+  {
+    "path": "bridge/server.py",
+    "repository_sha256": "af9fb6107306917f96275813178d0ed19e0963a2ef4a3d851bdd67d00f2cdc39",
+    "installed_sha256": "81f39d7f01173cb0be402fb8fc8283a6f29a642d2b46f9beb4fdd014f1b90c27",
+    "changed": true
+  },
+  {
+    "path": "bridge/still_media.py",
+    "repository_sha256": null,
+    "installed_sha256": "89463fedca7b6b9e677cb5489433ec5ca99a5408124159b56f2262af39f12bbd",
+    "changed": true
+  },
+  {
+    "path": "bridge/timeline_dialogue_cleanup.py",
+    "repository_sha256": "4bb58a8016dda1525dc63a638961d85f9b970178154189c93746c16e699dac3c",
+    "installed_sha256": "4c8cc6d768aa5835832e7ba68d42d8970ed356b881b209f4b367e03e8e07673c",
+    "changed": true
+  },
+  {
+    "path": "bridge/timeline_tools.py",
+    "repository_sha256": "0795d6abe06337d7d45ccc70339e6d18634f255d792978d6a4203adb9a91a96a",
+    "installed_sha256": "0ce89f964c68fce1c7d7078be1e9b1f4194d858ee3f73dc3674d6990bef4b8c5",
+    "changed": true
+  },
+  {
+    "path": "bridge/timeline_transcription.py",
+    "repository_sha256": null,
+    "installed_sha256": "1a84ee8755be4a0c7720f36291587628cec0972e0fb94a49a1f043e7cbef7e08",
+    "changed": true
+  },
+  {
+    "path": "bridge/tool_catalog.py",
+    "repository_sha256": "00019d3f9b2834a762133bbe09982faddf514fb22d020e790d9c56aef4ed668b",
+    "installed_sha256": "a64630f694c0c69be3305578e84295a8c889fcae5143dc7c5d361b0d2d333fc6",
+    "changed": true
+  },
+  {
+    "path": "bridge/transcription_worker.py",
+    "repository_sha256": "89c5f5007a8960a9b358df652d5ce56754209773023b9d1dc4932f313748df23",
+    "installed_sha256": "77c37bcb4d40d4e8dc017df74dd58d6149696ea5f83cc36e77f4c993ae0261d3",
+    "changed": true
+  },
+  {
+    "path": "bridge/v11_caption_extension.py",
+    "repository_sha256": null,
+    "installed_sha256": "8a5d736c33af3b3f224fdd63272aeabcf082d918a9a7d98074d6f8ce2393f7b7",
+    "changed": true
+  },
+  {
+    "path": "bridge/v11_caption_metrics.py",
+    "repository_sha256": null,
+    "installed_sha256": "9f5b07a48e273c96309232a530c5a7e7e5a5e9133bd84a50f12579b9399fd05a",
+    "changed": true
+  },
+  {
+    "path": "bridge/vertical_social_apply.py",
+    "repository_sha256": "d6cd79c089280c39efb187d35afdaab96dae75183956e883f732e89c8672fe27",
+    "installed_sha256": "074374dc7b0c584217d13eff034e763fdc3c084df5d898d643dc1c49b56d154c",
+    "changed": true
+  },
+  {
+    "path": "bridge/vertical_social_broll.py",
+    "repository_sha256": "38a909e4b25c3e09faca7aedba71a0b6cb7f9727194c3b114e9003d07919523a",
+    "installed_sha256": "42cac9db2c8144edf9887b864461e8473e032132b9ed2d419c6c13f313f75114",
+    "changed": true
+  },
+  {
+    "path": "bridge/vertical_social_captions.py",
+    "repository_sha256": "c18a15126e81674bb3f44d0347e49dc3babb5900ee76dcf94587b554ba1162fc",
+    "installed_sha256": "a0e6e74ee910c733b9dc5ac936949bb4923f2607ece42acd3fd9ba91612cc052",
+    "changed": true
+  },
+  {
+    "path": "bridge/vertical_social_contract.py",
+    "repository_sha256": "30bb1352795163f23a40ffe29290712af6cdec7c12f24eafb23807edd61f0f35",
+    "installed_sha256": "30bb1352795163f23a40ffe29290712af6cdec7c12f24eafb23807edd61f0f35",
+    "changed": false
+  },
+  {
+    "path": "bridge/vertical_social_cuts.py",
+    "repository_sha256": "9d310e2a4ea0d0a4296be1fb213734c86f5d6e8234cc5f01091f8c22522a9cc4",
+    "installed_sha256": "fa5904e2c5196b0ffd8f4a37444f0b69b73e0daf689e6031d0cdd0a3b68659b8",
+    "changed": true
+  },
+  {
+    "path": "bridge/vertical_social_graphics.py",
+    "repository_sha256": "6d78f813ac27d06c4db8adc7cf48ef9875c3d5a1c86e0a9ebd5243e7a0f73e07",
+    "installed_sha256": "6d78f813ac27d06c4db8adc7cf48ef9875c3d5a1c86e0a9ebd5243e7a0f73e07",
+    "changed": false
+  },
+  {
+    "path": "bridge/vertical_social_jobs.py",
+    "repository_sha256": "c074d55ef93f7ee601fb87f7c28234f3152a34825cf8036c7f668dc9fa60a837",
+    "installed_sha256": "c074d55ef93f7ee601fb87f7c28234f3152a34825cf8036c7f668dc9fa60a837",
+    "changed": false
+  },
+  {
+    "path": "bridge/vertical_social_music.py",
+    "repository_sha256": "5873ff63b68affa0fd1b64772ad1670bea75e19fbf382ace88bc2992f78c630b",
+    "installed_sha256": "5873ff63b68affa0fd1b64772ad1670bea75e19fbf382ace88bc2992f78c630b",
+    "changed": false
+  },
+  {
+    "path": "bridge/vertical_social_overlay.py",
+    "repository_sha256": "dbdc1cc5c010f9208221f07f0322e28d6c9d66b1c5f8fc6bdd152f291de8ffb9",
+    "installed_sha256": "e9027e7b9267f225f4fdb51e455e71b9310dd3cfe3fda9cd6e078cd8d23ffbcf",
+    "changed": true
+  },
+  {
+    "path": "bridge/vertical_social_qc.py",
+    "repository_sha256": "9f4d000fb25dfd0d18678acbae0a40eeba0f958921c37cfc1e2724669e16deec",
+    "installed_sha256": "9f4d000fb25dfd0d18678acbae0a40eeba0f958921c37cfc1e2724669e16deec",
+    "changed": false
+  },
+  {
+    "path": "bridge/vertical_social_reframe.py",
+    "repository_sha256": "f27c08ce2d14c2c3c213307a41294a30ca384116decb7253a414cef2ff9cd249",
+    "installed_sha256": "a9808ce3a3ef616d20268d72451a69da3099b4583d39b6fed6e569dd331c033a",
+    "changed": true
+  },
+  {
+    "path": "bridge/vertical_social_source.py",
+    "repository_sha256": null,
+    "installed_sha256": "1b86b063f69cf0eab9d903b569200514c8844444daeac70049c946c051365016",
+    "changed": true
+  },
+  {
+    "path": "bridge/vertical_social_workflow.py",
+    "repository_sha256": "32edf02275ab98a6809be9afc4ef829debb8c8bba8e2fef80920c0d8e124157e",
+    "installed_sha256": "32edf02275ab98a6809be9afc4ef829debb8c8bba8e2fef80920c0d8e124157e",
+    "changed": false
+  },
+  {
+    "path": "bridge/voice_isolation.py",
+    "repository_sha256": "2f41501c2f93685ed18fc6a55ca1fdaade3df468dd32239f352ccbb9734939c5",
+    "installed_sha256": "2f41501c2f93685ed18fc6a55ca1fdaade3df468dd32239f352ccbb9734939c5",
+    "changed": false
+  },
+  {
+    "path": "bridge/voiceover_inspection.py",
+    "repository_sha256": null,
+    "installed_sha256": "fa684a73368bde6313207cbc148704baf8d7ae4f008abfd2337b5796bc859a27",
+    "changed": true
+  },
+  {
+    "path": "bridge/voiceover_transcript.py",
+    "repository_sha256": null,
+    "installed_sha256": "b3860a18c2aa7ce944905de64d7eaeeafcf2bb25e8fcbfb2ccca048079c402c4",
+    "changed": true
+  },
+  {
+    "path": "bridge/workflow_control.py",
+    "repository_sha256": "06a148cf8d7717e055cd74e4fc3871f2bed1f2802f3516c9bd590dcf17da1d72",
+    "installed_sha256": "06a148cf8d7717e055cd74e4fc3871f2bed1f2802f3516c9bd590dcf17da1d72",
+    "changed": false
+  },
+  {
+    "path": "artifact_retention.json",
+    "repository_sha256": "ae8aa3e0a4f2cbf37abfd64d7896928355176dbfdfa709426d8613a748288028",
+    "installed_sha256": "ec9a7876e0b9022d6696bc1d17a2143190548362898adc85efa6ce8075811ba9",
+    "changed": true
+  },
+  {
+    "path": "branded_longform_contract.json",
+    "repository_sha256": "e91517f2e477613b6edb215250ad4ec4ef915648b1693ec21c2621c63c0b9876",
+    "installed_sha256": "43b815710ce2f39ba8936050a3209b83c8f8bb1163aae21df837850086185da4",
+    "changed": true
+  },
+  {
+    "path": "branded_longform_kits.json",
+    "repository_sha256": null,
+    "installed_sha256": "ab16f7f5a939299d050cad688fd9b6a3036ca8cd77f7183d2954b163bccf7347",
+    "changed": true
+  },
+  {
+    "path": "carabellese_cleanup_contract.json",
+    "repository_sha256": "bd5e8078e3d3d60dbedaca14cc3913f5d6b16429bf64060a6f7af2d579f1dbb3",
+    "installed_sha256": "bd5e8078e3d3d60dbedaca14cc3913f5d6b16429bf64060a6f7af2d579f1dbb3",
+    "changed": false
+  },
+  {
+    "path": "carabellese_preferences.json",
+    "repository_sha256": "392e7aa55ee12ae9eb621d46477d8fa8b7be03edf31d30ae151584880888df87",
+    "installed_sha256": "392e7aa55ee12ae9eb621d46477d8fa8b7be03edf31d30ae151584880888df87",
+    "changed": false
+  },
+  {
+    "path": "colorist_presets.json",
+    "repository_sha256": "bddd5d76952ab905c74c02823ad23206d11230120ec4c1a093a38cf007d6e0d5",
+    "installed_sha256": "60095dd12102a90e882eae94fb39ba87656b779aa981eca46d6f8c5ebf32bef7",
+    "changed": true
+  },
+  {
+    "path": "editorial_preferences.json",
+    "repository_sha256": "5ab062f5e82a5bb7718645a74505b5aed1167245ec69502b9aa5c2cee3f62691",
+    "installed_sha256": "5ab062f5e82a5bb7718645a74505b5aed1167245ec69502b9aa5c2cee3f62691",
+    "changed": false
+  },
+  {
+    "path": "editorial_selection_contract.json",
+    "repository_sha256": "8bc57c9d5823d70d6dc528aa857e648c5536ddcfdc5e19572a4a9439233cb157",
+    "installed_sha256": "8bc57c9d5823d70d6dc528aa857e648c5536ddcfdc5e19572a4a9439233cb157",
+    "changed": false
+  },
+  {
+    "path": "editorial_workflows.json",
+    "repository_sha256": "49dfbe4a1c83b147a2c780de0ac10b04ce1978a304f9b78cdf0db02399d3317a",
+    "installed_sha256": "9c8d5e2914be6734ea2656f323e99e6813bfb25f384d8252209f1ffffe542180",
+    "changed": true
+  },
+  {
+    "path": "render_profiles.json",
+    "repository_sha256": "9d6b56127721d627fe738bd51cb4f14176370ee373aab3f40a0a47090c988014",
+    "installed_sha256": "0cf3a4b8790e6a3e62dfa618a5d5530f9338f748d45b36306bbf1cd0636105b2",
+    "changed": true
+  },
+  {
+    "path": "review_readability_contract.json",
+    "repository_sha256": "0d727d8dbceb9c7e2b46829638e02ca68812c2fd9dff5871504c265b3e9f57df",
+    "installed_sha256": "0d727d8dbceb9c7e2b46829638e02ca68812c2fd9dff5871504c265b3e9f57df",
+    "changed": false
+  },
+  {
+    "path": "vertical_social_contract.json",
+    "repository_sha256": "1befa310bdcea7b7132094c87f16a74b203516bd1c7b57e0c33b32fba445320f",
+    "installed_sha256": "1befa310bdcea7b7132094c87f16a74b203516bd1c7b57e0c33b32fba445320f",
+    "changed": false
+  },
+  {
+    "path": "ARPHE_MCP_BRIDGE_CREATIVE_03.py",
+    "repository_sha256": "3c9db0e0db0eafc69cd58eaa1e11936110719a0a10f0398b951e6eab8a8269e6",
+    "installed_sha256": "3c9db0e0db0eafc69cd58eaa1e11936110719a0a10f0398b951e6eab8a8269e6",
+    "changed": false
+  }
+]

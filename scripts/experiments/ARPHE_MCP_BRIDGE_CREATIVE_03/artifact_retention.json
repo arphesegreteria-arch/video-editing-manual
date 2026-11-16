@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "policy_version": "ARPHE_ARTIFACT_RETENTION_V1",
-  "quarantine_seconds": 604800,
+  "quarantine_seconds": 1296000,
   "purge_enabled": false,
   "rules": {
     "DIAGNOSTIC_CAPTURE": {

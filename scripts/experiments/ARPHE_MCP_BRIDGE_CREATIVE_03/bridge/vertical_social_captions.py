@@ -28,7 +28,6 @@ from .fusion_tools import (_media_out, _new_tool, _rgb, _set, _set_color,
 from .resolve_connection import safe_call
 from .safety import ValidationError
 from .vertical_social_overlay import create_overlay_composition
-from .timeline_element_control import register_created_item, timeline_item_track_index
 
 
 def lower_caption_layout() -> dict[str, Any]:
@@ -84,16 +83,16 @@ def cues_before_frame(cues: tuple[dict[str, Any], ...], cutoff_frame: int) -> tu
 
 STANDARD_FONT_SIZE = 0.050
 EMPHASIS_FONT_SIZE = 0.065
-CAPTION_CARD_PADDING = 0.016
-CAPTION_WORD_GAP = 0.014
+CAPTION_CARD_PADDING = 0.012
+CAPTION_WORD_GAP = 0.004
 
 
 def _caption_geometry(position: str) -> tuple[float, float, float, float]:
     if position == "UPPER":
         layout = upper_karaoke_layout()
-        return 0.5, layout["y"], layout["span"], 0.075
+        return 0.5, layout["y"], layout["span"], 0.055
     layout = lower_caption_layout()
-    return layout["center"]["x"], layout["center"]["y"], layout["width"], 0.090
+    return layout["center"]["x"], layout["center"]["y"], layout["width"], 0.060
 
 
 def _word_metrics(word: dict[str, Any]) -> dict[str, Any]:
@@ -147,6 +146,11 @@ def phrase_word_layout(phrase: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     center_x, center_y, span, row_spacing = _caption_geometry(str(phrase.get("position", "LOWER")))
     metrics = tuple(_word_metrics(word) for word in raw_words)
     rows = _caption_rows(metrics, span)
+    base_height = (upper_karaoke_layout()["height"] if phrase.get("position") == "UPPER"
+                   else lower_caption_layout()["height"])
+    # Multi-row cards shrink vertically with the line spacing; preserve a
+    # clear .010 gap. Single-row cards retain their approved geometry.
+    card_height = base_height if len(rows) == 1 else min(base_height, row_spacing - 0.010)
     if len(rows) == 1:
         row_y = (center_y,)
     elif phrase.get("position") == "UPPER":
@@ -166,7 +170,8 @@ def phrase_word_layout(phrase: dict[str, Any]) -> tuple[dict[str, Any], ...]:
                            "slot_width": round(card_width, 5),
                            "font_size": round(word["font_size"], 5),
                            "text_width": round(word["text_width"], 5),
-                           "card_width": round(card_width, 5)})
+                           "card_width": round(card_width, 5),
+                           "card_height": round(card_height, 5)})
             cursor += card_width + CAPTION_WORD_GAP
     return tuple(placed)
 
@@ -406,15 +411,14 @@ def build_caption_graph(comp: object, phrases: tuple[dict[str, Any], ...],
     if media_out is None:
         raise ValidationError("MediaOut CAPTIONS non trovato")
     canvas = _new_tool(comp, "Background", "ARPHE_VERTICAL_CAPTIONS_CANVAS")
-    _set_color(canvas, _rgb(palette.get("black", "#000000"), 0.0))
+    # Fusion composites premultiplied RGBA: brand ink with alpha zero still
+    # contributes nonzero RGB. A transparent technical canvas must be zero.
+    _set_color(canvas, _rgb("#000000", 0.0))
     if not connect_input(media_out, "Input", canvas):
         raise ValidationError("Collegamento canvas CAPTIONS fallito")
     lower_layout = lower_caption_layout()
     highlight_word_count = 0
     for phrase_index, phrase in enumerate(phrases, start=1):
-        is_lower = phrase["position"] == "LOWER"
-        upper_layout = upper_karaoke_layout()
-        height = lower_layout["height"] if is_lower else upper_layout["height"]
         phrase_start, phrase_end = phrase["range"]
         words = phrase_word_layout(phrase)
         for word_index, word in enumerate(words, start=1):
@@ -422,7 +426,7 @@ def build_caption_graph(comp: object, phrases: tuple[dict[str, Any], ...],
             background = _new_tool(comp, "Background", f"{prefix}_BG")
             _set_color(background, _rgb(palette["burgundy"], 0.94))
             mask = _new_tool(comp, "RectangleMask", f"{prefix}_MASK")
-            for key, value in (("Width", word["card_width"]), ("Height", height),
+            for key, value in (("Width", word["card_width"]), ("Height", word["card_height"]),
                                ("Center", {1: word["x"], 2: word["y"], 3: 0.0}),
                                ("CornerRadius", 0.16)):
                 _set(mask, key, value)
@@ -464,11 +468,6 @@ def apply_caption_action(project: object, timeline: object, config: Any,
     item, comp = create_overlay_composition(
         project, timeline, config, 0, total_frames, f"CAPTIONS_{action['action_id']}")
     graph = build_caption_graph(comp, plan["phrases"], config.palette)
-    register_created_item(
-        config, project, timeline, "video",
-        timeline_item_track_index(timeline, "video", item), item,
-        "apply_vertical_social_captions", str(action["action_id"]),
-    )
     return {"ok": True, "action_id": str(action["action_id"]),
             "timeline": str(safe_call(timeline, "GetName") or ""),
             "range": [0, total_frames], "timeline_item": str(safe_call(item, "GetName") or ""),

@@ -87,7 +87,8 @@ def _find_media(timeline: Any, clip_id: str) -> Any:
         for index in range(1, count + 1):
             for item in safe_call(timeline, "GetItemListInTrack", track_type, index) or []:
                 media = safe_call(item, "GetMediaPoolItem")
-                if str(safe_call(media, "GetUniqueId") or "") == clip_id:
+                if (str(safe_call(media, "GetUniqueId") or "") == clip_id
+                        or str(safe_call(item, "GetUniqueId") or "") == clip_id):
                     return media
     raise ValidationError("Clip sorgente non trovato nella timeline corrente")
 

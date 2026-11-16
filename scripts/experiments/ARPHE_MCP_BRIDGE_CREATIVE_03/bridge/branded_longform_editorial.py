@@ -21,11 +21,41 @@ class EditorialProposal:
     asset_path: str | None = None
     source_start_frame: int | None = None
     source_end_frame: int | None = None
+    content: dict[str, Any] | None = None
 
 
 def validate_proposal(profile_id: str, kind: str) -> None:
-    if profile_id == "CARABELLESE_LONGFORM_EDITORIAL" and kind in {"GRAPHIC", "CARD"}:
-        raise ValueError("Graphic Kit pending: proposta grafica bloccata")
+    if profile_id not in {"ARPHE_LONGFORM_EDITORIAL", "CARABELLESE_LONGFORM_EDITORIAL"}:
+        raise ValueError("Profilo longform sconosciuto")
+
+
+def _text_list(value: object, name: str, minimum: int, maximum: int) -> list[str]:
+    if not isinstance(value, list) or not minimum <= len(value) <= maximum:
+        raise ValueError(f"{name}: richiesti da {minimum} a massimo {maximum} elementi")
+    clean = [str(item).strip() for item in value]
+    if any(not item or len(item) > 80 for item in clean):
+        raise ValueError(f"{name}: testo vuoto o troppo lungo")
+    return clean
+
+
+def _comparison(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"left_title", "right_title", "rows"}:
+        raise ValueError("comparison non valida")
+    left, right = str(value["left_title"]).strip(), str(value["right_title"]).strip()
+    if not left or not right or len(left) > 40 or len(right) > 40:
+        raise ValueError("comparison: titoli non validi")
+    rows = value["rows"]
+    if not isinstance(rows, list) or not 1 <= len(rows) <= 4:
+        raise ValueError("comparison: richieste da 1 a massimo 4 righe")
+    clean_rows = []
+    for row in rows:
+        if not isinstance(row, list) or len(row) != 2:
+            raise ValueError("comparison: ogni riga richiede due celle")
+        cells = [str(cell).strip() for cell in row]
+        if any(not cell or len(cell) > 80 for cell in cells):
+            raise ValueError("comparison: cella vuota o troppo lunga")
+        clean_rows.append(cells)
+    return {"left_title": left, "right_title": right, "rows": clean_rows}
 
 
 def propose_editorial(segments: list[dict[str, Any]], profile_id: str) -> tuple[EditorialProposal, ...]:
@@ -33,6 +63,7 @@ def propose_editorial(segments: list[dict[str, Any]], profile_id: str) -> tuple[
     for index, segment in enumerate(segments, 1):
         semantic_class = str(segment["class"])
         confidence = float(segment.get("confidence", 1.0))
+        content: dict[str, Any] | None = None
         if confidence < 0.7:
             kind, rationale = "REVIEW_ONLY", "Confidenza bassa: serve giudizio editoriale"
         elif segment.get("provided_broll"):
@@ -41,8 +72,17 @@ def propose_editorial(segments: list[dict[str, Any]], profile_id: str) -> tuple[
             kind, rationale = "B_ROLL_GENERATED", "B-roll generato: solo proposta, mai import automatico"
         elif segment.get("camera_cut_available"):
             kind, rationale = "CAMERA_CUT", "Cambio camera preferibile a una grafica"
-        elif semantic_class == "PERSONAL":
+        elif semantic_class in {"PERSONAL", "STORY"}:
             kind, rationale = "NO_OVERLAY", "Passaggio personale: preservare il respiro"
+        elif segment.get("comparison") is not None:
+            kind, rationale = "COMPARISON_TABLE", "Confronto esplicito"
+            content = _comparison(segment["comparison"])
+        elif segment.get("process_steps") is not None:
+            kind, rationale = "PROCESS_STEPS", "Processo in passaggi"
+            content = {"steps": _text_list(segment["process_steps"], "process_steps", 3, 5)}
+        elif semantic_class == "EXPLAIN" and isinstance(segment.get("items"), list):
+            kind, rationale = "PROGRESSIVE_LIST", "Elenco di almeno tre elementi"
+            content = {"items": _text_list(segment["items"], "items", 3, 5)}
         elif semantic_class == "EXPLAIN" and int(segment.get("items", 0)) >= 3:
             kind, rationale = "PROGRESSIVE_LIST", "Elenco di almeno tre elementi"
         elif semantic_class == "TRANSITION":
@@ -50,10 +90,8 @@ def propose_editorial(segments: list[dict[str, Any]], profile_id: str) -> tuple[
         else:
             kind, rationale = "KEYWORD_BOX", "Segnalazione conservativa del concetto"
         visual = kind not in {"NO_OVERLAY", "REVIEW_ONLY", "CAMERA_CUT", "B_ROLL_GENERATED"}
-        pending = profile_id == "CARABELLESE_LONGFORM_EDITORIAL" and visual
-        executable = kind not in {"REVIEW_ONLY", "CAMERA_CUT", "B_ROLL_GENERATED"} and not pending
-        blocked_reason = ("KIT_PENDING" if pending else
-                          "LOW_CONFIDENCE" if kind == "REVIEW_ONLY" else
+        executable = kind not in {"REVIEW_ONLY", "CAMERA_CUT", "B_ROLL_GENERATED"}
+        blocked_reason = ("LOW_CONFIDENCE" if kind == "REVIEW_ONLY" else
                           "NATIVE_CAMERA_SWITCH_PENDING" if kind == "CAMERA_CUT" else
                           "GENERATED_MEDIA_REQUIRES_PROVIDER" if kind == "B_ROLL_GENERATED" else None)
         fps = float(segment.get("fps", 30))
@@ -68,7 +106,7 @@ def propose_editorial(segments: list[dict[str, Any]], profile_id: str) -> tuple[
             f"P{index:03d}", kind, start, end, rationale, profile_id,
             executable, blocked_reason,
             round(start * fps), round(end * fps),
-            asset_path, source_start, source_end,
+            asset_path, source_start, source_end, content,
         ))
     return tuple(proposals)
 

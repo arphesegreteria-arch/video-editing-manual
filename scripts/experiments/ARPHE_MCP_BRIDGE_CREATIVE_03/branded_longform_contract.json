@@ -13,9 +13,9 @@
     },
     {
       "profile_id": "CARABELLESE_LONGFORM_EDITORIAL",
-      "kit_status": "PENDING",
-      "allowed_operations": ["CLEANUP", "MULTICAM", "MARKER", "PROPOSAL"],
-      "allowed_asset_classes": []
+      "kit_status": "READY",
+      "allowed_operations": ["CLEANUP", "MULTICAM", "MARKER", "PROPOSAL", "GRAPHIC", "CARD"],
+      "allowed_asset_classes": ["GRAPHIC_KIT"]
     }
   ]
 }

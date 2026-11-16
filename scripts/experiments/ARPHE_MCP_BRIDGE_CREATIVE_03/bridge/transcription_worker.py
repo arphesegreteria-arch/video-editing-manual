@@ -191,6 +191,14 @@ def run_job(job_path: Path) -> None:
                                 expected_source_fingerprint=str(payload["source_fingerprint"]),
                                 progress_callback=progress)
         payload = _load_worker_job(job_path)
+        # Timeline jobs carry an exact Resolve source binding.  Persist it into
+        # the finished transcript so the reader can verify provenance later.
+        timeline_source = payload.get("timeline_source")
+        if timeline_source is not None:
+            output_path = Path(payload["output_path"])
+            transcript = json.loads(output_path.read_text(encoding="utf-8-sig"))
+            transcript["timeline_source"] = timeline_source
+            _atomic_json(output_path, transcript)
         payload.update(status="COMPLETED", progress_percent=100.0,
                        transcript_fingerprint=file_sha256(Path(payload["output_path"])),
                        updated_at=_now(), error=None)

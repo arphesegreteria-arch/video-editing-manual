@@ -31,6 +31,16 @@ function Save-Receipt($Receipt,[string]$Path) {
     $Receipt | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath ($Path+'.tmp') -Encoding UTF8
     Move-Item -LiteralPath ($Path+'.tmp') -Destination $Path -Force
 }
+function Get-StagingPath([string]$Root,$Receipt,$Entry) {
+    if ($Receipt.PSObject.Properties['transaction_id']) {
+        if ([string]$Receipt.transaction_id -notmatch '^[a-f0-9]{32}$') { throw 'Invalid staging transaction identity' }
+        $expected = $Entry.path+'.arphe-install.'+$Receipt.transaction_id+'.tmp'
+        if (-not $Entry.PSObject.Properties['staging_path'] -or $Entry.staging_path -ne $expected) { throw 'Staging intent does not match transaction' }
+        return Confined $Root $expected
+    }
+    # Older receipts can prove ownership only through their completed ownership write.
+    return Confined $Root ($Entry.path+'.arphe-install.tmp')
+}
 
 $package = (Resolve-Path -LiteralPath $PackagePath).Path
 $profile = Read-Json ((Resolve-Path -LiteralPath $ProfilePath).Path)
@@ -90,7 +100,7 @@ if ($Mode -eq 'Rollback') {
         foreach ($entry in $receipt.files) {
             $path = Confined $target $entry.path
             if ((Hash-File $path) -ne $entry.before) { throw 'Completed rollback target drift' }
-            $temporary = Confined $target ($entry.path+'.arphe-install.tmp')
+            $temporary = Get-StagingPath $target $receipt $entry
             if (Test-Path -LiteralPath $temporary) { throw 'Unexpected staging after completed rollback' }
         }
         if (Test-Path -LiteralPath $pendingPath) { Remove-Item -LiteralPath $pendingPath }
@@ -100,6 +110,7 @@ if ($Mode -eq 'Rollback') {
         $expectedAfter = if ($entry.path -eq 'release-manifest.json') { Hash-File $manifestPath } else { $manifest.files.PSObject.Properties[$entry.path].Value }
         if ($entry.after -ne $expectedAfter) { throw 'Rollback receipt does not match release' }
         $path = Confined $target $entry.path
+        $null = Get-StagingPath $target $receipt $entry
         $hash = Hash-File $path
         if ($hash -ne $entry.after -and $hash -ne $entry.before) { throw "Rollback target drift: $($entry.path)" }
         if ($null -ne $entry.before -and (Hash-File (Confined (Join-Path $backup 'files') $entry.path)) -ne $entry.before) { throw 'Rollback backup hash mismatch' }
@@ -109,10 +120,10 @@ if ($Mode -eq 'Rollback') {
         if ($null -eq $entry.before) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path } }
         else { Copy-Item -LiteralPath (Confined (Join-Path $backup 'files') $entry.path) -Destination $path -Force }
         if ((Hash-File $path) -ne $entry.before) { throw 'Rollback readback mismatch' }
-        $temporary = $path+'.arphe-install.tmp'
+        $temporary = Get-StagingPath $target $receipt $entry
         if (Test-Path -LiteralPath $temporary) {
-            $null = Confined $target ($entry.path+'.arphe-install.tmp')
-            if (-not $entry.PSObject.Properties['staging_owned'] -or $entry.staging_owned -ne $true) { throw 'Unowned staging file retained; ownership cannot be inferred from contents' }
+            $intentOwned = $receipt.PSObject.Properties['transaction_id'] -and $entry.PSObject.Properties['staging_conflict'] -and $entry.staging_conflict -eq $false
+            if (-not $intentOwned -and (-not $entry.PSObject.Properties['staging_owned'] -or $entry.staging_owned -ne $true)) { throw 'Unowned staging file retained; ownership cannot be inferred from contents' }
             $audit = Confined (Join-Path $backup 'staging-audit') ($entry.path+'.arphe-install.tmp')
             $temporaryHash = Hash-File $temporary
             if ($entry.staging_audit_sha256 -and $entry.staging_audit_sha256 -ne $temporaryHash) { throw 'Owned staging changed after audit journal' }
@@ -163,9 +174,16 @@ if ($Mode -eq 'DryRun') { Write-Output "Validated $($profile.workstation_id): $(
 if (-not $BackupPath) { throw 'Install requires a new BackupPath' }
 $backup = [IO.Path]::GetFullPath($BackupPath)
 if ($backup -eq $target -or $backup.StartsWith($target.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $backup)) { throw 'Backup must be new and outside target' }
-$null = New-Item -ItemType Directory -Path $backup
+$transactionId = [Guid]::NewGuid().ToString('N')
 # Identity manifest participates in backup and rollback like payload files.
 $changes += [pscustomobject]@{path='release-manifest.json';before=(Hash-File $identityTarget);after=(Hash-File $manifestPath);staging_owned=$false;staging_audit_sha256=$null}
+foreach ($entry in $changes) {
+    $entry | Add-Member -NotePropertyName staging_path -NotePropertyValue ($entry.path+'.arphe-install.'+$transactionId+'.tmp')
+    $entry | Add-Member -NotePropertyName staging_conflict -NotePropertyValue $false
+    $temporary = Confined $target $entry.staging_path
+    if (Test-Path -LiteralPath $temporary) { throw 'Unique staging intent path already exists; left untouched' }
+}
+$null = New-Item -ItemType Directory -Path $backup
 foreach ($entry in $changes) {
     if ($null -ne $entry.before) {
         $saved = Confined (Join-Path $backup 'files') $entry.path
@@ -174,7 +192,7 @@ foreach ($entry in $changes) {
         if ((Hash-File $saved) -ne $entry.before) { throw 'Backup verification failed' }
     }
 }
-$receipt = [pscustomobject]@{schema_version=1;workstation_id=$profile.workstation_id;target=$target;release_id=$manifest.release_id;state='prepared';files=@($changes)}
+$receipt = [pscustomobject]@{schema_version=1;transaction_id=$transactionId;workstation_id=$profile.workstation_id;target=$target;release_id=$manifest.release_id;state='prepared';files=@($changes)}
 $receiptPath = Join-Path $backup 'receipt.json'
 Save-Receipt $receipt $receiptPath
 $null = New-Item -ItemType File -Path $pendingPath -Value $backup
@@ -186,16 +204,17 @@ try {
         $source = if ($entry.path -eq 'release-manifest.json') { $manifestPath } else { Confined (Join-Path $package 'payload') $entry.path }
         if ((Hash-File $source) -ne $entry.after) { throw 'Payload changed since preflight' }
         $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path)
-        $temporary = Confined $target ($entry.path+'.arphe-install.tmp')
-        # Exclusive creation rejects pre-existing/unowned files, even if their
-        # bytes happen to match. Durable ownership precedes the payload write.
-        $stagingHandle = [IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+        $temporary = Get-StagingPath $target $receipt $entry
+        # The unique transaction path/intent is already durable before creation.
+        # Record an exclusive-create collision rather than claiming its contents.
+        try { $stagingHandle = [IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None) }
+        catch { $entry.staging_conflict=$true; Save-Receipt $receipt $receiptPath; throw }
         $stagingHandle.Dispose()
         $entry.staging_owned = $true
         Save-Receipt $receipt $receiptPath
         Copy-Item -LiteralPath $source -Destination $temporary -Force
-        if ((Hash-File ($path+'.arphe-install.tmp')) -ne $entry.after) { throw 'Staged payload readback mismatch' }
-        Move-Item -LiteralPath ($path+'.arphe-install.tmp') -Destination $path -Force
+        if ((Hash-File $temporary) -ne $entry.after) { throw 'Staged payload readback mismatch' }
+        Move-Item -LiteralPath $temporary -Destination $path -Force
         if ((Hash-File $path) -ne $entry.after) { throw 'Installed payload readback mismatch' }
     }
     if ((Hash-File $creativeConfigPath) -ne $configHash) { throw 'Configuration changed during installation' }

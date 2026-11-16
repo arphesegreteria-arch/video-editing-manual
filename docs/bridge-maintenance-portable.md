@@ -65,8 +65,10 @@ fails closed. Configurations, feature flags, local registries and credentials ar
 never copied or rewritten. If rollback fails, leave the runtime stopped and retain
 the complete backup/receipt for recovery.
 
-Staging is created exclusively and journaled as owned before copying payload
-bytes. A truncated owned staging file is moved into the transaction backup's
+Each staging path includes a unique transaction ID and is durably journaled as
+intent before its first exclusive filesystem creation. Rollback uses that exact
+recorded name even if the process stopped immediately after creating an empty
+file and before the later ownership update. A truncated owned staging file is moved into the transaction backup's
 `staging-audit/` with a durable SHA256, allowing verified rollback to complete.
 Pre-existing unowned staging files or links are refused and never overwritten or
 removed. Repeated rollback verifies the restored target and finishes removal of

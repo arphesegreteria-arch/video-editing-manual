@@ -17,6 +17,56 @@ def policy_support(source):
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_crash_after_exclusive_stage_creation_recovers_from_durable_intent(self):
+        from bridge.release_identity import build_release,sha256_path
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'source';target=root/'target'
+            for folder in (source/'bridge',target/'bridge'):folder.mkdir(parents=True)
+            policy_support(source)
+            (source/'bridge'/'x.py').write_text('new')
+            original=target/'bridge'/'x.py';original.write_text('old')
+            build_release(source,root/'package',{'bridge/x.py':[sha256_path(original)]},'revision')
+            config=root/'creative.json';config.write_text('{"workstation_id":"PC_PERSONALE"}')
+            saved=config.read_bytes()
+            profile=root/'profile.json';profile.write_text(json.dumps({'workstation_id':'PC_PERSONALE','python_path':sys.executable,
+                'creative_destination':str(target),'creative_config_path':str(config)}))
+            real=ROOT/'scripts'/'install_package.ps1'
+            injected=root/'crash-installer.ps1'
+            text=real.read_text(encoding='utf-8')
+            self.assertEqual(1,text.count('$stagingHandle.Dispose()'))
+            injected.write_text(text.replace('$stagingHandle.Dispose()',
+                '$stagingHandle.Dispose()\n        [Environment]::Exit(99)'),encoding='utf-8')
+            def run(mode,backup='backup',installer=real):
+                return subprocess.run(['pwsh','-NoProfile','-ExecutionPolicy','Bypass','-File',str(installer),
+                    '-PackagePath',str(root/'package'),'-ProfilePath',str(profile),'-Mode',mode,
+                    '-BackupPath',str(root/backup)],capture_output=True,text=True)
+            failed=run('Install',installer=injected)
+            self.assertEqual(99,failed.returncode,failed.stderr)
+            receipt=json.loads((root/'backup'/'receipt.json').read_text(encoding='utf-8-sig'))
+            first=receipt['files'][0]
+            self.assertRegex(receipt['transaction_id'],r'^[a-f0-9]{32}$')
+            self.assertEqual(first['path']+'.arphe-install.'+receipt['transaction_id']+'.tmp',first['staging_path'])
+            self.assertFalse(first['staging_owned'])
+            staged=target/first.get('staging_path',first['path']+'.arphe-install.tmp')
+            self.assertEqual(b'',staged.read_bytes())
+            unrelated=target/(first['path']+'.arphe-install.'+'0'*32+'.tmp')
+            unrelated.write_bytes(b'unrelated staging')
+            rolled=run('Rollback');self.assertEqual(0,rolled.returncode,rolled.stderr)
+            self.assertFalse(staged.exists())
+            self.assertEqual(b'unrelated staging',unrelated.read_bytes())
+            self.assertFalse((target/'.arphe-install-pending.json').exists())
+            audit=root/'backup'/'staging-audit'/(first['path']+'.arphe-install.tmp')
+            self.assertEqual(b'',audit.read_bytes())
+            final_receipt=json.loads((root/'backup'/'receipt.json').read_text(encoding='utf-8-sig'))
+            self.assertEqual('rolled_back',final_receipt['state'])
+            self.assertEqual(sha256_path(audit),final_receipt['files'][0]['staging_audit_sha256'])
+            self.assertEqual('old',original.read_text());self.assertEqual(saved,config.read_bytes())
+            self.assertEqual(b'unrelated staging',unrelated.read_bytes())
+            self.assertEqual(0,run('Rollback').returncode)
+            installed=run('Install','backup2');self.assertEqual(0,installed.returncode,installed.stderr)
+            self.assertEqual(0,run('Rollback','backup2').returncode)
+            self.assertEqual('old',original.read_text());self.assertEqual(saved,config.read_bytes())
+
     def test_partial_install_requires_verified_rollback(self):
         from bridge.release_identity import build_release, sha256_path
         with tempfile.TemporaryDirectory() as directory:
@@ -141,10 +191,10 @@ class ReleaseTests(unittest.TestCase):
             # Fail after copy but before rename, then reproduce interruption during copy.
             with original.open('rb'):
                 self.assertNotEqual(0,run('Install').returncode)
-            staged=original.with_name(original.name+'.arphe-install.tmp')
-            staged.write_bytes(b'ne')
             receipt=json.loads((root/'backup'/'receipt.json').read_text(encoding='utf-8-sig'))
             entry=next(e for e in receipt['files'] if e['path']=='bridge/x.py')
+            staged=target/entry['staging_path']
+            staged.write_bytes(b'ne')
             self.assertTrue(entry.get('staging_owned'))
             rolled=run('Rollback');self.assertEqual(0,rolled.returncode,rolled.stderr)
             self.assertEqual(b'ne',(root/'backup'/'staging-audit'/'bridge'/'x.py.arphe-install.tmp').read_bytes())

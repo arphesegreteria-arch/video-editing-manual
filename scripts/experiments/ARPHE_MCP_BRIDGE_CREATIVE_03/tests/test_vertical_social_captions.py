@@ -113,7 +113,7 @@ class VerticalSocialCaptionTests(unittest.TestCase):
         self.assertEqual("AT_PICTURE_LOCK", result["locked_edit_fingerprint"])
 
 
-    def test_karaoke_graph_adds_a_subtle_dark_text_outline(self):
+    def test_karaoke_graph_uses_the_approved_dark_text_outline(self):
         from bridge import vertical_social_captions as captions
 
         class InputRecorder:
@@ -161,10 +161,11 @@ class VerticalSocialCaptionTests(unittest.TestCase):
                 self.assertEqual(1.0, node.inputs.get("Enabled2"))
                 self.assertEqual(1.0, node.inputs.get("ElementShape2"))
                 self.assertEqual(1.0, node.inputs.get("OutsideOnly2"))
-                self.assertAlmostEqual(0.018, node.inputs["Thickness2"])
-                self.assertAlmostEqual(0.75, node.inputs["Alpha2"])
-                self.assertEqual((27, 23, 14), tuple(round(node.inputs[channel] * 255)
-                                 for channel in ("Red2", "Green2", "Blue2")))
+                self.assertAlmostEqual(0.045, node.inputs["Thickness2"])
+                self.assertAlmostEqual(0.90, node.inputs["Opacity2"])
+                self.assertEqual(1.0, node.inputs["Alpha2"])
+                for channel, expected in (("Red2", 0.055), ("Green2", 0.042), ("Blue2", 0.040)):
+                    self.assertAlmostEqual(expected, node.inputs[channel])
 
     def test_caption_executor_uses_one_full_timeline_composition(self):
         from bridge.vertical_social_captions import apply_caption_action

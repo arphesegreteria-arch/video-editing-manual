@@ -160,7 +160,7 @@ class VerticalSocialCaptionTests(unittest.TestCase):
                 self.assertEqual(1.0, node.inputs["Alpha1"])
                 self.assertEqual(1.0, node.inputs.get("Enabled2"))
                 self.assertEqual(1.0, node.inputs.get("ElementShape2"))
-                self.assertEqual(1.0, node.inputs.get("OutsideOnly2"))
+                self.assertEqual(0.0, node.inputs.get("OutsideOnly2"))
                 self.assertAlmostEqual(0.045, node.inputs["Thickness2"])
                 self.assertAlmostEqual(0.90, node.inputs["Opacity2"])
                 self.assertEqual(1.0, node.inputs["Alpha2"])

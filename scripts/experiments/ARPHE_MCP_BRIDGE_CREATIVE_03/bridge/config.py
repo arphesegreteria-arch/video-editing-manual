@@ -25,7 +25,7 @@ DEFAULT_PALETTE = {
     "ivory": "#F7F2E8",
     "cream": "#EFE3CF",
     "beige": "#D7C2A6",
-    "burgundy": "#6C2438",
+    "burgundy": "#680C09",
     "warm_brown": "#8A6248",
     "dark_brown": "#3A2923",
     "black": "#111111",

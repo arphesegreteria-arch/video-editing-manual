@@ -410,7 +410,6 @@ def build_caption_graph(comp: object, phrases: tuple[dict[str, Any], ...],
         raise ValidationError("Collegamento canvas CAPTIONS fallito")
     lower_layout = lower_caption_layout()
     highlight_word_count = 0
-    outline = _rgb("#1B170E", 0.75)
     for phrase_index, phrase in enumerate(phrases, start=1):
         is_lower = phrase["position"] == "LOWER"
         upper_layout = upper_karaoke_layout()
@@ -446,9 +445,9 @@ def build_caption_graph(comp: object, phrases: tuple[dict[str, Any], ...],
                                ("Blue1", white["b"]), ("Alpha1", 1.0)):
                 _set(text, key, value)
             for key, value in (("Enabled2", 1.0), ("ElementShape2", 1.0),
-                               ("OutsideOnly2", 1.0), ("Thickness2", 0.018),
-                               ("Red2", outline["r"]), ("Green2", outline["g"]),
-                               ("Blue2", outline["b"]), ("Alpha2", outline["a"])):
+                               ("OutsideOnly2", 1.0), ("Thickness2", 0.045),
+                               ("Opacity2", 0.90), ("Red2", 0.055),
+                               ("Green2", 0.042), ("Blue2", 0.040), ("Alpha2", 1.0)):
                 if not _set(text, key, value):
                     raise ValidationError(f"Contorno Text+ CAPTIONS {key} non applicato")
             if safe_call(text, "GetInput", "Enabled2") != 1.0:

@@ -445,7 +445,7 @@ def build_caption_graph(comp: object, phrases: tuple[dict[str, Any], ...],
                                ("Blue1", white["b"]), ("Alpha1", 1.0)):
                 _set(text, key, value)
             for key, value in (("Enabled2", 1.0), ("ElementShape2", 1.0),
-                               ("OutsideOnly2", 1.0), ("Thickness2", 0.045),
+                               ("OutsideOnly2", 0.0), ("Thickness2", 0.045),
                                ("Opacity2", 0.90), ("Red2", 0.055),
                                ("Green2", 0.042), ("Blue2", 0.040), ("Alpha2", 1.0)):
                 if not _set(text, key, value):

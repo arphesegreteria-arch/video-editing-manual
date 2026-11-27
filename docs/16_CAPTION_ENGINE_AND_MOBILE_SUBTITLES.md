@@ -123,6 +123,14 @@ stata un nodo `Background` Fusion con RGBA tutti a zero come base reale del prim
 In questa build `GetToolList(False)` può esporre lo stesso tool tramite più chiavi della mappa.
 Prima di modificare il grafo, deduplicare i nodi usando `TOOLS_Name`.
 
+### Testo e sfondino sfocati anche con font corretto
+
+Su `PC_PERSONALE`, nella review verticale Depilazione C056, la timeline era 1080 × 1920 e il read-back di Satoshi e delle misure era corretto. Il canvas del carrier tecnico risultava però 64 × 64. Il render ingrandiva testo e maschere già rasterizzati a quella risoluzione.
+
+- Verificare le dimensioni effettive della composizione e di `TextPlus` e `Background`, inclusi i fondi delle singole parole. La risoluzione della sola timeline non è sufficiente.
+- In quella composizione, impostare il formato Fusion a 1080 × 1920 e fissare `Width` e `Height` dei generatori alla risoluzione della timeline, disattivando `UseFrameFormatSettings` dove ereditava il 64 × 64, ha restituito scritte nitide. Conservare i tempi, le coordinate normalizzate e le proprietà tipografiche del preset.
+- Confrontare un fotogramma nativo a risoluzione sufficiente, poi il fotogramma corrispondente nell’MP4. Controllare anche parole bianche su una zona chiara e l’assenza di karaoke dopo l’inizio della CTA.
+
 ### Verifica insufficiente tramite API
 
 Un read-back corretto non prova la resa grafica. Il gate minimo deve includere:

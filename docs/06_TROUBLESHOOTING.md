@@ -129,3 +129,18 @@ Separare:
 - anchor del tracking;
 - target estetico;
 - offset/reframe.
+
+## Resolve risponde al bridge e rifiuta di aprire o creare progetti
+
+Su `PC_PERSONALE`, durante l’ADV Depilazione C056 del 25 novembre, il bridge leggeva `Untitled Project` e l’elenco dei progetti, mentre Resolve non restituiva una pagina corrente né un database attivo. Anche `OpenPage`, caricamento e creazione non riuscivano.
+
+- Controllare identità della postazione, pagina, database corrente, timeline e Media Pool. Il ping del bridge attesta il collegamento al bridge. Provare una lettura del contesto Resolve prima di ripetere una scrittura.
+- Nel caso C056 il progetto corrente era verificato vuoto e il render inattivo. La chiusura ordinata di Resolve e il successivo avvio hanno ripristinato la creazione del progetto. Con un lavoro aperto, preservare prima il suo stato e coordinare un eventuale riavvio.
+
+## Il rumore resta udibile dopo Voice Isolation
+
+Su `PC_PERSONALE`, nel caso Depilazione C056, il valore di Voice Isolation era confermato. La media indiscriminata dei presunti silenzi includeva respiri e code di voce, quindi sottostimava la riduzione del fondo stazionario.
+
+- Confrontare gli stessi intervalli dei due render allineati. Scegliere un paio di pause effettive, con margine dagli attacchi delle parole, e confrontarle separatamente dal parlato. Usare le misure per localizzare il problema e l’ascolto per giudicare timbro e artefatti.
+- Se resta un fondo stabile, ricavare il profilo da tratti di ambiente senza voce presenti nella sorgente. Applicare una riduzione mirata in un asset separato, mantenendo frequenza di campionamento, canali, conteggio campioni e offset di montaggio. Ricontrollare il render.
+- Nel C056 la combinazione ha ridotto il livello in due pause campionate di 13,7 e 5,8 dB. Il livello medio del tratto parlato è cambiato di circa 0,5 dB. Sono risultati di quel girato, utili come esempio di confronto.
